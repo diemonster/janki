@@ -15,7 +15,6 @@ from japanese_anki import (
     audio_cmd,
     claude_client,
     codex_client,
-    coverage,
     enrich,
     extract,
     jpdb,
@@ -29,6 +28,7 @@ from japanese_anki import (
     status,
     workbench,
 )
+from japanese_anki.application import coverage as coverage_application
 from japanese_anki.application import promotion as promotion_application
 from japanese_anki.application.extraction import (
     ANSWER_EMPTY,
@@ -50,6 +50,9 @@ from japanese_anki.application.promotion import (
     decide_promotion,
     project_promotion,
     unreadable_deck_warning,
+)
+from japanese_anki.application.promotion_action import (
+    resolve_promotion_for_execution,
 )
 from japanese_anki.application.validation import validate_project
 from japanese_anki.audio_cmd import AudioError
@@ -86,20 +89,14 @@ from japanese_anki.io import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
-from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
     AI_ENRICHMENT_KEY,
     StagingError,
     check_rewritable,
-    coverage_acceptance_requirements,
-    coverage_already_resolved,
-    coverage_block_fingerprint,
     field_replacement_block,
     new_review_run_id,
     read_staging,
-    record_coverage_approval,
     rewrite_staging,
-    validate_coverage_facts,
     write_staging,
 )
 from japanese_anki.tts import (
@@ -2646,169 +2643,6 @@ def command_repair(args: argparse.Namespace) -> int:
     return 0
 
 
-def _durable_source(config: ProjectConfig, name: str) -> Path:
-    """The inbox file a staging file names, found by basename.
-
-    Basename because that is what staging records — an absolute path would be
-    stale in any other clone. The inbox refuses two files under one basename
-    only when their *content differs*, so two byte-identical namesakes are
-    permitted upstream and land here as an ambiguity. That is why this refuses
-    rather than picking: either file would give the same bytes today, but
-    choosing silently would mean a later edit to one of them changed which page
-    a coverage check read, with nothing recording the choice.
-    """
-    root = durable_inbox_root(config)
-    matches = [
-        path
-        for path in root.rglob("*")
-        if path.is_file() and path.name.casefold() == name.casefold()
-    ]
-    if not matches:
-        raise PromoteError(
-            f"Could not find {name} under {root}. Coverage is checked against "
-            "the page itself, so the source has to still be in the inbox."
-        )
-    if len(matches) > 1:
-        listed = ", ".join(str(path) for path in sorted(matches))
-        raise PromoteError(f"More than one {name} under {root}: {listed}.")
-    return matches[0]
-
-
-def _model_accepts_coverage(
-    config: ProjectConfig,
-    path: Path,
-    meta: dict[str, Any],
-    *,
-    reaccept: bool = False,
-) -> bool:
-    """Show a model the page and janki's account of it, and record the verdict.
-
-    The owner's decision, moved up a level: they are not deciding whether this
-    page is accounted for, they are deciding that a model may decide it. So the
-    verdict is written down with the model id and the prompt's fingerprint
-    beside it, and a refusal stops the promote with the model's own words
-    rather than a code.
-    """
-    block = meta.get("coverage")
-    if not isinstance(block, dict):
-        print(
-            f"{path.name} carries no coverage block, so there is nothing to "
-            "accept; promote it without --accept-coverage.",
-            file=sys.stderr,
-        )
-        return False
-    if (
-        block.get("approval") is not None
-        and coverage_already_resolved(meta)
-        and not reaccept
-    ):
-        # An approval that *exists and passes*. Both halves matter: a
-        # prose-only block needs no approval at all and also "resolves", and
-        # that is a different answer — nothing to accept, rather than already
-        # accepted — handled by the branch below.
-        #
-        # The question is answered, about these exact bytes: the approval is
-        # bound to the source and coverage-block fingerprints and repeats the
-        # accepted facts, so anything that could have changed the answer would
-        # have made it stale instead. Asking again buys the same verdict —
-        # and, since `record_coverage_approval` refuses to replace a standing
-        # decision, buys it and then fails to write it.
-        standing = block.get("approval") or {}
-        who = standing.get("model") or standing.get("authority") or "an owner"
-        print(
-            f"{path.name} is already approved by {who} on "
-            f"{standing.get('approved_at', 'an earlier date')}; nothing was "
-            "sent. Use --reaccept-coverage to ask again and replace it."
-        )
-        return True
-    # Everything the gate can decide offline, decided before spending. A stale
-    # block fingerprint or malformed provenance is free to detect and fatal
-    # either way; finding out afterwards meant paying for a verdict, writing
-    # it down, then refusing — and leaving a file that could not be promoted
-    # or re-approved without hand-deleting the approval just written.
-    if validate_coverage_facts(meta) is None:
-        # `None` means the block needs no acceptance at all — a prose-only
-        # extraction, which does not block. Paying for a verdict and writing an
-        # approval nothing will ever read is the same waste this ordering was
-        # introduced to stop, one branch over.
-        print(
-            f"{path.name} does not need a coverage approval; promote it "
-            "without --accept-coverage.",
-            file=sys.stderr,
-        )
-        return False
-
-    source_name = str(meta.get("source_file") or "").strip()
-    if not source_name:
-        raise PromoteError(f"{path.name} does not say which source it was read from.")
-    origin = _durable_source(config, source_name)
-    [prepared] = prepare_inputs(
-        [origin], config.scan_inbox, inbox_root=durable_inbox_root(config)
-    )
-    recorded = str(block.get("source_fingerprint") or "")
-    if prepared.source_sha256 != recorded:
-        raise PromoteError(
-            f"{origin} is not the file this staging was read from: it now "
-            f"fingerprints {prepared.source_sha256[:12]}, and the extraction "
-            f"recorded {recorded[:12]}. Checking coverage against different "
-            "bytes would answer a question about the wrong page."
-        )
-
-    model = config.extract_model
-    replacing = bool(reaccept and (block.get("approval") is not None))
-    if replacing:
-        print(
-            f"{path.name} already carries a coverage approval; re-asking and "
-            "replacing it."
-        )
-    print(f"Checking {source_name} against its coverage record with {model}...")
-    verdict = coverage.review_coverage(
-        prepared,
-        block,
-        model=model,
-        instructions=prompts.load(config.root, "approve-coverage"),
-    )
-    print(f"  {verdict.reason}")
-    if not verdict.approved:
-        print(
-            f"{model} did not accept the coverage for {source_name}. Nothing was "
-            "promoted — fix the extraction, or approve it yourself in the "
-            "staging file.",
-            file=sys.stderr,
-        )
-        return False
-
-    record_coverage_approval(
-        path,
-        {
-            "authority": "model",
-            "model": verdict.model,
-            "prompt_fingerprint": verdict.prompt_fingerprint,
-            "source_fingerprint": block["source_fingerprint"],
-            # Recomputed, never copied from the file. This is the only field
-            # binding the approval to the account the model actually read —
-            # `coverage_acceptance_requirements` repeats the disposition lists
-            # but not `source_units`, which is what `format_account` shows it.
-            # Copying the stored value let a truncated block be approved and
-            # then restored, leaving a permanent record that a model examined
-            # a page it was never shown.
-            "coverage_block_fingerprint": coverage_block_fingerprint(block),
-            **coverage_acceptance_requirements(block),
-            # A deliberate re-ask says so in the file, because the record of a
-            # decision is the only place a later reader can see that an
-            # earlier one was set aside on purpose rather than lost.
-            "reason": (
-                f"Re-asked and replaced an earlier approval. {verdict.reason}"
-                if replacing
-                else verdict.reason
-            ),
-            "approved_at": date.today().isoformat(),
-        },
-        replace_existing=replacing,
-    )
-    return True
-
-
 def _print_promotion_plan(plan: PromotionPlan) -> int:
     """Say what adding this source would do, having done none of it.
 
@@ -3009,40 +2843,70 @@ def command_promote(args: argparse.Namespace) -> int:
         return _print_promotion_plan(project_promotion(decision))
 
     if args.accept_coverage or args.reaccept_coverage:
-        if decision.is_blocked and decision.gate != "coverage":
+        if (
+            decision.is_blocked
+            and decision.gate != "coverage"
+            and (
+                decision.gate not in POST_READING_GATES
+                or args.skip_reading_check
+            )
+        ):
             # No approval can make this file promotable, so the model call
             # would be money for nothing.
             raise decision.error
-        # Writes the approval into the staging file, so the file on disk is
-        # the record — an approval held only in memory would let a promote
-        # succeed leaving nothing behind that says why. Called whatever the
-        # gate said, because it self-gates: a file with no coverage block, or
-        # one that needs no approval, is refused in its own words.
-        if not _model_accepts_coverage(
-            config, path, dict(decision.meta), reaccept=args.reaccept_coverage
-        ):
-            return 1
-        decision = offline()
-
-    if not args.skip_reading_check and (
-        decision.state in ("nothing_lands", "lands")
-        or (decision.is_blocked and decision.gate in POST_READING_GATES)
-    ):
-        # Only now, and only when a dictionary could change the answer: the
-        # key is not needed to refuse a broken file, and the offline pass has
-        # already decided everything a dictionary cannot.
-        #
-        # The blocked case matters as much as the landing one. Offline,
-        # `check_readings` promotes every row a dictionary would have held —
-        # so it judges a superset, and two rows can collide on one landing id
-        # that a consulted run would never have brought together. Believing
-        # that refusal would exit 1 on a file the old command promoted.
-        decision = decide_promotion(
+        coverage_decision = coverage_application.plan_model_coverage(
             config,
             path,
-            client=jpdb.JpdbClient(jpdb.api_key_from_env()),
-            skip_reading_check=args.skip_reading_check,
+            reaccept=args.reaccept_coverage,
         )
+        if coverage_decision.state == "not_required":
+            print(
+                coverage_decision.detail
+                + " Promote it without --accept-coverage.",
+                file=sys.stderr,
+            )
+            return 1
+        if coverage_decision.state == "already_resolved":
+            print(
+                coverage_decision.detail
+                + " Use --reaccept-coverage to ask again and replace it."
+            )
+        else:
+            if coverage_decision.replace_existing:
+                print(
+                    f"{path.name} already carries a coverage approval; "
+                    "re-asking and replacing it."
+                )
+            print(
+                f"Checking {coverage_decision.source_file} against its coverage "
+                f"record with {coverage_decision.model}..."
+            )
+            coverage_result = coverage_application.run_model_coverage(
+                config,
+                coverage_decision,
+                skip_reading_check=args.skip_reading_check,
+            )
+            print(f"  {coverage_result.verdict.reason}")
+            if coverage_result.state == "declined":
+                print(
+                    f"{coverage_decision.model} did not accept the coverage for "
+                    f"{coverage_decision.source_file}. Nothing was promoted — "
+                    "fix the extraction, or approve it yourself in the staging "
+                    f"file. Operation {coverage_result.operation_id} keeps the "
+                    "paid reply until you settle it.",
+                    file=sys.stderr,
+                )
+                return 1
+        decision = offline()
+
+    # The shared resolver constructs the client only when a reading can change
+    # the answer, preserves the CLI's explicit skip authority, and rechecks the
+    # offline preview after the lookup so neither surface acts on nearby state.
+    decision = resolve_promotion_for_execution(
+        config,
+        decision,
+        client_factory=lambda: jpdb.JpdbClient(jpdb.api_key_from_env()),
+    )
 
     if decision.is_blocked:
         # What the run learned before it refused, in the order the command has

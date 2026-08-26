@@ -577,6 +577,51 @@ def test_in_place_staging_mutations_preserve_a_final_seam_edit(
     assert path.read_bytes() == human
 
 
+def test_coverage_approval_uses_one_exact_expected_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    write_staging(path, [_record()], {"source_file": "export.csv", "coverage": {}})
+    rendered = path.read_bytes()
+    transient = rendered + b"# transient workbench edit\n"
+    expected_revision = hashlib.sha256(rendered).hexdigest()
+
+    path.write_bytes(transient)
+    with pytest.raises(StagingError, match="coverage-review-stale"):
+        staging_module.record_coverage_approval(
+            path,
+            {"authority": "human", "reason": "reviewed"},
+            expected_revision=expected_revision,
+        )
+    assert path.read_bytes() == transient
+    path.write_bytes(rendered)
+
+    real_load = staging_module._load_document_snapshot
+
+    def load_transient(target: Path) -> tuple[object, str, str]:
+        target.write_bytes(transient)
+        try:
+            return real_load(target)
+        finally:
+            target.write_bytes(rendered)
+
+    monkeypatch.setattr(
+        staging_module,
+        "_load_document_snapshot",
+        load_transient,
+    )
+
+    with pytest.raises(DataError, match="changed content"):
+        staging_module.record_coverage_approval(
+            path,
+            {"authority": "human", "reason": "reviewed"},
+        )
+
+    assert path.read_bytes() == rendered
+    _records, meta = read_staging(path)
+    assert "approval" not in meta["coverage"]
+
+
 @pytest.mark.parametrize("operation", ["rewrite", "coverage", "prune"])
 def test_in_place_staging_mutations_report_a_file_removed_after_review(
     tmp_path: Path,

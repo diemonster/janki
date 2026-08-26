@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from japanese_anki.identifiers import contains_kanji
@@ -62,6 +62,10 @@ class ValidationIssue:
     record_id: str = ""
     source: str = ""
     code: str = ""
+    #: Zero-based position when produced by ``validate_records``. A stable ID
+    #: cannot locate an issue until validation has proved that ID is present
+    #: and unique, so snapshot consumers must not key findings by it.
+    record_index: int | None = None
 
     def format(self) -> str:
         location = self.source
@@ -296,8 +300,12 @@ def validate_records(
     source_text = str(source)
     issues: list[ValidationIssue] = []
     seen: dict[str, int] = {}
-    for index, record in enumerate(records, start=1):
-        issues.extend(validate_record(record, source_text))
+    for position, record in enumerate(records):
+        index = position + 1
+        issues.extend(
+            replace(issue, record_index=position)
+            for issue in validate_record(record, source_text)
+        )
         if record.id in seen:
             issues.append(
                 ValidationIssue(
@@ -306,6 +314,7 @@ def validate_records(
                     record_id=record.id,
                     source=source_text,
                     code="duplicate-id",
+                    record_index=position,
                 )
             )
         else:

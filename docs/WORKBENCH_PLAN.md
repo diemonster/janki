@@ -675,27 +675,35 @@ absence from its exclusions, uniqueness and no cross-selection.
   `exporters/anki.py`, `tests/test_anki_builder_contract.py`.
 - **Ships when:** DESIGN.md names the model and the contract test enforces it.
 
-### [~] W4.1 claimed workbench-w0-w2a 2026-08-26 — Deck assignment, validation and promotion
+### [x] W4.1 — Deck assignment, validation and promotion
 
-*Progress 2026-08-26: the exact deck-assignment slice ships. The dashboard
-stops an otherwise-ready source at **Deck needs a decision**; its deck picker
-uses the real selectors and existing corpus, shows the exact tag diff, names
-duplicate proposals from other live sources, and binds the displayed choice to
-fresh staging, deck and sibling-proposal fingerprints before it writes. The
-shared promotion transaction refuses every newly landing record without
-exactly one word-deck owner, then rechecks the exact ownership verdict under
-the deck-directory lock immediately around the canonical save. An explicit
-deck-creation service also plans stable file bytes, a collision-free deck ID
-and build output from a learner-facing name and chosen directions (recognition
-on by default), and creates only that still-fresh preview under the same lock.*
+**Done 2026-08-26.** The dashboard stops an otherwise-ready source at **Deck
+needs a decision**; its picker uses the real selectors and existing corpus,
+shows the exact tag diff, names duplicate proposals from other live sources,
+and binds the displayed choice to fresh staging, deck and sibling-proposal
+fingerprints before it writes. The deck creator now has its preview-first
+browser route: recognition defaults on, the exact stable YAML/build path is
+shown, and **Create study deck** publishes only that still-current plan under
+the deck lock. **Check these cards** projects the shared structural validator,
+example authority, reading holds and prospective ownership into field actions
+while leaving Japanese judgment to the person.
 
-*Left: the deck creator's browser preview and button; **Check these cards** and
-its field actions; the promotion preview and browser action; both coverage
-routes; and the end-to-end tab journey. The promotion and coverage surface is
-paused at a written contract conflict: `AGENTS.md` currently says the
-workbench “never promotes rows or accepts coverage,” while this milestone
-requires both. The owner must resolve that authority boundary before either
-route is exposed.*
+Coverage and adding now complete the tab journey. The page shows the exact
+coverage account and separately names repository-owner comparison and the paid
+model completeness check. Owner approval records the scoped reason; the model
+route uses the same write-ahead journal, exact reply capture and provenance as
+extraction, with one-use consent bound to the source, request and staging. A
+promotion preview names new and merged cards, held rows, source history and
+the exact study-deck owner. The browser invokes the CLI's shared promotion
+transaction and jpdb order. When an offline structural refusal might disappear
+after reading checks, the first click only checks and renders the consulted
+coverage or landing result; a separate exact-plan confirmation is required to
+write. Fresh staging, collection, archive and deck facts are compared again at
+click, and deck ownership is still rechecked under the write lock. Three
+end-to-end HTTP cases cover owner coverage through landing, journaled model
+coverage, and stale/provisional checked plans with no-write refusals. The owner
+resolved the former authority conflict in `AGENTS.md`: the workbench may expose
+these explicit decisions but never makes one automatically.
 
 A deck picker previews where each card lands and checks the real selectors,
 exclusions and existing records — the same partition test a build runs. It

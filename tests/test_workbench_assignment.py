@@ -220,11 +220,13 @@ def test_assignment_refuses_a_changed_plan_or_staging_snapshot(
         race_fingerprint = _fingerprint(race_page)
         real_render = staging_module.render_staging_update
 
-        def race_after_render(path: Path, updated: object) -> str:
-            text = real_render(path, updated)
-            live, live_meta = read_staging(path)
+        def race_after_render(
+            captured: bytes, updated: object, *, source: str
+        ) -> str:
+            text = real_render(captured, updated, source=source)
+            live, live_meta = read_staging(staging_path)
             live[2] = replace(live[2], tags=["won-the-race"])
-            write_staging(path, live, live_meta, force=True)
+            write_staging(staging_path, live, live_meta, force=True)
             return text
 
         monkeypatch.setattr(

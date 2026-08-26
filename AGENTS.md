@@ -205,8 +205,15 @@ below is what is left, and it is the loop every other project already uses.*
    `staging-review` sentinel remains available for a reviewer editing YAML by
    hand. Its separate pattern-set checkbox writes only the matching store
    entry's existing `reviewed` mark. A human can edit or remove proposed cards,
-   and an exact one-use consent can dispatch journaled extraction; it never
-   promotes rows or accepts coverage. Both
+   assign them to an explicitly chosen study deck, record a scoped
+   repository-owner coverage decision with their reason, and invoke the same
+   promotion transaction as the CLI. Exact one-use consent can dispatch
+   journaled extraction or a separately named paid coverage check over the
+   named source; each paid operation is re-planned and bound to the exact
+   source, request and staging state described before the click. A model
+   coverage verdict records its model and prompt provenance. The workbench
+   never manufactures a CLI approval flag or makes an automatic identity,
+   deck, coverage, review or promotion decision. Both
    card-writing paths require a nonblank
    meaning list, complete fields on every returned example, and an explicit
    usage note that may be empty. Schema-v5 extraction additionally requires

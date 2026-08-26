@@ -37,8 +37,10 @@ from japanese_anki.errors import JankiError
 from japanese_anki.inputs import PreparedInput
 
 __all__ = [
+    "CoverageRequest",
     "CoverageVerdict",
     "CoverageReviewError",
+    "build_request",
     "format_account",
     "review_coverage",
     "verdict_schema",
@@ -47,6 +49,18 @@ __all__ = [
 
 class CoverageReviewError(JankiError):
     """The coverage pass could not produce a usable verdict."""
+
+
+@dataclass(frozen=True, slots=True)
+class CoverageRequest:
+    """Every value sent by one completeness check, plus its exact identity."""
+
+    model: str
+    system_blocks: tuple[dict[str, Any], ...]
+    user_content: tuple[dict[str, Any], ...]
+    schema: Any
+    request_fingerprint: str
+    prompt_fingerprint: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +106,54 @@ def format_account(block: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_request(
+    prepared: PreparedInput,
+    block: dict[str, Any],
+    *,
+    model: str,
+    instructions: str,
+) -> CoverageRequest:
+    """Build the exact request both consent and dispatch identify.
+
+    The source block itself belongs in the fingerprint, not merely its path:
+    the coverage question is about the bytes the model sees. The journal also
+    stores the source digest and model as searchable fields, while this value
+    binds every request channel together so a stale browser action cannot send
+    a nearby-but-different question.
+    """
+    schema = verdict_schema()
+    system = tuple(claude_client.system_blocks(instructions))
+    account = format_account(block)
+    user_content = (
+        prepared.content_block(),
+        {"type": "text", "text": account},
+    )
+    effort = claude_client.effort_for(model)
+    wire_schema = claude_client.wire_schema(schema)
+    request_fingerprint = prompts.request_fingerprint(
+        provider="anthropic",
+        style_guide="",
+        task_template=instructions,
+        user_turn=account,
+        transport_prompt={
+            "model": model,
+            "system": system,
+            "user": user_content,
+            "max_tokens": claude_client.DEFAULT_MAX_TOKENS,
+            "effort": effort,
+        },
+        schema=wire_schema,
+    )
+    return CoverageRequest(
+        model=model,
+        system_blocks=system,
+        user_content=user_content,
+        schema=schema,
+        request_fingerprint=request_fingerprint,
+        prompt_fingerprint=prompts.fingerprint(instructions),
+    )
+
+
 def review_coverage(
     prepared: PreparedInput,
     block: dict[str, Any],
@@ -100,6 +162,7 @@ def review_coverage(
     instructions: str,
     client: Any | None = None,
     parse_call: Any | None = None,
+    capture: Any | None = None,
 ) -> CoverageVerdict:
     """Show a model the page and janki's account of it, and take its verdict.
 
@@ -108,18 +171,22 @@ def review_coverage(
     would tell a reader the page was examined and found wanting when it was
     not examined at all.
     """
+    request = build_request(
+        prepared,
+        block,
+        model=model,
+        instructions=instructions,
+    )
     caller = parse_call or claude_client.parse_call
     parsed, stop_reason, refusal = caller(
         model,
-        claude_client.system_blocks(instructions),
-        [
-            prepared.content_block(),
-            {"type": "text", "text": format_account(block)},
-        ],
-        verdict_schema(),
+        request.system_blocks,
+        request.user_content,
+        request.schema,
         client,
         max_tokens=claude_client.DEFAULT_MAX_TOKENS,
         effort=claude_client.effort_for(model),
+        capture=capture,
     )
     if refusal:
         raise CoverageReviewError(
@@ -146,5 +213,5 @@ def review_coverage(
         approved=bool(getattr(parsed, "approved", False)),
         reason=reason,
         model=model,
-        prompt_fingerprint=prompts.fingerprint(instructions),
+        prompt_fingerprint=request.prompt_fingerprint,
     )

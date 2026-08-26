@@ -24,6 +24,7 @@ import yaml
 from test_workbench_fixtures import materialize
 
 from japanese_anki import cli, operations, promote
+from japanese_anki import io as io_module
 from japanese_anki.application import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
@@ -34,6 +35,7 @@ from japanese_anki.application import (
     capture_hook,
     classify_dispatch_failure,
     deck_membership,
+    execute_promotion,
     plan_extraction,
     plan_promotion,
     project_promotion,
@@ -52,7 +54,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.io import load_records, records_revision
+from japanese_anki.io import load_records
 from japanese_anki.models import SourceReference, VocabularyRecord
 from japanese_anki.validation import ValidationIssue
 
@@ -415,6 +417,13 @@ def test_a_fresh_source_is_all_new_cards(tmp_path: Path) -> None:
     assert plan.adding == plan.landing
     assert plan.merging == ()
     assert plan.reminted == {}
+    assert [ownership.record_id for ownership in plan.deck_ownership] == [
+        card.landing.id for card in plan.landing
+    ]
+    assert all(
+        [owner.name for owner in ownership.owners] == ["Promotion fixture"]
+        for ownership in plan.deck_ownership
+    )
 
 
 def test_an_unresolved_coverage_block_stops_the_plan_and_says_which(
@@ -2348,44 +2357,68 @@ def test_the_decision_carries_the_ai_attribution(tmp_path: Path) -> None:
     assert stored.id in proven
 
 
-def test_the_swap_token_is_taken_before_the_records_it_guards(
+def test_the_swap_token_and_records_come_from_one_bound_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Order, not adjacency — and the wrong order loses data silently.
+    """A/B/A between two opens must not smuggle transient B into the merge.
 
-    Token first, then read: a write landing between them makes the token stale
-    against the collection the decision was built from, so the compare-and-swap
-    refuses and nothing is overwritten. Read first, then token: the records are
-    stale but the token is fresh, the swap passes, and the merge is written
-    over somebody's newer file.
-
-    Both orders pass every other test here, because they differ only when
-    something writes in the window. So the window is opened deliberately.
+    The first collection read returns A and installs B; the next returns B and
+    leaves B in place. A separate revision read plus records read therefore
+    builds a decision carrying token A and records B. Returning the path to A
+    makes its CAS accept that mismatched decision; one bound read instead makes
+    the token and parsed records both A, so transient B cannot reach the file.
     """
     path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
     config = ProjectConfig.load(tmp_path)
     collection = (tmp_path / "vocabulary.json").resolve()
-    real = promotion_module.load_records
+    initial = collection.read_text(encoding="utf-8")
+    transient = _record(
+        id="word:割り込み:わりこみ",
+        expression="割り込み",
+        reading="わりこみ",
+    )
+    transient_wire = json.dumps(
+        [transient.to_dict()], ensure_ascii=False
+    )
+    real_read = io_module.read_text_bound
+    collection_reads = 0
 
-    def write_then_read(target: Path, *args: object, **kwargs: object):
-        if Path(target) == collection:
-            # Somebody else's save, landing in the window.
-            collection.write_text(
-                json.dumps([_record(id="word:割り込み:わりこみ",
-                                    expression="割り込み",
-                                    reading="わりこみ").to_dict()],
-                           ensure_ascii=False),
-                encoding="utf-8",
-            )
-        return real(target, *args, **kwargs)
+    # Isolate the collection snapshot itself: deck census reads the same source
+    # path for a different question, which would otherwise consume transient B
+    # and accidentally restore the A/B/A harness before execution.
+    monkeypatch.setattr(
+        promotion_module.status_module,
+        "surviving_ids",
+        lambda _config, existing: ({record.id for record in existing}, []),
+    )
+    monkeypatch.setattr(
+        promotion_module,
+        "require_exact_deck_ownership",
+        lambda *_args, **_kwargs: (),
+    )
 
-    monkeypatch.setattr(promotion_module, "load_records", write_then_read)
+    def aba_read(target: Path) -> str:
+        nonlocal collection_reads
+        text = real_read(target)
+        if Path(target).resolve() != collection:
+            return text
+        collection_reads += 1
+        if collection_reads == 1:
+            assert text == initial
+            collection.write_text(transient_wire, encoding="utf-8")
+        return text
 
-    decision = decide_promotion(config, path)
+    monkeypatch.setattr(io_module, "read_text_bound", aba_read)
 
-    assert decision.state == "lands"
-    # Stale against what is on disk now, which is what makes the write refuse.
-    assert decision.output_revision != records_revision(collection)
+    decision = decide_promotion(config, path, skip_reading_check=True)
+    collection.write_text(initial, encoding="utf-8")
+    result = execute_promotion(config, decision)
+
+    assert result.state == "landed"
+    assert collection_reads >= 2
+    stored_ids = {record.id for record in load_records(collection)}
+    assert transient.id not in stored_ids
+    assert stored_ids == {record.id for record in result.promoted}
 
 
 # --- would this build? ------------------------------------------------------

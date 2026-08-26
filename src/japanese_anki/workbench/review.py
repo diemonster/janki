@@ -57,6 +57,7 @@ __all__ = [
     "IndeterminateWriteError",
     "ReviewPanel",
     "bound_replace",
+    "bound_replace_under_lock",
     "ReviewPanelError",
     "StaleReviewError",
     "parse_review_form",
@@ -107,8 +108,10 @@ def _fingerprint(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None:
-    """CAS one rendered snapshot and classify a final-seam interference safely."""
+def _bound_replace_unlocked(
+    path: Path, text: str, snapshot: bytes, *, label: str
+) -> None:
+    """CAS one rendered snapshot after the caller settles the path lock."""
     intended = text.encode("utf-8")
     try:
         atomic_write_text_bound(
@@ -139,6 +142,19 @@ def bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None
             "restart the panel and inspect the recorded decisions",
             intended_bytes_are_live=live == intended,
         ) from exc
+
+
+def bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None:
+    """Join the staging transaction lock, then replace one exact snapshot."""
+    with exclusive_path_lock(path):
+        _bound_replace_unlocked(path, text, snapshot, label=label)
+
+
+def bound_replace_under_lock(
+    path: Path, text: str, snapshot: bytes, *, label: str
+) -> None:
+    """Replace one exact snapshot while the caller holds its path lock."""
+    _bound_replace_unlocked(path, text, snapshot, label=label)
 
 
 def _absolute(path: Path) -> Path:
@@ -631,7 +647,7 @@ class ReviewPanel:
             saved = ReviewOutcome()
             if staging_text is not None:
                 try:
-                    bound_replace(
+                    bound_replace_under_lock(
                         self.staging_path,
                         staging_text,
                         self.staging_bytes,
@@ -652,7 +668,7 @@ class ReviewPanel:
             # erase a concurrent human edit made before a later failure.
             if patterns_text is not None:
                 try:
-                    bound_replace(
+                    bound_replace_under_lock(
                         self.patterns_path,
                         patterns_text,
                         self.patterns_bytes,

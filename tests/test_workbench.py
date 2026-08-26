@@ -1057,10 +1057,33 @@ def _submit_edit(
     )
 
 
-def test_correcting_a_gloss_changes_only_that_line(tmp_path: Path) -> None:
+def test_correcting_a_gloss_changes_only_that_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """W2c's ships-when: every byte you did not edit survives unchanged."""
     session = _staged(tmp_path)
     staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    snapshot = staging_path.read_bytes()
+    transient = snapshot + b"transient_private_note: must-not-return\n"
+    real_render = staging.render_staging_update
+
+    def render_during_transient_note(
+        captured: bytes,
+        updated: Sequence[VocabularyRecord],
+        *,
+        source: str,
+    ) -> str:
+        staging_path.write_bytes(transient)
+        try:
+            return real_render(captured, updated, source=source)
+        finally:
+            staging_path.write_bytes(snapshot)
+
+    monkeypatch.setattr(
+        staging,
+        "render_staging_update",
+        render_during_transient_note,
+    )
     before = staging_path.read_text(encoding="utf-8").split("\n")
     server, _thread = _running(session)
     try:
@@ -1373,6 +1396,37 @@ def test_an_uncertain_edit_write_never_claims_nothing_was_written(
         server.server_close()
 
 
+def test_bound_replace_joins_the_staging_transaction_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from japanese_anki.workbench import review as review_module
+
+    path = tmp_path / "review.yaml"
+    path.write_text("old\n", encoding="utf-8")
+    entered: list[Path] = []
+
+    class ObservedLock:
+        def __init__(self, target: Path) -> None:
+            self.target = target
+
+        def __enter__(self) -> None:
+            entered.append(self.target)
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        review_module,
+        "exclusive_path_lock",
+        lambda target: ObservedLock(target),
+    )
+
+    review_module.bound_replace(path, "new\n", b"old\n", label="staging file")
+
+    assert entered == [path]
+    assert path.read_text(encoding="utf-8") == "new\n"
+
+
 def test_register_is_a_choice_not_a_text_box(tmp_path: Path) -> None:
     """Anything outside polite/casual makes the example incomplete, so a free
     text box would let a typo quietly degrade a card. Offer the whole domain
@@ -1528,8 +1582,36 @@ def test_removal_forms_are_never_nested_inside_the_editor(tmp_path: Path) -> Non
         server.server_close()
 
 
-def test_removing_a_card_drops_only_that_row(tmp_path: Path) -> None:
+def test_removing_a_card_drops_only_that_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    snapshot = staging_path.read_bytes()
+    records, meta = read_staging(staging_path)
+    transient_path = tmp_path / "staging" / "transient.yaml"
+    write_staging(transient_path, [records[1], records[0], records[2]], meta)
+    transient = transient_path.read_bytes()
+    transient_path.unlink()
+    real_render = staging.render_staging_prune
+
+    def render_during_transient_order(
+        captured: bytes,
+        keep: Sequence[bool],
+        *,
+        source: str,
+    ) -> str | None:
+        staging_path.write_bytes(transient)
+        try:
+            return real_render(captured, keep, source=source)
+        finally:
+            staging_path.write_bytes(snapshot)
+
+    monkeypatch.setattr(
+        staging,
+        "render_staging_prune",
+        render_during_transient_order,
+    )
     server, _thread = _running(session)
     try:
         _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
@@ -2625,7 +2707,11 @@ def test_removing_a_row_takes_its_provenance_with_it(tmp_path: Path) -> None:
     panel = session.panel("vocabulary.json")
     assert panel is not None
 
-    text = staging.render_staging_prune(path, [True, False])
+    text = staging.render_staging_prune(
+        path.read_bytes(),
+        [True, False],
+        source=str(path),
+    )
     assert text is not None
     path.write_text(text, encoding="utf-8")
 

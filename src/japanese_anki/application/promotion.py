@@ -44,10 +44,10 @@ from japanese_anki.io import (
     DataError,
     MergeOutcome,
     RecordsRevision,
+    atomic_unlink_bound,
     exclusive_path_lock,
-    load_records,
+    load_records_snapshot,
     read_bytes_bound,
-    records_revision,
     save_records_json,
 )
 from japanese_anki.models import VocabularyRecord
@@ -55,10 +55,9 @@ from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
     STAGING_SUFFIXES,
     check_rewritable,
-    prune_staging_under_lock,
+    finish_staging_under_lock,
     read_staging,
     review_run_id,
-    rewrite_staging_under_lock,
     rich_extraction_review_run_id,
     validate_coverage_facts,
     write_staging_under_lock,
@@ -121,17 +120,23 @@ def archive_run_provenance(meta: Mapping[str, Any]) -> dict[str, Any]:
     return identity
 
 
-def archive_for_run(
-    base: Path, meta: Mapping[str, Any]
-) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None]:
+def _select_archive_for_run(
+    base: Path, meta: Mapping[str, Any], *, bind_read: bool
+) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None, bytes | None]:
     """Choose this run's deterministic archive and any partial rows already there."""
+    def read(path: Path) -> tuple[bytes | None, list[VocabularyRecord], dict[str, Any]]:
+        if bind_read:
+            return record_review_snapshot(path)
+        records, archived_meta = read_staging(path)
+        return None, records, archived_meta
+
     identity = archive_run_provenance(meta)
     if not base.exists():
-        return base, [], None
+        return base, [], None, None
 
-    previous, previous_meta = read_staging(base)
+    wire, previous, previous_meta = read(base)
     if archive_run_provenance(previous_meta) == identity:
-        return base, list(previous), previous_meta
+        return base, list(previous), previous_meta, wire
 
     try:
         encoded = json.dumps(
@@ -149,14 +154,31 @@ def archive_for_run(
     digest = hashlib.sha256(encoded).hexdigest()
     candidate = base.with_name(f"{base.stem}.{digest}{base.suffix}")
     if not candidate.exists():
-        return candidate, [], None
+        return candidate, [], None, None
 
-    previous, previous_meta = read_staging(candidate)
+    wire, previous, previous_meta = read(candidate)
     if archive_run_provenance(previous_meta) != identity:
         raise PromoteError(
             f"Archive provenance collision at {candidate}; nothing was promoted."
         )
-    return candidate, list(previous), previous_meta
+    return candidate, list(previous), previous_meta, wire
+
+
+def _archive_for_run_snapshot(
+    base: Path, meta: Mapping[str, Any]
+) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None, bytes | None]:
+    """Choose and bind an archive for a read-only promotion decision."""
+    return _select_archive_for_run(base, meta, bind_read=True)
+
+
+def archive_for_run(
+    base: Path, meta: Mapping[str, Any]
+) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None]:
+    """Choose this run's archive, including inside its already-held writer lock."""
+    selected, records, archived_meta, _wire = _select_archive_for_run(
+        base, meta, bind_read=False
+    )
+    return selected, records, archived_meta
 
 
 
@@ -177,6 +199,55 @@ def inside_archive(path: Path, archive_dir: Path) -> bool:
         pass
     return path.is_relative_to(archive_dir)
 
+
+def _file_revision(path: Path) -> bytes | None:
+    """Exact bytes at ``path``, with absence preserved as a distinct state."""
+    try:
+        return read_bytes_bound(path)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise DataError(f"Could not read {path}: {exc.strerror or exc}") from exc
+
+
+def _deck_configuration_revision(config: ProjectConfig) -> str:
+    """Fingerprint the exact configured deck-file set and its bytes."""
+    digest = hashlib.sha256()
+    for path in status_module.deck_files(config):
+        target = path.resolve()
+        wire = _file_revision(target)
+        if wire is None:
+            raise DataError(f"Deck file vanished while it was read: {target}")
+        encoded_path = str(target).encode("utf-8")
+        digest.update(len(encoded_path).to_bytes(8, "big"))
+        digest.update(encoded_path)
+        digest.update(len(wire).to_bytes(8, "big"))
+        digest.update(wire)
+    return digest.hexdigest()
+
+
+def _require_deck_inputs(
+    config: ProjectConfig,
+    existing: Sequence[VocabularyRecord],
+    *,
+    stored_ids: set[str],
+    unreadable_decks: Sequence[str],
+    deck_revision: str,
+) -> None:
+    """Refuse deck/source rereads that differ from the pre-dictionary input."""
+    revision_before = _deck_configuration_revision(config)
+    current_ids, current_unreadable = status_module.surviving_ids(config, existing)
+    revision_after = _deck_configuration_revision(config)
+    if (
+        revision_before != deck_revision
+        or revision_after != deck_revision
+        or current_ids != stored_ids
+        or tuple(current_unreadable) != tuple(unreadable_decks)
+    ):
+        raise PromoteError(
+            "[promotion-input-stale] a configured deck or its declared records "
+            "changed during the reading check. Reload the promotion preview."
+        )
 
 
 def validate_record_archive(
@@ -438,6 +509,10 @@ class PromotionPlan:
     #: removes them from the live review rather than adding them twice.
     already_archived: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    #: The exact configured word-deck owners proved for every landing card,
+    #: in landing order. Safe to render; execution re-proves the same verdict
+    #: under the deck-directory lock before the canonical save.
+    deck_ownership: tuple[DeckOwnershipEvaluation, ...] = ()
     #: Whether the dictionary witness was skipped — load-bearing rather than
     #: decorative.
     #:
@@ -624,7 +699,6 @@ def _complete_pattern_only_review(
                             "Both files were kept; nothing was overwritten."
                         )
                 else:
-                    done.parent.mkdir(parents=True, exist_ok=True)
                     # `selected` is already locked. The ordinary writer would
                     # acquire this non-reentrant lock again and deadlock.
                     write_staging_under_lock(done, [], archived_meta)
@@ -640,7 +714,19 @@ def _complete_pattern_only_review(
                 # remain locked. Neither a failed archive write, a concurrent
                 # forced extraction, nor a force-write to the verified archive
                 # can remove the only recoverable review artifact in between.
-                path.unlink()
+                try:
+                    atomic_unlink_bound(
+                        path,
+                        expected_revision=hashlib.sha256(expected_wire).hexdigest(),
+                    )
+                except JankiError as exc:
+                    raise PromoteError(
+                        "[pattern-completion-incomplete] the reviewed pattern "
+                        "archive completed, but janki could not prove that the "
+                        "live staging review was retired unchanged. Inspect both "
+                        "copies and rerun this exact promotion; do not delete "
+                        "staging by hand."
+                    ) from exc
                 return done, retried
 
 
@@ -652,6 +738,7 @@ def _finish_record_review(
     expected_meta: Mapping[str, Any],
     expected_archived: Sequence[VocabularyRecord],
     expected_archived_meta: Mapping[str, Any] | None,
+    expected_archive_revision: bytes | None,
     promoted: Sequence[VocabularyRecord],
     retry_records: Sequence[VocabularyRecord],
     keep: Sequence[bool],
@@ -669,6 +756,11 @@ def _finish_record_review(
         raise PromoteError(
             "[record-promotion-invalid] row disposition does not match the "
             "archive transaction"
+        )
+    if sum(keep) != len(held):
+        raise PromoteError(
+            "[record-promotion-invalid] held rows do not match the live "
+            "staging remainder"
         )
 
     with exclusive_path_lock(path):
@@ -694,7 +786,9 @@ def _finish_record_review(
                 )
                 if confirmed != selected:
                     continue
-                if list(archived) != list(expected_archived) or (
+                if _file_revision(confirmed) != expected_archive_revision or (
+                    list(archived) != list(expected_archived)
+                ) or (
                     None if archived_meta is None else dict(archived_meta)
                 ) != (
                     None
@@ -736,25 +830,69 @@ def _finish_record_review(
                 done = confirmed
                 combined = list(archived) + list(promoted)
                 if promoted:
-                    done.parent.mkdir(parents=True, exist_ok=True)
-                    completed_meta = promote.archive_meta(
-                        dict(current_meta), len(combined)
-                    )
-                    write_staging_under_lock(
-                        done, combined, completed_meta, force=True
-                    )
-                    written, written_meta = read_staging(done)
-                    if written != combined or written_meta != completed_meta:
-                        raise PromoteError(
-                            f"[record-archive-divergent] {done} did not read back "
-                            "as the exact completed archive. The live review was kept."
+                    try:
+                        completed_meta = promote.archive_meta(
+                            dict(current_meta), len(combined)
                         )
+                        write_staging_under_lock(
+                            done,
+                            combined,
+                            completed_meta,
+                            force=True,
+                            expected_revision=(
+                                hashlib.sha256(expected_archive_revision).hexdigest()
+                                if expected_archive_revision is not None
+                                else None
+                            ),
+                            expected_absent=expected_archive_revision is None,
+                        )
+                        written, written_meta = read_staging(done)
+                        if written != combined or written_meta != completed_meta:
+                            raise PromoteError(
+                                f"[record-archive-divergent] {done} did not read "
+                                "back as the exact completed archive. The live "
+                                "review was kept."
+                            )
+                    except JankiError as exc:
+                        if canonical_commit is not None:
+                            raise PromoteError(
+                                "[promotion-completion-incomplete] cards reached "
+                                "the collection, but janki could not complete and "
+                                "verify their archive. The live review was kept. "
+                                "Inspect it and the archive, then rerun this exact "
+                                "promotion; do not delete staging by hand."
+                            ) from exc
+                        raise
 
-                removed = prune_staging_under_lock(path, keep)
-                if held:
-                    rewrite_staging_under_lock(path, held)
-                else:
-                    path.unlink()
+                live_revision = hashlib.sha256(expected_wire).hexdigest()
+                try:
+                    if held:
+                        removed = finish_staging_under_lock(
+                            path,
+                            keep,
+                            held,
+                            expected_revision=live_revision,
+                        )
+                    else:
+                        removed = len(keep) - sum(keep)
+                        atomic_unlink_bound(
+                            path,
+                            expected_revision=live_revision,
+                        )
+                except JankiError as exc:
+                    if canonical_commit is not None:
+                        raise PromoteError(
+                            "[promotion-completion-incomplete] cards reached the "
+                            "collection and archive, but janki could not prove "
+                            "that the live staging review was retired unchanged. "
+                            "Inspect the live review and archive, then rerun this "
+                            "exact promotion; do not delete staging by hand."
+                        ) from exc
+                    raise PromoteError(
+                        "[staging-review-stale] janki could not prove that the "
+                        "live staging review was retired unchanged. Inspect it "
+                        "and retry; do not delete staging by hand."
+                    ) from exc
                 return done, removed
 
 
@@ -842,6 +980,9 @@ class PromotionDecision:
     done: Path | None = None
     archived: tuple[VocabularyRecord, ...] = ()
     archived_meta: Mapping[str, Any] | None = None
+    #: Exact archive bytes from the same read that produced the rows and
+    #: metadata. ``None`` preserves absence as a distinct preview state.
+    archive_revision: bytes | None = None
     #: One flag per input row: already in this run's archive.
     retry_flags: tuple[bool, ...] = ()
     #: The ids this run has already archived — computed once, here, because
@@ -867,6 +1008,15 @@ class PromotionDecision:
     existing: tuple[VocabularyRecord, ...] = ()
     output_path: Path | None = None
     output_revision: RecordsRevision | None = None
+    #: Every id the reading gate treated as already present, including inline
+    #: deck notes.  This is derived before a possibly blocking dictionary
+    #: lookup and therefore belongs to the same snapshot as ``existing``.
+    stored_ids: frozenset[str] = frozenset()
+    #: Exact operational inputs sampled before the reading lookup. Coverage
+    #: dispatch compares them after that blocking call: selector and ledger
+    #: changes need not alter declared ids, parsing, or the first gate label.
+    deck_revision: str = ""
+    ledger_revision: bytes | None = None
     #: Decks whose ids could not be read, verbatim — the two warning streams
     #: stay separate because the command prints these *before* the readings
     #: warnings and the plan reports them after.
@@ -1102,10 +1252,15 @@ def decide_promotion(
         # produced a traceback where the old code returned a refusal.
         wire, records, meta = record_review_snapshot(staging_path)
         snapshot.update(wire=wire, records=tuple(records), meta=meta)
-        validate_coverage_facts(meta)
-        done, archived, archived_meta = archive_for_run(archive_base, meta)
+        promote.check_coverage_facts(meta)
+        done, archived, archived_meta, archive_revision = (
+            _archive_for_run_snapshot(archive_base, meta)
+        )
         snapshot.update(
-            done=done, archived=tuple(archived), archived_meta=archived_meta
+            done=done,
+            archived=tuple(archived),
+            archived_meta=archived_meta,
+            archive_revision=archive_revision,
         )
         if records or archived:
             validate_record_archive(meta, archived, archived_meta)
@@ -1114,17 +1269,20 @@ def decide_promotion(
         )
     except JankiError as exc:
         return blocked(exc, "structure")
+    coverage_error: JankiError | None = None
     try:
         promote.check_coverage(meta)
     except JankiError as exc:
         # Named separately because this is the one `--accept-coverage` can
-        # answer. Every other refusal above means the model call would be
-        # spent on a file no acceptance could make promotable.
-        return blocked(exc, "coverage")
+        # answer. Keep it while the remaining local gates run: a coverage
+        # verdict cannot repair any of their refusals, so returning here would
+        # spend a paid check before discovering a free, fatal answer.
+        coverage_error = exc
 
     common = {
         "wire": wire, "meta": meta, "records": tuple(records),
         "done": done, "archived": tuple(archived), "archived_meta": archived_meta,
+        "archive_revision": archive_revision,
         "retry_flags": tuple(retry_flags),
         "already_archived": (
             tuple(record.id for record in archived)
@@ -1136,14 +1294,23 @@ def decide_promotion(
             )
         ),
     }
+    # A refusal after this point still has to carry the exact repository
+    # snapshots already read. Paid coverage preflight compares them after a
+    # blocking dictionary lookup so a call cannot be bought for collection or
+    # archive state that disappeared while jpdb was answering.
+    snapshot.update(common)
 
     if not records:
         if archived:
             # An empty live file beside this run's own archive is a completed
             # partial promotion, not a new review.
+            if coverage_error is not None:
+                return blocked(coverage_error, "coverage")
             return at("archive_retry", **common)
         run_id = rich_extraction_review_run_id(meta)
         if run_id is None:
+            if coverage_error is not None:
+                return blocked(coverage_error, "coverage")
             return at("nothing", **common)
         # A zero-record rich extraction proposed grammar and nothing else. Its
         # completion contract is a different one, and it refuses a source
@@ -1158,6 +1325,8 @@ def decide_promotion(
             return blocked(exc, "rewritable")
         if staging_path.suffix.lower() not in STAGING_SUFFIXES:
             return blocked(PromoteError(_unrewritable(staging_path)), "rewritable")
+        if coverage_error is not None:
+            return blocked(coverage_error, "coverage")
         return at("pattern_only", **common)
 
     # After the zero-record branch, exactly as in the command: a legacy file
@@ -1176,6 +1345,8 @@ def decide_promotion(
         if not is_retry
     ]
     if not work:
+        if coverage_error is not None:
+            return blocked(coverage_error, "coverage")
         return at("archive_retry", **common)
 
     try:
@@ -1188,12 +1359,13 @@ def decide_promotion(
             archived_ids=[record.id for record in archived],
         )
         output_path = config.normalized_file.resolve()
-        # Captured in the same pass that reads the records the decision is
-        # made from. Split apart, the token races the read it is meant to
-        # prove unchanged.
-        output_revision = records_revision(output_path)
-        existing = load_records(output_path) if output_path.exists() else []
+        # One bound read supplies both the parsed collection and its CAS token.
+        # Two opens can observe revision A and records B, then silently accept
+        # a write if the path returns to A before execution.
+        existing, output_revision = load_records_snapshot(output_path)
         stored_ids, unreadable = status_module.surviving_ids(config, existing)
+        deck_revision = _deck_configuration_revision(config)
+        ledger_revision = _file_revision(config.ledger_file.resolve())
     except JankiError as exc:
         return blocked(exc, "collection")
 
@@ -1211,9 +1383,13 @@ def decide_promotion(
         "work": tuple(work), "readings": readings,
         "existing": tuple(existing), "output_path": output_path,
         "output_revision": output_revision,
+        "stored_ids": frozenset(stored_ids),
+        "deck_revision": deck_revision,
+        "ledger_revision": ledger_revision,
         "unreadable_decks": tuple(unreadable),
         "ai_provenance": ai_provenance,
     }
+    snapshot.update(common)
 
     try:
         # The *second* accounting call, the one made after `check_readings`.
@@ -1234,15 +1410,18 @@ def decide_promotion(
         return blocked(exc, "accounting")
 
     common["promoted_retry_flags"] = tuple(promoted_retry)
+    snapshot["promoted_retry_flags"] = tuple(promoted_retry)
 
     if not readings.promoted:
         # Nothing would land, so promote returns before it reads the ledger.
         # Reading it here would block a source on a corrupt ledger promote
         # never opens — telling someone their work is unusable when it is not.
+        if coverage_error is not None:
+            return blocked(coverage_error, "coverage")
         return at("nothing_lands", **common)
 
     try:
-        ledger.load(config.ledger_file)
+        ledger.load_snapshot(config.ledger_file, ledger_revision)
     except JankiError as exc:
         return blocked(exc, "ledger")
     try:
@@ -1258,6 +1437,7 @@ def decide_promotion(
         )
     except JankiError as exc:
         return blocked(exc, "merge")
+    snapshot.update(merged=tuple(merged), outcomes=outcomes)
     try:
         newly_landing = [
             record
@@ -1266,12 +1446,50 @@ def decide_promotion(
             )
             if not is_retry
         ]
+        _require_deck_inputs(
+            config,
+            existing,
+            stored_ids=stored_ids,
+            unreadable_decks=unreadable,
+            deck_revision=deck_revision,
+        )
         deck_ownership = require_exact_deck_ownership(
             config, newly_landing, merged
         )
+        _require_deck_inputs(
+            config,
+            existing,
+            stored_ids=stored_ids,
+            unreadable_decks=unreadable,
+            deck_revision=deck_revision,
+        )
+        try:
+            confirmed_ownership = require_exact_deck_ownership(
+                config, newly_landing, merged
+            )
+        except JankiError as exc:
+            raise PromoteError(
+                "[promotion-input-stale] study-deck ownership changed while "
+                "it was being proved. Reload the promotion preview."
+            ) from exc
+        if confirmed_ownership != deck_ownership:
+            raise PromoteError(
+                "[promotion-input-stale] study-deck ownership changed while "
+                "it was being proved. Reload the promotion preview."
+            )
+        _require_deck_inputs(
+            config,
+            existing,
+            stored_ids=stored_ids,
+            unreadable_decks=unreadable,
+            deck_revision=deck_revision,
+        )
     except JankiError as exc:
         return blocked(exc, "deck")
+    snapshot["deck_ownership"] = deck_ownership
 
+    if coverage_error is not None:
+        return blocked(coverage_error, "coverage")
     return at(
         "lands",
         **common,
@@ -1348,6 +1566,7 @@ def execute_promotion(
             expected_meta=meta,
             expected_archived=archived,
             expected_archived_meta=archived_meta,
+            expected_archive_revision=decision.archive_revision,
             promoted=(),
             retry_records=() if empty_live else list(decision.records),
             keep=() if empty_live else [False] * len(decision.records),
@@ -1441,6 +1660,7 @@ def execute_promotion(
             expected_meta=meta,
             expected_archived=archived,
             expected_archived_meta=archived_meta,
+            expected_archive_revision=decision.archive_revision,
             promoted=(),
             retry_records=retry_records,
             keep=keep,
@@ -1525,6 +1745,13 @@ def execute_promotion(
                     "these cards were checked. Nothing was promoted. Check "
                     "the current deck membership and try again."
                 )
+            _require_deck_inputs(
+                config,
+                existing,
+                stored_ids=set(decision.stored_ids),
+                unreadable_decks=decision.unreadable_decks,
+                deck_revision=decision.deck_revision,
+            )
             save_records_json(output_path, merged, expected=output_revision)
             ledger_error = _save_execution_ledger(book)
             if ledger_error is not None and ai_provenance is not None:
@@ -1545,6 +1772,7 @@ def execute_promotion(
             expected_meta=meta,
             expected_archived=archived,
             expected_archived_meta=archived_meta,
+            expected_archive_revision=decision.archive_revision,
             promoted=pending_promoted,
             retry_records=retry_records,
             keep=keep,
@@ -1669,4 +1897,5 @@ def project_promotion(decision: PromotionDecision) -> PromotionPlan:
         held=held,
         already_archived=already,
         warnings=warnings,
+        deck_ownership=decision.deck_ownership,
     )

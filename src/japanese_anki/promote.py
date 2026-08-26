@@ -57,6 +57,7 @@ from japanese_anki.staging import (
     authorized_field_replacements,
     field_replacement_block,
     require_resolved_coverage,
+    validate_coverage_facts,
 )
 
 __all__ = [
@@ -69,6 +70,7 @@ __all__ = [
     "PromoteResult",
     "check_readings",
     "check_coverage",
+    "check_coverage_facts",
     "check_candidate_accounting",
     "field_replacement_block",
     "already_landed_staged_fields",
@@ -145,9 +147,26 @@ def check_coverage(meta: dict[str, Any]) -> None:
         require_resolved_coverage(meta)
     except JankiError as exc:
         raise PromoteError(str(exc)) from exc
+    check_coverage_facts(meta)
+
+
+def check_coverage_facts(
+    meta: dict[str, Any],
+) -> tuple[Mapping[str, Any], str, str, str] | None:
+    """Validate every coverage invariant except a person's acceptance.
+
+    A caller about to buy the separate completeness check needs to know first
+    whether any verdict could make this artifact promotable. The ordinary
+    promotion gate still asks for authority before reaching this half, keeping
+    its established refusal ordering unchanged.
+    """
+    try:
+        pending = validate_coverage_facts(meta)
+    except JankiError as exc:
+        raise PromoteError(str(exc)) from exc
     block = meta.get("coverage")
     if not isinstance(block, dict):
-        return
+        return pending
     accounting = meta.get(CANDIDATE_ACCOUNTING_KEY)
     if block.get("version") == 2:
         if not isinstance(accounting, Mapping):
@@ -164,6 +183,7 @@ def check_coverage(meta: dict[str, Any]) -> None:
             "coverage v2; it cannot be backfilled onto an older paid artifact"
         )
     _verify_coverage_facts(meta, block)
+    return pending
 
 
 def check_candidate_accounting(

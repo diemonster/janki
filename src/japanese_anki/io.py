@@ -3178,6 +3178,44 @@ def read_text_bound(path: Path) -> str:
         raise DataError(f"Could not safely read {target}: {exc}") from exc
 
 
+def atomic_unlink_bound(path: Path, *, expected_revision: str) -> None:
+    """Retire one exact regular file without deleting a raced replacement.
+
+    The CAS lock serializes janki's bound writers. The bound directory and
+    private retirement machinery close the remaining POSIX rename/unlink seam:
+    if the named entry no longer has ``expected_revision``, its replacement is
+    left at the original path.
+    """
+    target = Path(path).absolute()
+    try:
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_bound_directory(target.parent, create=False) as binding,
+        ):
+            _recover_bound_target_under_lock(binding, target)
+            state, revision, _payload = _read_bound_bytes(
+                binding.descriptor, target.name
+            )
+            if revision != expected_revision:
+                raise DataError(f"Bound target changed content: {target}")
+            if not _retire_exact_entry(
+                binding,
+                target.name,
+                state,
+                revision,
+            ):
+                raise DataError(f"Bound target changed before unlink: {target}")
+            _validate_bound_directory(binding)
+    except FileNotFoundError as exc:
+        raise DataError(f"Bound target changed before unlink: {target}") from exc
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(
+            f"Could not safely unlink {target}: {exc.strerror or exc}"
+        ) from exc
+
+
 def _allocate_bound_temporary(
     binding: _DirectoryBinding,
     target_name: str,
@@ -3915,11 +3953,8 @@ def load_structured(path: Path) -> Any:
     return _parse_structured_text(path, text)
 
 
-def load_records(path: Path) -> list[VocabularyRecord]:
-    try:
-        text = read_text_bound(path)
-    except FileNotFoundError as exc:
-        raise DataError(f"File not found: {path}") from exc
+def _records_from_text(path: Path, text: str) -> list[VocabularyRecord]:
+    """Parse vocabulary records from bytes already bound to one read."""
     data = _parse_structured_text(path, text)
     if isinstance(data, dict) and "records" in data:
         data = data["records"]
@@ -3935,6 +3970,35 @@ def load_records(path: Path) -> list[VocabularyRecord]:
     except ModelError as exc:
         # The constructor knows the field; only this frame knows the file.
         raise DataError(f"Could not read a record in {path}: {exc}") from exc
+
+
+def load_records(path: Path) -> list[VocabularyRecord]:
+    try:
+        text = read_text_bound(path)
+    except FileNotFoundError as exc:
+        raise DataError(f"File not found: {path}") from exc
+    return _records_from_text(path, text)
+
+
+def load_records_snapshot(
+    path: Path,
+) -> tuple[list[VocabularyRecord], RecordsRevision]:
+    """Read records and their later-write token from the exact same text.
+
+    A separate ``records_revision`` followed by ``load_records`` can observe
+    revision A and records B. If the file returns to A before the guarded
+    write, the compare-and-swap accepts a merge built over transient B. The
+    revision already owns the exact text; parse that text rather than opening
+    the path a second time.
+
+    Absence is a real revision and an empty collection, matching first-write
+    callers that previously paired ``records_revision`` with an existence
+    check.
+    """
+    revision = records_revision(path)
+    if revision.text is None:
+        return [], revision
+    return _records_from_text(revision.path, revision.text), revision
 
 
 def save_records_json(

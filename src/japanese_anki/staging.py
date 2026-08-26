@@ -1133,6 +1133,7 @@ def _write_staging_unlocked(
     force: bool = False,
     *,
     expected_revision: str | None = None,
+    expected_absent: bool | None = None,
 ) -> Path:
     """Implementation shared by the ordinary and already-locked writers."""
     path = Path(path)
@@ -1150,6 +1151,10 @@ def _write_staging_unlocked(
     if expected_revision is not None and not force:
         raise StagingError(
             "A staging revision can guard only an explicitly forced replacement"
+        )
+    if expected_revision is not None and expected_absent:
+        raise StagingError(
+            "A staging write cannot expect both exact content and absence"
         )
 
     payload: dict[str, Any] = {}
@@ -1183,7 +1188,7 @@ def _write_staging_unlocked(
         path,
         text,
         expected_revision=expected_revision,
-        expected_absent=not force,
+        expected_absent=not force if expected_absent is None else expected_absent,
     )
     return path
 
@@ -1224,6 +1229,7 @@ def write_staging_under_lock(
     force: bool = False,
     *,
     expected_revision: str | None = None,
+    expected_absent: bool | None = None,
 ) -> Path:
     """Write staging when the caller already holds this exact path's lock.
 
@@ -1231,8 +1237,9 @@ def write_staging_under_lock(
     its done archive. Calling :func:`write_staging` while holding the done lock
     would try to acquire that non-reentrant lock again and deadlock; calling an
     unlocked writer without the outer lock would reopen the data-loss race.
-    ``expected_revision`` closes the final seam against an editor that ignores
-    that advisory lock.
+    ``expected_revision`` and ``expected_absent`` close the final seam against
+    an editor that ignores that advisory lock. Absence remains the default for
+    a non-forced create; a forced transaction must request it explicitly.
     """
     return _write_staging_unlocked(
         path,
@@ -1240,6 +1247,7 @@ def write_staging_under_lock(
         meta,
         force,
         expected_revision=expected_revision,
+        expected_absent=expected_absent,
     )
 
 
@@ -1615,7 +1623,21 @@ def _rewrite_staging_unlocked(
     return path
 
 
-def render_staging_update(path: Path, records: Sequence[VocabularyRecord]) -> str:
+def _captured_staging_document(snapshot: bytes, *, source: str) -> tuple[Any, str]:
+    """Parse the exact browser-bound staging bytes for an in-memory edit."""
+    try:
+        captured_text = snapshot.decode("utf-8", errors="strict")
+    except UnicodeError as exc:
+        raise StagingError(f"Could not read {source} for rewriting: {exc}") from exc
+    return _load_document_text(captured_text, source=source), captured_text
+
+
+def render_staging_update(
+    snapshot: bytes,
+    records: Sequence[VocabularyRecord],
+    *,
+    source: str,
+) -> str:
     """The text :func:`rewrite_staging` would write, without writing it.
 
     The workbench needs the same round-trip edit but a different *write*: a
@@ -1624,18 +1646,18 @@ def render_staging_update(path: Path, records: Sequence[VocabularyRecord]) -> st
     Splitting render from write lets both callers share one implementation of
     "change only what changed" instead of growing a second one.
     """
-    document, captured_text, _revision = _load_document_snapshot(path)
-    original, _meta = read_staging_text(captured_text, source=str(path))
+    document, captured_text = _captured_staging_document(snapshot, source=source)
+    original, _meta = read_staging_text(captured_text, source=source)
     raw_records = document[_RECORDS_KEY] or []
     if not (len(raw_records) == len(original) == len(records)):
         raise StagingError(
-            f"{path} holds {len(raw_records)} row(s) but {len(records)} were given. "
+            f"{source} holds {len(raw_records)} row(s) but {len(records)} were given. "
             "render_staging_update annotates the rows already in a file."
         )
     for raw, before, after in zip(raw_records, original, records, strict=True):
         if not isinstance(raw, MutableMapping):
             raise StagingError(
-                f"Record in {path} must be a mapping, got {type(raw).__name__}"
+                f"Record in {source} must be a mapping, got {type(raw).__name__}"
             )
         _apply_changes(raw, before.to_dict(), after.to_dict())
     buffer = io.StringIO()
@@ -1671,9 +1693,12 @@ def coverage_already_resolved(meta: Mapping[str, Any]) -> bool:
     return True
 
 
-@_path_locked
-def record_coverage_approval(
-    path: Path, approval: Mapping[str, Any], *, replace_existing: bool = False
+def _record_coverage_approval_unlocked(
+    path: Path,
+    approval: Mapping[str, Any],
+    *,
+    replace_existing: bool = False,
+    expected_revision: str | None = None,
 ) -> Path:
     """Write a coverage approval into a staging file, changing nothing else.
 
@@ -1691,6 +1716,11 @@ def record_coverage_approval(
     """
     path = Path(path)
     document, _captured_text, revision = _load_document_snapshot(path)
+    if expected_revision is not None and revision != expected_revision:
+        raise StagingError(
+            f"[coverage-review-stale] {path} changed before its coverage "
+            "approval could be recorded"
+        )
     block = document.get(_COVERAGE_KEY)
     if not isinstance(block, MutableMapping):
         raise StagingError(f"{path} carries no coverage block to approve.")
@@ -1709,6 +1739,44 @@ def record_coverage_approval(
         expected_revision=revision,
     )
     return path
+
+
+@_path_locked
+def record_coverage_approval(
+    path: Path,
+    approval: Mapping[str, Any],
+    *,
+    replace_existing: bool = False,
+    expected_revision: str | None = None,
+) -> Path:
+    """Write a coverage approval through an exact locked compare-and-swap."""
+    return _record_coverage_approval_unlocked(
+        path,
+        approval,
+        replace_existing=replace_existing,
+        expected_revision=expected_revision,
+    )
+
+
+def record_coverage_approval_under_lock(
+    path: Path,
+    approval: Mapping[str, Any],
+    *,
+    replace_existing: bool = False,
+    expected_revision: str | None = None,
+) -> Path:
+    """Write an approval when the caller already holds this staging lock.
+
+    Paid-call completion has to acquire the output lock before the operation
+    journal lock. Re-entering the ordinary wrapper from that transaction would
+    deadlock because path locks are deliberately non-reentrant.
+    """
+    return _record_coverage_approval_unlocked(
+        path,
+        approval,
+        replace_existing=replace_existing,
+        expected_revision=expected_revision,
+    )
 
 
 def _plain(value: Any) -> Any:
@@ -1819,7 +1887,12 @@ def _drop_provenance(document: Any, gone: Iterable[str]) -> None:
             del values[record_id]
 
 
-def render_staging_prune(path: Path, keep: Sequence[bool]) -> str | None:
+def render_staging_prune(
+    snapshot: bytes,
+    keep: Sequence[bool],
+    *,
+    source: str,
+) -> str | None:
     """The text :func:`prune_staging` would write, or None if nothing goes.
 
     The workbench needs the same pruning bound to a compare-and-swap, for the
@@ -1832,12 +1905,11 @@ def render_staging_prune(path: Path, keep: Sequence[bool]) -> str | None:
     archive still holds them, while the workbench prunes a row somebody threw
     away, whose provenance would otherwise name a record nothing holds.
     """
-    path = Path(path)
-    document, _captured_text, _revision = _load_document_snapshot(path)
+    document, _captured_text = _captured_staging_document(snapshot, source=source)
     raw_records = document[_RECORDS_KEY] or []
     if len(raw_records) != len(keep):
         raise StagingError(
-            f"{path} holds {len(raw_records)} row(s) but {len(keep)} flag(s) were "
+            f"{source} holds {len(raw_records)} row(s) but {len(keep)} flag(s) were "
             "given; pruning needs one flag per row, in file order."
         )
     survivors = [raw for raw, wanted in zip(raw_records, keep, strict=True) if wanted]
@@ -1867,6 +1939,65 @@ def prune_staging(path: Path, keep: Sequence[bool]) -> int:
 def prune_staging_under_lock(path: Path, keep: Sequence[bool]) -> int:
     """Drop selected rows when the caller already holds this path's lock."""
     return _prune_staging_unlocked(path, keep)
+
+
+def finish_staging_under_lock(
+    path: Path,
+    keep: Sequence[bool],
+    held: Sequence[VocabularyRecord],
+    *,
+    expected_revision: str,
+) -> int:
+    """Write promotion's held remainder as one exact-snapshot CAS.
+
+    Promotion used to prune and then rewrite in two read-modify-write passes.
+    Besides exposing an intermediate file, either pass could start from a
+    workbench edit that landed after promotion validated its positional
+    ``keep`` flags. Build the final document from one captured revision and
+    replace only that same revision instead.
+    """
+    path = Path(path)
+    document, captured_text, revision = _load_document_snapshot(path)
+    if revision != expected_revision:
+        raise StagingError(
+            f"[staging-review-stale] {path} changed before its reviewed rows "
+            "could be retired"
+        )
+    original, _meta = read_staging_text(captured_text, source=str(path))
+    raw_records = document[_RECORDS_KEY] or []
+    if not (len(raw_records) == len(original) == len(keep)):
+        raise StagingError(
+            f"{path} holds {len(raw_records)} row(s) but {len(keep)} flag(s) were "
+            "given; finishing promotion needs one flag per row, in file order."
+        )
+    kept = [
+        (raw, before)
+        for raw, before, wanted in zip(raw_records, original, keep, strict=True)
+        if wanted
+    ]
+    if len(kept) != len(held):
+        raise StagingError(
+            f"{path} keeps {len(kept)} row(s) but promotion supplied "
+            f"{len(held)} held row(s)."
+        )
+    removed = len(raw_records) - len(kept)
+    raw_records[:] = [raw for raw, _before in kept]
+    document[_RECORDS_KEY] = raw_records
+    for (raw, before), after in zip(kept, held, strict=True):
+        if not isinstance(raw, MutableMapping):
+            raise StagingError(
+                f"Record in {path} must be a mapping, got {type(raw).__name__}"
+            )
+        _apply_changes(raw, before.to_dict(), after.to_dict())
+
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    atomic_write_text_bound(
+        path,
+        buffer.getvalue(),
+        expected_revision=revision,
+    )
+    return removed
 
 
 def _read_staging_data(data: Any, *, source: str) -> tuple[list[VocabularyRecord], dict[str, Any]]:

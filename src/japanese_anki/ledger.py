@@ -1867,29 +1867,8 @@ class Ledger:
         ]
 
 
-def load(path: Path, *, repair: bool = False) -> Ledger:
-    """Read a ledger. A missing (or empty) file is an empty ledger, not an error.
-
-    This is where a misshapen entry is refused, and the timing is the point: a
-    ledger is loaded before an import writes anything, so a refusal here costs
-    the user nothing. The same refusal raised from a mutator fires *after*
-    ``vocabulary.json`` has been replaced and rows have been staged, so the
-    command has done almost all of its work and reports none of it.
-
-    ``repair=True`` coerces a wrong-typed structured key back to an empty one
-    and names the record in :attr:`Ledger.repaired` instead of refusing. Only
-    ``status --rebuild`` passes it, because only ``--rebuild`` is asking to fix
-    the file: deleting the ledger is the other way out of a bad shape, and it
-    destroys the export and enrichment history that no rebuild can reconstruct.
-    """
-    path = Path(path)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return Ledger(path=path, baseline=None, guarded=True)
-    except OSError as exc:
-        raise LedgerError(f"Could not read ledger {path}: {exc.strerror or exc}") from exc
-
+def _load_text(path: Path, text: str, *, repair: bool) -> Ledger:
+    """Parse ledger text whose filesystem identity was chosen by the caller."""
     if not text.strip():
         return Ledger(path=path, baseline=text, guarded=True)
     try:
@@ -1967,3 +1946,42 @@ def load(path: Path, *, repair: bool = False) -> Ledger:
         guarded=True,
         repaired=repaired,
     )
+
+
+def load(path: Path, *, repair: bool = False) -> Ledger:
+    """Read a ledger. A missing (or empty) file is an empty ledger, not an error.
+
+    This is where a misshapen entry is refused, and the timing is the point: a
+    ledger is loaded before an import writes anything, so a refusal here costs
+    the user nothing. The same refusal raised from a mutator fires *after*
+    ``vocabulary.json`` has been replaced and rows have been staged, so the
+    command has done almost all of its work and reports none of it.
+
+    ``repair=True`` coerces a wrong-typed structured key back to an empty one
+    and names the record in :attr:`Ledger.repaired` instead of refusing. Only
+    ``status --rebuild`` passes it, because only ``--rebuild`` is asking to fix
+    the file: deleting the ledger is the other way out of a bad shape, and it
+    destroys the export and enrichment history that no rebuild can reconstruct.
+    """
+    path = Path(path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return Ledger(path=path, baseline=None, guarded=True)
+    except OSError as exc:
+        raise LedgerError(f"Could not read ledger {path}: {exc.strerror or exc}") from exc
+    return _load_text(path, text, repair=repair)
+
+
+def load_snapshot(
+    path: Path, wire: bytes | None, *, repair: bool = False
+) -> Ledger:
+    """Parse the exact ledger bytes already bound by an earlier decision read."""
+    path = Path(path)
+    if wire is None:
+        return Ledger(path=path, baseline=None, guarded=True)
+    try:
+        text = wire.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise LedgerError(f"Could not parse ledger {path}: {exc}") from exc
+    return _load_text(path, text, repair=repair)

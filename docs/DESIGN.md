@@ -124,10 +124,10 @@ retry cannot duplicate rows or delete a concurrently replaced review.
 A paid model call follows the same write-ahead shape as that paid audio
 staging: journaled durably before dispatch, its exact response persisted as a
 pending artifact before parsing, so neither a crash nor a parse failure can
-lose an answer already paid for. `extract` does this today. `enrich --ai` and
-`promote --accept-coverage` spend money and do **not** yet journal, which is a
-gap to close rather than a design choice — until they do, nothing below
-applies to them. The journal moves
+lose an answer already paid for. `extract` and the separate
+`promote --accept-coverage` completeness check do this today. `enrich --ai`
+spends money and does **not** yet journal, which is a gap to close rather than
+a design choice — until it does, nothing below applies to it. The journal moves
 `authorized → dispatching → running → result_captured → committed`, with
 `outcome_unknown`, `failed_before_send`, `canceled_before_send`, and `expired`
 as terminal or holding states. A dispatched call whose outcome is unknown is

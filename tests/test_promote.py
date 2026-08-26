@@ -7,6 +7,7 @@ than stubbed at the decision.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from contextlib import contextmanager
 from dataclasses import replace
@@ -17,11 +18,11 @@ from typing import Any
 import pytest
 import yaml
 
-from japanese_anki import cli, enrich, extract, patterns, promote
+from japanese_anki import cli, coverage, enrich, extract, patterns, promote
 from japanese_anki import staging as staging_module
 from japanese_anki.application import promotion as promotion_application
 from japanese_anki.config import ProjectConfig
-from japanese_anki.io import load_records
+from japanese_anki.io import atomic_write_text_bound, load_records
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.promote import (
@@ -1388,7 +1389,7 @@ def test_a_pattern_archive_write_failure_keeps_the_live_review(
     assert "archive write failed" in capsys.readouterr().err
 
 
-def test_a_concurrent_forced_replacement_is_not_deleted_as_the_review_finishes(
+def test_a_final_seam_pattern_replacement_is_not_deleted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1402,24 +1403,32 @@ def test_a_concurrent_forced_replacement_is_not_deleted_as_the_review_finishes(
         run_id=REVIEW_RUN_B,
         request_fingerprint="b" * 64,
     )
-    real_complete = promotion_application._complete_pattern_only_review
+    replacement_path = root / "staging" / "replacement.yaml"
+    write_staging(replacement_path, [], replacement)
+    replacement_wire = replacement_path.read_bytes()
+    replacement_path.unlink()
+    real_unlink = promotion_application.atomic_unlink_bound
 
-    def replace_before_completion(*args: Any, **kwargs: Any) -> tuple[Path, bool]:
-        write_staging(path, [], replacement, force=True)
-        return real_complete(*args, **kwargs)
+    def replace_before_unlink(*args: Any, **kwargs: Any) -> None:
+        assert Path(args[0]) == path
+        path.write_bytes(replacement_wire)
+        real_unlink(*args, **kwargs)
 
     monkeypatch.setattr(
         promotion_application,
-        "_complete_pattern_only_review",
-        replace_before_completion,
+        "atomic_unlink_bound",
+        replace_before_unlink,
     )
 
     assert cli.main(["--root", str(root), "promote", str(path)]) == 1
 
     _rows, surviving_meta = read_staging(path)
     assert surviving_meta["review_run_id"] == REVIEW_RUN_B
-    assert not (root / "staging" / "done").exists()
-    assert "staging-review-stale" in capsys.readouterr().err
+    _archived, archived_meta = read_staging(
+        root / "staging" / "done" / path.name
+    )
+    assert archived_meta["review_run_id"] == REVIEW_RUN_A
+    assert "pattern-completion-incomplete" in capsys.readouterr().err
 
 
 def test_the_done_archive_lock_is_held_through_live_staging_deletion(
@@ -1471,10 +1480,10 @@ def test_the_done_archive_lock_is_held_through_live_staging_deletion(
 
     writer_thread = Thread(target=replace_archive)
     writer_thread.start()
-    real_unlink = Path.unlink
+    real_unlink = promotion_application.atomic_unlink_bound
 
     def observe_live_unlink(target: Path, *args: Any, **kwargs: Any) -> None:
-        if target == path:
+        if Path(target) == path:
             start_writer.set()
             assert writer_attempting.wait(5)
             # Once the writer has reached the real lock, it must remain blocked
@@ -1482,7 +1491,11 @@ def test_the_done_archive_lock_is_held_through_live_staging_deletion(
             acquired_before_unlink.append(writer_acquired.wait(0.5))
         real_unlink(target, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "unlink", observe_live_unlink)
+    monkeypatch.setattr(
+        promotion_application,
+        "atomic_unlink_bound",
+        observe_live_unlink,
+    )
 
     assert cli.main(["--root", str(root), "promote", str(path)]) == 0
     assert writer_finished.wait(5)
@@ -1687,13 +1700,13 @@ def test_exact_archive_retry_prunes_live_row_without_appending_it_twice(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     def fail_after_archive(*_args: Any, **_kwargs: Any) -> int:
         raise staging_module.StagingError("simulated prune failure")
 
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", fail_after_archive
+        promotion_application, "atomic_unlink_bound", fail_after_archive
     )
     assert cli.main(command) == 1
     archive = root / "staging" / "done" / "lesson.yaml"
@@ -1701,7 +1714,7 @@ def test_exact_archive_retry_prunes_live_row_without_appending_it_twice(
     first_archive = archive.read_bytes()
 
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
     assert cli.main(command) == 0
 
@@ -1723,17 +1736,17 @@ def test_candidate_accounting_caps_new_rows_across_an_exact_archive_retry(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     def fail_after_archive(*_args: Any, **_kwargs: Any) -> int:
         raise staging_module.StagingError("simulated prune failure")
 
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", fail_after_archive
+        promotion_application, "atomic_unlink_bound", fail_after_archive
     )
     assert cli.main(command) == 1
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
 
     archive = root / "staging" / "done" / "lesson.yaml"
@@ -1867,18 +1880,18 @@ def test_schema_v3_exact_archive_retry_does_not_append_the_row_twice(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, [row], meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     monkeypatch.setattr(
         promotion_application,
-        "prune_staging_under_lock",
+        "atomic_unlink_bound",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
 
     assert cli.main(command) == 0
@@ -1936,18 +1949,18 @@ def test_exact_archive_retry_matches_the_post_remint_record(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, [reviewed], meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     monkeypatch.setattr(
         promotion_application,
-        "prune_staging_under_lock",
+        "atomic_unlink_bound",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
 
     assert cli.main(command) == 0
@@ -1971,18 +1984,18 @@ def test_exact_remint_retry_is_independent_of_later_collection_state(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, [reviewed], meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     monkeypatch.setattr(
         promotion_application,
-        "prune_staging_under_lock",
+        "atomic_unlink_bound",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
 
     # Mutable collection state must not change what the already-archived
@@ -2013,18 +2026,18 @@ def test_exact_retry_does_not_delete_a_concurrent_forced_replacement(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     monkeypatch.setattr(
         promotion_application,
-        "prune_staging_under_lock",
+        "atomic_unlink_bound",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
 
     replacement_records, replacement_meta = accounted_extract(
@@ -2193,6 +2206,154 @@ def test_record_promotion_holds_the_done_lock_through_canonical_writes(
     assert (root / "ledger.json").exists()
 
 
+@pytest.mark.parametrize("existing_archive", [False, True], ids=["create", "append"])
+def test_record_archive_writer_cas_preserves_a_final_seam_edit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing_archive: bool,
+) -> None:
+    candidates = [parsed_candidate()]
+    if existing_archive:
+        candidates.append(parsed_candidate(expression="食べる", reading="たべる"))
+    records, meta = accounted_extract(tmp_path, *candidates)
+    path = tmp_path / "staging" / "lesson.yaml"
+    live = [records[-1]]
+    write_staging(path, live, meta)
+    live_before = path.read_bytes()
+    archive = tmp_path / "staging" / "done" / path.name
+    archived = records[:-1] if existing_archive else []
+    archived_meta = (
+        promote.archive_meta(meta, len(archived)) if existing_archive else None
+    )
+    if archived_meta is not None:
+        write_staging(archive, archived, archived_meta)
+    expected_archive = archive.read_bytes() if archive.exists() else None
+    replacement = (
+        expected_archive + b"\n# concurrent archive edit\n"
+        if expected_archive is not None
+        else b"source_file: intruder.pdf\nrecords: []\n"
+    )
+    seen_guards: list[dict[str, object]] = []
+    committed: list[bool] = []
+    real_write = promotion_application.write_staging_under_lock
+
+    def edit_at_writer_seam(*args: Any, **kwargs: Any) -> Path:
+        target = Path(args[0])
+        seen_guards.append(dict(kwargs))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(replacement)
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(
+        promotion_application,
+        "write_staging_under_lock",
+        edit_at_writer_seam,
+    )
+
+    with pytest.raises(promote.PromoteError, match="promotion-completion-incomplete"):
+        promotion_application._finish_record_review(
+            path,
+            archive,
+            expected_wire=live_before,
+            expected_meta=meta,
+            expected_archived=archived,
+            expected_archived_meta=archived_meta,
+            expected_archive_revision=expected_archive,
+            promoted=live,
+            retry_records=[],
+            keep=[False],
+            held=[],
+            canonical_commit=lambda: committed.append(True),
+        )
+
+    assert committed == [True]
+    assert path.read_bytes() == live_before
+    assert archive.read_bytes() == replacement
+    [guard] = seen_guards
+    assert guard["expected_absent"] is (expected_archive is None)
+    assert guard["expected_revision"] == (
+        hashlib.sha256(expected_archive).hexdigest()
+        if expected_archive is not None
+        else None
+    )
+
+
+@pytest.mark.parametrize("held_remainder", [False, True], ids=["unlink", "rewrite"])
+def test_record_completion_preserves_a_final_seam_workbench_edit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held_remainder: bool,
+) -> None:
+    candidates = [parsed_candidate()]
+    if held_remainder:
+        candidates.append(parsed_candidate(expression="食べる", reading="たべる"))
+    records, meta = accounted_extract(tmp_path, *candidates)
+    path = tmp_path / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    live_before = path.read_bytes()
+    workbench_text = live_before.decode("utf-8") + "# concurrent workbench edit\n"
+    archive = tmp_path / "staging" / "done" / path.name
+    committed: list[bool] = []
+
+    if held_remainder:
+        real_finish = promotion_application.finish_staging_under_lock
+
+        def edit_before_finish(*args: Any, **kwargs: Any) -> int:
+            atomic_write_text_bound(
+                path,
+                workbench_text,
+                expected_revision=hashlib.sha256(live_before).hexdigest(),
+            )
+            return real_finish(*args, **kwargs)
+
+        monkeypatch.setattr(
+            promotion_application,
+            "finish_staging_under_lock",
+            edit_before_finish,
+        )
+        keep = [False, True]
+        held = [records[1]]
+    else:
+        real_unlink = promotion_application.atomic_unlink_bound
+
+        def edit_before_unlink(*args: Any, **kwargs: Any) -> None:
+            atomic_write_text_bound(
+                path,
+                workbench_text,
+                expected_revision=hashlib.sha256(live_before).hexdigest(),
+            )
+            real_unlink(*args, **kwargs)
+
+        monkeypatch.setattr(
+            promotion_application,
+            "atomic_unlink_bound",
+            edit_before_unlink,
+        )
+        keep = [False]
+        held = []
+
+    with pytest.raises(promote.PromoteError, match="promotion-completion-incomplete"):
+        promotion_application._finish_record_review(
+            path,
+            archive,
+            expected_wire=live_before,
+            expected_meta=meta,
+            expected_archived=[],
+            expected_archived_meta=None,
+            expected_archive_revision=None,
+            promoted=[records[0]],
+            retry_records=[],
+            keep=keep,
+            held=held,
+            canonical_commit=lambda: committed.append(True),
+        )
+
+    assert committed == [True]
+    assert path.read_text(encoding="utf-8") == workbench_text
+    archived, _archived_meta = read_staging(archive)
+    assert archived == [records[0]]
+
+
 def test_record_archive_selection_is_rechecked_under_its_lock(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2229,11 +2390,36 @@ def test_record_archive_selection_is_rechecked_under_its_lock(
     archives = list((root / "staging" / "done").glob("lesson*.yaml"))
     assert len(archives) == 2
     by_run = {}
+    path_by_run = {}
     for archive in archives:
         rows, archived_meta = read_staging(archive)
         by_run[archived_meta["review_run_id"]] = rows
+        path_by_run[archived_meta["review_run_id"]] = archive
     assert [item.id for item in by_run[REVIEW_RUN_A]] == ["word:話す:はなす"]
     assert [item.id for item in by_run[REVIEW_RUN_B]] == ["word:食べる:たべる"]
+
+    # This selector is called while its archive lock is already held. The public
+    # path must use the unlocked reader; asking for a bound snapshot here would
+    # recursively acquire the deliberately non-reentrant lock.
+    selected_a = path_by_run[REVIEW_RUN_A]
+
+    def forbidden_bound_read(*_args: Any, **_kwargs: Any) -> object:
+        raise AssertionError("archive_for_run re-entered the held archive lock")
+
+    with monkeypatch.context() as selector_patch:
+        selector_patch.setattr(
+            promotion_application,
+            "record_review_snapshot",
+            forbidden_bound_read,
+        )
+        with cli.exclusive_path_lock(selected_a):
+            selected, selected_rows, selected_meta = (
+                promotion_application.archive_for_run(selected_a, meta)
+            )
+    assert selected == selected_a
+    assert selected_rows == by_run[REVIEW_RUN_A]
+    assert selected_meta is not None
+    assert selected_meta["review_run_id"] == REVIEW_RUN_A
 
 
 def test_exact_retry_keeps_live_when_the_done_metadata_is_damaged(
@@ -2246,11 +2432,11 @@ def test_exact_retry_keeps_live_when_the_done_metadata_is_damaged(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     monkeypatch.setattr(
         promotion_application,
-        "prune_staging_under_lock",
+        "atomic_unlink_bound",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
@@ -2262,7 +2448,7 @@ def test_exact_retry_keeps_live_when_the_done_metadata_is_damaged(
     write_staging(archive, archived, archived_meta, force=True)
     live_before = path.read_bytes()
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
 
     assert cli.main(command) == 1
@@ -2300,11 +2486,11 @@ def test_divergent_live_copy_of_an_archived_candidate_refuses_retry(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = promotion_application.prune_staging_under_lock
+    real_prune = promotion_application.atomic_unlink_bound
 
     monkeypatch.setattr(
         promotion_application,
-        "prune_staging_under_lock",
+        "atomic_unlink_bound",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
@@ -2322,7 +2508,7 @@ def test_divergent_live_copy_of_an_archived_candidate_refuses_retry(
     live_before = path.read_bytes()
 
     monkeypatch.setattr(
-        promotion_application, "prune_staging_under_lock", real_prune
+        promotion_application, "atomic_unlink_bound", real_prune
     )
     assert cli.main(command) == 1
 
@@ -4621,7 +4807,7 @@ def test_accepting_coverage_is_refused_for_a_file_no_approval_could_save(
     the refusal a person needs is the structural one."""
     sent: list[object] = []
     monkeypatch.setattr(
-        cli.coverage, "review_coverage",
+        coverage, "review_coverage",
         lambda *a, **k: sent.append(1) or None,
     )
     root = project(tmp_path)
@@ -4674,6 +4860,65 @@ def test_a_refusal_the_dictionary_could_change_is_not_settled_offline(
     remaining, _meta = read_staging(staged)
     assert len(remaining) == 2
     assert all(staging_module.annotations(row).get("hold_reason") for row in remaining)
+
+
+def test_coverage_preflight_consults_before_believing_an_offline_collision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A preview-only post-reading refusal must not suppress a valid paid route.
+
+    Offline, both rows converge on one id and collide. JPDB holds them both,
+    so the consulted promotion has no collision. Coverage dispatch must consult
+    before treating that preview as fatal, while still doing so before paying.
+    """
+    import hashlib
+
+    from conftest import seed_prompts
+
+    root = project(tmp_path, [record(id="word:話す:はなし", reading="はなし")])
+    config = ProjectConfig.load(root)
+    source = config.scan_inbox / "lesson.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"%PDF-1.4\n%coverage preflight\n")
+    source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    block = extract.coverage_block(
+        extract.ExtractionResult(
+            candidates=(), source_units=(), model_reported_unit_count=0
+        ),
+        source_sha256=source_sha,
+        mode="table",
+    )
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [
+            record(id="word:話す:はなし", reading="はなし", meanings=["kept"]),
+            record(id="word:話す:ふるい", reading="はなし", meanings=["reminted"]),
+        ],
+        extraction_meta(block),
+    )
+    seed_prompts(root)
+    api = hanasu_jpdb()
+    patch_jpdb(monkeypatch, api)
+    sent: list[object] = []
+    monkeypatch.setattr(
+        coverage,
+        "review_coverage",
+        lambda *a, **k: sent.append(1)
+        or coverage.CoverageVerdict(True, "Accounted for.", "m", "f" * 64),
+    )
+
+    assert cli.main([
+        "--root", str(root), "promote", str(staged), "--accept-coverage",
+    ]) == 0
+
+    assert sent == [1]
+    assert api.bodies, "the preview-only collision was checked before paying"
+    remaining, _meta = read_staging(staged)
+    assert all(staging_module.annotations(row).get("hold_reason") for row in remaining)
+
+
 def test_a_row_the_second_accounting_call_flags_is_not_promoted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

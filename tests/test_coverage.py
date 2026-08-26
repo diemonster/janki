@@ -8,6 +8,9 @@ a card promoted on a model's word says so permanently.
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -16,6 +19,7 @@ import pytest
 
 from japanese_anki import coverage, prompts
 from japanese_anki.claude_client import CallResult
+from japanese_anki.errors import JankiError
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.staging import StagingError, record_coverage_approval
 
@@ -64,6 +68,65 @@ def answering(**fields: Any):
 
 
 # --- what the model is shown ---------------------------------------------------
+
+
+def test_the_request_identity_binds_source_account_prompt_and_model() -> None:
+    original = coverage.build_request(page(), BLOCK, model="m1", instructions="ASK")
+    other_source = PreparedInput(
+        kind="document",
+        media_type="application/pdf",
+        data_b64="ZGlmZmVyZW50",
+        origin_path=Path("lesson.pdf"),
+    )
+    changed_block = {**BLOCK, "source_units": [*BLOCK["source_units"]]}
+    changed_block["source_units"][0] = {
+        **changed_block["source_units"][0],
+        "context": "a different first row",
+    }
+
+    fingerprints = {
+        original.request_fingerprint,
+        coverage.build_request(
+            other_source, BLOCK, model="m1", instructions="ASK"
+        ).request_fingerprint,
+        coverage.build_request(
+            page(), changed_block, model="m1", instructions="ASK"
+        ).request_fingerprint,
+        coverage.build_request(
+            page(), BLOCK, model="m1", instructions="ASK AGAIN"
+        ).request_fingerprint,
+        coverage.build_request(
+            page(), BLOCK, model="m2", instructions="ASK"
+        ).request_fingerprint,
+    }
+
+    assert len(fingerprints) == 5
+
+
+def test_the_exact_reply_capture_is_forwarded_before_the_verdict_is_used() -> None:
+    events: list[object] = []
+    response = object()
+
+    def call(*_args: Any, capture=None, **_kwargs: Any) -> CallResult:
+        assert capture is not None
+        capture(response)
+        events.append("parsed")
+        return CallResult(
+            SimpleNamespace(approved=True, reason="Accounted for."),
+            "end_turn",
+            None,
+        )
+
+    coverage.review_coverage(
+        page(),
+        BLOCK,
+        model="m",
+        instructions="ASK",
+        parse_call=call,
+        capture=lambda value: events.append(value),
+    )
+
+    assert events == [response, "parsed"]
 
 
 def test_the_model_is_shown_the_page_itself_not_a_description_of_it() -> None:
@@ -333,7 +396,7 @@ def project_with_source(tmp_path: Path, *, mode: str = "table") -> tuple[Path, P
     """A project holding one inbox PDF and a staging file extracted from it."""
     import json
 
-    from conftest import seed_prompts
+    from conftest import seed_promotion_deck, seed_prompts
     from japanese_anki.extract import ExtractionResult, SourceUnit, coverage_block
     from japanese_anki.staging import coverage_block_fingerprint
 
@@ -344,6 +407,7 @@ def project_with_source(tmp_path: Path, *, mode: str = "table") -> tuple[Path, P
     )
     (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
     seed_prompts(tmp_path)
+    seed_promotion_deck(tmp_path)
     source = tmp_path / "inbox" / "lesson.pdf"
     source.parent.mkdir(parents=True)
     source.write_bytes(b"%PDF-1.4\n%real\n")
@@ -374,7 +438,7 @@ def project_with_source(tmp_path: Path, *, mode: str = "table") -> tuple[Path, P
         f"coverage: {json.dumps(block)}\n"
         "prompt_provenance:\n"
         f"  source_sha256: '{sha}'\n"
-        "  mode: table\n  provider: anthropic\n  model: m\n"
+        f"  mode: {mode}\n  provider: anthropic\n  model: m\n"
         "  response_schema_version: 2\n"
         f"  system_prompt_fingerprint: '{'c' * 64}'\n"
         f"  style_guide_fingerprint: '{'d' * 64}'\n"
@@ -407,21 +471,17 @@ def test_the_recorded_fingerprint_matches_the_block_that_was_approved(
     construction. `coverage_block_fingerprint(block)` is kept at the write
     anyway, as the form that stays correct if that ordering is ever changed.
     """
-    from japanese_anki import cli
     from japanese_anki.staging import coverage_block_fingerprint, read_staging
 
     root, staged = project_with_source(tmp_path)
     monkeypatch.setattr(
-        cli.coverage, "review_coverage",
+        coverage, "review_coverage",
         lambda *a, **k: coverage.CoverageVerdict(True, "Accounted for.", "m", "f" * 64),
     )
-    _records, meta = read_staging(staged)
     # A file whose stored fingerprint disagrees with its own facts is refused
     # outright now, so the honest check is that what we write matches the
     # recomputed value rather than whatever the file happened to carry.
-    cli._model_accepts_coverage(  # noqa: SLF001
-        cli._load_config(SimpleNamespace(root=root)), staged, meta
-    )
+    assert _accept(root, staged) is True
 
     _records, after = read_staging(staged)
     block = after["coverage"]
@@ -435,31 +495,32 @@ def test_a_block_the_gate_would_reject_is_never_paid_for(
 ) -> None:
     """Validate first, spend second.
 
-    A stale block fingerprint is free to detect and fatal either way. Finding
-    out after the call meant paying for a verdict, writing it into the file,
-    and *then* refusing — leaving a staging file that could neither be
-    promoted nor re-approved without hand-deleting the approval it had just
-    been given.
+    Even a self-consistent edited block is free to reject by regenerating its
+    facts from the source units. Finding out after the call meant paying for a
+    verdict, writing it into the file, and *then* refusing — leaving a staging
+    file that could neither be promoted nor re-approved without hand-deleting
+    the approval it had just been given.
     """
-    from japanese_anki import cli
-    from japanese_anki.staging import StagingError, read_staging
+    from japanese_anki.staging import (
+        coverage_block_fingerprint,
+        read_staging,
+        write_staging,
+    )
 
     root, staged = project_with_source(tmp_path)
-    staged.write_text(
-        staged.read_text(encoding="utf-8").replace("row 1", "row 1 EDITED"),
-        encoding="utf-8",
-    )
+    records, meta = read_staging(staged)
+    block = meta["coverage"]
+    block["candidate_units"] = []
+    block["coverage_block_fingerprint"] = coverage_block_fingerprint(block)
+    write_staging(staged, records, meta, force=True)
     calls: list[object] = []
     monkeypatch.setattr(
-        cli.coverage, "review_coverage",
+        coverage, "review_coverage",
         lambda *a, **k: calls.append(1) or coverage.CoverageVerdict(True, "ok", "m", "f"),
     )
-    _records, meta = read_staging(staged)
 
-    with pytest.raises(StagingError, match="coverage-block-stale"):
-        cli._model_accepts_coverage(  # noqa: SLF001
-            cli._load_config(SimpleNamespace(root=root)), staged, meta
-        )
+    with pytest.raises(JankiError, match="coverage-facts-stale"):
+        _accept(root, staged)
 
     assert calls == [], "nothing was sent"
     assert "approval" not in staged.read_text(encoding="utf-8")
@@ -507,20 +568,14 @@ def test_a_block_that_needs_no_approval_is_not_paid_for(
     approval into a committed file that no gate would ever read — the same
     waste as spending before validation, one branch over.
     """
-    from japanese_anki import cli
-    from japanese_anki.staging import read_staging
-
     root, staged = project_with_source(tmp_path, mode="prose")
     calls: list[object] = []
     monkeypatch.setattr(
-        cli.coverage, "review_coverage",
+        coverage, "review_coverage",
         lambda *a, **k: calls.append(1) or coverage.CoverageVerdict(True, "ok", "m", "f"),
     )
-    _records, meta = read_staging(staged)
 
-    accepted = cli._model_accepts_coverage(  # noqa: SLF001
-        cli._load_config(SimpleNamespace(root=root)), staged, meta
-    )
+    accepted = _accept(root, staged)
 
     assert accepted is False
     assert calls == [], "nothing was sent"
@@ -531,7 +586,7 @@ def test_a_block_that_needs_no_approval_is_not_paid_for(
 def test_the_promote_command_sends_the_coverage_template(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Through `_model_accepts_coverage`, not through `review_coverage`.
+    """Through the shared coverage service, not a direct unit call.
 
     The first attempt at this test called `review_coverage` directly and handed
     it the file — pinning only that the function forwards its own argument,
@@ -543,7 +598,7 @@ def test_the_promote_command_sends_the_coverage_template(
     it is handed, so a wrong wiring writes a permanent `authority: model`
     approval into a committed file naming a question that was never asked.
     """
-    from japanese_anki import cli, prompts
+    from japanese_anki import prompts
 
     root, staged = project_with_source(tmp_path)
     sent: list[str] = []
@@ -560,15 +615,9 @@ def test_the_promote_command_sends_the_coverage_template(
             SimpleNamespace(approved=True, reason="Accounted for."), "end_turn", None
         )
 
-    for module in (cli, coverage):
-        monkeypatch.setattr(module.claude_client, "parse_call", call, raising=False)
-    from japanese_anki.staging import read_staging
+    monkeypatch.setattr(coverage.claude_client, "parse_call", call)
 
-    _records, meta = read_staging(staged)
-
-    cli._model_accepts_coverage(  # noqa: SLF001
-        cli._load_config(SimpleNamespace(root=root)), staged, meta
-    )
+    assert _accept(root, staged) is True
 
     assert sent, "the command reached the model"
     assert prompts.load(REPO_ROOT, "approve-coverage") in sent[0]
@@ -585,12 +634,25 @@ def test_the_promote_command_sends_the_coverage_template(
 
 
 def _accept(root: Path, staged: Path, **kwargs: object) -> bool:
-    from japanese_anki import cli
-    from japanese_anki.staging import read_staging
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
 
-    _records, meta = read_staging(staged)
-    return cli._model_accepts_coverage(  # noqa: SLF001
-        cli._load_config(SimpleNamespace(root=root)), staged, meta, **kwargs
+    decision = coverage_application.plan_model_coverage(
+        ProjectConfig.load(root),
+        staged,
+        reaccept=bool(kwargs.get("reaccept", False)),
+    )
+    if decision.state == "not_required":
+        print(decision.detail, file=sys.stderr)
+        return False
+    if decision.state == "already_resolved":
+        print(decision.detail + " Use --reaccept-coverage to ask again and replace it.")
+        return True
+    return (
+        coverage_application.run_model_coverage(
+            ProjectConfig.load(root), decision
+        ).state
+        == "approved"
     )
 
 
@@ -604,12 +666,10 @@ def test_an_approval_that_already_stands_is_not_bought_again(
     verdict and then failed to write it, because replacing a recorded decision
     is refused.
     """
-    from japanese_anki import cli
-
     root, staged = project_with_source(tmp_path)
     calls: list[object] = []
     monkeypatch.setattr(
-        cli.coverage, "review_coverage",
+        coverage, "review_coverage",
         lambda *a, **k: calls.append(1)
         or coverage.CoverageVerdict(True, "Accounted for.", "m", "f"),
     )
@@ -633,7 +693,6 @@ def test_reaccepting_asks_again_and_says_it_meant_to(
     replaced something, because the file is the only place a later reader can
     see an earlier decision was set aside on purpose rather than lost.
     """
-    from japanese_anki import cli
     from japanese_anki.staging import read_staging
 
     root, staged = project_with_source(tmp_path)
@@ -642,18 +701,18 @@ def test_reaccepting_asks_again_and_says_it_meant_to(
         coverage.CoverageVerdict(True, "Second look.", "opus-5", "f2"),
     ])
     monkeypatch.setattr(
-        cli.coverage, "review_coverage", lambda *a, **k: next(verdicts)
+        coverage, "review_coverage", lambda *a, **k: next(verdicts)
     )
 
     assert _accept(root, staged) is True
     _records, first = read_staging(staged)
-    assert first["coverage"]["approval"]["model"] == "weak-model"
+    assert first["coverage"]["approval"]["model"] == "claude-opus-5"
 
     assert _accept(root, staged, reaccept=True) is True
 
     _records, second = read_staging(staged)
     approval = second["coverage"]["approval"]
-    assert approval["model"] == "opus-5"
+    assert approval["model"] == "claude-opus-5"
     assert "Second look." in approval["reason"]
     assert "replaced an earlier approval" in approval["reason"]
 
@@ -664,12 +723,11 @@ def test_reaccepting_a_file_with_no_approval_is_an_ordinary_acceptance(
     """Nothing to replace, so nothing claims to have replaced anything — a
     reason that says it set aside an earlier decision would be a false record
     of one having existed."""
-    from japanese_anki import cli
     from japanese_anki.staging import read_staging
 
     root, staged = project_with_source(tmp_path)
     monkeypatch.setattr(
-        cli.coverage, "review_coverage",
+        coverage, "review_coverage",
         lambda *a, **k: coverage.CoverageVerdict(True, "Accounted for.", "m", "f"),
     )
 
@@ -691,22 +749,24 @@ def test_a_structurally_refused_file_never_reaches_the_model(
     file too broken to parse is stopped by the acceptance helper's own
     self-gating, which would make the guard look tested when it is not.
     """
-    from japanese_anki import cli, promote
-    from japanese_anki.staging import read_staging, write_staging
+    from japanese_anki import cli
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
 
     root, staged = project_with_source(tmp_path)
-    records, meta = read_staging(staged)
-    # A same-run archive whose own note no longer records what it archived.
-    # Refused before coverage is ever asked about, and no verdict can mend it.
-    done = staged.parent / "done"
-    done.mkdir(parents=True, exist_ok=True)
-    archived_meta = promote.archive_meta(meta, 1)
-    archived_meta["review_notes"] = "no count here"
-    write_staging(done / staged.name, [records[0]], archived_meta)
+    # A valid review under a suffix the archive transaction cannot rewrite.
+    # This gate comes after coverage in the ordinary promotion pipeline, so it
+    # proves the pre-pay pass does not merely stop at the unresolved approval.
+    refused = staged.with_suffix(".txt")
+    staged.rename(refused)
+    staged = refused
     sent: list[object] = []
     monkeypatch.setattr(
-        cli.coverage, "review_coverage", lambda *a, **k: sent.append(1) or None
+        coverage, "review_coverage", lambda *a, **k: sent.append(1) or None
     )
+
+    with pytest.raises(JankiError, match="not a staging file"):
+        coverage_application.plan_coverage(ProjectConfig.load(root), staged)
 
     assert cli.main([
         "--root", str(root), "promote", str(staged), "--accept-coverage",
@@ -724,13 +784,14 @@ def test_an_accepted_file_is_then_promoted(
     against the file as it now stands, not against the copy read before the
     approval existed."""
     from conftest import seed_promotion_deck
-    from japanese_anki import cli
+    from japanese_anki import cli, operations
+    from japanese_anki.config import ProjectConfig
     from japanese_anki.io import load_records
 
     root, staged = project_with_source(tmp_path)
     seed_promotion_deck(root)
     monkeypatch.setattr(
-        cli.coverage, "review_coverage",
+        coverage, "review_coverage",
         lambda *a, **k: coverage.CoverageVerdict(True, "Accounted for.", "m", "f"),
     )
 
@@ -743,3 +804,596 @@ def test_an_accepted_file_is_then_promoted(
     assert "approval" in staged.parent.joinpath("done", staged.name).read_text(
         encoding="utf-8"
     )
+    [entry] = operations.OperationJournal.load(
+        ProjectConfig.load(root).operations_file
+    ).operations.values()
+    assert (entry.kind, entry.state) == ("coverage", "committed")
+
+
+# --- shared application service ------------------------------------------------
+
+
+def test_owner_coverage_approval_is_bound_to_the_rendered_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The owner's reason may approve only the local coverage bytes they saw."""
+    from japanese_anki.application.coverage import (
+        approve_coverage_as_owner,
+        plan_coverage,
+    )
+    from japanese_anki.config import ProjectConfig
+    from japanese_anki.staging import read_staging, require_resolved_coverage
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    monkeypatch.setattr(
+        coverage,
+        "build_request",
+        lambda *_a, **_k: pytest.fail("owner approval loaded the optional AI route"),
+    )
+    stale = plan_coverage(config, staged)
+    staged.write_text(
+        staged.read_text(encoding="utf-8") + "# changed after preview\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(JankiError, match="changed|stale"):
+        approve_coverage_as_owner(
+            config,
+            stale,
+            reason="I compared all three source rows.",
+        )
+
+    _records, untouched = read_staging(staged)
+    assert "approval" not in untouched["coverage"]
+
+    fresh = plan_coverage(config, staged)
+    approve_coverage_as_owner(
+        config,
+        fresh,
+        reason="  I compared all three source rows.  ",
+    )
+
+    _records, approved = read_staging(staged)
+    approval = approved["coverage"]["approval"]
+    assert approval["authority"] == "repository-owner"
+    assert approval["reason"] == "I compared all three source rows."
+    require_resolved_coverage(approved)
+
+    # Coverage sends the same private corpus bytes extraction did. A final
+    # symlink must not let a staged basename read an outside file, even when
+    # the target has identical bytes and would pass the source fingerprint.
+    symlink_root = tmp_path / "coverage-symlink"
+    symlink_root.mkdir()
+    _root, symlink_staged = project_with_source(symlink_root)
+    symlink_config = ProjectConfig.load(symlink_root)
+    symlink_source = symlink_config.scan_inbox / "lesson.pdf"
+    held_source = symlink_root / "held-source.pdf"
+    outside = symlink_root / "outside.pdf"
+    outside.write_bytes(symlink_source.read_bytes())
+    symlink_source.rename(held_source)
+    symlink_source.symlink_to(outside)
+    try:
+        with pytest.raises(JankiError, match="symlink|regular|safely read"):
+            plan_coverage(symlink_config, symlink_staged)
+    finally:
+        symlink_source.unlink()
+        held_source.rename(symlink_source)
+
+    # Replacing the direct entry after its descriptor is read is also stale;
+    # the captured original must not be silently described as the new path.
+    from japanese_anki import inputs as inputs_module
+
+    replacement_root = tmp_path / "coverage-replacement"
+    replacement_root.mkdir()
+    _root, replacement_staged = project_with_source(replacement_root)
+    replacement_config = ProjectConfig.load(replacement_root)
+    replacement_source = replacement_config.scan_inbox / "lesson.pdf"
+    replacement_held = replacement_root / "held-source.pdf"
+    replacement_outside = replacement_root / "outside.pdf"
+    replacement_outside.write_bytes(replacement_source.read_bytes())
+    real_read = inputs_module._read_fd_bytes
+    swapped = False
+
+    def replace_after_read(descriptor: int) -> bytes:
+        nonlocal swapped
+        captured = real_read(descriptor)
+        if not swapped:
+            replacement_source.rename(replacement_held)
+            replacement_source.symlink_to(replacement_outside)
+            swapped = True
+        return captured
+
+    monkeypatch.setattr(inputs_module, "_read_fd_bytes", replace_after_read)
+    try:
+        with pytest.raises(JankiError, match="changed while|safely read"):
+            plan_coverage(replacement_config, replacement_staged)
+        assert swapped
+    finally:
+        if replacement_source.is_symlink():
+            replacement_source.unlink()
+        if replacement_held.exists():
+            replacement_held.rename(replacement_source)
+
+
+def test_paid_coverage_is_authorized_and_captured_before_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The provider sees dispatching; parsing sees a durable exact reply."""
+    from japanese_anki import operations
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.application import promotion as promotion_application
+    from japanese_anki.config import ProjectConfig
+    from japanese_anki.staging import read_staging, require_resolved_coverage
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = coverage_application.plan_model_coverage(config, staged)
+    observed: list[str] = []
+
+    def review(*_args: Any, capture=None, **_kwargs: Any) -> coverage.CoverageVerdict:
+        [entry] = operations.OperationJournal.load(
+            config.operations_file
+        ).operations.values()
+        observed.append(entry.state)
+        assert capture is not None
+        capture({"content": [{"type": "text", "text": "exact paid reply"}]})
+        [captured] = operations.OperationJournal.load(
+            config.operations_file
+        ).operations.values()
+        observed.append(captured.state)
+        return coverage.CoverageVerdict(
+            True,
+            "Every source row is accounted for.",
+            decision.model,
+            decision.prompt_fingerprint,
+        )
+
+    monkeypatch.setattr(coverage_application.coverage, "review_coverage", review)
+
+    prompt_path = prompts.path_for(root, "approve-coverage")
+    prompt_wire = prompt_path.read_bytes()
+    prompt_path.write_bytes(prompt_wire + b"\nChanged after consent.\n")
+    with pytest.raises(JankiError, match="prompt|stale"):
+        coverage_application.run_model_coverage(config, decision)
+    assert operations.OperationJournal.load(config.operations_file).operations == {}
+    assert observed == [], "a changed paid request must not be authorized or sent"
+    prompt_path.write_bytes(prompt_wire)
+    decision = coverage_application.plan_model_coverage(config, staged)
+
+    outcome = coverage_application.run_model_coverage(config, decision)
+
+    assert observed == ["dispatching", "result_captured"]
+    assert outcome.state == "approved"
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        outcome.operation_id
+    ]
+    assert (entry.kind, entry.state) == ("coverage", "committed")
+    assert entry.request_fp == decision.request_fingerprint
+    _records, meta = read_staging(staged)
+    require_resolved_coverage(meta)
+
+    # A rejecting verdict is a paid answer, not an approval. Keep it in the
+    # journal for recovery and leave the coverage gate unresolved.
+    decline_root = tmp_path / "decline"
+    decline_root.mkdir()
+    _root, decline_staged = project_with_source(decline_root)
+    decline_config = ProjectConfig.load(decline_root)
+    decline_decision = coverage_application.plan_model_coverage(
+        decline_config, decline_staged
+    )
+
+    def reject(
+        *_args: Any, capture=None, **_kwargs: Any
+    ) -> coverage.CoverageVerdict:
+        assert capture is not None
+        capture({"content": [{"type": "text", "text": "not complete"}]})
+        return coverage.CoverageVerdict(
+            False,
+            "One source row is missing.",
+            decline_decision.model,
+            decline_decision.prompt_fingerprint,
+        )
+
+    monkeypatch.setattr(coverage_application.coverage, "review_coverage", reject)
+    declined = coverage_application.run_model_coverage(
+        decline_config, decline_decision
+    )
+
+    assert declined.state == "declined"
+    decline_entry = operations.OperationJournal.load(
+        decline_config.operations_file
+    ).operations[declined.operation_id]
+    assert decline_entry.state == "result_captured"
+    _records, declined_meta = read_staging(decline_staged)
+    assert "approval" not in declined_meta["coverage"]
+
+    # A provisional deck refusal makes preflight call jpdb. Every repository
+    # input read before that blocking lookup must still be current before the
+    # separate paid model call is authorized; its eventual approval CAS would
+    # be too late.
+    from test_promote import FakeJpdb, client_for
+
+    from japanese_anki import promote as promote_module
+    from japanese_anki.staging import write_staging
+
+    paid: list[object] = []
+    monkeypatch.setattr(
+        coverage_application.coverage,
+        "review_coverage",
+        lambda *_a, **_k: paid.append(1),
+    )
+
+    def race_project(
+        name: str, *, reaccept: bool = False, partial_archive: bool = False
+    ) -> tuple[ProjectConfig, Path, Path, object]:
+        race_root = tmp_path / name
+        race_root.mkdir()
+        _root, race_staged = project_with_source(race_root)
+        race_config = ProjectConfig.load(race_root)
+        [race_deck] = race_config.deck_dir.glob("*.yaml")
+        race_deck.write_text(
+            "deck:\n"
+            "  name: Other deck\n"
+            '  source: "../../vocabulary.json"\n'
+            "  intake_tag: other\n"
+            "  include_tags: [other]\n",
+            encoding="utf-8",
+        )
+        if partial_archive:
+            records, meta = read_staging(race_staged)
+            write_staging(
+                race_staged,
+                [
+                    records[0],
+                    replace(
+                        records[0],
+                        id="word:聞く:きく",
+                        expression="聞く",
+                        reading="きく",
+                    ),
+                ],
+                meta,
+                force=True,
+            )
+        if reaccept:
+            coverage_application.approve_coverage_as_owner(
+                race_config,
+                coverage_application.plan_coverage(race_config, race_staged),
+                reason="I compared all three source rows.",
+            )
+        race_decision = coverage_application.plan_model_coverage(
+            race_config, race_staged, reaccept=reaccept
+        )
+        return race_config, race_staged, race_deck, race_decision
+
+    def refuses_after(
+        config: ProjectConfig,
+        decision: object,
+        change: Callable[[], None],
+    ) -> None:
+        class _ChangingJpdb(FakeJpdb):
+            def __call__(self, *args: object, **kwargs: object) -> object:
+                if not self.bodies:
+                    change()
+                return super().__call__(*args, **kwargs)  # type: ignore[arg-type]
+
+        api = _ChangingJpdb(
+            {
+                "話す": [999_001, 999_002, "話す", "ちがう", [], 100, []],
+                "聞く": [999_003, 999_004, "聞く", "ちがう", [], 100, []],
+            },
+            {
+                (999_001, 999_002): {"reading": "ちがう", "alt_sids": []},
+                (999_003, 999_004): {"reading": "ちがう", "alt_sids": []},
+            },
+        )
+        with pytest.raises(
+            coverage_application.CoverageApplicationError,
+            match="preflight-stale",
+        ):
+            coverage_application.run_model_coverage(
+                config,
+                decision,  # type: ignore[arg-type]
+                reading_client=client_for(api),
+            )
+        assert api.bodies
+        assert paid == []
+        assert operations.OperationJournal.load(config.operations_file).operations == {}
+
+    def refuses_gate_swap(
+        config: ProjectConfig,
+        decision: object,
+        *,
+        during_lookup: Callable[[], None] = lambda: None,
+        match: str = "promotion-input-stale",
+    ) -> None:
+        class _GateJpdb(FakeJpdb):
+            def __call__(self, *args: object, **kwargs: object) -> object:
+                if not self.bodies:
+                    during_lookup()
+                return super().__call__(*args, **kwargs)  # type: ignore[arg-type]
+
+        api = _GateJpdb(
+            {
+                "話す": [999_001, 999_002, "話す", "はなす", [], 100, []],
+                "聞く": [999_003, 999_004, "聞く", "きく", [], 100, []],
+            },
+            {
+                (999_001, 999_002): {"reading": "はなす", "alt_sids": []},
+                (999_003, 999_004): {"reading": "きく", "alt_sids": []},
+            },
+        )
+        with pytest.raises(JankiError, match=match):
+            coverage_application.run_model_coverage(
+                config,
+                decision,  # type: ignore[arg-type]
+                reading_client=client_for(api),
+            )
+        assert api.bodies
+        assert paid == []
+        assert operations.OperationJournal.load(config.operations_file).operations == {}
+
+    # Exact canonical bytes are the CAS identity even when they parse to the
+    # same empty collection.
+    canonical_config, _staged_path, _deck, canonical_decision = race_project(
+        "preflight-canonical"
+    )
+    refuses_after(
+        canonical_config,
+        canonical_decision,
+        lambda: canonical_config.normalized_file.write_text(
+            "[]\n", encoding="utf-8"
+        ),
+    )
+
+    staging_config, staging_path, _deck, staging_decision = race_project(
+        "preflight-staging"
+    )
+    refuses_after(
+        staging_config,
+        staging_decision,
+        lambda: staging_path.write_text(
+            staging_path.read_text(encoding="utf-8") + "# changed during jpdb\n",
+            encoding="utf-8",
+        ),
+    )
+
+    stored_config, stored_staging, stored_deck, _stored_decision = race_project(
+        "preflight-stored-ids"
+    )
+    stored_source = stored_config.root / "static.json"
+    stored_source.write_text("[]", encoding="utf-8")
+    stored_deck.write_text(
+        "deck:\n"
+        "  name: Static deck\n"
+        '  source: "../../static.json"\n',
+        encoding="utf-8",
+    )
+    stored_decision = coverage_application.plan_model_coverage(
+        stored_config, stored_staging
+    )
+    refuses_after(
+        stored_config,
+        stored_decision,
+        lambda: stored_source.write_text(
+            '[{"id":"word:別:べつ","expression":"別","reading":"べつ"}]',
+            encoding="utf-8",
+        ),
+    )
+
+    # Keep the declared-id set empty while the deck becomes unreadable. A
+    # dictionary hold means the consulted decision returns the coverage gate
+    # before deck ownership is asked, so this pre-lookup warning state is the
+    # only thing that can prevent a paid verdict for the now-broken project.
+    unreadable_config, unreadable_staging, unreadable_deck, _unreadable_decision = (
+        race_project("preflight-unreadable-deck")
+    )
+    unreadable_source = unreadable_config.root / "static.json"
+    unreadable_source.write_text("[]", encoding="utf-8")
+    unreadable_deck.write_text(
+        "deck:\n"
+        "  name: Static deck\n"
+        '  source: "../../static.json"\n',
+        encoding="utf-8",
+    )
+    unreadable_decision = coverage_application.plan_model_coverage(
+        unreadable_config, unreadable_staging
+    )
+    refuses_after(
+        unreadable_config,
+        unreadable_decision,
+        lambda: unreadable_source.write_text("{broken", encoding="utf-8"),
+    )
+
+    # Selector edits do not change declared ids or readability. They still
+    # change the authoritative offline gate: this source goes from unassigned
+    # to owned, so a fresh coverage refusal must not be mistaken for the old
+    # provisional deck refusal.
+    selector_config, _staged_path, selector_deck, selector_decision = race_project(
+        "preflight-selector"
+    )
+    refuses_after(
+        selector_config,
+        selector_decision,
+        lambda: selector_deck.write_text(
+            "deck:\n"
+            "  name: Now owns every card\n"
+            '  source: "../../vocabulary.json"\n',
+            encoding="utf-8",
+        ),
+    )
+
+    # A selector can change only for the post-reading ownership gate and then
+    # return to the rendered bytes before the final offline replan. Bind that
+    # gate itself to the pre-jpdb deck revision; comparing the two outer plans
+    # alone sees A on both sides and would buy a verdict for the transient B.
+    aba_config, _staged_path, aba_deck, aba_decision = race_project(
+        "preflight-selector-a-b-a"
+    )
+    deck_a = aba_deck.read_bytes()
+    deck_b = (
+        b"deck:\n"
+        b"  name: Transient owner\n"
+        b'  source: "../../vocabulary.json"\n'
+    )
+    original_ownership = promotion_application.require_exact_deck_ownership
+    ownership_calls = 0
+
+    def swap_during_ownership(*args: Any, **kwargs: Any) -> object:
+        nonlocal ownership_calls
+        ownership_calls += 1
+        if ownership_calls == 3:
+            aba_deck.write_bytes(deck_b)
+            try:
+                return original_ownership(*args, **kwargs)
+            finally:
+                aba_deck.write_bytes(deck_a)
+        return original_ownership(*args, **kwargs)
+
+    with monkeypatch.context() as race_patch:
+        race_patch.setattr(
+            promotion_application,
+            "require_exact_deck_ownership",
+            swap_during_ownership,
+        )
+        refuses_gate_swap(aba_config, aba_decision)
+    assert aba_deck.read_bytes() == deck_a
+    assert ownership_calls >= 4
+
+    # The ledger is likewise first validated after jpdb. A corrupt A swapped
+    # for valid B only during that load must not reach coverage and then pass
+    # the final A-to-A outer comparison.
+    ledger_aba_config, ledger_aba_staging, ledger_aba_deck, _decision = race_project(
+        "preflight-ledger-a-b-a"
+    )
+    ledger_aba_deck.write_bytes(deck_b)
+    corrupt_ledger = b"{broken"
+    ledger_aba_config.ledger_file.write_bytes(corrupt_ledger)
+    ledger_aba_decision = coverage_application.plan_model_coverage(
+        ledger_aba_config, ledger_aba_staging
+    )
+    original_decide = coverage_application.decide_promotion
+    decision_calls = 0
+
+    def restore_ledger_after_consulted(*args: Any, **kwargs: Any) -> object:
+        nonlocal decision_calls
+        result = original_decide(*args, **kwargs)
+        decision_calls += 1
+        if decision_calls == 3:
+            ledger_aba_config.ledger_file.write_bytes(corrupt_ledger)
+        return result
+
+    with monkeypatch.context() as race_patch:
+        race_patch.setattr(
+            coverage_application,
+            "decide_promotion",
+            restore_ledger_after_consulted,
+        )
+        refuses_gate_swap(
+            ledger_aba_config,
+            ledger_aba_decision,
+            during_lookup=lambda: ledger_aba_config.ledger_file.write_bytes(b"{}\n"),
+            match="Could not parse ledger",
+        )
+    assert ledger_aba_config.ledger_file.read_bytes() == corrupt_ledger
+    assert decision_calls == 4
+
+    ledger_config, _staged_path, _deck, ledger_decision = race_project(
+        "preflight-ledger"
+    )
+    refuses_after(
+        ledger_config,
+        ledger_decision,
+        lambda: ledger_config.ledger_file.write_text(
+            '{"changed":"during jpdb"}\n', encoding="utf-8"
+        ),
+    )
+
+    # Archive identity is exact wire, not only parsed rows and metadata. A
+    # comment-only replacement during jpdb must stale the paid preflight too.
+    archive_wire_config, archive_wire_staged, _deck, _decision = race_project(
+        "preflight-archive-wire", reaccept=True, partial_archive=True
+    )
+    archive_wire_records, archive_wire_meta = read_staging(archive_wire_staged)
+    archive_wire_done = archive_wire_config.staging_dir / "done"
+    archive_wire_done.mkdir(parents=True, exist_ok=True)
+    archive_wire_path = archive_wire_done / archive_wire_staged.name
+    write_staging(
+        archive_wire_path,
+        [archive_wire_records[0]],
+        promote_module.archive_meta(archive_wire_meta, 1),
+    )
+    archive_wire_decision = coverage_application.plan_model_coverage(
+        archive_wire_config,
+        archive_wire_staged,
+        reaccept=True,
+    )
+    refuses_after(
+        archive_wire_config,
+        archive_wire_decision,
+        lambda: archive_wire_path.write_bytes(
+            archive_wire_path.read_bytes() + b"\n# exact-wire change\n"
+        ),
+    )
+
+    # A re-check can start from already-approved coverage and a valid partial
+    # archive can appear during jpdb. Bind both its rows and metadata before
+    # buying the replacement verdict.
+    archive_config, archive_staged, _deck, archive_decision = race_project(
+        "preflight-archive", reaccept=True, partial_archive=True
+    )
+
+    def create_archive() -> None:
+        records, meta = read_staging(archive_staged)
+        done = archive_config.staging_dir / "done"
+        done.mkdir(parents=True, exist_ok=True)
+        write_staging(
+            done / archive_staged.name,
+            [records[0]],
+            promote_module.archive_meta(meta, 1),
+        )
+
+    refuses_after(archive_config, archive_decision, create_archive)
+
+
+def test_a_paid_answer_is_kept_when_the_review_changes_during_the_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale approval loses the write race, never the already-paid answer."""
+    from japanese_anki import operations
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
+    from japanese_anki.staging import read_staging
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = coverage_application.plan_model_coverage(config, staged)
+
+    def review(*_args: Any, capture=None, **_kwargs: Any) -> coverage.CoverageVerdict:
+        assert capture is not None
+        capture({"content": [{"type": "text", "text": "paid answer"}]})
+        staged.write_text(
+            staged.read_text(encoding="utf-8") + "# reviewer edit\n",
+            encoding="utf-8",
+        )
+        return coverage.CoverageVerdict(
+            True,
+            "Every source row is accounted for.",
+            decision.model,
+            decision.prompt_fingerprint,
+        )
+
+    monkeypatch.setattr(coverage_application.coverage, "review_coverage", review)
+
+    with pytest.raises(coverage_application.CoverageRunError) as raised:
+        coverage_application.run_model_coverage(config, decision)
+
+    [entry] = operations.OperationJournal.load(
+        config.operations_file
+    ).operations.values()
+    assert entry.state == "result_captured"
+    assert raised.value.operation_id == entry.operation_id
+    assert f"operations --show-reply {entry.operation_id}" in str(raised.value)
+    _records, meta = read_staging(staged)
+    assert "approval" not in meta["coverage"]

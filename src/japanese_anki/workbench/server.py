@@ -42,22 +42,31 @@ from email.parser import BytesParser
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import extract, inputs, ledger, operations, staging
+from japanese_anki import extract, inputs, jpdb, ledger, operations, staging
 from japanese_anki.application import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
     ANSWER_UNAVAILABLE,
     FORGOTTEN,
+    CoverageDecision,
     ExtractionCompletionError,
     ExtractionConsent,
     SourceJourney,
+    approve_coverage_as_owner,
     authorize_dispatch,
+    busy_refusal,
     capture_hook,
+    check_cards,
     classify_dispatch_failure,
     complete_extraction,
     describe_extraction,
     extraction_replacement_revision,
     plan_corpus_extraction,
+    plan_coverage,
+    plan_model_coverage,
+    project_coverage,
+    project_promotion,
+    run_model_coverage,
     source_detail,
     source_journeys,
 )
@@ -68,6 +77,23 @@ from japanese_anki.application.assignment import (
     ProposalOccurrence,
     assignable_word_decks,
     plan_deck_assignment,
+)
+from japanese_anki.application.coverage import CoverageRunError
+from japanese_anki.application.deck_creation import (
+    StudyDeckCreationError,
+    StudyDeckCreationPlan,
+    create_study_deck,
+    plan_study_deck,
+)
+from japanese_anki.application.promotion import (
+    POST_READING_GATES,
+    PromotionDecision,
+    decide_promotion,
+    execute_promotion,
+)
+from japanese_anki.application.promotion_action import (
+    promotion_preview_fingerprint,
+    resolve_promotion_for_execution,
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -80,6 +106,17 @@ from japanese_anki.localhttp import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.workbench import edit, reidentify, review
+from japanese_anki.workbench.addition import (
+    AdditionFormError,
+    CheckedPromotionSubmission,
+    CoverageAction,
+    CoverageActions,
+    ModelCoverageSubmission,
+    OwnerCoverageSubmission,
+    PromotionSubmission,
+    ReadingCheckSubmission,
+    parse_addition_form,
+)
 from japanese_anki.workbench.dispatch import (
     DispatchFormError,
     ExtractionAction,
@@ -88,8 +125,11 @@ from japanese_anki.workbench.dispatch import (
 )
 from japanese_anki.workbench.render import (
     STYLE,
+    render_addition,
+    render_card_check,
     render_consent,
     render_dashboard,
+    render_deck_creator,
     render_extraction_failure,
     render_extraction_progress_start,
     render_extraction_progress_step,
@@ -102,6 +142,7 @@ __all__ = ["WorkbenchSession", "make_server", "serve"]
 
 _SOURCE_PREFIX = "/source/"
 _EXTRACT_PREFIX = "/extract/"
+_DECK_CREATOR_ROUTE = "/decks/new"
 
 #: An uploaded source is orders of magnitude larger than a form. It is
 #: still bounded: this is a localhost tool reading a scan or a lesson PDF,
@@ -130,6 +171,98 @@ class _DeckAssignmentOffer:
     proposals: tuple[ProposalOccurrence, ...]
     choices: tuple[_DeckAssignmentChoice, ...]
     fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class _StudyDeckSubmission:
+    """One strictly parsed preview or create form."""
+
+    action: str
+    csrf: str
+    name: str
+    recognition: bool
+    production: bool
+    reading: bool
+    plan_fingerprint: str | None
+
+
+def _study_deck_plan_fingerprint(plan: StudyDeckCreationPlan) -> str:
+    """Bind every field of the exact service plan rendered in the browser."""
+    claim = {
+        "name": plan.name,
+        "recognition": plan.recognition,
+        "production": plan.production,
+        "reading": plan.reading,
+        "stem": plan.stem,
+        "intake_tag": plan.intake_tag,
+        "deck_id": plan.deck_id,
+        "path": str(plan.path),
+        "output_path": str(plan.output_path),
+        "yaml_bytes": plan.yaml_bytes.hex(),
+        "deck_set_fingerprint": plan.deck_set_fingerprint,
+        "project_root": str(plan.project_root),
+        "canonical_source": str(plan.canonical_source),
+    }
+    encoded = json.dumps(
+        claim, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _parse_study_deck_form(body: bytes) -> _StudyDeckSubmission:
+    """Parse the creator's two exact form shapes, including optional toggles."""
+    try:
+        text = body.decode("utf-8", errors="strict")
+        pairs = parse_qsl(
+            text,
+            keep_blank_values=True,
+            strict_parsing=True,
+            max_num_fields=8,
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise StudyDeckCreationError(
+            "That study-deck form could not be read."
+        ) from exc
+    names = [name for name, _value in pairs]
+    if len(names) != len(set(names)):
+        raise StudyDeckCreationError("That study-deck form repeats a field.")
+    fields = dict(pairs)
+    action = fields.get("action", "")
+    if action not in {"preview", "create"}:
+        raise StudyDeckCreationError(
+            "That study-deck form names no available action."
+        )
+    required = {"action", "csrf", "name"}
+    allowed = required | {"recognition", "production", "reading"}
+    if action == "create":
+        required.add("plan_fingerprint")
+        allowed.add("plan_fingerprint")
+    if not required.issubset(fields) or not set(fields).issubset(allowed):
+        raise StudyDeckCreationError(
+            "That study-deck form is not one this page offered."
+        )
+    for direction in ("recognition", "production", "reading"):
+        if direction in fields and fields[direction] != "on":
+            raise StudyDeckCreationError(
+                f"The {direction} choice is not one this page offered."
+            )
+    fingerprint = fields.get("plan_fingerprint")
+    if fingerprint is not None and (
+        len(fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in fingerprint)
+    ):
+        raise StudyDeckCreationError(
+            "That study-deck preview fingerprint is malformed."
+        )
+    return _StudyDeckSubmission(
+        action=action,
+        csrf=fields["csrf"],
+        name=fields["name"],
+        recognition="recognition" in fields,
+        production="production" in fields,
+        reading="reading" in fields,
+        plan_fingerprint=fingerprint,
+    )
 
 
 def _assignment_claim(choice: _DeckAssignmentChoice) -> dict[str, object]:
@@ -347,6 +480,12 @@ class WorkbenchSession:
     extraction_actions: ExtractionActions = field(
         default_factory=ExtractionActions, repr=False, compare=False
     )
+    #: The separately named paid completeness check gets its own one-use
+    #: capability. It carries only scalar request identity, never source bytes
+    #: or a cached CoverageDecision.
+    coverage_actions: CoverageActions = field(
+        default_factory=CoverageActions, repr=False, compare=False
+    )
 
     @classmethod
     def open(cls, config: ProjectConfig) -> WorkbenchSession:
@@ -426,6 +565,12 @@ class WorkbenchSession:
 
     def consume_extraction_action(self, token: str) -> ExtractionAction | None:
         return self.extraction_actions.consume(token)
+
+    def issue_coverage_action(self, source: str, decision: CoverageDecision) -> str:
+        return self.coverage_actions.issue(source, decision)
+
+    def consume_coverage_action(self, token: str) -> CoverageAction | None:
+        return self.coverage_actions.consume(token)
 
     def panel(self, source: str) -> review.ReviewPanel | None:
         """A freshly opened review panel for one source, or None.
@@ -637,6 +782,21 @@ class _WorkbenchHandler(LocalOnlyHandler):
             max(assigned, 0),
         )
 
+    def _promoted_banner(self) -> tuple[str, int, int] | None:
+        """Display-only PRG result; repository files remain the authority."""
+        query = self.path.split("?", 1)
+        if len(query) != 2:
+            return None
+        fields = dict(parse_qsl(query[1]))
+        if not {"source", "promoted", "held"} <= set(fields):
+            return None
+        try:
+            promoted = max(int(fields["promoted"]), 0)
+            held = max(int(fields["held"]), 0)
+        except ValueError:
+            return None
+        return fields["source"], promoted, held
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         if not self._request_is_local():
             self._error(403, "The workbench accepts only its exact localhost origin.")
@@ -656,11 +816,21 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     token=self.server.session.token,
                     csrf=self.server.session.csrf_token,
                     added=self._added_banner(),
+                    promoted=self._promoted_banner(),
                 ),
             )
             return
         if route == "/style.css":
             self._send(200, STYLE, content_type="text/css; charset=utf-8")
+            return
+        if route == _DECK_CREATOR_ROUTE:
+            self._send(
+                200,
+                render_deck_creator(
+                    token=self.server.session.token,
+                    csrf=self.server.session.csrf_token,
+                ),
+            )
             return
         if route.startswith(_EXTRACT_PREFIX):
             # Same discipline as the source route: the name is matched against
@@ -682,6 +852,35 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     dispatch=dispatch,
                 ),
             )
+            return
+        if route.startswith(_SOURCE_PREFIX) and route.endswith("/check"):
+            encoded_name = route[len(_SOURCE_PREFIX) : -len("/check")]
+            if not encoded_name or "/" in encoded_name:
+                self._error(404, "No such source.")
+                return
+            name = unquote(encoded_name)
+            panel = self.server.session.panel(name)
+            if panel is None:
+                self._error(404, "No such source.")
+                return
+            report = check_cards(
+                self.server.session.config,
+                panel.records,
+                source=name,
+                reidentifiable=panel.reidentifiable,
+                approvable=panel.has_extraction_lineage,
+            )
+            self._send(
+                200,
+                render_card_check(report, token=self.server.session.token),
+            )
+            return
+        if route.startswith(_SOURCE_PREFIX) and route.endswith("/add"):
+            encoded_name = route[len(_SOURCE_PREFIX) : -len("/add")]
+            if not encoded_name or "/" in encoded_name:
+                self._error(404, "No such source.")
+                return
+            self._addition_page(unquote(encoded_name))
             return
         if route.startswith(_SOURCE_PREFIX):
             # The name is matched against the dashboard's own computed list and
@@ -739,6 +938,109 @@ class _WorkbenchHandler(LocalOnlyHandler):
             )
             return
         self._error(404, "No such workbench page.")
+
+    def _addition_page(self, name: str) -> None:
+        """Plan one exact source for coverage or promotion; write nothing."""
+        session = self.server.session
+        panel = session.panel(name)
+        if panel is None:
+            self._error(404, "No such source.")
+            return
+        try:
+            decision = decide_promotion(
+                session.config,
+                panel.staging_path,
+                source=name,
+                skip_reading_check=None,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, f"Could not preview adding this source: {exc}")
+            return
+        self._render_addition_decision(name, panel, decision)
+
+    def _render_addition_decision(
+        self,
+        name: str,
+        panel: review.ReviewPanel,
+        decision: PromotionDecision,
+        *,
+        checked_offline_preview_fingerprint: str = "",
+    ) -> None:
+        """Render an offline page or the exact result of an explicit check."""
+        session = self.server.session
+        promotion = project_promotion(decision)
+        preview_fingerprint = promotion_preview_fingerprint(decision)
+        coverage_preview = None
+        model_preview = None
+        coverage_action = ""
+        source_fingerprint = ""
+        busy = ""
+        model_error = ""
+        staging_fingerprint = hashlib.sha256(decision.wire).hexdigest()
+        if decision.is_blocked and decision.gate == "coverage":
+            try:
+                owner_decision = plan_coverage(session.config, panel.staging_path)
+                coverage_preview = project_coverage(owner_decision)
+            except JankiError as exc:
+                self._error(409, f"Could not open this coverage decision: {exc}")
+                return
+            try:
+                model_decision = plan_model_coverage(
+                    session.config, panel.staging_path
+                )
+                model_preview = project_coverage(model_decision)
+                if (
+                    model_preview.staging_fingerprint
+                    != coverage_preview.staging_fingerprint
+                    or model_preview.account != coverage_preview.account
+                ):
+                    model_error = (
+                        "The review changed while this page was opening. Reload "
+                        "before choosing a paid completeness check."
+                    )
+                    model_preview = None
+                else:
+                    coverage_action = session.issue_coverage_action(
+                        name, model_decision
+                    )
+                    source_fingerprint = model_decision.source_sha256
+                    try:
+                        busy = busy_refusal(session.config)
+                    except JankiError as exc:
+                        model_error = (
+                            "Could not read the paid-operation journal, so no "
+                            f"new call is available: {exc}"
+                        )
+            except (JankiError, ImportError) as exc:
+                model_error = str(exc)
+
+        self._send(
+            200,
+            render_addition(
+                name,
+                promotion,
+                token=session.token,
+                csrf=session.csrf_token,
+                staging_fingerprint=(
+                    coverage_preview.staging_fingerprint
+                    if coverage_preview is not None
+                    else staging_fingerprint
+                ),
+                preview_fingerprint=preview_fingerprint,
+                coverage=coverage_preview,
+                model_coverage=model_preview,
+                coverage_action=coverage_action,
+                source_fingerprint=source_fingerprint,
+                busy=busy,
+                model_error=model_error,
+                reading_check_actionable=(
+                    decision.is_blocked and decision.gate in POST_READING_GATES
+                ),
+                checked_offline_preview_fingerprint=(
+                    checked_offline_preview_fingerprint
+                ),
+            ),
+        )
 
     def _upload(self, body: bytes, content_type: str) -> None:
         """Store one uploaded source in the durable inbox. Sends nothing.
@@ -849,6 +1151,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         if (
             route != "/add-source"
+            and route != _DECK_CREATOR_ROUTE
             and not route.startswith(_SOURCE_PREFIX)
             and not route.startswith(_EXTRACT_PREFIX)
         ):
@@ -859,6 +1162,12 @@ class _WorkbenchHandler(LocalOnlyHandler):
             if read is None:
                 return
             self._upload(*read)
+            return
+        if route == _DECK_CREATOR_ROUTE:
+            body = self._read_body()
+            if body is None:
+                return
+            self._study_deck(body)
             return
         if route.startswith(_EXTRACT_PREFIX):
             name = unquote(route[len(_EXTRACT_PREFIX) :])
@@ -872,7 +1181,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         rest = route[len(_SOURCE_PREFIX) :]
         name, _, action = rest.rpartition("/")
-        actions = {"approve", "edit", "remove", "reidentify", "assign"}
+        actions = {"approve", "edit", "remove", "reidentify", "assign", "add"}
         if action not in actions or not name:
             self._error(404, "No such workbench action.")
             return
@@ -887,8 +1196,368 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._remove(unquote(name), body)
         elif action == "assign":
             self._assign(unquote(name), body)
+        elif action == "add":
+            self._addition(unquote(name), body)
         else:
             self._reidentify(unquote(name), body)
+
+    def _redirect(self, location: str) -> None:
+        self.send_response(303)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.close_connection = True
+
+    def _addition(self, name: str, body: bytes) -> None:
+        """Check readings, record coverage, or consume an exact promotion."""
+        session = self.server.session
+        try:
+            submission = parse_addition_form(body)
+        except AdditionFormError as exc:
+            self._error(400, str(exc))
+            return
+        if not secrets.compare_digest(
+            submission.csrf.encode("utf-8"), session.csrf_token.encode("utf-8")
+        ):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+
+        if isinstance(submission, ModelCoverageSubmission):
+            self._model_coverage(name, submission)
+            return
+        panel = session.panel(name)
+        if panel is None:
+            self._error(404, "No such source. Nothing was written.")
+            return
+        if isinstance(submission, OwnerCoverageSubmission):
+            try:
+                decision = plan_coverage(session.config, panel.staging_path)
+                if not secrets.compare_digest(
+                    submission.staging_fingerprint, decision.staging_revision
+                ):
+                    self._error(
+                        409,
+                        "This coverage account changed after the page was rendered. "
+                        "Nothing was approved; reload and compare the current one.",
+                    )
+                    return
+                approve_coverage_as_owner(
+                    session.config, decision, reason=submission.reason
+                )
+            except JankiError as exc:
+                self._error(409, f"{exc} Nothing was approved by this attempt.")
+                return
+            self._redirect(f"/{session.token}/source/{quote(name, safe='')}/add")
+            return
+        if isinstance(submission, ReadingCheckSubmission):
+            self._check_readings(name, panel, submission)
+            return
+        assert isinstance(
+            submission, (PromotionSubmission, CheckedPromotionSubmission)
+        )
+        self._promote(name, panel.staging_path, submission)
+
+    def _check_readings(
+        self,
+        name: str,
+        panel: review.ReviewPanel,
+        submission: ReadingCheckSubmission,
+    ) -> None:
+        """Consult jpdb, then show the result; this step writes nothing."""
+        session = self.server.session
+        try:
+            offline = decide_promotion(
+                session.config,
+                panel.staging_path,
+                source=name,
+                skip_reading_check=None,
+            )
+            staging_fingerprint = hashlib.sha256(offline.wire).hexdigest()
+            preview_fingerprint = promotion_preview_fingerprint(offline)
+            if not (
+                offline.is_blocked and offline.gate in POST_READING_GATES
+            ):
+                raise AdditionFormError(
+                    "This source no longer needs a preliminary reading check. "
+                    "Nothing was added; reload its current preview."
+                )
+            if (
+                not secrets.compare_digest(
+                    submission.staging_fingerprint, staging_fingerprint
+                )
+                or not secrets.compare_digest(
+                    submission.preview_fingerprint, preview_fingerprint
+                )
+            ):
+                raise AdditionFormError(
+                    "This promotion plan changed after the preview. Nothing was "
+                    "added; reload and check the current result."
+                )
+            checked = resolve_promotion_for_execution(
+                session.config,
+                offline,
+                client_factory=lambda: jpdb.JpdbClient(jpdb.api_key_from_env()),
+                expected_preview_fingerprint=submission.preview_fingerprint,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, str(exc))
+            return
+
+        if checked.is_blocked and checked.gate != "coverage":
+            assert checked.error is not None
+            self._error(
+                409,
+                f"After checking readings, these cards still cannot be added: "
+                f"{checked.error}",
+            )
+            return
+        self._render_addition_decision(
+            name,
+            panel,
+            checked,
+            checked_offline_preview_fingerprint=(
+                submission.preview_fingerprint
+                if not checked.is_blocked
+                else ""
+            ),
+        )
+
+    def _model_coverage(
+        self, name: str, submission: ModelCoverageSubmission
+    ) -> None:
+        """Spend one exact completeness-check consent through the shared journal."""
+        session = self.server.session
+        action = session.consume_coverage_action(submission.coverage_action)
+        if action is None:
+            self._error(
+                409,
+                "This paid coverage action has already been used or is no longer "
+                "available. Nothing was sent; reload the current coverage page.",
+            )
+            return
+        submitted = (
+            name,
+            submission.staging_fingerprint,
+            submission.source_file,
+            submission.source_fingerprint,
+            submission.model,
+            submission.request_fingerprint,
+            submission.prompt_fingerprint,
+        )
+        expected = (
+            action.source,
+            action.staging_fingerprint,
+            action.source_file,
+            action.source_fingerprint,
+            action.model,
+            action.request_fingerprint,
+            action.prompt_fingerprint,
+        )
+        if submitted != expected:
+            self._error(
+                409,
+                "This paid action does not match the completeness check the page "
+                "described. Nothing was sent; reload the coverage page.",
+            )
+            return
+        panel = session.panel(name)
+        if panel is None:
+            self._error(404, "No such source. Nothing was sent.")
+            return
+        try:
+            fresh = plan_model_coverage(
+                session.config,
+                panel.staging_path,
+                model=action.model,
+            )
+            fresh_identity = (
+                name,
+                fresh.staging_revision,
+                fresh.source_file,
+                fresh.source_sha256,
+                fresh.model,
+                fresh.request_fingerprint,
+                fresh.prompt_fingerprint,
+            )
+            if fresh_identity != expected:
+                self._error(
+                    409,
+                    "The source, account, prompt, or request changed after this "
+                    "page was rendered. Nothing was sent; reload and review it.",
+                )
+                return
+            result = run_model_coverage(session.config, fresh)
+        except CoverageRunError as exc:
+            self._error(409, str(exc))
+            return
+        except JankiError as exc:
+            # OperationError belongs here too. A paid gate refusal is an
+            # expected 409-style answer, never an unhandled server error.
+            self._error(409, f"{exc} Nothing was sent by this attempt.")
+            return
+        if result.state == "declined":
+            self._error(
+                409,
+                f"{result.verdict.model} did not accept this coverage: "
+                f"{result.verdict.reason} Nothing was promoted. Operation "
+                f"{result.operation_id} keeps the paid reply for recovery.",
+            )
+            return
+        self._redirect(f"/{session.token}/source/{quote(name, safe='')}/add")
+
+    def _promote(
+        self,
+        name: str,
+        staging_path: Path,
+        submission: PromotionSubmission | CheckedPromotionSubmission,
+    ) -> None:
+        """Re-plan, consult readings when needed, and call the shared writer."""
+        session = self.server.session
+        try:
+            offline = decide_promotion(
+                session.config,
+                staging_path,
+                source=name,
+                skip_reading_check=None,
+            )
+            staging_fingerprint = hashlib.sha256(offline.wire).hexdigest()
+            preview_fingerprint = promotion_preview_fingerprint(offline)
+            expected_offline_fingerprint = (
+                submission.offline_preview_fingerprint
+                if isinstance(submission, CheckedPromotionSubmission)
+                else submission.preview_fingerprint
+            )
+            if isinstance(submission, CheckedPromotionSubmission):
+                if not (
+                    offline.is_blocked and offline.gate in POST_READING_GATES
+                ):
+                    raise AdditionFormError(
+                        "The preliminary reading-check plan is no longer current. "
+                        "Nothing was promoted; reload its current preview."
+                    )
+            elif offline.is_blocked:
+                raise AdditionFormError(
+                    "This refusal needs a separate reading-check preview before "
+                    "anything can be promoted. Reload the current page."
+                )
+            if (
+                not secrets.compare_digest(
+                    submission.staging_fingerprint, staging_fingerprint
+                )
+                or not secrets.compare_digest(
+                    expected_offline_fingerprint, preview_fingerprint
+                )
+            ):
+                self._error(
+                    409,
+                    "This promotion plan changed after the preview. Nothing was "
+                    "promoted; reload and check the current result.",
+                )
+                return
+            decision = resolve_promotion_for_execution(
+                session.config,
+                offline,
+                client_factory=lambda: jpdb.JpdbClient(jpdb.api_key_from_env()),
+                expected_preview_fingerprint=expected_offline_fingerprint,
+            )
+            if decision.is_blocked:
+                assert decision.error is not None
+                raise decision.error
+            if isinstance(
+                submission, CheckedPromotionSubmission
+            ) and not secrets.compare_digest(
+                submission.checked_preview_fingerprint,
+                promotion_preview_fingerprint(decision),
+            ):
+                raise AdditionFormError(
+                    "The checked reading, landing, merge, or study-deck result "
+                    "changed after its preview. Nothing was promoted; check it "
+                    "again."
+                )
+            result = execute_promotion(session.config, decision)
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, str(exc))
+            return
+
+        if result.state in {
+            "landed_ledger_incomplete",
+            "landed_ai_ledger_incomplete",
+        }:
+            kept = (
+                "The live review was kept; retry this same action after the "
+                "ledger is writable."
+                if result.state == "landed_ai_ledger_incomplete"
+                else "The review was archived; janki status --rebuild can recover "
+                "source history from the landed records."
+            )
+            self._error(
+                409,
+                f"{len(result.promoted)} card(s) reached the collection, but the "
+                f"ledger did not save: {result.ledger_error}. {kept}",
+            )
+            return
+        self._redirect(
+            f"/{session.token}/?source={quote(name, safe='')}&"
+            f"promoted={len(result.promoted)}&held={len(result.held)}"
+        )
+
+    def _study_deck(self, body: bytes) -> None:
+        """Preview or explicitly create one exact thematic study deck."""
+        session = self.server.session
+        try:
+            submission = _parse_study_deck_form(body)
+        except StudyDeckCreationError as exc:
+            self._error(400, str(exc))
+            return
+        if not secrets.compare_digest(
+            submission.csrf.encode("utf-8"), session.csrf_token.encode("utf-8")
+        ):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        try:
+            plan = plan_study_deck(
+                session.config,
+                name=submission.name,
+                recognition=submission.recognition,
+                production=submission.production,
+                reading=submission.reading,
+            )
+        except StudyDeckCreationError as exc:
+            self._error(409, str(exc))
+            return
+        fingerprint = _study_deck_plan_fingerprint(plan)
+        if submission.action == "preview":
+            self._send(
+                200,
+                render_deck_creator(
+                    token=session.token,
+                    csrf=session.csrf_token,
+                    plan=plan,
+                    plan_fingerprint=fingerprint,
+                ),
+            )
+            return
+        if not secrets.compare_digest(
+            submission.plan_fingerprint or "", fingerprint
+        ):
+            self._error(
+                409,
+                "This study-deck plan changed after the preview. Nothing was "
+                "created; preview it again.",
+            )
+            return
+        try:
+            create_study_deck(session.config, plan)
+        except StudyDeckCreationError as exc:
+            self._error(409, f"{exc} Nothing was created by this attempt.")
+            return
+        self.send_response(303)
+        self.send_header("Location", f"/{session.token}/")
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.close_connection = True
 
     def _extract(self, name: str, body: bytes) -> None:
         """Spend one bound browser consent through the shared extraction path."""
@@ -1213,7 +1882,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._redirect_to_source(source, saved=0, grammar=False, edited=0)
             return
         try:
-            text = staging.render_staging_update(panel.staging_path, updated)
+            text = staging.render_staging_update(
+                panel.staging_bytes,
+                updated,
+                source=str(panel.staging_path),
+            )
             review.bound_replace(
                 panel.staging_path,
                 text,
@@ -1294,7 +1967,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         keep = [position != index for position in range(len(panel.records))]
         try:
-            text = staging.render_staging_prune(panel.staging_path, keep)
+            text = staging.render_staging_prune(
+                panel.staging_bytes,
+                keep,
+                source=str(panel.staging_path),
+            )
             if text is None:
                 self._redirect_to_source(source, removed=0)
                 return
@@ -1426,7 +2103,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
         updated = list(panel.records)
         updated[card] = choice.plan.assigned_record
         try:
-            text = staging.render_staging_update(panel.staging_path, updated)
+            text = staging.render_staging_update(
+                panel.staging_bytes,
+                updated,
+                source=str(panel.staging_path),
+            )
             review.bound_replace(
                 panel.staging_path,
                 text,
@@ -1561,7 +2242,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._error(409, str(exc))
             return
         try:
-            text = staging.render_staging_update(panel.staging_path, updated)
+            text = staging.render_staging_update(
+                panel.staging_bytes,
+                updated,
+                source=str(panel.staging_path),
+            )
             review.bound_replace(
                 panel.staging_path, text, panel.staging_bytes, label="staging file"
             )

@@ -19,12 +19,21 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from japanese_anki.application import NOT_EXTRACTED, SourceJourney
+from japanese_anki.application import (
+    NOT_EXTRACTED,
+    CardCheckReport,
+    CoveragePreview,
+    PromotionPlan,
+    SourceJourney,
+)
 
 __all__ = [
     "STYLE",
+    "render_addition",
     "render_consent",
+    "render_card_check",
     "render_dashboard",
+    "render_deck_creator",
     "render_extraction_failure",
     "render_extraction_progress_start",
     "render_extraction_progress_step",
@@ -87,7 +96,9 @@ input[type=file] { font: inherit; padding: .4rem; }
   margin-block-start: 1rem; padding-block-start: .75rem;
   border-block-start: 1px solid ButtonBorder;
 }
-.actions > div { flex: 1 1 16rem; display: grid; gap: .35rem; align-content: start; }
+.actions > div, .actions > form {
+  flex: 1 1 16rem; display: grid; gap: .35rem; align-content: start;
+}
 /* Content width, not column width: a button stretched across the card reads
    as a disabled input, which is how the removal control came to look inert. */
 .actions button { justify-self: start; text-align: start; }
@@ -262,6 +273,7 @@ def render_dashboard(
     token: str = "",
     csrf: str = "",
     added: tuple[str, bool] | None = None,
+    promoted: tuple[str, int, int] | None = None,
 ) -> str:
     """The whole page. `token` prefixes every same-session link."""
     prefix = f"/{html.escape(token, quote=True)}" if token else ""
@@ -300,8 +312,19 @@ def render_dashboard(
             )
             + "</p>"
         )
+    if promoted is not None:
+        source, landed, held = promoted
+        body.append(
+            '<p class="status reviewed">Finished adding '
+            f"{_escaped(source)}: {_escaped(landed)} card(s) reached your "
+            f"collection and {_escaped(held)} remain(s) in review.</p>"
+        )
     if csrf:
         body.append(_add_source_form(prefix, csrf))
+        body.append(
+            f'<p><a class=button href="{prefix}/decks/new">'
+            "Create a study deck</a></p>"
+        )
     if warnings:
         body.append('<section class="warnings"><h2>Could not be read</h2><ul>')
         body.extend(f"<li>{_escaped(warning)}</li>" for warning in warnings)
@@ -344,6 +367,81 @@ def _add_source_form(prefix: str, csrf: str) -> str:
 
 def _saved_where(root: Path | None) -> str:
     return f" at {_escaped(root)}" if root is not None else ""
+
+
+def render_deck_creator(
+    *,
+    token: str,
+    csrf: str,
+    plan: Any | None = None,
+    plan_fingerprint: str = "",
+) -> str:
+    """Ask for learner choices, then preview the exact deck file they create."""
+    prefix = f"/{html.escape(token, quote=True)}"
+    action = html.escape(f"{prefix}/decks/new", quote=True)
+    name = "" if plan is None else str(plan.name)
+    recognition = plan is None or bool(plan.recognition)
+    production = bool(plan is not None and plan.production)
+    reading = bool(plan is not None and plan.reading)
+
+    def checkbox(direction: str, label: str, checked: bool) -> str:
+        mark = " checked" if checked else ""
+        return (
+            f'<label class=decision><input type=checkbox name="{direction}"{mark}>'
+            f"<span>{_escaped(label)}</span></label>"
+        )
+
+    body = [
+        "<!doctype html><html lang=en><head><meta charset=utf-8>",
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        "<title>Create a study deck · janki workbench</title>",
+        f'<link rel=stylesheet href="{prefix}/style.css">',
+        "</head><body><main><h1>Create a study deck</h1>",
+        '<p class=lead>Name the deck you want to see in Anki and choose its '
+        "card directions. Nothing is created until the final button.</p>",
+        f'<form method=post action="{action}" class=add-source>',
+        '<input type=hidden name=action value=preview>',
+        f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">',
+        '<p class=edit><label for=deck-name>Name in Anki</label>',
+        '<input id=deck-name name=name type=text required value="'
+        f'{html.escape(name, quote=True)}"></p>',
+        checkbox("recognition", "Recognition cards", recognition),
+        checkbox("production", "Production cards", production),
+        checkbox("reading", "Reading cards", reading),
+        "<button type=submit>Preview study deck</button></form>",
+    ]
+    if plan is not None:
+        enabled = "".join(
+            f'<input type=hidden name={direction} value=on>'
+            for direction, selected in (
+                ("recognition", plan.recognition),
+                ("production", plan.production),
+                ("reading", plan.reading),
+            )
+            if selected
+        )
+        body.extend(
+            [
+                '<section class=source><h2>Study deck preview</h2>',
+                f'<p><b>Name in Anki:</b> {_escaped(plan.name)}</p>',
+                f'<p><b>Deck file:</b> {_escaped(plan.path)}</p>',
+                f'<p><b>Build output:</b> {_escaped(plan.output_path)}</p>',
+                '<details><summary>Deck and technical details</summary>',
+                f'<pre>{_escaped(plan.yaml_bytes.decode("utf-8"))}</pre></details>',
+                f'<form method=post action="{action}" class=submit>',
+                '<input type=hidden name=action value=create>',
+                f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">',
+                f'<input type=hidden name=name value="{html.escape(plan.name, quote=True)}">',
+                enabled,
+                '<input type=hidden name=plan_fingerprint '
+                f'value="{html.escape(plan_fingerprint, quote=True)}">',
+                "<button type=submit>Create study deck</button></form></section>",
+            ]
+        )
+    body.append(
+        f'<p><a href="{prefix}/">Back to sources</a></p></main></body></html>'
+    )
+    return "".join(body)
 
 
 # --- one source, opened ------------------------------------------------------
@@ -476,7 +574,7 @@ def _card_html(
 ) -> str:
     record = card.record
     parts = [
-        '<article class="card">',
+        f'<article class="card" id="card-{index + 1}">',
         f'<h3 lang="ja">{_escaped(record.expression)}'
         f" <small>{_escaped(record.reading)}</small></h3>",
     ]
@@ -768,6 +866,391 @@ def _remove_forms(
     )
 
 
+def render_card_check(report: CardCheckReport, *, token: str) -> str:
+    """Render learner actions from one exact, read-only staged snapshot."""
+    prefix = f"/{html.escape(token, quote=True)}"
+    source_path = f"{prefix}/source/{quote(report.source, safe='')}"
+    body = [
+        "<!doctype html><html lang=en><head><meta charset=utf-8>",
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        f"<title>Check { _escaped(report.source) } · janki workbench</title>",
+        f'<link rel=stylesheet href="{prefix}/style.css">',
+        "</head><body><main>",
+        f'<p><a href="{html.escape(source_path, quote=True)}">&larr; Back to '
+        "this source</a></p>",
+        "<h1>Check these cards</h1>",
+        '<p class=lead>These checks cover the cards\' structure, review marks, '
+        "reading holds and study-deck membership. They do not judge the Japanese.</p>",
+    ]
+    if report.general:
+        body.append('<section class=warnings><h2>Source-wide checks</h2><ul>')
+        body.extend(f"<li>{_escaped(detail.reason)}</li>" for detail in report.general)
+        body.append("</ul></section>")
+    if not report.cards:
+        body.append("<p class=empty>This source proposed no word cards.</p>")
+    for card in report.cards:
+        anchor = f"card-{card.index + 1}"
+        identity = f"{card.record.expression} ({card.record.reading})"
+        body.extend(
+            [
+                f'<article class=card id="{anchor}">',
+                f'<h2 lang=ja>{_escaped(identity)}</h2>',
+            ]
+        )
+        if not card.actions:
+            body.append(
+                '<p class="status reviewed">No structural action is waiting '
+                "for this card.</p>"
+            )
+        for action in card.actions:
+            edit = action.kind in {"edit", "identity"}
+            target = source_path + ("?edit=1" if edit else "") + f"#{anchor}"
+            body.extend(
+                [
+                    '<section class=assignment-choice>',
+                    f'<p><a class=button href="{html.escape(target, quote=True)}">'
+                    f"{_escaped(action.label)}</a></p>",
+                    "<details><summary>Source and technical details</summary>",
+                    '<dl class=fields>',
+                ]
+            )
+            for detail in action.details:
+                body.extend(
+                    [
+                        '<div class=field><dt>Code</dt>',
+                        f"<dd><code>{_escaped(detail.code)}</code></dd></div>",
+                        '<div class=field><dt>Why</dt>',
+                        f"<dd>{_escaped(detail.reason)}</dd></div>",
+                        '<div class=field><dt>Level</dt>',
+                        f"<dd>{_escaped(detail.level)}</dd></div>",
+                    ]
+                )
+            body.append("</dl></details></section>")
+        body.append("</article>")
+    body.append("</main></body></html>")
+    return "".join(body)
+
+
+def _hidden(name: str, value: object) -> str:
+    return (
+        f'<input type=hidden name="{html.escape(name, quote=True)}" '
+        f'value="{html.escape(str(value), quote=True)}">'
+    )
+
+
+def _coverage_actions(
+    coverage: CoveragePreview,
+    *,
+    model_coverage: CoveragePreview | None,
+    source_path: str,
+    csrf: str,
+    coverage_action: str,
+    source_fingerprint: str,
+    busy: str,
+    model_error: str,
+) -> str:
+    """The two authorities that can answer one unresolved coverage count."""
+    action = html.escape(source_path + "/add", quote=True)
+    parts = [
+        '<section class=source><h2>Coverage needs a decision</h2>',
+        "<p>Did the extraction account for the source units it promised to "
+        "cover?</p>",
+        f"<p>janki recorded {_escaped(coverage.source_units)} source unit(s), "
+        f"including {_escaped(coverage.candidate_units)} card candidate(s).</p>",
+        f'<pre>{_escaped(coverage.account)}</pre>',
+        '<div class="actions">',
+        f'<form method=post action="{action}">',
+        "<h3>Compare it yourself</h3>",
+        _hidden("action", "owner-coverage"),
+        _hidden("csrf", csrf),
+        _hidden("staging_fingerprint", coverage.staging_fingerprint),
+        '<label class=decision><input type=checkbox name=compared '
+        'value=confirmed required><span>I compared the named source with the '
+        "coverage account above. This is only a completeness decision; it does "
+        "not approve the Japanese.</span></label>",
+        '<p class=edit><label for=coverage-reason>Why the account is complete</label>',
+        '<textarea id=coverage-reason name=reason rows=3 required></textarea></p>',
+        '<button type=submit>I compared the source rows myself</button>',
+        "</form>",
+        '<div><h3>Ask a model</h3>',
+    ]
+    if model_error:
+        parts.append(f'<p class="status problem">{_escaped(model_error)}</p>')
+    elif model_coverage is not None and coverage_action:
+        model = model_coverage.model
+        parts.extend(
+            [
+                f'<form method=post action="{action}">',
+                _hidden("action", "model-coverage"),
+                _hidden("csrf", csrf),
+                _hidden("coverage_action", coverage_action),
+                _hidden(
+                    "staging_fingerprint", model_coverage.staging_fingerprint
+                ),
+                _hidden("source_file", model_coverage.source_file),
+                _hidden("source_fingerprint", source_fingerprint),
+            ]
+        )
+        parts.extend(
+            [
+                _hidden("model", model),
+                _hidden(
+                    "request_fingerprint", model_coverage.request_fingerprint
+                ),
+                _hidden("prompt_fingerprint", model_coverage.prompt_fingerprint),
+                f"<p>This sends {_escaped(model_coverage.source_file)} and the "
+                f"account above to {_escaped(model)}. It is a separate paid "
+                "Anthropic API call. Claude Max is a different subscription. "
+                "The verdict checks completeness, not the Japanese.</p>",
+            ]
+        )
+        if busy:
+            parts.extend(
+                [
+                    '<button type=submit disabled>Ask Claude to check '
+                    "completeness — paid API call"
+                    "</button>",
+                    f'<p class="status problem">{_escaped(busy)}</p>',
+                ]
+            )
+        else:
+            parts.append(
+                '<button type=submit>Ask Claude to check '
+                "completeness — paid API call</button>"
+            )
+        parts.append("</form>")
+    else:
+        parts.append(
+            '<p class="status problem">A paid completeness check is not '
+            "available for this exact source state. Reload the page.</p>"
+        )
+    parts.append("</div></div></section>")
+    return "".join(parts)
+
+
+def _promotion_card(card: Any, owner: Any | None) -> str:
+    identity = f"{card.landing.expression} ({card.landing.reading})"
+    source = card.staged.source
+    kind = "New card" if card.is_new else "Matches a card already in your collection"
+    owners = owner.owners if owner is not None else ()
+    deck = ", ".join(item.name for item in owners) or "no study deck"
+    parts = [
+        '<article class=card>',
+        f'<h3 lang=ja>{_escaped(identity)}</h3>',
+        f'<p class=state>{_escaped(kind)}</p>',
+        f'<p>Study deck after adding: <b>{_escaped(deck)}</b>.</p>',
+        "<p>Source history to record: "
+        f"{_escaped(source.type or 'manual')} · "
+        f"{_escaped(source.imported_from or 'unnamed source')}.</p>",
+    ]
+    if not card.is_new:
+        parts.append(
+            "<p>This keeps the existing card's curated fields and records this "
+            "source alongside it.</p>"
+        )
+    if card.reminted_from:
+        parts.append(
+            f'<p class="status held">Its stable ID changes from '
+            f"{_escaped(card.reminted_from)} to {_escaped(card.landing.id)}.</p>"
+        )
+    parts.append("</article>")
+    return "".join(parts)
+
+
+def _promotion_form(
+    *,
+    source_path: str,
+    csrf: str,
+    staging_fingerprint: str,
+    preview_fingerprint: str,
+    label: str,
+    form_action: str = "promote",
+    offline_preview_fingerprint: str = "",
+) -> str:
+    """The exact offline preview authority carried into one fresh plan."""
+    action = html.escape(source_path + "/add", quote=True)
+    parts = [
+        f'<form method=post action="{action}" class=submit>',
+        _hidden("action", form_action),
+        _hidden("csrf", csrf),
+        _hidden("staging_fingerprint", staging_fingerprint),
+    ]
+    if form_action == "promote-checked":
+        parts.extend(
+            [
+                _hidden(
+                    "offline_preview_fingerprint",
+                    offline_preview_fingerprint,
+                ),
+                _hidden("checked_preview_fingerprint", preview_fingerprint),
+            ]
+        )
+    else:
+        parts.append(_hidden("preview_fingerprint", preview_fingerprint))
+    parts.extend(
+        [
+            f"<button type=submit>{_escaped(label)}</button>",
+            "</form>",
+        ]
+    )
+    return "".join(parts)
+
+
+def _promotion_preview(
+    plan: PromotionPlan,
+    *,
+    source_path: str,
+    csrf: str,
+    staging_fingerprint: str,
+    preview_fingerprint: str,
+    checked_offline_preview_fingerprint: str = "",
+) -> str:
+    ownership = {item.record_id: item for item in plan.deck_ownership}
+    landing = plan.landing
+    parts = [
+        '<section class=source><h2>What adding this source will do</h2>',
+        f"<p><b>{len(plan.adding)}</b> new card(s); "
+        f"<b>{len(plan.merging)}</b> existing card match(es); "
+        f"<b>{len(plan.held)}</b> card(s) expected to remain held.</p>",
+    ]
+    if checked_offline_preview_fingerprint:
+        parts.append(
+            '<p class="status reviewed">jpdb has now been checked. Review '
+            "this exact result, then use the separate add button below.</p>"
+        )
+    if plan.readings_unchecked and landing:
+        parts.append(
+            '<p class="status held">The preview has not spent dictionary '
+            "lookups. When you add, jpdb is consulted in the same order as the "
+            "command and may hold a card whose reading it contradicts.</p>"
+        )
+    parts.extend(
+        _promotion_card(card, ownership.get(card.landing.id)) for card in landing
+    )
+    for card in plan.held:
+        identity = f"{card.record.expression} ({card.record.reading})"
+        parts.append(
+            '<article class=card><h3 lang=ja>'
+            f"{_escaped(identity)}</h3><p class=\"status held\">Stays in review: "
+            f"{_escaped(card.reason)}</p></article>"
+        )
+    if plan.already_archived:
+        parts.append(
+            "<p>Already recorded by this extraction run: "
+            f"{_escaped(', '.join(plan.already_archived))}.</p>"
+        )
+    if plan.warnings:
+        parts.append('<section class=warnings><h3>Warnings</h3><ul>')
+        parts.extend(f"<li>{_escaped(item)}</li>" for item in plan.warnings)
+        parts.append("</ul></section>")
+    label = (
+        f"Add {len(landing)} card{'s' if len(landing) != 1 else ''} to your collection"
+        if landing
+        else "Finish this reviewed source"
+    )
+    parts.append(
+        _promotion_form(
+            source_path=source_path,
+            csrf=csrf,
+            staging_fingerprint=staging_fingerprint,
+            preview_fingerprint=preview_fingerprint,
+            label=label,
+            form_action=(
+                "promote-checked"
+                if checked_offline_preview_fingerprint
+                else "promote"
+            ),
+            offline_preview_fingerprint=checked_offline_preview_fingerprint,
+        )
+    )
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def render_addition(
+    source: str,
+    promotion: PromotionPlan,
+    *,
+    token: str,
+    csrf: str,
+    staging_fingerprint: str,
+    preview_fingerprint: str = "",
+    coverage: CoveragePreview | None = None,
+    model_coverage: CoveragePreview | None = None,
+    coverage_action: str = "",
+    source_fingerprint: str = "",
+    busy: str = "",
+    model_error: str = "",
+    reading_check_actionable: bool = False,
+    checked_offline_preview_fingerprint: str = "",
+) -> str:
+    """Render coverage or an exact promotion preview for one staged source."""
+    prefix = f"/{html.escape(token, quote=True)}"
+    source_path = f"{prefix}/source/{quote(source, safe='')}"
+    body = [
+        "<!doctype html><html lang=en><head><meta charset=utf-8>",
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        f"<title>Add {_escaped(source)} · janki workbench</title>",
+        f'<link rel=stylesheet href="{prefix}/style.css">',
+        "</head><body><main>",
+        f'<p><a href="{html.escape(source_path, quote=True)}">&larr; Back to '
+        "this source</a></p>",
+        "<h1>Add cards to your collection</h1>",
+    ]
+    if coverage is not None:
+        section = _coverage_actions(
+            coverage,
+            model_coverage=model_coverage,
+            source_path=source_path,
+            csrf=csrf,
+            coverage_action=coverage_action,
+            source_fingerprint=source_fingerprint,
+            busy=busy,
+            model_error=model_error,
+        )
+        body.append(section)
+    elif promotion.is_blocked:
+        body.append(
+            '<p class="status problem">These cards cannot be added yet: '
+            f"{_escaped(promotion.blocked)}</p>"
+        )
+        if reading_check_actionable:
+            body.extend(
+                [
+                    '<section class=source><h2>A reading check can change this '
+                    "provisional result</h2>",
+                    "<p>This preview has not spent dictionary lookups. The same "
+                    "jpdb check used by the command may hold cards before this "
+                    "gate is decided. Nothing is added unless the checked plan "
+                    "can proceed.</p>",
+                    _promotion_form(
+                        source_path=source_path,
+                        csrf=csrf,
+                        staging_fingerprint=staging_fingerprint,
+                        preview_fingerprint=preview_fingerprint,
+                        label="Check readings and preview what can be added",
+                        form_action="check-readings",
+                    ),
+                    "</section>",
+                ]
+            )
+    else:
+        body.append(
+            _promotion_preview(
+                promotion,
+                source_path=source_path,
+                csrf=csrf,
+                staging_fingerprint=staging_fingerprint,
+                preview_fingerprint=preview_fingerprint,
+                checked_offline_preview_fingerprint=(
+                    checked_offline_preview_fingerprint
+                ),
+            )
+        )
+    body.append("</main></body></html>")
+    return "".join(body)
+
+
 def render_source(
     detail: Any,
     *,
@@ -823,6 +1306,16 @@ def render_source(
         body.append(
             '<p class="status problem">Study-deck choices are unavailable: '
             f"{_escaped(assignment_error)}</p>"
+        )
+    if detail.cards:
+        body.append(
+            f'<p><a class=button href="{html.escape(source_path + "/check", quote=True)}">'
+            "Check these cards</a></p>"
+        )
+    if csrf:
+        body.append(
+            f'<p><a class=button href="{html.escape(source_path + "/add", quote=True)}">'
+            "Preview adding these cards</a></p>"
         )
     if waiting:
         body.append(
