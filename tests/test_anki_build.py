@@ -8,11 +8,62 @@ import pytest
 pytest.importorskip("genanki")
 
 from japanese_anki.config import ProjectConfig
-from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
+from japanese_anki.exporters.anki import (
+    AnkiBuildError,
+    build_deck,
+    deck_selection,
+    resolve_deck_records,
+)
 from japanese_anki.io import DataError
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_intake_tag_is_optional_assignment_metadata() -> None:
+    unassignable = deck_selection(
+        {"include_tags": ["archive"]}, Path("archive.yaml")
+    )
+    assignable = deck_selection(
+        {"include_tags": ["week-3"], "intake_tag": "week-3"},
+        Path("week-3.yaml"),
+    )
+
+    assert unassignable.intake_tag is None
+    assert assignable.intake_tag == "week-3"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, "", "   ", 5, True, ["week-3"]],
+    ids=["null", "empty", "whitespace", "integer", "boolean", "list"],
+)
+def test_declared_intake_tag_must_be_a_nonblank_string(value: object) -> None:
+    with pytest.raises(DataError, match="intake_tag must be a nonblank string"):
+        deck_selection(
+            {"include_tags": ["week-3"], "intake_tag": value},
+            Path("week-3.yaml"),
+        )
+
+
+def test_intake_tag_must_be_selected_by_its_deck() -> None:
+    with pytest.raises(DataError, match="intake_tag must appear in deck.include_tags"):
+        deck_selection(
+            {"include_tags": ["week-4"], "intake_tag": "week-3"},
+            Path("week-3.yaml"),
+        )
+
+
+def test_intake_tag_cannot_also_be_excluded_by_its_deck() -> None:
+    with pytest.raises(DataError, match="intake_tag must not appear in deck.exclude_tags"):
+        deck_selection(
+            {
+                "include_tags": ["week-3"],
+                "exclude_tags": ["week-3"],
+                "intake_tag": "week-3",
+            },
+            Path("week-3.yaml"),
+        )
 
 
 def test_builds_importable_package(tmp_path: Path) -> None:

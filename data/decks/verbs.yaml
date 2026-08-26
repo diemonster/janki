@@ -23,5 +23,6 @@ deck:
   #
   # The tag selects the same twenty records the exclusions did — verified
   # identical before the swap — so no note moved deck and no GUID changed.
+  intake_tag: jpdb:anki-test-top-20-verbs
   include_tags:
     - jpdb:anki-test-top-20-verbs

@@ -1,12 +1,13 @@
 deck:
   name: "Workbench Fixture::Week A"
   deck_id: 2059499001
-  description: "W0 fixture deck standing in for a per-handout study deck."
+  description: "W0 fixture standing in for an assignable thematic study deck."
   output: "workbench-fixture-week-a.apkg"
   cards:
     recognition: true
     production: false
     reading: false
+  intake_tag: week-a
   include_tags: [week-a]
 
 notes:

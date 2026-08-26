@@ -520,6 +520,10 @@ class DeckSelection:
     exclude_ids: frozenset[str] = frozenset()
     include_tags: frozenset[str] = frozenset()
     exclude_tags: frozenset[str] = frozenset()
+    #: The one tag an assignment surface may add to place a staged card in
+    #: this deck. ``None`` leaves synthetic and exact-list decks buildable but
+    #: deliberately unavailable as workbench destinations.
+    intake_tag: str | None = None
 
     @property
     def takes_everything(self) -> bool:
@@ -560,16 +564,41 @@ class DeckSelection:
 
 
 def deck_selection(deck_config: dict[str, Any], deck_path: Path) -> DeckSelection:
-    """The four filters a deck declares, parsed and refused once."""
+    """A deck's filters and optional assignment handle, parsed once."""
+    include_ids = frozenset(_deck_string_set(deck_config, "include_ids", deck_path))
+    exclude_ids = frozenset(_deck_string_set(deck_config, "exclude_ids", deck_path))
+    include_tags = frozenset(
+        _deck_string_set(deck_config, "include_tags", deck_path)
+    )
+    exclude_tags = frozenset(
+        _deck_string_set(deck_config, "exclude_tags", deck_path)
+    )
+
+    intake_tag: str | None = None
+    if "intake_tag" in deck_config:
+        raw_intake_tag = deck_config["intake_tag"]
+        if not isinstance(raw_intake_tag, str) or not raw_intake_tag.strip():
+            raise DataError(
+                f"deck.intake_tag must be a nonblank string: {deck_path}"
+            )
+        intake_tag = raw_intake_tag.strip()
+        if intake_tag not in include_tags:
+            raise DataError(
+                "deck.intake_tag must appear in deck.include_tags so assigned "
+                f"cards reach the deck: {deck_path}"
+            )
+        if intake_tag in exclude_tags:
+            raise DataError(
+                "deck.intake_tag must not appear in deck.exclude_tags: "
+                f"{deck_path}"
+            )
+
     return DeckSelection(
-        include_ids=frozenset(_deck_string_set(deck_config, "include_ids", deck_path)),
-        exclude_ids=frozenset(_deck_string_set(deck_config, "exclude_ids", deck_path)),
-        include_tags=frozenset(
-            _deck_string_set(deck_config, "include_tags", deck_path)
-        ),
-        exclude_tags=frozenset(
-            _deck_string_set(deck_config, "exclude_tags", deck_path)
-        ),
+        include_ids=include_ids,
+        exclude_ids=exclude_ids,
+        include_tags=include_tags,
+        exclude_tags=exclude_tags,
+        intake_tag=intake_tag,
     )
 
 

@@ -8,14 +8,11 @@ deck:
     production: true
     reading: false
   source: ../normalized/vocabulary.json
-  # One deck per handout: each sheet is a unit of study, and its records were
-  # tagged with the source slug at import. every word deck selects on a tag of its own, and
-  # `m7-mixed-tsumori.yaml` carries an `exclude_ids` for the one record two of
-  # them tag, so no two claim the same record — same source file, same GUIDs,
-  # and an overlap moves notes between decks on every import.
-  # `tests/test_anki_builder_contract.py` asserts that, over the nine word
-  # decks it names. The one conjugation deck, `teform-drill.yaml`, is not among
-  # them and does re-use these records; its notes are GUID-namespaced
-  # (`drill:<form>:<id>`) under a different model, so they are separate notes
-  # rather than the same note in two decks.
+  # `intake_tag` names this durable study destination for assignment. It reuses
+  # the existing selector tag, so adding it changes no current membership.
+  # Ordinary include/exclude selectors remain the build authority, and
+  # `tests/test_anki_builder_contract.py` asserts the partition over all ten
+  # word decks. Conjugation cards use namespaced GUIDs under another model and
+  # are not part of that word-deck partition.
+  intake_tag: kanji-practice-sheet-no-112-123
   include_tags: [kanji-practice-sheet-no-112-123]

@@ -25,13 +25,12 @@ real command would write.
 | `shared_word_source_a.json` / `shared_word_source_b.json` | あげる proposed by two different sources; same stable ID from two extraction runs |
 | `reading_holds.json` | 泊まる with a blank reading, and 走る with a reading (わしる) no dictionary lists — two different `promote.check_readings` hold reasons |
 
-`decks/week-a.yaml` and `decks/week-b.yaml` are two per-handout-style decks
-(the convention `data/decks/*.yaml` already uses) that both claim
-`word:あげる:あげる` via `include_tags`, the way `shared_word_source_a/b`'s
-record would if both sources' proposals were promoted and tagged for their
-own source deck. This is the ambiguity the deck picker in W4.1 has to make
-visible and resolvable — the same shape `m7-mixed-tsumori.yaml`'s
-`exclude_ids` already resolves for a real overlap in the corpus.
+`decks/week-a.yaml` and `decks/week-b.yaml` are two assignable thematic decks.
+Each declares its ordinary selector tag as `intake_tag`, and both currently
+claim `word:あげる:あげる` via `include_tags`. This is the ambiguity the deck
+picker in W4.1 has to make visible and resolve — the same shape
+`m7-mixed-tsumori.yaml`'s `exclude_ids` already resolves for a real overlap in
+the corpus.
 
 Nothing here is a live provider response and no test in this suite makes a
 network call.

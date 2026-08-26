@@ -7,6 +7,7 @@ deck:
     recognition: true
     production: false
     reading: false
+  intake_tag: week-b
   include_tags: [week-b]
 
 notes:

@@ -123,11 +123,11 @@ real `build_records`/`write_staging`/`save_store`/`check_readings`/
 fixtures cannot drift from the real schema): the exhaustive table (走る/食べる/
 飲む); the あげる/もらう lesson with 〜てあげる/〜てもらう grammar; a
 zero-candidate pattern-only chart; 一日 read いちにち vs ついたち as the
-same-spelling pair; あげる proposed by two sources with two
-`include_tags`-based fixture decks
-(`decks/week-a.yaml`, `week-b.yaml`) that both legitimately claim the shared
-ID, the way `m7-mixed-tsumori.yaml`'s `exclude_ids` already resolves for a
-real overlap; 泊まる with a blank reading and 走る with a reading no dictionary
+same-spelling pair; あげる proposed by two sources with two `intake_tag`-marked
+fixture decks (`decks/week-a.yaml`, `week-b.yaml`) whose ordinary
+`include_tags` selectors both legitimately claim the shared ID, the way
+`m7-mixed-tsumori.yaml`'s `exclude_ids` already resolves for a real overlap;
+泊まる with a blank reading and 走る with a reading no dictionary
 lists, held for `HOLD_MISSING_READING` and `HOLD_UNKNOWN_READING`
 respectively via a fake jpdb transport; and a `max_tokens` stop that raises
 `extract-response-truncated` and writes nothing. The ships-when render is
@@ -291,7 +291,7 @@ durable files have not been committed or copied elsewhere.
 
 - **Depends on:** W1.1a. **Files:** `workbench/` (new), `review_panel.py`,
   `cli.py`, `tests/test_workbench.py` (new).
-- **Ships when:** you open a tab, see all eleven decks' sources with honest
+- **Ships when:** you open a tab, see all twelve decks' sources with honest
   states, and click through to review one.
 
 **Done 2026-08-21.** The boundary moved first: `localhttp.py` (new) holds what
@@ -650,34 +650,28 @@ journal and the same recovery path. Every provider response in tests is fake.
 - **Ships when:** you drag a PDF in and get staged cards without a terminal,
   and killing the process mid-call leaves a state you can safely resume.
 
-### [ ] W4.0 Decide the deck-assignment model
+### [x] W4.0 Decide the deck-assignment model
 
-**Open design question — resolve before W4.1.** The current corpus is *one
-deck per handout*: each of the eleven files in `data/decks/` selects on a
-source-slug `include_tags` entry, `m7-mixed-tsumori.yaml` carries `exclude_ids`
-for the one overlapping record, and `tests/test_anki_builder_contract.py`
-asserts the partition over nine word decks. That convention answers "where does
-a new PDF's vocabulary go?" with "a new deck named after the handout."
+The chosen model is durable thematic word decks. Every assignable word deck
+declares one nonblank, unique `intake_tag` that assignment writes. The tag is
+part of that deck's ordinary `include_tags`, absent from its `exclude_tags`,
+and cannot select another word deck.
 
-The workbench journey assumes something different: durable thematic decks a
-learner picks from ("Week 3"), with a per-deck `intake_tag` that assignment
-writes. `intake_tag` exists nowhere in the codebase today. Adopting it is a
-deck-schema migration across all eleven files plus the builder and the contract
-test — not a clause in a UI task.
+At decision time the corpus had twelve deck files: ten word decks, one pattern
+deck and one conjugation deck. The ten word decks select through
+`include_tags`; most use source-slug tags, while `verbs.yaml` and
+`yotsuba.yaml` use broader historical tags. `m7-mixed-tsumori.yaml` carries
+`exclude_ids` for the one overlap, and the real-corpus contract test asserts
+the partition over all ten word decks.
 
-Pick one and write it into `docs/DESIGN.md` beside the existing
-*"no record belongs to more than one word deck"* sentence:
+**Done 2026-08-25.** The owner chose thematic `intake_tag` assignment. Each of
+the ten word decks reuses its existing unique include tag as its initial
+`intake_tag`, so the migration moves no records and changes no GUIDs. The
+pattern and conjugation decks remain non-assignable. The deck parser and
+real-corpus contract enforce nonblank tags, inclusion by the owning deck,
+absence from its exclusions, uniqueness and no cross-selection.
 
-- **(a) Keep per-handout decks.** Assignment means creating a deck for the new
-  source. Cheapest, matches the corpus, and the "two sources propose あげる"
-  case stays an `exclude_ids` decision. The picker becomes *name this lesson's
-  deck*, and the plan's "Week 3" language is wrong.
-- **(b) Adopt `intake_tag` thematic decks.** Every assignable word deck
-  declares one nonblank, unique `intake_tag`, present in its includes, absent
-  from its exclusions, unable to select another word deck. Migrate the eleven
-  files. More work; matches how a learner actually thinks about study decks.
-
-- **Depends on:** W3. **Files:** `docs/DESIGN.md`, `data/decks/*.yaml` if (b),
+- **Depends on:** W3. **Files:** `docs/DESIGN.md`, `data/decks/*.yaml`,
   `exporters/anki.py`, `tests/test_anki_builder_contract.py`.
 - **Ships when:** DESIGN.md names the model and the contract test enforces it.
 
@@ -1214,8 +1208,8 @@ Local: `src/japanese_anki/workbench/` (new),
 share), `review_panel.py` (folded into the workbench and deleted),
 `staging.py`, `patterns.py`, `promote.py`, `status.py`, `validation.py`,
 `coverage.py`,
-`inputs.py`, `extract.py`, `ledger.py`, `data/decks/*.yaml` (if W4.0 picks
-`intake_tag`), `exporters/anki.py`, `tests/fixtures/workbench/` (new),
+`inputs.py`, `extract.py`, `ledger.py`, `data/decks/*.yaml`,
+`exporters/anki.py`, `tests/fixtures/workbench/` (new),
 `tests/test_workbench.py` (new), `README.md`, `docs/DESIGN.md`,
 `docs/IMPORTING.md`, `docs/QUALITY.md`.
 

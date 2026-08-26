@@ -136,6 +136,40 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
     assert not (everything - covered), sorted(everything - covered)
 
 
+def _real_word_selections(config: ProjectConfig) -> dict[str, anki.DeckSelection]:
+    selections: dict[str, anki.DeckSelection] = {}
+    for path in status.deck_files(config):
+        if anki.deck_kind(path) not in {"", "vocabulary"}:
+            continue
+        deck_config, _records = anki.resolve_deck_records(path)
+        name = path.relative_to(config.root).as_posix()
+        selections[name] = anki.deck_selection(deck_config, path)
+    return selections
+
+
+def test_real_word_decks_define_unique_intake_tags() -> None:
+    selections = _real_word_selections(ProjectConfig.load(PROJECT_ROOT))
+    assignments = {
+        name: selection.intake_tag for name, selection in selections.items()
+    }
+
+    assert all(tag is not None for tag in assignments.values()), assignments
+    assert len(set(assignments.values())) == len(assignments), assignments
+
+
+def test_each_real_intake_tag_selects_only_its_owner() -> None:
+    selections = _real_word_selections(ProjectConfig.load(PROJECT_ROOT))
+
+    for owner, owner_selection in selections.items():
+        tag = owner_selection.intake_tag
+        assert tag is not None, owner
+        probe = SimpleNamespace(id="word:assignment:assignment", tags=[tag])
+        claimers = {
+            name for name, selection in selections.items() if selection.includes(probe)
+        }
+        assert claimers == {owner}, f"{tag!r} is selected by {sorted(claimers)}"
+
+
 def test_deck_files_discovers_nested_yaml(tmp_path: Path) -> None:
     deck_dir = tmp_path / "decks"
     nested = deck_dir / "pilots" / "camera.yaml"

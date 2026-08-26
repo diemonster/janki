@@ -8,13 +8,8 @@ deck:
     production: true
     reading: false
   source: ../normalized/vocabulary.json
-  # The tag `import-anki` puts on everything it reads. Every word deck selects
-  # on a tag of its own, and `m7-mixed-tsumori.yaml` carries an `exclude_ids`
-  # for the one record two of them tag, so no two claim the same record — same
-  # source file, same GUIDs, and an overlap means each import moves notes
-  # between decks. `tests/test_anki_builder_contract.py` asserts that over the
-  # nine word decks it names. The one conjugation deck, `teform-drill.yaml`, is
-  # not among them and does re-use these records; its notes are GUID-namespaced
-  # (`drill:<form>:<id>`) under a different model, so they are separate notes
-  # rather than the same note in two decks.
+  # The existing `import-anki` tag becomes this durable study destination's
+  # assignment handle. Ordinary selectors remain the build authority, and the
+  # real-corpus contract keeps all ten word decks a disjoint partition.
+  intake_tag: anki
   include_tags: [anki]

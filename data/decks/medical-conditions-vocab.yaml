@@ -8,7 +8,7 @@ deck:
     production: true
     reading: false
   source: ../normalized/vocabulary.json
-  # One deck per handout, the convention every other word deck here follows:
-  # the records were tagged with this source's slug at promote time, and no
-  # record belongs to more than one word deck.
+  # This deck keeps its existing source tag as the initial thematic assignment
+  # handle, so the schema migration changes no current membership.
+  intake_tag: medical-conditions-vocab
   include_tags: [medical-conditions-vocab]

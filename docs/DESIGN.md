@@ -95,7 +95,14 @@ Enrichment adds facts about *words* and *files*. It never judges sentences.
 **4. Compile.** genanki builds the decks. Deterministic **GUIDs** — note ids
 are timestamps genanki mints per build, and the GUID is what Anki matches on
 make rebuilds update cards instead of duplicating them; the ledger records
-what shipped; no record belongs to more than one word deck — a convention the deck files keep, checked by a test over the real decks rather than enforced by the builder, which filters each deck without looking at the others.
+what shipped. Word decks are durable thematic study destinations, not
+per-source artifacts. Every assignable word deck declares one nonblank, unique
+`intake_tag`; assigning a staged record to that deck writes that tag. Its
+`intake_tag` appears in its `include_tags`, not its `exclude_tags`, and cannot
+select another word deck. No record belongs to more than one word deck — a
+convention the deck files keep, checked by a test over the real decks rather
+than enforced by the builder, which filters each deck without looking at the
+others.
 
 ## Mechanisms the pipeline rests on
 

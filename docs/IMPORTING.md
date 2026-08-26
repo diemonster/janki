@@ -382,6 +382,7 @@ narrow it, all lists, all matched exactly:
 deck:
   name: Genki 1 — verbs
   source: ../normalized/vocabulary.json
+  intake_tag: genki-1                 # workbench assignment adds this tag
   include_ids: [word:話す:はなす]   # only these records
   include_tags: [genki-1]          # only records carrying at least one
   exclude_ids: [word:食べる:たべる] # never these records
@@ -392,6 +393,13 @@ They apply in that order, so an `include_` key chooses the pool and an
 `exclude_` key removes from it: a record that is both included by tag and
 excluded by id is excluded. Omitting all four means "every record in the
 source". Tag matching is exact — `genki-1` does not match `genki-10`.
+
+`intake_tag` marks a word deck as a workbench assignment destination. It must
+be one nonblank tag already named by `include_tags` and not by `exclude_tags`;
+assigning a staged card writes that exact tag. Across the real deck corpus,
+these tags are unique and a card carrying one may select only its owning word
+deck. Decks without `intake_tag` still build, but the workbench does not offer
+them as assignment destinations.
 
 `janki migrate-inline` writes `include_ids:` and `exclude_ids:` for you; the
 tag keys are yours to maintain.

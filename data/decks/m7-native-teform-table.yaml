@@ -8,4 +8,5 @@ deck:
     production: true
     reading: false
   source: ../normalized/vocabulary.json
+  intake_tag: m7-native-teform-table
   include_tags: [m7-native-teform-table]
