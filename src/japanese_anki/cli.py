@@ -18,7 +18,6 @@ from japanese_anki import (
     enrich,
     extract,
     jpdb,
-    kanji,
     ledger,
     migrate,
     operations,
@@ -29,6 +28,8 @@ from japanese_anki import (
     workbench,
 )
 from japanese_anki.application import coverage as coverage_application
+from japanese_anki.application import enrichment as enrichment_application
+from japanese_anki.application import kanji_addition as kanji_application
 from japanese_anki.application import promotion as promotion_application
 from japanese_anki.application.extraction import (
     ANSWER_EMPTY,
@@ -1039,24 +1040,26 @@ def command_enrich(args: argparse.Namespace) -> int:
     if args.staging is not None:
         return _enrich_staging(client, args.staging.resolve(), args.yes)
 
-    output_path = config.normalized_file.resolve()
-    output_revision = records_revision(output_path)
-    records = load_records(output_path) if output_path.exists() else []
-    if not records:
+    decision = (
+        enrichment_application.plan_dictionary_enrichment(
+            config,
+            client,
+            args.ids,
+            force_fields=force_fields,
+        )
+        if args.ids
+        else enrichment_application.plan_all_dictionary_enrichment(
+            config,
+            client,
+            force_fields=force_fields,
+        )
+    )
+    if decision is None:
+        output_path = config.normalized_file.resolve()
         print(f"No records to enrich in {output_path}.")
         return 0
-
-    # Read the ledger before anything is written, and only once.
-    book = ledger.load(config.ledger_file)
-    result = enrich.enrich_records(
-        client,
-        records,
-        force_fields=force_fields,
-        ids=args.ids or None,
-        # For one question: does jpdb's per-character furigana assign a
-        # character a reading it has? A jukujikun says no.
-        kanji_store=kanji.load_store(config.kanji_file),
-    )
+    output_path = decision.output_path
+    result = decision.result
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
@@ -1076,7 +1079,11 @@ def command_enrich(args: argparse.Namespace) -> int:
     if not _confirm_enrich(pending, args.yes):
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
-    save_records_json(output_path, result.records, expected=output_revision)
+    committed = enrichment_application.commit_dictionary_enrichment(
+        config,
+        decision,
+        expected_fingerprint=decision.fingerprint,
+    )
     if result.cleared:
         # After the write it describes, like every other success message here:
         # a save can refuse (the file changed since it was read), and a
@@ -1091,9 +1098,7 @@ def command_enrich(args: argparse.Namespace) -> int:
         # A marks-only save: the records were written, and there is no field
         # change for the ledger to attribute to jpdb.
         return 0
-    for record_id, changed in result.changes.items():
-        book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=changed)
-    ledger_error = _save_ledger(book)
+    ledger_error = committed.ledger_error
 
     print(
         f"Enriched {len(result.changes)} record(s) in {output_path} "
@@ -3498,45 +3503,36 @@ def command_kanji(args: argparse.Namespace) -> int:
     request per new character rather than a re-download of everything.
     """
     config = _load_config(args)
-    output_path = config.normalized_file.resolve()
-    records = load_records(output_path) if output_path.exists() else []
-    if not records:
-        print(f"No records to read characters from in {output_path}.")
+    plan = kanji_application.plan_corpus_kanji_addition(
+        config, refresh=args.refresh
+    )
+    if not plan.record_ids:
+        print(f"No records to read characters from in {plan.canonical_path}.")
         return 0
 
-    wanted: list[str] = []
-    for record in records:
-        wanted.extend(kanji.kanji_in(record.expression))
-    wanted = list(dict.fromkeys(wanted))
-
-    store = kanji.load_store(config.kanji_file)
-    todo = wanted if args.refresh else store.missing(wanted)
-    if not todo:
-        print(f"All {len(wanted)} character(s) already looked up in {config.kanji_file}.")
+    if not plan.to_fetch:
+        print(
+            f"All {len(plan.characters)} character(s) already looked up in "
+            f"{config.kanji_file}."
+        )
         return 0
 
-    failures: list[str] = []
-    for character in todo:
-        try:
-            store.entries[character] = kanji.fetch_kanji(character)
-        except JankiError as exc:
-            # One character that cannot be looked up must not cost the rest:
-            # every other card in the deck still gets its section.
-            failures.append(f"{character}: {exc}")
-    kanji.save_store(config.kanji_file, store)
+    result = kanji_application.execute_kanji_addition(
+        config, plan, expected_fingerprint=plan.fingerprint
+    )
 
     print(
-        f"Looked up {len(todo) - len(failures)} character(s) into "
+        f"Looked up {len(result.successes)} character(s) into "
         f"{status.display_path(config.kanji_file, config.root)}."
     )
-    for failure in failures:
-        print(f"warning: {failure}", file=sys.stderr)
+    for failure in result.failures:
+        print(f"warning: {failure.character}: {failure.message}", file=sys.stderr)
     # Any loss is a non-zero exit, not only total loss. kanjiapi has no retry or
     # backoff here, so one 403 or rate limit part-way through leaves most
     # characters unlooked-up; exiting 0 let a scripted `janki kanji && janki
     # build` carry straight on and ship cards whose kanji section is missing,
     # with nothing but a stderr warning to say so.
-    return 1 if failures else 0
+    return 1 if result.failures else 0
 
 
 def command_operations(args: argparse.Namespace) -> int:

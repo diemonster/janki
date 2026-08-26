@@ -154,6 +154,7 @@ def test_an_empty_collection_is_not_an_error(
     tmp_path: Path, transport: Transport, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = project(tmp_path, [])
+    (root / "kanji.json").write_text("not valid JSON", encoding="utf-8")
 
     assert cli.main(["--root", str(root), "kanji"]) == 0
 

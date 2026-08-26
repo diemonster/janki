@@ -18,6 +18,13 @@ import pytest
 import yaml
 
 from japanese_anki import cli, enrich, jpdb, pitch
+from japanese_anki import io as io_module
+from japanese_anki.application.enrichment import (
+    DictionaryEnrichmentError,
+    commit_dictionary_enrichment,
+    plan_dictionary_enrichment,
+)
+from japanese_anki.config import ProjectConfig
 from japanese_anki.enrich import (
     EnrichError,
     enrich_records,
@@ -25,6 +32,7 @@ from japanese_anki.enrich import (
     parse_force_fields,
     suggest_readings,
 )
+from japanese_anki.io import DataError
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import (
     PROVISIONAL_FIELDS_KEY,
@@ -1202,6 +1210,112 @@ def stored(root: Path) -> dict[str, dict[str, Any]]:
     return {item["id"]: item for item in payload}
 
 
+# --- the shared dictionary decision -----------------------------------------
+
+
+def test_dictionary_decision_looks_up_only_its_exact_nonempty_id_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = hanasu_api()
+    target = record()
+    outside = record(id="word:本:ほん", expression="本", reading="ほん")
+    root = project(tmp_path, [target, outside])
+    config = ProjectConfig.load(root)
+    collection = config.normalized_file.resolve()
+    initial_wire = collection.read_text(encoding="utf-8")
+    transient_wire = json.dumps([outside.to_dict()], ensure_ascii=False)
+    real_read = io_module.read_text_bound
+    collection_reads = 0
+
+    def aba_read(path: Path) -> str:
+        nonlocal collection_reads
+        text = real_read(path)
+        if Path(path).resolve() == collection:
+            collection_reads += 1
+            if collection_reads == 1:
+                # Revision A was read; a second open would now see B. Restoring
+                # A after planning reproduces the stale writer's accepting CAS.
+                collection.write_text(transient_wire, encoding="utf-8")
+        return text
+
+    monkeypatch.setattr(io_module, "read_text_bound", aba_read)
+
+    decision = plan_dictionary_enrichment(config, client_for(api), [target.id])
+    collection.write_text(initial_wire, encoding="utf-8")
+
+    assert collection_reads == 1
+    assert decision.record_ids == (target.id,)
+    assert [body["text"][0] for body in api.calls("parse")] == ["話す"]
+    assert set(decision.result.changes) == {target.id}
+    assert len(decision.fingerprint) == 64
+
+    # The fingerprint is write authority for this exact rendered scope. A
+    # controller cannot widen the ids in memory and retain it.
+    widened = replace(decision, record_ids=(target.id, outside.id))
+    with pytest.raises(DictionaryEnrichmentError, match="dictionary-plan-stale"):
+        commit_dictionary_enrichment(
+            config,
+            widened,
+            expected_fingerprint=decision.fingerprint,
+        )
+
+    mutated_records = list(decision.result.records)
+    mutated_records[0] = replace(mutated_records[0], meanings=["tampered result"])
+    mutated_result = replace(decision.result, records=mutated_records)
+    mutated_changes = replace(
+        decision.result,
+        changes={target.id: {"meanings": ([], ["tampered attribution"])}},
+    )
+    for changed_result in (mutated_result, mutated_changes):
+        with pytest.raises(DictionaryEnrichmentError, match="dictionary-plan-stale"):
+            commit_dictionary_enrichment(
+                config,
+                replace(decision, result=changed_result),
+                expected_fingerprint=decision.fingerprint,
+            )
+    assert stored(root)[target.id]["furigana"] == ""
+    assert not config.ledger_file.exists()
+
+
+def test_an_empty_dictionary_scope_never_means_the_whole_collection(
+    tmp_path: Path,
+) -> None:
+    api = hanasu_api()
+    config = ProjectConfig.load(project(tmp_path, [record()]))
+
+    with pytest.raises(DictionaryEnrichmentError, match="empty scope never means"):
+        plan_dictionary_enrichment(config, client_for(api), [])
+
+    assert api.bodies == []
+
+
+def test_dictionary_commit_refuses_canonical_drift_before_records_or_ledger_write(
+    tmp_path: Path,
+) -> None:
+    api = hanasu_api()
+    target = record()
+    root = project(tmp_path, [target])
+    config = ProjectConfig.load(root)
+    decision = plan_dictionary_enrichment(config, client_for(api), [target.id])
+    concurrent = record(id="word:本:ほん", expression="本", reading="ほん")
+    concurrent_wire = json.dumps(
+        [target.to_dict(), concurrent.to_dict()],
+        ensure_ascii=False,
+    )
+    config.normalized_file.write_text(concurrent_wire, encoding="utf-8")
+
+    with pytest.raises(DataError, match="changed on disk"):
+        commit_dictionary_enrichment(
+            config,
+            decision,
+            expected_fingerprint=decision.fingerprint,
+        )
+
+    assert config.normalized_file.read_text(encoding="utf-8") == concurrent_wire
+    assert not config.ledger_file.exists()
+
+
 def test_enrich_without_a_source_says_so_rather_than_guessing() -> None:
     assert cli.main(["enrich"]) == 1
 
@@ -1408,21 +1522,37 @@ def test_enrich_reports_a_reading_mismatch_on_stderr_and_still_succeeds(
     assert stored(root)["word:話す:はなし"]["furigana"] == ""
 
 
-def test_enrich_can_be_pointed_at_single_ids(
+def test_enrich_cli_passes_exact_ids_and_force_fields_to_the_shared_service(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api = hanasu_api()
+    target = record(
+        part_of_speech="godan verb (curated)",
+        pitch_accent=["HLLL"],
+    )
     other = record(id="word:本:ほん", expression="本", reading="ほん")
-    root = project(tmp_path, [record(), other])
+    root = project(tmp_path, [target, other])
     patch_api(monkeypatch, api)
 
     code = cli.main(
-        ["--root", str(root), "enrich", "--jpdb", "--yes", "word:話す:はなす"]
+        [
+            "--root",
+            str(root),
+            "enrich",
+            "--jpdb",
+            "--force-fields",
+            "pitch_accent",
+            "--yes",
+            target.id,
+        ]
     )
 
     assert code == 0
     assert stored(root)["word:本:ほん"]["furigana"] == ""
-    assert stored(root)["word:話す:はなす"]["furigana"] == "話[はな]す"
+    enriched = stored(root)[target.id]
+    assert enriched["furigana"] == "話[はな]す"
+    assert enriched["pitch_accent"] == ["LHLL"]
+    assert enriched["part_of_speech"] == "godan verb (curated)"
 
 
 def test_enrichable_fields_can_never_include_the_reading() -> None:
