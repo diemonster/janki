@@ -1,13 +1,77 @@
 from __future__ import annotations
 
 import html
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
+from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
+from japanese_anki.models import VocabularyRecord
+
+
+class PreviewError(JankiError):
+    pass
+
+
+def _resolved_preview(
+    deck_path: Path,
+    requested_ids: tuple[str, ...] | None,
+) -> tuple[dict[str, Any], tuple[VocabularyRecord, ...]]:
+    """Resolve the whole deck, then optionally project one exact ID scope."""
+    deck_config, resolved = resolve_deck_records(deck_path.resolve())
+    if requested_ids is None:
+        return deck_config, tuple(resolved)
+
+    by_id: dict[str, VocabularyRecord] = {}
+    for record in resolved:
+        if record.id in by_id:
+            raise PreviewError(
+                f"The deck resolves card ID {record.id!r} more than once."
+            )
+        by_id[record.id] = record
+    missing = tuple(record_id for record_id in requested_ids if record_id not in by_id)
+    if missing:
+        names = ", ".join(repr(record_id) for record_id in missing)
+        raise PreviewError(
+            f"The requested card IDs are not in the resolved deck: {names}."
+        )
+    return deck_config, tuple(by_id[record_id] for record_id in requested_ids)
+
+
+def resolve_preview_records(
+    deck_path: Path,
+    record_ids: Sequence[str],
+) -> tuple[VocabularyRecord, ...]:
+    """Return exact deck-resolved record versions in requested order.
+
+    Resolving the complete deck applies its real selectors and inline
+    overrides. Missing IDs therefore refuse instead of previewing a canonical
+    record that this deck would not actually build. No files are written.
+    """
+    if isinstance(record_ids, str | bytes | bytearray) or not isinstance(
+        record_ids, Sequence
+    ):
+        raise PreviewError("Preview card IDs must be a sequence of IDs, not text.")
+    requested_ids = tuple(record_ids)
+    if not requested_ids:
+        raise PreviewError("Preview needs at least one card ID.")
+    if any(
+        not isinstance(record_id, str) or not record_id.strip()
+        for record_id in requested_ids
+    ):
+        raise PreviewError("Preview card IDs must be nonblank strings.")
+    seen: set[str] = set()
+    for record_id in requested_ids:
+        if record_id in seen:
+            raise PreviewError(f"Preview card ID {record_id!r} is repeated.")
+        seen.add(record_id)
+    _deck_config, records = _resolved_preview(deck_path, requested_ids)
+    return records
 
 
 def build_preview(deck_path: Path, output_path: Path) -> Path:
-    deck_config, records = resolve_deck_records(deck_path.resolve())
+    deck_config, records = _resolved_preview(deck_path, None)
     title = str(deck_config.get("name", deck_path.stem))
     cards = []
     for record in records:

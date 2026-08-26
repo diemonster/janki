@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from itertools import combinations
 from pathlib import Path
 from types import SimpleNamespace
@@ -80,6 +81,75 @@ def test_builder_wires_templates_fields_and_stable_guids(tmp_path, monkeypatch) 
     assert output.exists()
     with ZipFile(output) as archive:
         assert "collection.anki2" in archive.namelist()
+
+
+def test_public_build_seams_resolve_directions_and_configured_output(
+    tmp_path: Path,
+) -> None:
+    config = replace(
+        ProjectConfig.load(PROJECT_ROOT),
+        dist_dir=tmp_path / "dist",
+        default_cards={
+            "recognition": True,
+            "production": False,
+            "reading": False,
+        },
+    )
+    deck_path = tmp_path / "decks" / "lesson.yaml"
+
+    assert anki.resolve_card_types(
+        {"cards": {"recognition": False, "production": True, "reading": True}},
+        config,
+    ) == ["production", "reading"]
+    assert anki.resolve_deck_output_path(
+        deck_path, {"output": "lessons/../week-1.apkg"}, config
+    ) == (tmp_path / "dist" / "week-1.apkg").resolve()
+    assert anki.resolve_deck_output_path(deck_path, {}, config) == (
+        tmp_path / "dist" / "lesson.apkg"
+    ).resolve()
+
+
+def test_builder_uses_the_public_direction_and_output_resolvers(
+    tmp_path: Path, monkeypatch
+) -> None:
+    fake = SimpleNamespace(
+        Model=FakeModel,
+        Deck=FakeDeck,
+        Note=FakeNote,
+        Package=FakePackage,
+        guid_for=lambda value: f"guid:{value}",
+    )
+    monkeypatch.setattr(anki, "genanki", fake)
+    configured_output = tmp_path / "chosen" / "by-resolver.apkg"
+    direction_calls: list[tuple[dict[str, object], ProjectConfig]] = []
+    output_calls: list[tuple[Path, dict[str, object], ProjectConfig]] = []
+
+    def directions(
+        deck_config: dict[str, object], project_config: ProjectConfig
+    ) -> list[str]:
+        direction_calls.append((deck_config, project_config))
+        return ["reading"]
+
+    def output_path(
+        deck_path: Path,
+        deck_config: dict[str, object],
+        project_config: ProjectConfig,
+    ) -> Path:
+        output_calls.append((deck_path, deck_config, project_config))
+        return configured_output
+
+    monkeypatch.setattr(anki, "resolve_card_types", directions)
+    monkeypatch.setattr(anki, "resolve_deck_output_path", output_path)
+    config = ProjectConfig.load(PROJECT_ROOT)
+    deck_path = PROJECT_ROOT / "data/decks/verbs.yaml"
+
+    result = anki.build_deck(deck_path, config)
+
+    assert result.card_types == ("reading",)
+    assert result.output_path == configured_output.resolve()
+    assert len(direction_calls) == 1
+    assert direction_calls[0][1] is config
+    assert output_calls == [(deck_path.resolve(), direction_calls[0][0], config)]
 
 
 def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:

@@ -685,7 +685,7 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
     deck_config = raw.get("deck") or {}
     if not isinstance(deck_config, dict):
         raise DataError(f"The deck section must be a mapping: {deck_path}")
-    # Checked here rather than in `_resolve_card_types`, which only `build`
+    # Checked here rather than in `resolve_card_types`, which only `build`
     # reaches: every path into a deck file comes through this function, so this
     # is where a deck's shape is refused once for all three commands.
     cards = deck_config.get("cards")
@@ -811,7 +811,7 @@ def _card_mask(card_types: list[str]) -> int:
     return mask
 
 
-def _resolve_card_types(
+def resolve_card_types(
     deck_config: dict[str, Any], project_config: ProjectConfig
 ) -> list[str]:
     """Which card types to build. ``deck_config`` comes from
@@ -902,7 +902,7 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
         )
 
     deck_config, _ = resolve_deck_records(deck_path)
-    card_types = _resolve_card_types(deck_config, project_config)
+    card_types = resolve_card_types(deck_config, project_config)
     # Both already refused by `resolve_deck_records`, so this and `build_deck`
     # cannot disagree about which decks are valid.
     model_id = int(
@@ -912,6 +912,16 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
         deck_config.get("model_name", f"Japanese Study ({'+'.join(card_types)})")
     )
     return model_id, name, len(FIELD_NAMES)
+
+
+def resolve_deck_output_path(
+    deck_path: Path,
+    deck_config: dict[str, Any],
+    project_config: ProjectConfig,
+) -> Path:
+    """Return the absolute package path configured for a vocabulary deck."""
+    filename = str(deck_config.get("output", f"{deck_path.stem}.apkg"))
+    return (project_config.dist_dir / filename).resolve()
 
 
 def build_deck(
@@ -941,7 +951,7 @@ def build_deck(
     if include_ids is not None:
         records = [record for record in records if record.id in include_ids]
 
-    card_types = _resolve_card_types(deck_config, project_config)
+    card_types = resolve_card_types(deck_config, project_config)
     template_dir = project_config.template_dir
     templates = []
     for card_type in card_types:
@@ -1033,8 +1043,9 @@ def build_deck(
         deck.add_note(note)
 
     if output_path is None:
-        filename = str(deck_config.get("output", f"{deck_path.stem}.apkg"))
-        output_path = project_config.dist_dir / filename
+        output_path = resolve_deck_output_path(
+            deck_path, deck_config, project_config
+        )
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
