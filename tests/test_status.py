@@ -20,6 +20,7 @@ import yaml
 
 from japanese_anki import cli, extract, ledger, operations, patterns, staging
 from japanese_anki import status as status_module
+from japanese_anki.application import audio as audio_application
 from japanese_anki.config import ProjectConfig
 from japanese_anki.ledger import (
     example_audio_content_fingerprint,
@@ -438,8 +439,8 @@ def test_word_voice_does_not_decide_whether_openai_examples_are_stale(
         encoding="utf-8",
     )
     config = ProjectConfig.load(root)
-    words = cli._speech_provider(config, None)
-    sentences = cli._sentence_provider(config, None, words)
+    words = audio_application.resolve_word_provider(config, None)
+    sentences = audio_application.resolve_sentence_provider(config, None, words)
     book = ledger.load(root / "ledger.json")
     book.record_audio(
         record.id,
@@ -478,8 +479,8 @@ def test_status_compares_each_openai_examples_effective_instructions(
         encoding="utf-8",
     )
     config = ProjectConfig.load(root)
-    words = cli._speech_provider(config, None)
-    sentences = cli._sentence_provider(config, None, words)
+    words = audio_application.resolve_word_provider(config, None)
+    sentences = audio_application.resolve_sentence_provider(config, None, words)
     prepared = sentences.for_clip(example.instructions)
     book = ledger.load(root / "ledger.json")
     book.record_audio(
@@ -1887,13 +1888,13 @@ def test_a_record_whose_example_was_edited_after_its_audio_reads_as_stale(
     book.save()
     config = ProjectConfig.load(root)
 
-    words = cli._speech_provider(config, None)
+    words = audio_application.resolve_word_provider(config, None)
     report = status_module.build_report(
         config,
         status_module.collect_records(config),
         ledger.load(root / "ledger.json"),
         word_provider=words,
-        example_provider=cli._sentence_provider(config, None, words),
+        example_provider=audio_application.resolve_sentence_provider(config, None, words),
     )
 
     assert report.stale_audio == [record.id]

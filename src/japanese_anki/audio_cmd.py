@@ -40,6 +40,7 @@ import stat
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Literal
 
 from japanese_anki import ledger as ledger_mod
 from japanese_anki.errors import JankiError
@@ -59,17 +60,23 @@ __all__ = [
     "ACCENT_UNVERIFIED",
     "AUDIO_SUBDIR",
     "AudioError",
+    "AudioClipRequirement",
     "AudioResult",
     "SynthesisError",
+    "audio_clip_requirements",
     "cleanup_pending_stages",
     "cleanup_unclaimed_pending_stages",
     "commit_promoted_audio",
     "current_pending_audio_keys",
     "generate_audio",
     "media_relative",
+    "prepare_example_audio_profiles",
     "promote_pending_audio",
     "prune_unreferenced",
 ]
+
+AudioClipState = Literal["current", "recoverable", "provider-required"]
+AudioRecoverySource = Literal["pending-stage", "canonical-target", "orphan-stage"]
 
 
 class AudioError(JankiError):
@@ -294,6 +301,35 @@ def _orphan_stages_for(
     return candidates
 
 
+@dataclass(frozen=True, slots=True)
+class _PendingRecovery:
+    """Verified bytes for one exact request, with any WAL adoption still pending."""
+
+    key: str
+    expected: str
+    staged_name: str
+    staged_sha256: str
+    source: AudioRecoverySource
+    adopt_required: bool
+
+
+@dataclass(frozen=True, slots=True)
+class AudioClipRequirement:
+    """One selected clip and how the existing transaction can satisfy it."""
+
+    record_id: str
+    kind: Literal["word", "example"]
+    target: str
+    request_input: str
+    forced_accent: bool
+    content_fingerprint: str
+    provider: SpeechProvider = field(repr=False, compare=False)
+    state: AudioClipState
+    recovery_key: str | None = None
+    recovery_sha256: str | None = None
+    recovery_source: AudioRecoverySource | None = None
+
+
 @dataclass(slots=True)
 class AudioResult:
     """What a run generated, skipped, and refused."""
@@ -372,7 +408,7 @@ def _is_current(
     return _canonical_target_exists(audio_dir, recorded)
 
 
-def _pending_current_file(
+def _pending_recovery(
     book: ledger_mod.Ledger,
     record_id: str,
     *,
@@ -383,15 +419,14 @@ def _pending_current_file(
     forced_accent: bool,
     audio_dir: Path,
     provider: SpeechProvider,
-    details: dict[str, object] | None = None,
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
     replace_corrupt: bool = False,
-) -> tuple[str, str] | None:
-    """Recover an exact staged render whose record CAS did not commit.
+) -> _PendingRecovery | None:
+    """Inspect exact staged recovery without changing the ledger or media.
 
     A self-verifying stage can precede its WAL row if the process is interrupted
     inside the persistence callback. Its request key and byte SHA in the name
-    are enough to reconstruct the exact row before deciding to call a provider.
+    are enough to prove the exact row before deciding to call a provider. The
+    caller decides whether to adopt that row; planning deliberately does not.
     """
     arguments = {
         "of": of,
@@ -418,13 +453,27 @@ def _pending_current_file(
             staged_data is not None
             and hashlib.sha256(staged_data).hexdigest() == staged_sha
         ):
-            return key, expected
+            return _PendingRecovery(
+                key=key,
+                expected=expected,
+                staged_name=staged_name,
+                staged_sha256=staged_sha,
+                source="pending-stage",
+                adopt_required=False,
+            )
         canonical_data = _read_canonical_audio(audio_dir, expected)
         if (
             canonical_data is not None
             and hashlib.sha256(canonical_data).hexdigest() == staged_sha
         ):
-            return key, expected
+            return _PendingRecovery(
+                key=key,
+                expected=expected,
+                staged_name=staged_name,
+                staged_sha256=staged_sha,
+                source="canonical-target",
+                adopt_required=False,
+            )
         if replace_corrupt:
             replacements = _orphan_stages_for(
                 audio_dir, key, tolerate_corrupt=True
@@ -436,20 +485,14 @@ def _pending_current_file(
                 )
             if replacements:
                 staged_name, staged_sha, _ = replacements[0]
-                recorded = book.record_pending_audio(
-                    record_id,
-                    **arguments,
-                    staged_file=staged_name,
+                return _PendingRecovery(
+                    key=key,
+                    expected=expected,
+                    staged_name=staged_name,
                     staged_sha256=staged_sha,
-                    **(details or {}),
+                    source="orphan-stage",
+                    adopt_required=True,
                 )
-                if recorded != key:  # pragma: no cover - ledger owns this
-                    raise SynthesisError(
-                        "Pending audio identity changed during stage recovery"
-                    )
-                if persist_pending is not None:
-                    persist_pending(book, key)
-                return key, expected
             return None
         raise SynthesisError(
             f"Pending audio for {expected} no longer has bytes matching its "
@@ -473,18 +516,71 @@ def _pending_current_file(
     if not orphaned:
         return None
     staged_name, staged_sha, _ = orphaned[0]
+    return _PendingRecovery(
+        key=key,
+        expected=expected,
+        staged_name=staged_name,
+        staged_sha256=staged_sha,
+        source="orphan-stage",
+        adopt_required=True,
+    )
+
+
+def _pending_current_file(
+    book: ledger_mod.Ledger,
+    record_id: str,
+    *,
+    of: str,
+    content_fp: str,
+    expected: str,
+    request_input: str,
+    forced_accent: bool,
+    audio_dir: Path,
+    provider: SpeechProvider,
+    details: dict[str, object] | None = None,
+    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
+    replace_corrupt: bool = False,
+) -> tuple[str, str] | None:
+    """Recover an exact staged render, adopting an orphaned WAL row if needed."""
+    recovery = _pending_recovery(
+        book,
+        record_id,
+        of=of,
+        content_fp=content_fp,
+        expected=expected,
+        request_input=request_input,
+        forced_accent=forced_accent,
+        audio_dir=audio_dir,
+        provider=provider,
+        replace_corrupt=replace_corrupt,
+    )
+    if recovery is None:
+        return None
+    if not recovery.adopt_required:
+        return recovery.key, recovery.expected
+    arguments = {
+        "of": of,
+        "target": expected,
+        "request_input": request_input,
+        "forced_accent": forced_accent,
+        "content_fp": content_fp,
+        "provider": provider.name,
+        "voice": provider.voice,
+        "speed": provider.speed,
+        "settings": provider.settings,
+    }
     recorded = book.record_pending_audio(
         record_id,
         **arguments,
-        staged_file=staged_name,
-        staged_sha256=staged_sha,
+        staged_file=recovery.staged_name,
+        staged_sha256=recovery.staged_sha256,
         **(details or {}),
     )
-    if recorded != key:  # pragma: no cover - ledger owns the identity formula
+    if recorded != recovery.key:  # pragma: no cover - ledger owns the identity formula
         raise SynthesisError("Pending audio identity changed during stage recovery")
     if persist_pending is not None:
-        persist_pending(book, key)
-    return key, expected
+        persist_pending(book, recovery.key)
+    return recovery.key, recovery.expected
 
 
 def _stage_audio(
@@ -892,49 +988,10 @@ def generate_audio(
         selected_ids.add(record.id)
     prepared_examples: dict[str, list[SpeechProvider]] = {}
     if examples:
-        # Resolve every selected clip before either provider is called. A
-        # non-OpenAI provider cannot honor prose steering, and discovering that
-        # after the word half ran would leave a partial mutation for a request
-        # that was invalid from the start.
-        for record in result.records:
-            if record.id not in wanted:
-                continue
-            seen: dict[str, str] = {}
-            profiles: list[SpeechProvider] = []
-            for example in record.examples:
-                instruction = example.instructions.strip()
-                if example.japanese:
-                    previous = seen.get(example.japanese)
-                    if previous is not None and previous != instruction:
-                        raise AudioError(
-                            f"{record.id} has the same audio file for duplicate "
-                            f"sentence {example.japanese!r} but different "
-                            "instructions. Make the instructions agree or keep "
-                            "only one copy of the sentence."
-                        )
-                    seen[example.japanese] = instruction
-                try:
-                    profile = (
-                        clip_provider(sentence_provider, instruction)
-                        if example.japanese
-                        else sentence_provider
-                    )
-                    if example.japanese:
-                        validate_utterance(profile, example.japanese)
-                    profiles.append(profile)
-                except TtsError as exc:
-                    raise AudioError(f"{record.id}: {exc}") from exc
-            prepared_examples[record.id] = profiles
-    _refuse_address_collisions(
-        result.records,
-        book=book,
-        wanted=wanted,
-        word_provider=provider,
-        prepared_examples=prepared_examples,
-        protected_records=protected_records,
-        words=words,
-        examples=examples,
-    )
+        prepared_examples = prepare_example_audio_profiles(
+            [record for record in result.records if record.id in wanted],
+            sentence_provider=sentence_provider,
+        )
     _preflight_provider_availability(
         result.records,
         wanted=wanted,
@@ -946,6 +1003,7 @@ def generate_audio(
         examples=examples,
         force=force,
         stage_only=stage_only,
+        protected_records=protected_records,
         persist_pending=persist_pending,
     )
 
@@ -996,6 +1054,247 @@ def generate_audio(
     return result
 
 
+def prepare_example_audio_profiles(
+    records: Sequence[VocabularyRecord],
+    *,
+    sentence_provider: SpeechProvider,
+) -> dict[str, list[SpeechProvider]]:
+    """Resolve and validate every example profile without contacting a provider.
+
+    Planning and execution share this deterministic preflight so a displayed
+    action cannot conceal a duplicate-instruction conflict, unsupported
+    steering, or a provider request-length refusal that execution already
+    knows before spending.
+    """
+    prepared: dict[str, list[SpeechProvider]] = {}
+    for record in records:
+        seen: dict[str, str] = {}
+        profiles: list[SpeechProvider] = []
+        for example in record.examples:
+            instruction = example.instructions.strip()
+            if example.japanese:
+                previous = seen.get(example.japanese)
+                if previous is not None and previous != instruction:
+                    raise AudioError(
+                        f"{record.id} has the same audio file for duplicate "
+                        f"sentence {example.japanese!r} but different "
+                        "instructions. Make the instructions agree or keep "
+                        "only one copy of the sentence."
+                    )
+                seen[example.japanese] = instruction
+            try:
+                profile = (
+                    clip_provider(sentence_provider, instruction)
+                    if example.japanese
+                    else sentence_provider
+                )
+                if example.japanese:
+                    validate_utterance(profile, example.japanese)
+                profiles.append(profile)
+            except TtsError as exc:
+                raise AudioError(f"{record.id}: {exc}") from exc
+        prepared[record.id] = profiles
+    return prepared
+
+
+def _clip_requirement(
+    *,
+    book: ledger_mod.Ledger,
+    record_id: str,
+    kind: Literal["word", "example"],
+    content_fp: str,
+    target: str,
+    request_input: str,
+    forced_accent: bool,
+    named: str,
+    audio_dir: Path,
+    provider: SpeechProvider,
+    force: bool,
+    stage_only: bool,
+    adopt_pending: bool,
+    details: dict[str, object] | None,
+    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
+) -> AudioClipRequirement:
+    """Classify one exact request through execution's recovery/currency gates."""
+    _canonical_target_exists(audio_dir, target)
+    recovery: _PendingRecovery | None = None
+    if stage_only:
+        if adopt_pending:
+            adopted = _pending_current_file(
+                book,
+                record_id,
+                of=kind,
+                content_fp=content_fp,
+                expected=target,
+                request_input=request_input,
+                forced_accent=forced_accent,
+                audio_dir=audio_dir,
+                provider=provider,
+                details=details,
+                persist_pending=persist_pending,
+                replace_corrupt=force,
+            )
+            if adopted is not None:
+                recovery = _pending_recovery(
+                    book,
+                    record_id,
+                    of=kind,
+                    content_fp=content_fp,
+                    expected=target,
+                    request_input=request_input,
+                    forced_accent=forced_accent,
+                    audio_dir=audio_dir,
+                    provider=provider,
+                    replace_corrupt=force,
+                )
+                assert recovery is not None
+        else:
+            recovery = _pending_recovery(
+                book,
+                record_id,
+                of=kind,
+                content_fp=content_fp,
+                expected=target,
+                request_input=request_input,
+                forced_accent=forced_accent,
+                audio_dir=audio_dir,
+                provider=provider,
+                replace_corrupt=force,
+            )
+    current = False
+    if recovery is None and not force:
+        current = _is_current(
+            book,
+            record_id,
+            of=kind,
+            content_fp=content_fp,
+            named=named,
+            audio_dir=audio_dir,
+            provider=provider,
+        )
+    if recovery is not None:
+        state: AudioClipState = "recoverable"
+    elif current:
+        state = "current"
+    else:
+        state = "provider-required"
+    return AudioClipRequirement(
+        record_id=record_id,
+        kind=kind,
+        target=target,
+        request_input=request_input,
+        forced_accent=forced_accent,
+        content_fingerprint=content_fp,
+        provider=provider,
+        state=state,
+        recovery_key=recovery.key if recovery is not None else None,
+        recovery_sha256=(
+            recovery.staged_sha256 if recovery is not None else None
+        ),
+        recovery_source=recovery.source if recovery is not None else None,
+    )
+
+
+def audio_clip_requirements(
+    records: Sequence[VocabularyRecord],
+    *,
+    wanted: set[str],
+    book: ledger_mod.Ledger,
+    audio_dir: Path,
+    word_provider: SpeechProvider,
+    prepared_examples: dict[str, list[SpeechProvider]],
+    words: bool,
+    examples: bool,
+    force: bool,
+    stage_only: bool = True,
+    adopt_pending: bool = False,
+    protected_records: Sequence[VocabularyRecord] = (),
+    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
+) -> tuple[AudioClipRequirement, ...]:
+    """Return the exact current/recovery/provider census without synthesis."""
+    _refuse_address_collisions(
+        records,
+        book=book,
+        wanted=wanted,
+        word_provider=word_provider,
+        prepared_examples=prepared_examples,
+        protected_records=protected_records,
+        words=words,
+        examples=examples,
+    )
+    requirements: list[AudioClipRequirement] = []
+    for record in records:
+        if record.id not in wanted:
+            continue
+        if words and record.reading:
+            utterance, forced, _ = _word_request(record)
+            requirements.append(
+                _clip_requirement(
+                    book=book,
+                    record_id=record.id,
+                    kind="word",
+                    content_fp=ledger_mod.word_audio_content_fingerprint(record),
+                    target=(
+                        f"janki-{ledger_mod.word_audio_filename_fingerprint(record)}"
+                        f"{word_provider.suffix}"
+                    ),
+                    request_input=utterance,
+                    forced_accent=forced,
+                    named=record.audio,
+                    audio_dir=audio_dir,
+                    provider=word_provider,
+                    force=force,
+                    stage_only=stage_only,
+                    adopt_pending=adopt_pending,
+                    details={} if forced else {ACCENT_UNVERIFIED: True},
+                    persist_pending=persist_pending,
+                )
+            )
+        if not examples:
+            continue
+        by_sentence: dict[str, list[int]] = {}
+        for position, example in enumerate(record.examples):
+            if example.japanese:
+                by_sentence.setdefault(example.japanese, []).append(position)
+        for positions in by_sentence.values():
+            first: AudioClipRequirement | None = None
+            current: AudioClipRequirement | None = None
+            recovered: AudioClipRequirement | None = None
+            for position in positions:
+                example = record.examples[position]
+                provider = prepared_examples[record.id][position]
+                candidate = _clip_requirement(
+                    book=book,
+                    record_id=record.id,
+                    kind="example",
+                    content_fp=ledger_mod.example_audio_content_fingerprint(example),
+                    target=(
+                        f"janki-"
+                        f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
+                        f"{provider.suffix}"
+                    ),
+                    request_input=example.japanese,
+                    forced_accent=False,
+                    named=example.audio,
+                    audio_dir=audio_dir,
+                    provider=provider,
+                    force=force,
+                    stage_only=stage_only,
+                    adopt_pending=adopt_pending,
+                    details=None,
+                    persist_pending=persist_pending,
+                )
+                first = first or candidate
+                if candidate.state == "recoverable":
+                    recovered = candidate
+                    break
+                if candidate.state == "current":
+                    current = candidate
+            assert first is not None
+            requirements.append(recovered or current or first)
+    return tuple(requirements)
+
+
 def _preflight_provider_availability(
     records: Sequence[VocabularyRecord],
     *,
@@ -1008,6 +1307,7 @@ def _preflight_provider_availability(
     examples: bool,
     force: bool,
     stage_only: bool,
+    protected_records: Sequence[VocabularyRecord],
     persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
 ) -> None:
     """Check every engine still needed before the first provider call.
@@ -1018,92 +1318,25 @@ def _preflight_provider_availability(
     currency can satisfy, while the complete census still happens before any
     synthesis call.
     """
+    requirements = audio_clip_requirements(
+        records,
+        wanted=wanted,
+        book=book,
+        audio_dir=audio_dir,
+        word_provider=word_provider,
+        prepared_examples=prepared_examples,
+        words=words,
+        examples=examples,
+        force=force,
+        stage_only=stage_only,
+        adopt_pending=True,
+        protected_records=protected_records,
+        persist_pending=persist_pending,
+    )
     required: dict[int, SpeechProvider] = {}
-    for record in records:
-        if record.id not in wanted:
-            continue
-        if words and record.reading:
-            utterance, forced, _ = _word_request(record)
-            content_fp = ledger_mod.word_audio_content_fingerprint(record)
-            target = (
-                f"janki-{ledger_mod.word_audio_filename_fingerprint(record)}"
-                f"{word_provider.suffix}"
-            )
-            _canonical_target_exists(audio_dir, target)
-            recovered = None
-            if stage_only:
-                recovered = _pending_current_file(
-                    book,
-                    record.id,
-                    of="word",
-                    content_fp=content_fp,
-                    expected=target,
-                    request_input=utterance,
-                    forced_accent=forced,
-                    audio_dir=audio_dir,
-                    provider=word_provider,
-                    details={} if forced else {ACCENT_UNVERIFIED: True},
-                    persist_pending=persist_pending,
-                    replace_corrupt=force,
-                )
-            current = not force and _is_current(
-                book,
-                record.id,
-                of="word",
-                content_fp=content_fp,
-                named=record.audio,
-                audio_dir=audio_dir,
-                provider=word_provider,
-            )
-            if recovered is None and not current:
-                required[id(word_provider)] = word_provider
-        if not examples:
-            continue
-        by_sentence: dict[str, list[int]] = {}
-        for position, example in enumerate(record.examples):
-            if example.japanese:
-                by_sentence.setdefault(example.japanese, []).append(position)
-        for positions in by_sentence.values():
-            recovered = False
-            current = False
-            for position in positions:
-                example = record.examples[position]
-                sentence_provider = prepared_examples[record.id][position]
-                content_fp = ledger_mod.example_audio_content_fingerprint(example)
-                target = (
-                    f"janki-"
-                    f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
-                    f"{sentence_provider.suffix}"
-                )
-                _canonical_target_exists(audio_dir, target)
-                if stage_only and _pending_current_file(
-                    book,
-                    record.id,
-                    of="example",
-                    content_fp=content_fp,
-                    expected=target,
-                    request_input=example.japanese,
-                    forced_accent=False,
-                    audio_dir=audio_dir,
-                    provider=sentence_provider,
-                    persist_pending=persist_pending,
-                    replace_corrupt=force,
-                ):
-                    recovered = True
-                    break
-                if not force and _is_current(
-                    book,
-                    record.id,
-                    of="example",
-                    content_fp=content_fp,
-                    named=example.audio,
-                    audio_dir=audio_dir,
-                    provider=sentence_provider,
-                ):
-                    current = True
-            if not recovered and not current:
-                sentence_provider = prepared_examples[record.id][positions[0]]
-                required[id(sentence_provider)] = sentence_provider
+    for requirement in requirements:
+        if requirement.state == "provider-required":
+            required[id(requirement.provider)] = requirement.provider
     for engine in required.values():
         if not engine.available():
             raise AudioError(f"{engine.name}: {engine.launch_hint}")

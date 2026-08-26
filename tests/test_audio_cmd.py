@@ -20,6 +20,7 @@ import pytest
 
 from japanese_anki import audio_cmd, cli
 from japanese_anki import ledger as ledger_mod
+from japanese_anki.application import audio as audio_application
 from japanese_anki.audio_cmd import AudioError, generate_audio, prune_unreferenced
 from japanese_anki.config import ProjectConfig
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
@@ -266,7 +267,7 @@ def test_an_example_is_read_naturally(tmp_path: Path) -> None:
 
 
 def test_the_configured_voice_and_rate_reach_the_provider(tmp_path: Path) -> None:
-    """`_speech_provider` is the only join between janki.toml and the engine, and
+    """`resolve_word_provider` is the join between janki.toml and the engine, and
     both halves of it are silent when wrong: a dropped speed gives audio at the
     wrong rate with no error, and — since the ledger now records what the
     provider reports — a ledger that agrees with the audio and with nothing the
@@ -276,7 +277,7 @@ def test_the_configured_voice_and_rate_reach_the_provider(tmp_path: Path) -> Non
     )
     config = ProjectConfig.load(tmp_path)
 
-    provider = cli._speech_provider(config, None)
+    provider = audio_application.resolve_word_provider(config, None)
 
     assert (provider.voice, provider.speed) == (13, 0.7)
 
@@ -630,7 +631,7 @@ def test_the_command_refuses_before_spending_when_the_engine_is_down(
     """Static engine unavailability is knowable before the first paid call."""
     root = project(tmp_path, [record()])
     down = FakeVoice(reachable=False)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: down)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: down)
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
 
@@ -642,7 +643,9 @@ def test_the_command_writes_records_media_and_ledger(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = project(tmp_path, [record()])
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    monkeypatch.setattr(
+        audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
+    )
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
@@ -681,7 +684,7 @@ def test_a_concurrent_record_edit_does_not_make_the_rerun_pay_again(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = EditsDuringSynthesis()
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
     assert len(provider.said) == 1
@@ -702,7 +705,7 @@ def test_same_address_cas_failure_keeps_old_media_and_canonical_ledger(
     """A re-voice is prepared beside the live clip until its record CAS wins."""
     root = project(tmp_path, [record()])
     old = FakeVoice(audio=b"old voice", voice=7)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: old)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: old)
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
     [before_record] = json.loads(
@@ -723,7 +726,11 @@ def test_same_address_cas_failure_keeps_old_media_and_canonical_ledger(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     replacement = EditsDuringRevoice(audio=b"new voice", voice=13)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: replacement)
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_word_provider",
+        lambda config, chosen: replacement,
+    )
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
 
@@ -769,8 +776,12 @@ def test_new_address_cas_failure_does_not_publish_or_forget_the_old_clip(
     original = record(examples=[ExampleSentence(japanese="橋を渡る。")])
     root = project(tmp_path, [original])
     old = FakeVoice(audio=b"old sentence", voice=52)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: old)
-    monkeypatch.setattr(cli, "_sentence_provider", lambda config, chosen, words: old)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: old)
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_sentence_provider",
+        lambda config, chosen, words: old,
+    )
     assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
 
     [payload] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
@@ -794,9 +805,15 @@ def test_new_address_cas_failure_does_not_publish_or_forget_the_old_clip(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     replacement = EditsDuringSynthesis(audio=b"new sentence", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: replacement)
     monkeypatch.setattr(
-        cli, "_sentence_provider", lambda config, chosen, words: replacement
+        audio_application,
+        "resolve_word_provider",
+        lambda config, chosen: replacement,
+    )
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_sentence_provider",
+        lambda config, chosen, words: replacement,
     )
 
     assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
@@ -827,7 +844,7 @@ def test_failed_final_ledger_commit_recovers_promoted_audio_without_rebilling(
 ) -> None:
     root = project(tmp_path, [record()])
     provider = FakeVoice(audio=b"paid once", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     real_save = cli.ledger.Ledger.save
     saves = 0
 
@@ -871,7 +888,7 @@ def test_concurrent_ledger_change_merges_the_additive_wal_without_losing_paid_au
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = EditsLedgerDuringSynthesis(audio=b"one paid render", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
@@ -907,9 +924,9 @@ def test_each_completed_clip_is_durable_before_the_next_paid_call(
             return self.audio
 
     provider = InterruptsSecondClip(audio=b"paid sentence", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
-        cli, "_sentence_provider", lambda config, chosen, words: provider
+        audio_application, "resolve_sentence_provider", lambda config, chosen, words: provider
     )
 
     with pytest.raises(KeyboardInterrupt):
@@ -969,9 +986,9 @@ def test_force_rerun_adopts_its_exact_paid_stage_instead_of_rebilling(
     root = project(tmp_path, [item])
     flag = "--words" if kind == "word" else "--examples"
     original = FakeVoice(audio=b"old current bytes", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: original)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: original)
     monkeypatch.setattr(
-        cli, "_sentence_provider", lambda config, chosen, words: original
+        audio_application, "resolve_sentence_provider", lambda config, chosen, words: original
     )
     assert cli.main(["--root", str(root), "audio", flag]) == 0
 
@@ -990,9 +1007,9 @@ def test_force_rerun_adopts_its_exact_paid_stage_instead_of_rebilling(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = EditsOnce(audio=b"forced paid bytes", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
-        cli, "_sentence_provider", lambda config, chosen, words: provider
+        audio_application, "resolve_sentence_provider", lambda config, chosen, words: provider
     )
     assert cli.main(["--root", str(root), "audio", flag, "--force"]) == 1
 
@@ -1016,7 +1033,7 @@ def test_stage_is_self_describing_if_wal_persistence_is_interrupted(
     """The provider result is recoverable at every boundary after staging."""
     root = project(tmp_path, [record()])
     provider = FakeVoice(audio=b"paid exactly once", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     real_persist = cli._persist_audio_wal
 
     def interrupt_after_stage(*args: object, **kwargs: object) -> None:
@@ -1048,7 +1065,7 @@ def test_unregistered_stage_is_retired_when_its_request_can_no_longer_match(
     item = record()
     root = project(tmp_path, [item])
     provider = FakeVoice(audio=b"old completed render", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     real_persist = cli._persist_audio_wal
     monkeypatch.setattr(
         cli,
@@ -1085,7 +1102,7 @@ def test_targeted_run_preserves_another_current_requests_unregistered_stage(
     second = record(id="word:箸:はし", expression="箸", pitch_accent=["HLL"])
     root = project(tmp_path, [first, second])
     provider = FakeVoice(audio=b"paid render", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     real_persist = cli._persist_audio_wal
     monkeypatch.setattr(
         cli,
@@ -1112,7 +1129,7 @@ def test_corrupt_completed_wal_refuses_before_rebilling_exact_request(
     item = record()
     root = project(tmp_path, [item])
     provider = FakeVoice(audio=b"replacement would cost", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     utterance, forced, _ = ledger_mod.word_audio_request(item)
     arguments = {
         "of": "word",
@@ -1169,7 +1186,7 @@ def test_record_lock_stays_held_from_cas_through_publish_and_ledger_commit(
 ) -> None:
     root = project(tmp_path, [record()])
     provider = FakeVoice(audio=b"new canonical bytes", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     real_promote = audio_cmd.promote_pending_audio
     writer_done = threading.Event()
     writer_failures: list[BaseException] = []
@@ -1250,7 +1267,7 @@ def test_deck_source_owner_revision_is_rechecked_before_media_promotion(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = AddsSourceOwner(audio=b"selected new bytes", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
 
@@ -1268,7 +1285,7 @@ def test_pending_audio_owner_participates_in_address_collision_preflight(
     second = record(id="word:箸:はし", expression="箸", pitch_accent=["HL"])
     root = project(tmp_path, [first, second])
     provider = FakeVoice(audio=b"must not be called", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     target = (
         f"janki-{ledger_mod.word_audio_filename_fingerprint(second)}.wav"
     )
@@ -1368,9 +1385,9 @@ def test_changed_sentence_retires_nonmatching_pending_wal_and_unblocks_build(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = ChangesSentence(audio=b"sentence", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
-        cli, "_sentence_provider", lambda config, chosen, words: provider
+        audio_application, "resolve_sentence_provider", lambda config, chosen, words: provider
     )
     assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
     pending_before = json.loads(
@@ -1415,7 +1432,7 @@ def test_changed_word_request_supersedes_same_slot_pending_wal(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = ChangesPitchOnce(voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
     interrupted = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
     [old_pending] = interrupted["pending_audio"].values()
@@ -1438,7 +1455,7 @@ def test_force_retry_adopts_valid_sibling_of_corrupt_same_key_wal(
     item = record()
     root = project(tmp_path, [item])
     provider = FakeVoice(audio=b"one valid replacement", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     utterance, forced, _ = ledger_mod.word_audio_request(item)
     arguments = {
         "of": "word",
@@ -1500,7 +1517,7 @@ def test_prune_retires_pending_audio_for_a_deleted_record_and_unblocks_build(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = DeletesRecord(audio=b"orphaned paid bytes")
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
     pending = json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
         "pending_audio"
@@ -1574,7 +1591,7 @@ def test_prune_keeps_a_paid_clip_with_a_pending_record_reference(
             return super().synthesize(text_or_kana, forced_accent=forced_accent)
 
     provider = EditsTheFirstRun()
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
     assert cli.main(["--root", str(root), "audio", first.id, "--words"]) == 1
     pending = root / "media" / "audio" / (
@@ -1610,7 +1627,7 @@ def test_stale_prune_snapshot_refuses_before_deleting_a_newly_committed_clip(
     stale_records = [record()]
     stale_book = ledger_mod.load(root / "ledger.json")
     provider = FakeVoice(audio=b"new canonical clip")
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
     [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
     target = root / "media" / saved["audio"]
@@ -1698,7 +1715,7 @@ def test_pending_stage_symlink_cannot_overwrite_canonical_media_before_cas(
 ) -> None:
     root = project(tmp_path, [record()])
     original = FakeVoice(audio=b"old canonical", voice=7)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: original)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: original)
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
     [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
     canonical = root / "media" / saved["audio"]
@@ -1724,7 +1741,11 @@ def test_pending_stage_symlink_cannot_overwrite_canonical_media_before_cas(
     )
     staged.parent.mkdir(parents=True, exist_ok=True)
     staged.symlink_to(canonical)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: replacement)
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_word_provider",
+        lambda config, chosen: replacement,
+    )
 
     assert cli.main(["--root", str(root), "audio", "--words", "--force"]) == 1
 
@@ -1750,7 +1771,7 @@ def test_canonical_target_symlink_is_refused_during_promotion(
     outside.write_bytes(b"do not overwrite")
     target.symlink_to(outside)
     provider = FakeVoice(audio=b"new paid bytes", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
 
@@ -1769,7 +1790,7 @@ def test_matching_canonical_symlink_cannot_bypass_bound_promotion(
     item = record()
     root = project(tmp_path, [item])
     provider = FakeVoice(audio=b"same bytes", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     target_name = f"janki-{ledger_mod.word_audio_filename_fingerprint(item)}.wav"
     audio_dir = root / "media" / "audio"
     audio_dir.mkdir(parents=True)
@@ -1820,7 +1841,7 @@ def test_current_currency_refuses_a_canonical_symlink_before_provider(
 ) -> None:
     root = project(tmp_path, [record()])
     provider = FakeVoice(audio=b"old canonical", voice=53)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
     [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
     target = root / "media" / saved["audio"]
@@ -1989,7 +2010,7 @@ def test_bare_janki_audio_refuses_rather_than_voicing_everything(
     invocation silently voiced every record in the collection."""
     root = project(tmp_path, [record()])
     voice = FakeVoice()
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: voice)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: voice)
 
     assert cli.main(["--root", str(root), "audio"]) == 1
 
@@ -2036,7 +2057,9 @@ def test_the_command_tells_the_shell_which_records_carry_a_guess(
     green — the list was asserted only in-process, and this message is the one
     surface a person ever sees for a clip that sounds right and is not."""
     root = project(tmp_path, [record(pitch_accent=[])])
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    monkeypatch.setattr(
+        audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
+    )
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
@@ -2053,7 +2076,9 @@ def test_the_command_prunes_the_saved_ledger_too(
     the book argument at the call site, or the save after it, and ledger.json
     keeps entries for files that are gone."""
     root = project(tmp_path, [record()])
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    monkeypatch.setattr(
+        audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
+    )
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
     # A clip nothing will ever regenerate: an example entry whose sentence the
@@ -2084,7 +2109,7 @@ def test_an_unwritable_ledger_refuses_before_a_paid_audio_call(
     """A static durability failure is knowable before synthesis, so ask first."""
     root = project(tmp_path, [record()])
     provider = FakeVoice()
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
         cli.ledger.Ledger,
         "save",
@@ -2207,8 +2232,8 @@ def test_the_configured_sentence_voice_reaches_its_own_provider(tmp_path: Path) 
     )
     config = ProjectConfig.load(tmp_path)
 
-    words = cli._speech_provider(config, None)
-    sentences = cli._sentence_provider(config, None, words)
+    words = audio_application.resolve_word_provider(config, None)
+    sentences = audio_application.resolve_sentence_provider(config, None, words)
 
     assert (words.voice, sentences.voice) == (13, 52)
     assert sentences.speed == 0.7, "and takes the same rate"
@@ -2220,9 +2245,11 @@ def test_an_unset_sentence_voice_returns_the_word_provider(tmp_path: Path) -> No
     )
     config = ProjectConfig.load(tmp_path)
 
-    words = cli._speech_provider(config, None)
+    words = audio_application.resolve_word_provider(config, None)
 
-    assert cli._sentence_provider(config, None, words) is words, "the same object"
+    assert (
+        audio_application.resolve_sentence_provider(config, None, words) is words
+    ), "the same object"
 
 
 class FakeMp3Voice(FakeVoice):
@@ -2306,14 +2333,18 @@ def test_the_cli_gives_sentences_their_own_engine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The CLI is the only entry point a user has, and nothing drove it: every
-    other test called `generate_audio` or `_sentence_provider` directly, so
+    other test called `generate_audio` or `resolve_sentence_provider` directly, so
     deleting the wiring left the feature a no-op with the suite green."""
     root = project(tmp_path, [record(
         examples=[ExampleSentence(japanese="橋を渡る。", english="Cross.")]
     )])
     words, sentences = FakeVoice(voice=13), FakeVoice(voice=52)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: words)
-    monkeypatch.setattr(cli, "_sentence_provider", lambda config, chosen, w: sentences)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: words)
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_sentence_provider",
+        lambda config, chosen, w: sentences,
+    )
 
     assert cli.main(["--root", str(root), "audio", "--words", "--examples"]) == 0
 
@@ -2348,8 +2379,8 @@ def test_a_sentence_voice_of_zero_is_a_real_voice(tmp_path: Path) -> None:
     )
     config = ProjectConfig.load(tmp_path)
 
-    words = cli._speech_provider(config, None)
-    sentences = cli._sentence_provider(config, None, words)
+    words = audio_application.resolve_word_provider(config, None)
+    sentences = audio_application.resolve_sentence_provider(config, None, words)
 
     assert sentences is not words, "0 selected a different speaker"
     assert sentences.voice == 0
@@ -2359,10 +2390,10 @@ def test_an_absent_sentence_speaker_is_the_only_way_to_opt_out(tmp_path: Path) -
     (tmp_path / "janki.toml").write_text("[tts]\nvoicevox_speaker = 13\n", encoding="utf-8")
     config = ProjectConfig.load(tmp_path)
 
-    words = cli._speech_provider(config, None)
+    words = audio_application.resolve_word_provider(config, None)
 
     assert config.voicevox_sentence_speaker is None
-    assert cli._sentence_provider(config, None, words) is words
+    assert audio_application.resolve_sentence_provider(config, None, words) is words
 
 
 def test_a_words_run_ignores_an_unavailable_sentence_engine(
@@ -2373,8 +2404,14 @@ def test_a_words_run_ignores_an_unavailable_sentence_engine(
     and the message blames the wrong thing, since nothing is unreachable."""
     root = project(tmp_path, [record()])
     down = FakeVoice(reachable=False)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
-    monkeypatch.setattr(cli, "_sentence_provider", lambda config, chosen, w: down)
+    monkeypatch.setattr(
+        audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
+    )
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_sentence_provider",
+        lambda config, chosen, w: down,
+    )
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
@@ -2387,9 +2424,13 @@ def test_an_examples_run_still_refuses_before_spending(
     root = project(tmp_path, [record(
         examples=[ExampleSentence(japanese="橋を渡る。", english="Cross.")]
     )])
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
     monkeypatch.setattr(
-        cli, "_sentence_provider", lambda config, chosen, w: FakeVoice(reachable=False)
+        audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
+    )
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_sentence_provider",
+        lambda config, chosen, w: FakeVoice(reachable=False),
     )
 
     assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
@@ -2399,8 +2440,8 @@ def test_an_examples_run_still_refuses_before_spending(
 
 @pytest.mark.parametrize("written", ["Voicevox", "VOICEVOX", " voicevox ", ""])
 def test_the_provider_name_is_normalised_once(tmp_path: Path, written: str) -> None:
-    """Two normalisations disagreed: `_speech_provider` lower-cased and
-    defaulted while `_sentence_provider` compared the raw string, so
+    """Two normalisations once disagreed: word resolution lower-cased and
+    defaulted while sentence resolution compared the raw string, so
     `provider = "Voicevox"` built a VOICEVOX word engine and then silently
     discarded the configured sentence voice — every sentence in the word voice,
     with no message."""
@@ -2411,8 +2452,8 @@ def test_the_provider_name_is_normalised_once(tmp_path: Path, written: str) -> N
     )
     config = ProjectConfig.load(tmp_path)
 
-    words = cli._speech_provider(config, None)
-    sentences = cli._sentence_provider(config, None, words)
+    words = audio_application.resolve_word_provider(config, None)
+    sentences = audio_application.resolve_sentence_provider(config, None, words)
 
     assert (words.voice, sentences.voice) == (13, 52)
 
@@ -2429,9 +2470,9 @@ def test_a_provider_flag_overriding_the_file_still_selects_the_sentence_voice(
     )
     config = ProjectConfig.load(tmp_path)
 
-    words = cli._speech_provider(config, "voicevox")
+    words = audio_application.resolve_word_provider(config, "voicevox")
 
-    assert cli._sentence_provider(config, "voicevox", words).voice == 52
+    assert audio_application.resolve_sentence_provider(config, "voicevox", words).voice == 52
 
 
 def test_voicevox_refuses_clip_instructions_before_any_synthesis(tmp_path: Path) -> None:
@@ -2861,10 +2902,10 @@ def test_the_command_protects_audio_referenced_only_by_an_inline_deck_note(
     target.parent.mkdir(parents=True)
     target.write_bytes(b"OLD-INLINE-CLIP")
     provider = FakeVoice(voice=52, audio=b"NEW-NORMALIZED-CLIP")
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
-        cli,
-        "_sentence_provider",
+        audio_application,
+        "resolve_sentence_provider",
         lambda config, chosen, words: provider,
     )
 
@@ -2910,10 +2951,12 @@ def test_an_inline_override_with_different_instructions_cannot_share_a_clip(
         encoding="utf-8",
     )
     provider = FakeInstructionVoice(instructions="Global.")
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
     monkeypatch.setattr(
-        cli,
-        "_sentence_provider",
+        audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
+    )
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_sentence_provider",
         lambda config, chosen, words: provider,
     )
 
@@ -2945,7 +2988,7 @@ def test_an_inline_word_variant_cannot_share_the_normalized_word_clip(
         encoding="utf-8",
     )
     provider = FakeVoice()
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
     assert provider.said == []
@@ -2976,7 +3019,7 @@ def test_prune_preserves_a_noncolliding_inline_only_audio_reference(
     protected.parent.mkdir(parents=True)
     protected.write_bytes(b"INLINE")
     provider = FakeVoice()
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
     assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 0
     assert protected.read_bytes() == b"INLINE"
@@ -3033,10 +3076,10 @@ def test_prune_uses_the_saved_source_record_after_revoicing(
     )
     book.save()
     provider = FakeVoice(audio=b"NEW")
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
-        cli,
-        "_sentence_provider",
+        audio_application,
+        "resolve_sentence_provider",
         lambda config, chosen, words: provider,
     )
 
@@ -3083,7 +3126,9 @@ def test_a_partial_prune_saves_the_ledger_before_reporting_the_failure(
         real_unlink(path, *args, **kwargs)
 
     monkeypatch.setattr(Path, "unlink", fail_second)
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    monkeypatch.setattr(
+        audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
+    )
 
     assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 1
 
@@ -3264,10 +3309,10 @@ def test_the_command_persists_a_duplicate_reference_repair_without_a_write(
     project(tmp_path, [broken])
     book.save()
     provider.said.clear()
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
-        cli,
-        "_sentence_provider",
+        audio_application,
+        "resolve_sentence_provider",
         lambda config, chosen, words: provider,
     )
 
@@ -3387,9 +3432,9 @@ def test_a_blank_openai_model_refuses_before_word_or_sentence_synthesis(
     requests: list[object] = []
     words = FakeVoice()
     monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: words)
+    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: words)
     monkeypatch.setattr(
-        cli.openai_tts,
+        audio_application.openai_tts,
         "urllib_transport",
         lambda *args, **kwargs: (requests.append((args, kwargs)) or (200, b"ID3")),
     )
@@ -3504,7 +3549,7 @@ def test_the_word_rate_does_not_reach_the_openai_sentence_provider(tmp_path: Pat
     )
     config = ProjectConfig.load(tmp_path)
 
-    sentences = cli._sentence_provider(config, None, object())
+    sentences = audio_application.resolve_sentence_provider(config, None, object())
 
     assert sentences.name == "openai"
     assert sentences.speed == 1.0, "the word engine's rate stayed out of it"

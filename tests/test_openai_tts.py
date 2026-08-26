@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from japanese_anki import cli
+from japanese_anki.application import audio as audio_application
 from japanese_anki.config import ProjectConfig
 from japanese_anki.tts import TtsError, openai_tts
 from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
@@ -401,8 +401,8 @@ def test_selecting_openai_gives_sentences_a_different_engine(tmp_path: Path) -> 
         'voicevox_speaker = 13\nsentence_provider = "openai"\nopenai_voice = "ash"',
     )
 
-    words = cli._speech_provider(config, None)
-    sentences = cli._sentence_provider(config, None, words)
+    words = audio_application.resolve_word_provider(config, None)
+    sentences = audio_application.resolve_sentence_provider(config, None, words)
 
     assert (words.name, words.voice) == ("voicevox", 13), "words stay on VOICEVOX"
     assert (sentences.name, sentences.voice) == ("openai", "ash")
@@ -413,7 +413,7 @@ def test_the_configured_instructions_reach_the_provider(tmp_path: Path) -> None:
         tmp_path, 'sentence_provider = "openai"\nopenai_instructions = "Very slowly."'
     )
 
-    sentences = cli._sentence_provider(config, None, object())
+    sentences = audio_application.resolve_sentence_provider(config, None, object())
 
     assert sentences.instructions == "Very slowly."
 
@@ -421,7 +421,7 @@ def test_the_configured_instructions_reach_the_provider(tmp_path: Path) -> None:
 def test_the_default_instructions_ask_for_a_slower_pace(tmp_path: Path) -> None:
     config = _config(tmp_path, 'sentence_provider = "openai"')
 
-    sentences = cli._sentence_provider(config, None, object())
+    sentences = audio_application.resolve_sentence_provider(config, None, object())
 
     assert "slower" in sentences.instructions.lower()
 
@@ -429,8 +429,11 @@ def test_the_default_instructions_ask_for_a_slower_pace(tmp_path: Path) -> None:
 def test_an_unknown_sentence_provider_is_refused(tmp_path: Path) -> None:
     config = _config(tmp_path, 'sentence_provider = "unknown-engine"')
 
-    with pytest.raises(cli.AudioError, match="Unknown \\[tts\\] sentence_provider"):
-        cli._sentence_provider(config, None, object())
+    with pytest.raises(
+        audio_application.AudioPlanError,
+        match="Unknown \\[tts\\] sentence_provider",
+    ):
+        audio_application.resolve_sentence_provider(config, None, object())
 
 
 def test_the_voice_list_matches_what_the_api_accepts() -> None:

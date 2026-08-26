@@ -27,6 +27,7 @@ from japanese_anki import (
     status,
     workbench,
 )
+from japanese_anki.application import audio as audio_application
 from japanese_anki.application import coverage as coverage_application
 from japanese_anki.application import enrichment as enrichment_application
 from japanese_anki.application import kanji_addition as kanji_application
@@ -103,9 +104,7 @@ from japanese_anki.staging import (
 from japanese_anki.tts import (
     TtsError,
     clip_provider,
-    openai_tts,
     validate_utterance,
-    voicevox,
 )
 from japanese_anki.validation import (
     has_errors,
@@ -2068,87 +2067,6 @@ def command_extract(args: argparse.Namespace) -> int:
     return 0
 
 
-def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
-    """The engine this run speaks words through, normalised once.
-
-    One definition, because two normalisations disagree: ``_speech_provider``
-    lower-cased and defaulted while ``_sentence_provider`` compared the raw
-    config string, so ``provider = "Voicevox"`` — or an empty one, or
-    ``--provider voicevox`` overriding an ``azure`` file — built a VOICEVOX word
-    provider and then silently discarded the configured sentence voice.
-    """
-    return (chosen or config.tts_provider or "voicevox").strip().lower()
-
-
-def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) -> Any:
-    """The provider that reads example sentences.
-
-    ``words`` when nothing else is configured, so the default is one voice
-    throughout and the ledger keeps recording what it always did. A separate
-    sentence voice is worth having because the two recordings do different
-    jobs: a word is a thing to identify, a sentence is a thing to follow, and
-    hearing them in one voice makes the sentence sound like a longer word.
-    """
-    name = (config.sentence_provider or "").strip().lower()
-    if name == "openai":
-        return openai_tts.OpenAiSpeechProvider(
-            voice=config.openai_voice,
-            model=config.openai_model,
-            instructions=config.openai_instructions,
-            # Deliberately not `voicevox_speed`: OpenAI has its own optional
-            # speed field, but janki leaves it at the API's 1.0 default. Tying
-            # sentence currency to a VOICEVOX word knob would re-bill every
-            # sentence whenever the word pace changed. Learner-specific pace
-            # lives in `instructions`, which `settings` records.
-        )
-    if name not in {"", "voicevox"}:
-        raise AudioError(
-            f"Unknown [tts] sentence_provider {name!r}. Known: voicevox, openai, "
-            "or leave it empty to read sentences in the same voice as the words."
-        )
-    if _provider_name(config, chosen) == "voicevox":
-        speaker = config.voicevox_sentence_speaker
-        # `is not None`, not truthiness: 0 is a real style id.
-        if speaker is not None and speaker != config.voicevox_speaker:
-            return voicevox.VoicevoxProvider(
-                base_url=config.voicevox_url,
-                speaker=speaker,
-                speed=config.voicevox_speed,
-            )
-    return words
-
-
-def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
-    """The provider this run speaks *words* through.
-
-    Only VOICEVOX can force a pitch accent, which is what a word clip is for,
-    so this stays VOICEVOX. ``azure`` is still refused by name rather than
-    falling through to "unknown": it was a real plan, it was evaluated and
-    dropped, and a user who wrote it in their config deserves to hear which of
-    those happened. Sentences are a separate choice — see
-    :func:`_sentence_provider`.
-    """
-    name = _provider_name(config, chosen)
-    if name == "voicevox":
-        return voicevox.VoicevoxProvider(
-            base_url=config.voicevox_url,
-            speaker=config.voicevox_speaker,
-            speed=config.voicevox_speed,
-        )
-    if name == "azure":
-        raise AudioError(
-            "The Azure provider was evaluated and dropped — VOICEVOX reads the "
-            "ambiguous kanji correctly and needs no account (see M5.7 in "
-            "docs/IMPLEMENTATION_PLAN.md). Words use VOICEVOX, which is the "
-            "only engine here that can force a pitch accent; for sentences set "
-            "[tts] sentence_provider = \"openai\"."
-        )
-    raise AudioError(
-        f"Unknown TTS provider {name!r}. Words are voiced by voicevox. For "
-        "sentences, set [tts] sentence_provider to voicevox or openai."
-    )
-
-
 def _persist_audio_wal(
     book: ledger.Ledger, keys: Sequence[str], *, replace: bool = False
 ) -> ledger.Ledger:
@@ -2176,8 +2094,12 @@ def _cleanup_unclaimed_audio_stages(
         current_keys: set[str] = set()
     else:
         try:
-            words = word_provider or _speech_provider(config, chosen)
-            sentences = _sentence_provider(config, chosen, words)
+            words = word_provider or audio_application.resolve_word_provider(
+                config, chosen
+            )
+            sentences = audio_application.resolve_sentence_provider(
+                config, chosen, words
+            )
             current_keys = audio_cmd.current_pending_audio_keys(
                 records,
                 book=book,
@@ -2355,17 +2277,34 @@ def _command_audio_owner_locked(
             print(f"Pruned {len(removed)} unreferenced clip(s).")
             return 0
 
-    provider = _speech_provider(config, args.provider)
+    provider = audio_application.resolve_word_provider(config, args.provider)
     # Only what this run will actually use. A `--words` run never reaches the
     # sentence provider, and refusing to start because *that* engine lacks a
     # key would abort a job it plays no part in.
-    sentences = _sentence_provider(config, args.provider, provider) if args.examples else provider
+    sentences = (
+        audio_application.resolve_sentence_provider(config, args.provider, provider)
+        if args.examples
+        else provider
+    )
     if book is None:
         book = ledger.load(config.ledger_file)
         # A static permission/read-only failure is knowable before a paid
         # speech call. Save once as a writeability/revision probe; a later race
         # is merged additively by the per-clip WAL callback.
         book.save()
+    audio_plan = audio_application.plan_audio_records(
+        config,
+        records,
+        output_revision,
+        args.ids or None,
+        words=args.words,
+        examples=args.examples,
+        force=args.force,
+        chosen_provider=args.provider,
+        word_provider=provider,
+        sentence_provider=sentences,
+        protected_records=protected_records,
+    )
     result = audio_cmd.generate_audio(
         records,
         provider=provider,
@@ -2377,7 +2316,7 @@ def _command_audio_owner_locked(
         # quietly voice every record in the collection.
         words=args.words,
         examples=args.examples,
-        ids=args.ids or None,
+        ids=audio_plan.record_ids,
         force=args.force,
         protected_records=protected_records,
         # Paid bytes live under audio/.pending until the guarded records write
@@ -3694,7 +3633,7 @@ def command_status(args: argparse.Namespace) -> int:
                 + (" ..." if len(missing_ids) > 5 else "")
             )
     try:
-        word_provider = _speech_provider(config, None)
+        word_provider = audio_application.resolve_word_provider(config, None)
     except JankiError as exc:
         word_provider = None
         profile_warnings.append(
@@ -3704,7 +3643,9 @@ def command_status(args: argparse.Namespace) -> int:
         )
     sentence_seed: Any = word_provider if word_provider is not None else object()
     try:
-        candidate = _sentence_provider(config, None, sentence_seed)
+        candidate = audio_application.resolve_sentence_provider(
+            config, None, sentence_seed
+        )
         example_provider = (
             None if word_provider is None and candidate is sentence_seed else candidate
         )
