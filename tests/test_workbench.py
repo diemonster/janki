@@ -11,7 +11,9 @@ Nothing here starts a browser or touches the network beyond 127.0.0.1.
 
 from __future__ import annotations
 
+import base64
 import difflib
+import hashlib
 import html as html_module
 import http.client
 import json
@@ -38,6 +40,7 @@ from japanese_anki.application import (
 )
 from japanese_anki.application.promotion import staged_ai_enrichment
 from japanese_anki.config import ProjectConfig
+from japanese_anki.localhttp import LocalOnlyHandler
 from japanese_anki.models import (
     ExampleSentence,
     SourceReference,
@@ -192,15 +195,99 @@ def test_every_response_carries_the_restrictive_headers(tmp_path: Path) -> None:
         server.server_close()
 
 
-def test_the_page_ships_no_script_and_no_remote_asset(tmp_path: Path) -> None:
+def test_the_intake_preview_is_the_only_local_script_and_csp_binds_it(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, headers, body = _request(server, "GET", f"/{session.token}/")
+        lowered = body.lower()
+        assert lowered.count(b"<script>") == 1
+        script = body.split(b"<script>", 1)[1].split(b"</script>", 1)[0]
+        digest = base64.b64encode(hashlib.sha256(script).digest()).decode("ascii")
+        directives = set(headers["content-security-policy"].split("; "))
+        assert directives == {
+            "default-src 'none'",
+            "style-src 'self'",
+            f"script-src 'sha256-{digest}'",
+            "img-src blob:",
+            "frame-src blob:",
+            "object-src 'none'",
+            "form-action 'self'",
+            "base-uri 'none'",
+            "frame-ancestors 'none'",
+        }
+        assert set(LocalOnlyHandler.content_security_policy.split("; ")) == {
+            "default-src 'none'",
+            "style-src 'self'",
+            "form-action 'self'",
+            "base-uri 'none'",
+            "frame-ancestors 'none'",
+        }
+        assert script.count(b"URL.createObjectURL(file)") == 1
+        assert script.count(b'frame.setAttribute("sandbox", "")') == 1
+        assert script.count(b'frame.setAttribute("referrerpolicy", "no-referrer")') == 1
+        assert script.count(b"sandbox") == 1
+        assert script.count(b"referrerpolicy") == 1
+        assert script.count(b'.trim().normalize("NFC")') == 1
+        assert script.count(b"permanentName.textContent = name") == 1
+        assert script.count(b'name.startsWith(".")') == 1
+        assert script.count(b'name.includes("\\u0000")') == 1
+        assert script.count(b"if (previewUrl !== frameUrl) return") == 1
+        assert script.count(b"if (previewUrl !== imageUrl) return") == 2
+        assert script.count(b'input.addEventListener("change"') == 1
+        assert script.count(b'frame.addEventListener("load"') == 1
+        assert b'frame.addEventListener("error"' not in script
+        assert script.count(b'image.addEventListener("load"') == 1
+        assert script.count(b"frame.src = frameUrl") == 1
+        assert script.count(b"image.src = imageUrl") == 1
+        assert script.index(b'frame.addEventListener("load"') < script.index(
+            b"frame.src = frameUrl"
+        )
+        assert script.index(b'image.addEventListener("load"') < script.index(
+            b"image.src = imageUrl"
+        )
+        assert script.count(b"pages.append(frame)") == 1
+        assert script.count(b"pages.append(image)") == 1
+        assert script.count(b"save.disabled = false") == 2
+        assert script.count(b"URL.revokeObjectURL(previewUrl)") == 1
+        assert script.count(
+            b'window.addEventListener("pagehide", () => {\n'
+            b"    clearPreview();\n"
+            b'    input.value = "";\n'
+            b"  });"
+        ) == 1
+        assert b'name="permanent_filename"' not in body
+        assert b"http://" not in lowered.replace(b"http://127.0.0.1", b"")
+        assert b"https://" not in lowered
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_adding_a_source_previews_the_pages_and_permanent_name_before_save(
+    tmp_path: Path,
+) -> None:
     session = _session(tmp_path)
     server, _thread = _running(session)
     try:
         _status, _headers, body = _request(server, "GET", f"/{session.token}/")
-        lowered = body.lower()
-        assert b"<script" not in lowered
-        assert b"http://" not in lowered.replace(b"http://127.0.0.1", b"")
-        assert b"https://" not in lowered
+        page = body.decode("utf-8")
+        file_input = page.index('id="source-file"')
+        preview = page.index('id="intake-preview"')
+        save = page.index("Save permanent copy")
+
+        assert file_input < preview < save
+        assert "Proposed permanent filename — rechecked when saved" in page
+        assert 'id="permanent-filename"' in page
+        assert 'id="intake-pages"' in page
+        assert '<section id="intake-preview"' in page
+        assert "hidden" in page[preview : preview + 100]
+        assert "Nothing is copied until you confirm after the preview." in page
+        assert "Save only if the expected pages are visible and readable." in page
+        assert "disabled>Save permanent copy</button>" in page
+        assert "Add a PDF or photo above." in page
     finally:
         server.shutdown()
         server.server_close()
@@ -2244,6 +2331,7 @@ def test_one_name_cannot_mean_two_different_sources(tmp_path: Path) -> None:
         ("/home/me/scans/week-3.pdf", "week-3.pdf"),
         ("../../escape.pdf", "escape.pdf"),
         ("sub/dir/x.pdf", "x.pdf"),
+        ("Cafe\u0301.pdf", "Café.pdf"),
     ],
 )
 def test_an_uploaded_name_lands_as_a_plain_basename(

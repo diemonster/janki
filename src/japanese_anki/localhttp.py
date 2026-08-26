@@ -61,6 +61,15 @@ class LocalOnlyHandler(BaseHTTPRequestHandler):
     #: Shown in the `<title>` of a refusal page. Overridden per surface.
     error_title = "janki error"
 
+    #: Surfaces inherit the deny-by-default policy. A surface with one exact
+    #: local behavior may replace it with a policy that names only that
+    #: behavior; keeping this on the class lets the shared response boundary
+    #: remain the sole writer of the header.
+    content_security_policy = (
+        "default-src 'none'; style-src 'self'; form-action 'self'; "
+        "base-uri 'none'; frame-ancestors 'none'"
+    )
+
     #: Per-surface, and read off the *class* rather than a module global so
     #: a test lowering it cannot miss (a module-level patch aimed at the
     #: wrong module silently does nothing, which is how a stalled-body test
@@ -129,8 +138,7 @@ class LocalOnlyHandler(BaseHTTPRequestHandler):
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'none'; style-src 'self'; form-action 'self'; "
-            "base-uri 'none'; frame-ancestors 'none'",
+            self.content_security_policy,
         )
         self.send_header("Connection", "close")
         self.end_headers()

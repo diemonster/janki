@@ -124,6 +124,7 @@ from japanese_anki.workbench.dispatch import (
     parse_dispatch_form,
 )
 from japanese_anki.workbench.render import (
+    INTAKE_SCRIPT_SOURCE,
     STYLE,
     render_addition,
     render_card_check,
@@ -699,6 +700,12 @@ def _completion_error_note(
 class _WorkbenchHandler(LocalOnlyHandler):
     server: _WorkbenchServer
     error_title = "Workbench error"
+    content_security_policy = (
+        "default-src 'none'; style-src 'self'; "
+        f"script-src {INTAKE_SCRIPT_SOURCE}; img-src blob:; frame-src blob:; "
+        "object-src 'none'; form-action 'self'; base-uri 'none'; "
+        "frame-ancestors 'none'"
+    )
 
     def _route(self) -> str | None:
         """The path beneath this session's token, or None if it is not ours.

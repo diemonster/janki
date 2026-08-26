@@ -1,10 +1,12 @@
-"""The dashboard, as server-rendered HTML.
+"""The workbench, as server-rendered HTML plus one exact intake behavior.
 
-No frontend build, no remote asset, no script tag — the page is a list, and a
-list does not need a framework. The CSS uses system colours (`Canvas`,
-`CanvasText`, `Highlight`) so light mode, dark mode and forced-colours mode all
-work without a theme switcher, which `WORKBENCH_PLAN.md` makes a completion
-requirement rather than polish.
+There is no frontend build or remote asset. One CSP-hashed inline script shows
+the browser's already-local selected file before the existing upload form may
+save it; it has no network permission and no authority over the filename the
+server derives. Everything else is ordinary server-rendered HTML. The CSS uses
+system colours (`Canvas`, `CanvasText`, `Highlight`) so light mode, dark mode
+and forced-colours mode all work without a theme switcher, which
+`WORKBENCH_PLAN.md` makes a completion requirement rather than polish.
 
 Every value that reaches this module is escaped. A source filename is
 attacker-adjacent input — it arrives from whatever the person dragged in — and
@@ -13,6 +15,8 @@ it is rendered beside their own study material.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import html
 from collections.abc import Sequence
 from pathlib import Path
@@ -29,6 +33,8 @@ from japanese_anki.application import (
 
 __all__ = [
     "STYLE",
+    "INTAKE_SCRIPT",
+    "INTAKE_SCRIPT_SOURCE",
     "render_addition",
     "render_consent",
     "render_card_check",
@@ -41,6 +47,104 @@ __all__ = [
     "render_reidentify",
     "render_source",
 ]
+
+INTAKE_SCRIPT = r'''(() => {
+  "use strict";
+  const form = document.querySelector("form.add-source");
+  if (!form) return;
+  const input = form.querySelector("#source-file");
+  const preview = form.querySelector("#intake-preview");
+  const permanentName = form.querySelector("#permanent-filename");
+  const pages = form.querySelector("#intake-pages");
+  const note = form.querySelector("#intake-preview-note");
+  const save = form.querySelector("button[type=submit]");
+  let previewUrl = null;
+
+  const clearPreview = () => {
+    if (previewUrl !== null) {
+      URL.revokeObjectURL(previewUrl);
+      previewUrl = null;
+    }
+    pages.replaceChildren();
+    permanentName.textContent = "";
+    note.textContent = "";
+    preview.hidden = true;
+    save.disabled = true;
+  };
+
+  const storedName = (raw) => {
+    const parts = raw.replace(/\\/g, "/").split("/");
+    return (parts[parts.length - 1] || "").trim().normalize("NFC");
+  };
+
+  const showPreview = (file) => {
+    clearPreview();
+    if (!file) return;
+    const name = storedName(file.name);
+    const lower = name.toLowerCase();
+    const isPdf = lower.endsWith(".pdf");
+    const isPhoto = [".jpg", ".jpeg", ".png", ".heic", ".heif"].some(
+      (suffix) => lower.endsWith(suffix)
+    );
+    permanentName.textContent = name;
+    preview.hidden = false;
+    if (
+      !name || name === "." || name === ".." || name.startsWith(".") ||
+      name.includes("\u0000")
+    ) {
+      note.textContent = "Give this file an ordinary visible filename before adding it.";
+      return;
+    }
+    if (!isPdf && !isPhoto) {
+      note.textContent = "This file type cannot be previewed or saved by janki.";
+      return;
+    }
+
+    previewUrl = URL.createObjectURL(file);
+    if (isPdf) {
+      const frame = document.createElement("iframe");
+      const frameUrl = previewUrl;
+      frame.setAttribute("sandbox", "");
+      frame.setAttribute("referrerpolicy", "no-referrer");
+      frame.title = `Page preview of ${name}`;
+      frame.addEventListener("load", () => {
+        if (previewUrl !== frameUrl) return;
+        save.disabled = false;
+      }, {once: true});
+      frame.src = frameUrl;
+      pages.append(frame);
+      note.textContent = "Save only if the expected pages are visible and readable. " +
+        "If no pages appear, convert or rescan this PDF first.";
+    } else {
+      const image = document.createElement("img");
+      const imageUrl = previewUrl;
+      image.alt = `Preview of ${name}`;
+      image.addEventListener("load", () => {
+        if (previewUrl !== imageUrl) return;
+        save.disabled = false;
+      }, {once: true});
+      image.addEventListener("error", () => {
+        if (previewUrl !== imageUrl) return;
+        save.disabled = true;
+        note.textContent = "This browser cannot preview this photo. " +
+          "Convert it to JPEG or PNG before adding it.";
+      }, {once: true});
+      image.src = imageUrl;
+      pages.append(image);
+      note.textContent = "Check that this is the right photo before saving it.";
+    }
+  };
+
+  input.addEventListener("change", () => showPreview(input.files[0]));
+  window.addEventListener("pagehide", () => {
+    clearPreview();
+    input.value = "";
+  });
+})();'''
+
+INTAKE_SCRIPT_SOURCE = "'sha256-" + base64.b64encode(
+    hashlib.sha256(INTAKE_SCRIPT.encode("utf-8")).digest()
+).decode("ascii") + "'"
 
 STYLE = """
 :root { color-scheme: light dark; }
@@ -91,6 +195,15 @@ pre {
   margin-block-end: 2rem; display: grid; gap: .5rem; }
 .add-source h2 { font-size: 1.1rem; margin: 0; }
 input[type=file] { font: inherit; padding: .4rem; }
+.intake-preview { border-block-start: 1px solid ButtonBorder; padding-block-start: .75rem; }
+.intake-preview[hidden] { display: none; }
+.intake-preview h3 { font-size: 1rem; margin: 0 0 .5rem; }
+.intake-pages iframe, .intake-pages img {
+  display: block; inline-size: 100%; border: 1px solid GrayText;
+  border-radius: .35rem; background: Canvas;
+}
+.intake-pages iframe { block-size: min(70vh, 48rem); }
+.intake-pages img { max-block-size: 48rem; object-fit: contain; }
 .actions {
   display: flex; flex-wrap: wrap; gap: 1rem;
   margin-block-start: 1rem; padding-block-start: .75rem;
@@ -330,9 +443,10 @@ def render_dashboard(
         body.extend(f"<li>{_escaped(warning)}</li>" for warning in warnings)
         body.append("</ul></section>")
     if not journeys:
+        where = "above" if csrf else "to your inbox folder"
         body.append(
-            '<p class=empty>Add a PDF or photo to your inbox folder, then run '
-            "<code>janki extract</code>.</p>"
+            f'<p class=empty>Add a PDF or photo {where}. After you save it, '
+            "the workbench will show the separate reading step.</p>"
         )
     body.extend(_source_html(journey, prefix) for journey in journeys)
     body.append("</main></body></html>")
@@ -353,15 +467,23 @@ def _add_source_form(prefix: str, csrf: str) -> str:
         'class="add-source">'
         "<h2>Add source material</h2>"
         f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">'
-        '<p class=edit><label for="source-file">A PDF or photo of your study '
-        "material</label>"
+        '<p class=edit><label for="source-file">Drag a PDF or photo here, or '
+        "choose your study material</label>"
         '<input id="source-file" name="file" type=file '
         'accept=".pdf,.jpg,.jpeg,.png,.heic,.heif" required></p>'
-        "<button type=submit>Add this to my corpus</button>"
-        "<span class=counts>This copies the file into your corpus and sends it "
-        "nowhere. Reading it with a model is a separate, paid step you choose "
-        "afterwards.</span>"
+        '<section id="intake-preview" class="intake-preview" hidden aria-live=polite>'
+        "<h3>Check before saving</h3>"
+        '<p>Proposed permanent filename — rechecked when saved: '
+        '<strong id="permanent-filename"></strong></p>'
+        '<div id="intake-pages" class="intake-pages"></div>'
+        '<p id="intake-preview-note" class=counts></p>'
+        "</section>"
+        "<button type=submit disabled>Save permanent copy</button>"
+        "<span class=counts>Nothing is copied until you confirm after the preview. "
+        "Saving copies the file into your corpus and sends it nowhere. Reading it "
+        "with a model is a separate, paid step you choose afterwards.</span>"
         "</form>"
+        f"<script>{INTAKE_SCRIPT}</script>"
     )
 
 

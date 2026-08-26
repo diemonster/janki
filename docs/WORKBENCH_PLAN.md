@@ -546,11 +546,18 @@ re-identifies staged rows only; migrating a canonical identity has to move
 review history and rewrite what the ledger says shipped, and remains out of
 scope.
 
-### [~] W3 claimed workbench-w0-w2a 2026-08-25 — Intake and the extraction job
+### [x] W3 — Intake and the extraction job
 
-*Progress 2026-08-25: everything except page preview at intake. **Intake** ships —
-upload into the durable inbox, a conflicting basename refused in plain
-language, and "this copies the file and sends it nowhere" on the control.
+*Done 2026-08-26. **Intake** ships — drag or pick a PDF or browser-displayable
+photo, preview its pages from the browser's still-local `File`, see the proposed
+normalized permanent filename, then save into the durable inbox. The one exact
+preview script is bound by its CSP hash; PDFs render in an empty sandbox with no
+same-origin, script, form or navigation permission. The displayed name is advisory:
+`receive_upload` independently derives the path and still refuses a conflicting
+basename in plain language. The control says that saving sends the file nowhere.
+HEIC remains a supported source, but a browser that cannot display it keeps Save
+disabled and asks for a JPEG or PNG; W6's target-browser pass owns that platform
+compatibility check.
 **The consent page** (`GET /<token>/extract/<name>`) plans
 the real run so the request identity it describes is the one that would be
 journalled, and carries every disclosure this task names, plus a sixth the
@@ -602,7 +609,7 @@ when the earlier `busy_refusal` display was clear, streams **Preparing pages**,
 proposals** with no invented percentage, and calls the same
 `complete_extraction` writer as the CLI. A provider refusal or truncation says
 that nothing was staged while preserving the journal's paid-answer state.
-Left: page preview at intake.*
+The entire intake-to-staging path now runs in the tab.*
 
 Drag or pick a file; preview its pages; see the permanent filename; save the
 immutable copy under `data/inbox/`. A conflicting basename refuses in plain
