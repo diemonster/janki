@@ -31,6 +31,9 @@ from japanese_anki.kanji import KanjiInfo, KanjiStore, load_store, save_store
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.workbench import server as workbench_server
 from japanese_anki.workbench.finish import (
+    AudioExamplesSubmission,
+    AudioWordsSubmission,
+    BuildSubmission,
     DictionaryAction,
     DictionaryActions,
     DictionaryCommitSubmission,
@@ -136,7 +139,7 @@ def _replace_field(
     return [(key, value if key == name else old) for key, old in fields]
 
 
-def test_finish_form_parser_accepts_only_the_three_frozen_submission_shapes() -> None:
+def test_finish_form_parser_accepts_only_the_six_frozen_submission_shapes() -> None:
     dictionary_plan = parse_finish_form(
         _body(action="dictionary-plan", csrf="csrf", scope_fingerprint=SCOPE)
     )
@@ -152,6 +155,30 @@ def test_finish_form_parser_accepts_only_the_three_frozen_submission_shapes() ->
     kanji_add = parse_finish_form(
         _body(
             action="kanji-add",
+            csrf="csrf",
+            scope_fingerprint=SCOPE,
+            plan_fingerprint=PLAN,
+        )
+    )
+    audio_words = parse_finish_form(
+        _body(
+            action="audio-words",
+            csrf="csrf",
+            scope_fingerprint=SCOPE,
+            plan_fingerprint=PLAN,
+        )
+    )
+    audio_examples = parse_finish_form(
+        _body(
+            action="audio-examples",
+            csrf="csrf",
+            scope_fingerprint=SCOPE,
+            plan_fingerprint=PLAN,
+        )
+    )
+    build = parse_finish_form(
+        _body(
+            action="build",
             csrf="csrf",
             scope_fingerprint=SCOPE,
             plan_fingerprint=PLAN,
@@ -176,8 +203,91 @@ def test_finish_form_parser_accepts_only_the_three_frozen_submission_shapes() ->
         scope_fingerprint=SCOPE,
         plan_fingerprint=PLAN,
     )
+    assert audio_words == AudioWordsSubmission(
+        action="audio-words",
+        csrf="csrf",
+        scope_fingerprint=SCOPE,
+        plan_fingerprint=PLAN,
+    )
+    assert audio_examples == AudioExamplesSubmission(
+        action="audio-examples",
+        csrf="csrf",
+        scope_fingerprint=SCOPE,
+        plan_fingerprint=PLAN,
+    )
+    assert build == BuildSubmission(
+        action="build",
+        csrf="csrf",
+        scope_fingerprint=SCOPE,
+        plan_fingerprint=PLAN,
+    )
     with pytest.raises(FrozenInstanceError):
         dictionary_plan.csrf = "changed"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        audio_words.csrf = "changed"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        audio_examples.csrf = "changed"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        build.csrf = "changed"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("action", ["audio-words", "audio-examples"])
+@pytest.mark.parametrize("forbidden", ["ids", "provider", "force", "prune"])
+def test_audio_finish_forms_reject_authority_fields(
+    action: str, forbidden: str
+) -> None:
+    fields = {
+        "action": action,
+        "csrf": "csrf",
+        "scope_fingerprint": SCOPE,
+        "plan_fingerprint": PLAN,
+        forbidden: "attacker-chosen",
+    }
+
+    with pytest.raises(FinishFormError, match="not one this page offered"):
+        parse_finish_form(_body(**fields))
+
+
+@pytest.mark.parametrize("action", ["audio-words", "audio-examples"])
+@pytest.mark.parametrize("repeated", ["action", "csrf", "scope_fingerprint", "plan_fingerprint"])
+def test_audio_finish_forms_reject_duplicate_fields(
+    action: str, repeated: str
+) -> None:
+    fields = [
+        ("action", action),
+        ("csrf", "csrf"),
+        ("scope_fingerprint", SCOPE),
+        ("plan_fingerprint", PLAN),
+    ]
+    duplicate_value = action if repeated == "action" else dict(fields)[repeated]
+    fields.append((repeated, duplicate_value))
+
+    with pytest.raises(FinishFormError, match="repeats a field"):
+        parse_finish_form(urlencode(fields).encode("utf-8"))
+
+
+@pytest.mark.parametrize("action", ["audio-words", "audio-examples"])
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"csrf": "csrf", "scope_fingerprint": SCOPE},
+        {
+            "csrf": "csrf",
+            "scope_fingerprint": SCOPE.upper(),
+            "plan_fingerprint": PLAN,
+        },
+        {
+            "csrf": "csrf",
+            "scope_fingerprint": SCOPE,
+            "plan_fingerprint": PLAN[:-1],
+        },
+    ],
+)
+def test_audio_finish_forms_reject_missing_or_malformed_fingerprints(
+    action: str, fields: dict[str, str]
+) -> None:
+    with pytest.raises(FinishFormError):
+        parse_finish_form(_body(action=action, **fields))
 
 
 @pytest.mark.parametrize(
@@ -457,6 +567,322 @@ def test_finish_render_escapes_scope_warning_and_dictionary_diff() -> None:
     assert "&lt;script id=&quot;warning&quot;&gt;bad()&lt;/script&gt;" in page
     assert "&lt;img src=x onerror=&quot;bad()&quot;&gt;" in page
     assert "&lt;owner&gt;" in page
+
+
+def test_finish_page_previews_exact_cards_and_routes_the_bound_full_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, staging_path, deck_path, promoted_ids = _promotion_project(tmp_path)
+    older = VocabularyRecord(
+        id="word:older:older",
+        expression="OLDER-SHOULD-NOT-APPEAR",
+        reading="older",
+        meanings=["an older card in the complete deck"],
+        tags=["lesson-intake"],
+    )
+    save_records_json(session.config.normalized_file, [older])
+    approve_coverage_as_owner(
+        session.config,
+        plan_coverage(session.config, staging_path),
+        reason="I compared the three rows for this exact-preview test.",
+    )
+    promotion = execute_promotion(
+        session.config,
+        decide_promotion(
+            session.config,
+            staging_path,
+            source="table.pdf",
+            skip_reading_check=True,
+        ),
+    )
+    assert promotion.receipt_id is not None
+    finish_url = f"/{session.token}/finish/{promotion.receipt_id}"
+    calls: list[tuple[str, str, str]] = []
+
+    def execute(
+        _config: object,
+        receipt_id: str,
+        *,
+        expected_scope_fingerprint: str,
+        expected_plan_fingerprint: str,
+    ) -> object:
+        calls.append(
+            (
+                receipt_id,
+                expected_scope_fingerprint,
+                expected_plan_fingerprint,
+            )
+        )
+        if len(calls) == 1:
+            return SimpleNamespace(
+                state="complete",
+                package_paths=(session.config.dist_dir / "lesson.apkg",),
+                build_error=None,
+                ledger_error=None,
+            )
+        return SimpleNamespace(
+            state="build_and_ledger_incomplete",
+            package_paths=(session.config.dist_dir / "lesson.apkg",),
+            build_error="fixture later-deck refusal",
+            ledger_error="fixture export-history refusal",
+        )
+
+    monkeypatch.setattr(
+        workbench_server.build_application,
+        "execute_finish_build",
+        execute,
+    )
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", finish_url)
+        assert status == 200
+        assert b"Local network provider" in page
+        assert b"voicevox" in page
+        assert b"final package contains each complete current study deck" in page
+        assert _form(page, "audio-words")
+        assert _form(page, "audio-examples")
+        build_form = _form(page, "build")
+        assert b"Sync Anki before importing" in page
+        assert b"Merge Notetypes" in page
+        assert b"this batch's audio: words" in page
+        assert b"examples" in page
+
+        preview_status, _headers, preview = _request(
+            server,
+            "GET",
+            f"{finish_url}?preview={deck_path.stem}",
+        )
+        assert preview_status == 200
+        for record_id in promoted_ids:
+            record = next(
+                item
+                for item in load_records(session.config.normalized_file)
+                if item.id == record_id
+            )
+            assert record.expression.encode("utf-8") in preview
+        assert older.expression.encode("utf-8") not in preview
+        assert b"4 note(s) in the full deck" in preview
+
+        built, build_headers, _body = _post_finish(
+            server,
+            finish_url,
+            build_form,
+        )
+        assert built == 303
+        assert build_headers["location"].endswith("?build=complete")
+        final_status, _headers, final_page = _request(
+            server,
+            "GET",
+            build_headers["location"],
+        )
+        partial_status, _headers, partial_body = _post_finish(
+            server,
+            finish_url,
+            build_form,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert final_status == 200
+    assert b"Built every receipted study deck" in final_page
+    assert partial_status == 409
+    assert b"Package(s) written" in partial_body
+    assert b"lesson.apkg" in partial_body
+    assert b"fixture later-deck refusal" in partial_body
+    assert b"fixture export-history refusal" in partial_body
+    assert len(calls) == 2
+    submitted = dict(build_form)
+    for call in calls:
+        assert call == (
+            finish_url.rsplit("/", 1)[-1],
+            submitted["scope_fingerprint"],
+            submitted["plan_fingerprint"],
+        )
+
+
+def test_finish_audio_posts_bind_the_scope_and_report_partial_transaction_truth(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, finish_url, promoted_ids = _promoted_finish(tmp_path)
+    calls: list[tuple[tuple[str, ...], bool, bool, str, bool, bool]] = []
+
+    def execute(
+        _config: object,
+        record_ids: tuple[str, ...],
+        *,
+        words: bool,
+        examples: bool,
+        expected_fingerprint: str,
+        force: bool,
+        prune: bool,
+    ) -> object:
+        calls.append(
+            (
+                record_ids,
+                words,
+                examples,
+                expected_fingerprint,
+                force,
+                prune,
+            )
+        )
+        plan = workbench_server.audio_application.plan_targeted_audio(
+            _config,
+            record_ids,
+            words=words,
+            examples=examples,
+            force=force,
+        )
+        if words:
+            plan = replace(
+                plan,
+                word_counts=replace(
+                    plan.word_counts,
+                    total=3,
+                    current=0,
+                    recoverable=2,
+                    provider_required=1,
+                ),
+            )
+            return SimpleNamespace(succeeded=True, plan=plan, file_count=1)
+        if len(calls) in {3, 4}:
+            assert plan.example_provider is not None
+            recoverable = plan.example_counts.total if len(calls) == 4 else 0
+            plan = replace(
+                plan,
+                example_counts=replace(
+                    plan.example_counts,
+                    current=0,
+                    recoverable=recoverable,
+                    provider_required=plan.example_counts.total - recoverable,
+                ),
+                example_provider=replace(
+                    plan.example_provider,
+                    name="openai",
+                    access="paid-network",
+                ),
+            )
+        return SimpleNamespace(
+            succeeded=False,
+            plan=plan,
+            stopped_by="fixture provider stopped",
+            prune_error=None,
+            ledger_error="fixture ledger refusal",
+            record_references_written=True,
+            media_published=True,
+            ledger_committed=False,
+            pending_recovery=True,
+        )
+
+    monkeypatch.setattr(
+        workbench_server.audio_application,
+        "execute_targeted_audio",
+        execute,
+    )
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", finish_url)
+        assert status == 200
+        word_form = _form(page, "audio-words")
+        example_form = _form(page, "audio-examples")
+
+        stale, _headers, stale_body = _post_finish(
+            server,
+            finish_url,
+            _replace_field(word_form, "scope_fingerprint", "e" * 64),
+        )
+        assert calls == []
+
+        word_status, word_headers, _body = _post_finish(
+            server,
+            finish_url,
+            word_form,
+        )
+        banner_status, _headers, banner = _request(
+            server,
+            "GET",
+            word_headers["location"],
+        )
+        example_status, _headers, example_body = _post_finish(
+            server,
+            finish_url,
+            example_form,
+        )
+        paid_status, _headers, paid_body = _post_finish(
+            server,
+            finish_url,
+            example_form,
+        )
+        recovery_status, _headers, recovery_body = _post_finish(
+            server,
+            finish_url,
+            example_form,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert stale == 409
+    assert b"exact finish scope changed" in stale_body
+    assert word_status == 303
+    assert word_headers["location"].endswith(
+        "?audio=words&created=1&recovered=2&current=0"
+    )
+    assert banner_status == 200
+    assert b"Finished word audio: created 1 clip(s), recovered 2" in banner
+    assert b"kept 0 already-current clip(s)" in banner
+    assert example_status == 409
+    assert b"required no paid provider call" in example_body
+    assert b"may have been billed" not in example_body
+    assert b"fixture provider stopped" in example_body
+    assert b"fixture ledger refusal" in example_body
+    assert b"wrote its record references" in example_body
+    assert b"published canonical media" in example_body
+    assert b"did not commit canonical audio ledger" in example_body
+    assert b"pending_audio" in example_body
+    assert paid_status == 409
+    assert b"paid provider call may have been billed" in paid_body
+    assert b"required no paid provider call" not in paid_body
+    assert recovery_status == 409
+    assert b"required no paid provider call" in recovery_body
+    assert b"may have been billed" not in recovery_body
+    assert calls == [
+        (
+            promoted_ids,
+            True,
+            False,
+            dict(word_form)["plan_fingerprint"],
+            False,
+            False,
+        ),
+        (
+            promoted_ids,
+            False,
+            True,
+            dict(example_form)["plan_fingerprint"],
+            False,
+            False,
+        ),
+        (
+            promoted_ids,
+            False,
+            True,
+            dict(example_form)["plan_fingerprint"],
+            False,
+            False,
+        ),
+        (
+            promoted_ids,
+            False,
+            True,
+            dict(example_form)["plan_fingerprint"],
+            False,
+            False,
+        ),
+    ]
 
 
 def test_wrong_csrf_refuses_before_jpdb_lookup(

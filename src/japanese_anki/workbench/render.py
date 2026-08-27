@@ -30,6 +30,8 @@ from japanese_anki.application import (
     PromotionPlan,
     SourceJourney,
 )
+from japanese_anki.application.audio import AudioPlan
+from japanese_anki.application.build import FinishBuildPlan, FinishDeckBuildPlan
 from japanese_anki.application.enrichment import DictionaryEnrichmentDecision
 from japanese_anki.application.finish import FinishScope
 from japanese_anki.application.kanji_addition import KanjiAdditionPlan
@@ -467,6 +469,13 @@ def render_finish(
     dictionary_decision: DictionaryEnrichmentDecision | None = None,
     dictionary_action: str = "",
     banner: str = "",
+    word_audio_plan: AudioPlan | None = None,
+    word_audio_error: str = "",
+    example_audio_plan: AudioPlan | None = None,
+    example_audio_error: str = "",
+    build_plan: FinishBuildPlan | None = None,
+    build_error: str = "",
+    preview_stem: str = "",
 ) -> str:
     """The exact post-promotion steps for one durable receipt."""
     prefix = f"/{html.escape(token, quote=True)}"
@@ -481,8 +490,9 @@ def render_finish(
         f'<p><a href="{prefix}/">&larr; All sources</a></p>',
         f"<h1>Finish {_escaped(scope.source_file)}</h1>",
         f'<p class=saved>{len(scope.record_ids)} promoted card record(s) in '
-        f"{deck_count} study deck(s). Each step below stays limited to those "
-        "exact cards.</p>",
+        f"{deck_count} study deck(s). Dictionary facts, kanji, audio and the "
+        "preview stay limited to those exact cards; the final package contains "
+        "each complete current study deck.</p>",
     ]
     if banner:
         body.append(f'<p class="status reviewed">{_escaped(banner)}</p>')
@@ -587,10 +597,212 @@ def render_finish(
             "these cards.</p>"
         )
     body.append("</section>")
-    body.append(
-        '<section class=source><h2>Next</h2><p>Create word and example audio, '
-        "preview these cards, then build each named study deck.</p></section>"
+
+    def audio_step(
+        number: int,
+        title: str,
+        kind: str,
+        plan: AudioPlan | None,
+        error: str,
+    ) -> None:
+        body.append(f'<section class=source><h2>{number}. {_escaped(title)}</h2>')
+        if error:
+            body.append(
+                '<p class="status problem">This audio step cannot be planned: '
+                f"{_escaped(error)}</p></section>"
+            )
+            return
+        if plan is None:
+            body.append(
+                '<p class="status problem">This audio step is unavailable.</p>'
+                "</section>"
+            )
+            return
+        counts = plan.word_counts if kind == "words" else plan.example_counts
+        provider = plan.word_provider if kind == "words" else plan.example_provider
+        if provider is None or counts.total == 0:
+            body.append(
+                f'<p class="status reviewed">These cards need no {kind} clips.</p>'
+                "</section>"
+            )
+            return
+        access = (
+            "Paid network provider"
+            if provider.access == "paid-network"
+            else "Local network provider"
+        )
+        body.append(
+            f"<p><b>{_escaped(access)} · {_escaped(provider.name)}.</b> "
+            f"{_escaped(counts.total)} distinct clip(s): "
+            f"{_escaped(counts.current)} already current, "
+            f"{_escaped(counts.recoverable)} recoverable from an interrupted "
+            f"exact request, and {_escaped(counts.provider_required)} require "
+            "the provider.</p>"
+        )
+        if counts.current == counts.total:
+            body.append(
+                f'<p class="status reviewed">All {kind} audio is current for '
+                "this finish batch.</p></section>"
+            )
+            return
+        action_name = "audio-words" if kind == "words" else "audio-examples"
+        label = (
+            f"Recover {counts.recoverable} {kind} clip(s)"
+            if counts.provider_required == 0
+            else f"Create {kind} audio"
+        )
+        body.extend(
+            [
+                f'<form method=post action="{html.escape(action, quote=True)}">',
+                _hidden("action", action_name),
+                _hidden("csrf", csrf),
+                _hidden("scope_fingerprint", scope.fingerprint),
+                _hidden("plan_fingerprint", plan.fingerprint),
+                f"<button type=submit>{_escaped(label)}</button>",
+                "</form>",
+                "<p class=counts>An exact interrupted request is recovered from "
+                "its saved bytes and is not sent or billed again.</p>",
+                "</section>",
+            ]
+        )
+
+    audio_step(3, "Create word audio", "words", word_audio_plan, word_audio_error)
+    audio_step(
+        4,
+        "Create example audio",
+        "examples",
+        example_audio_plan,
+        example_audio_error,
     )
+
+    body.append('<section class=source><h2>5. Preview the cards</h2>')
+    if build_error:
+        body.append(
+            '<p class="status problem">The deck preview cannot be planned: '
+            f"{_escaped(build_error)}</p></section>"
+        )
+    elif build_plan is None:
+        body.append(
+            '<p class="status problem">The deck preview is unavailable.</p>'
+            "</section>"
+        )
+    else:
+        body.append(
+            "<p>This preview is limited to the exact cards from this finish "
+            "batch and uses each deck's real selection and inline edits.</p><ul>"
+        )
+        for deck in build_plan.decks:
+            preview_url = (
+                f"{action}?preview={quote(deck.stem, safe='')}"
+            )
+            directions = ", ".join(deck.card_types)
+            body.append(
+                f'<li><a href="{html.escape(preview_url, quote=True)}">Preview '
+                f"{_escaped(deck.name or deck.stem)}</a> — "
+                f"{_escaped(len(deck.receipt_record_ids))} record(s) from this finish; "
+                f"cards: {_escaped(directions)}</li>"
+            )
+        body.append("</ul>")
+        selected: FinishDeckBuildPlan | None = next(
+            (deck for deck in build_plan.decks if deck.stem == preview_stem),
+            None,
+        )
+        if selected is not None:
+            body.append(
+                f"<h3>{_escaped(selected.name or selected.stem)} — exact finish "
+                "preview</h3>"
+            )
+            for record in selected.preview_records:
+                body.append('<article class=card>')
+                body.append(
+                    f'<h3><span lang=ja>{_escaped(record.expression)}</span> '
+                    f"<small>{_escaped(record.reading)}</small></h3>"
+                )
+                body.append(
+                    "<p>" + " · ".join(_escaped(item) for item in record.meanings) + "</p>"
+                )
+                for example in record.examples:
+                    register = example.register.strip() or "example"
+                    body.append(
+                        '<div class=example>'
+                        f"<h4>{_escaped(register.title())}</h4>"
+                        f'<p class=ja lang=ja>{_escaped(example.japanese)}</p>'
+                        f'<p class=en>{_escaped(example.english)}</p>'
+                        "</div>"
+                    )
+                if record.usage_notes:
+                    body.append(
+                        f"<h4>Usage</h4><p>{_escaped(record.usage_notes)}</p>"
+                    )
+                body.append("</article>")
+        body.append("</section>")
+
+    body.append('<section class=source><h2>6. Build the Anki decks</h2>')
+    if build_error:
+        body.append(
+            '<p class="status problem">The build cannot start: '
+            f"{_escaped(build_error)}</p>"
+        )
+    elif build_plan is not None:
+        body.append(
+            "<p><b>Local.</b> Each receipted owner is built as its complete "
+            "current study deck; unrelated decks are not built.</p><ul>"
+        )
+
+        def audio_coverage(
+            plan: AudioPlan | None,
+            record_ids: tuple[str, ...],
+            kind: str,
+        ) -> str:
+            if plan is None:
+                return "unavailable"
+            selected = [
+                clip
+                for clip in plan.clips
+                if clip.record_id in set(record_ids) and clip.kind == kind
+            ]
+            current = sum(clip.state == "current" for clip in selected)
+            return f"{current}/{len(selected)} current"
+
+        for deck in build_plan.decks:
+            directions = ", ".join(deck.card_types)
+            word_coverage = audio_coverage(
+                word_audio_plan,
+                deck.receipt_record_ids,
+                "word",
+            )
+            example_coverage = audio_coverage(
+                example_audio_plan,
+                deck.receipt_record_ids,
+                "example",
+            )
+            body.append(
+                f"<li>{_escaped(deck.name or deck.stem)} — "
+                f"{_escaped(len(deck.receipt_record_ids))} record(s) in this "
+                f"batch, {_escaped(len(deck.records))} note(s) in the full deck; "
+                f"cards: {_escaped(directions)}; output "
+                f"<code>{_escaped(deck.output_path)}</code>; this batch's audio: words "
+                f"{_escaped(word_coverage)}, examples "
+                f"{_escaped(example_coverage)}</li>"
+            )
+        body.extend(
+            [
+                "</ul>",
+                f'<form method=post action="{html.escape(action, quote=True)}">',
+                _hidden("action", "build"),
+                _hidden("csrf", csrf),
+                _hidden("scope_fingerprint", scope.fingerprint),
+                _hidden("plan_fingerprint", build_plan.fingerprint),
+                "<button type=submit>Build these complete study decks</button>",
+                "</form>",
+                "<h3>Import into Anki</h3><ol>",
+                "<li>Sync Anki before importing.</li>",
+                "<li>In Anki, choose File → Import and select each output above.</li>",
+                '<li>Tick <b>Merge Notetypes</b>, then import.</li>',
+                "</ol>",
+            ]
+        )
+    body.append("</section>")
     body.append("</main></body></html>")
     return "".join(body)
 

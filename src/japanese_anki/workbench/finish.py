@@ -1,6 +1,6 @@
 """Exact browser forms and one-use dictionary decisions for W5.
 
-The finish page has three current POST shapes.  Keeping them distinct prevents
+The finish page has six current POST shapes.  Keeping them distinct prevents
 one nearby button from silently acquiring the meaning of another.  Hidden
 fingerprints are still only claims: the handler must resolve the promotion
 receipt, re-plan where required, and compare current repository state before a
@@ -29,6 +29,9 @@ from japanese_anki.application.finish import (
 from japanese_anki.errors import JankiError
 
 __all__ = [
+    "AudioExamplesSubmission",
+    "AudioWordsSubmission",
+    "BuildSubmission",
     "DictionaryAction",
     "DictionaryActions",
     "DictionaryCommitSubmission",
@@ -127,7 +130,38 @@ class KanjiAddSubmission:
     plan_fingerprint: str
 
 
-FinishSubmission = DictionaryPlanSubmission | DictionaryCommitSubmission | KanjiAddSubmission
+@dataclass(frozen=True, slots=True)
+class AudioWordsSubmission:
+    action: Literal["audio-words"]
+    csrf: str
+    scope_fingerprint: str
+    plan_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class AudioExamplesSubmission:
+    action: Literal["audio-examples"]
+    csrf: str
+    scope_fingerprint: str
+    plan_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class BuildSubmission:
+    action: Literal["build"]
+    csrf: str
+    scope_fingerprint: str
+    plan_fingerprint: str
+
+
+FinishSubmission = (
+    DictionaryPlanSubmission
+    | DictionaryCommitSubmission
+    | KanjiAddSubmission
+    | AudioWordsSubmission
+    | AudioExamplesSubmission
+    | BuildSubmission
+)
 
 
 def _fields(body: bytes) -> dict[str, str]:
@@ -164,7 +198,7 @@ def _fingerprint(fields: dict[str, str], name: str) -> str:
 
 
 def parse_finish_form(body: bytes) -> FinishSubmission:
-    """Parse exactly one of the three finish-page POST forms."""
+    """Parse exactly one of the six finish-page POST forms."""
     fields = _fields(body)
     action = fields.get("action", "")
     if action == "dictionary-plan":
@@ -199,6 +233,39 @@ def parse_finish_form(body: bytes) -> FinishSubmission:
         )
         return KanjiAddSubmission(
             action="kanji-add",
+            csrf=fields["csrf"],
+            scope_fingerprint=_fingerprint(fields, "scope_fingerprint"),
+            plan_fingerprint=_fingerprint(fields, "plan_fingerprint"),
+        )
+    if action == "audio-words":
+        _require_exact(
+            fields,
+            {"action", "csrf", "scope_fingerprint", "plan_fingerprint"},
+        )
+        return AudioWordsSubmission(
+            action="audio-words",
+            csrf=fields["csrf"],
+            scope_fingerprint=_fingerprint(fields, "scope_fingerprint"),
+            plan_fingerprint=_fingerprint(fields, "plan_fingerprint"),
+        )
+    if action == "audio-examples":
+        _require_exact(
+            fields,
+            {"action", "csrf", "scope_fingerprint", "plan_fingerprint"},
+        )
+        return AudioExamplesSubmission(
+            action="audio-examples",
+            csrf=fields["csrf"],
+            scope_fingerprint=_fingerprint(fields, "scope_fingerprint"),
+            plan_fingerprint=_fingerprint(fields, "plan_fingerprint"),
+        )
+    if action == "build":
+        _require_exact(
+            fields,
+            {"action", "csrf", "scope_fingerprint", "plan_fingerprint"},
+        )
+        return BuildSubmission(
+            action="build",
             csrf=fields["csrf"],
             scope_fingerprint=_fingerprint(fields, "scope_fingerprint"),
             plan_fingerprint=_fingerprint(fields, "plan_fingerprint"),

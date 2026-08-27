@@ -748,7 +748,32 @@ cannot land canonical rows where the same refusal would have stopped the CLI.
   `validation.py`, `coverage.py`, `collection.py`.
 - **Ships when:** a source goes from staged to promoted entirely in the tab.
 
-### [ ] W5 Targeted finish and build
+### [x] W5 Targeted finish and build
+
+*Done 2026-08-26. A promotion receipt now reconstructs the exact promoted IDs
+and their owner decks as one finish scope. Dictionary and kanji actions stay on
+those IDs. Word and example audio separately name the local or paid provider
+and show current, recoverable and provider-required clips before a click; their
+forms carry only the rendered scope and plan fingerprints, never record IDs,
+provider choice, force or prune authority. Execution re-resolves the receipt
+and re-plans under the audio and repository-owner locks against the same
+read-only ledger snapshot before it may write or contact a provider. The CLI
+uses that same transaction. Exact pending bytes recover without another call,
+and an incomplete run reports whether this action wrote record references,
+published media, committed the ledger, or left durable recovery instead of
+collapsing every failure into one provider error.*
+
+*The preview projects only this receipt's records through each deck's real
+selectors and inline edits; the older records in that deck are deliberately
+absent. Build then switches scope explicitly and writes each receipted owner's
+complete current deck to its configured `.apkg` path. It shares the audio
+operation lock, refuses a pending audio split, binds fresh receipt and build
+fingerprints, records exact export results once, and names any package or
+ledger work that landed before a partial failure. The final page shows enabled
+directions, receipt-batch audio coverage, full-deck note counts, output paths,
+and the sync-first, File → Import and Merge Notetypes steps. The browser now
+carries the promoted PDF batch through the remaining finish steps to the
+`.apkg` without a terminal, YAML edit or JSON edit.*
 
 Carry the exact newly promoted ID set forward as the scope, and offer the
 remaining steps in order: **Add dictionary facts** (jpdb POS, furigana, pitch,

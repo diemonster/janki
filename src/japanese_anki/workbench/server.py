@@ -70,6 +70,8 @@ from japanese_anki.application import (
     source_detail,
     source_journeys,
 )
+from japanese_anki.application import audio as audio_application
+from japanese_anki.application import build as build_application
 from japanese_anki.application.assignment import (
     AssignableWordDeck,
     AssignmentError,
@@ -134,6 +136,9 @@ from japanese_anki.workbench.dispatch import (
     parse_dispatch_form,
 )
 from japanese_anki.workbench.finish import (
+    AudioExamplesSubmission,
+    AudioWordsSubmission,
+    BuildSubmission,
     DictionaryAction,
     DictionaryActions,
     DictionaryCommitSubmission,
@@ -877,7 +882,30 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 f"Saved {added} kanji lookup(s); {current} concurrent/current "
                 "lookup(s) were preserved."
             )
+        if fields.get("build") == "complete":
+            return "Built every receipted study deck and recorded its export history."
+        if fields.get("audio") in {"words", "examples"}:
+            try:
+                created = max(int(fields.get("created", "0")), 0)
+                recovered = max(int(fields.get("recovered", "0")), 0)
+                current = max(int(fields.get("current", "0")), 0)
+            except ValueError:
+                return ""
+            kind = "word" if fields["audio"] == "words" else "example"
+            return (
+                f"Finished {kind} audio: created {created} clip(s), recovered "
+                f"{recovered} from saved exact requests, and kept {current} "
+                "already-current clip(s)."
+            )
         return ""
+
+    def _finish_preview_stem(self) -> str:
+        """One display-only owner preview selected by the current GET."""
+        query = self.path.split("?", 1)
+        if len(query) != 2:
+            return ""
+        values = [value for name, value in parse_qsl(query[1]) if name == "preview"]
+        return values[0] if len(values) == 1 else ""
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         if not self._request_is_local():
@@ -1047,6 +1075,40 @@ class _WorkbenchHandler(LocalOnlyHandler):
         except (JankiError, TypeError, ValueError) as exc:
             self._error(409, f"Could not open this finish workflow: {exc}")
             return
+        word_audio_plan = None
+        word_audio_error = ""
+        try:
+            word_audio_plan = audio_application.plan_targeted_audio(
+                session.config,
+                current.record_ids,
+                words=True,
+                force=False,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            word_audio_error = str(exc)
+        example_audio_plan = None
+        example_audio_error = ""
+        try:
+            example_audio_plan = audio_application.plan_targeted_audio(
+                session.config,
+                current.record_ids,
+                examples=True,
+                force=False,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            example_audio_error = str(exc)
+        build_plan = None
+        build_error = ""
+        try:
+            build_plan = build_application.plan_finish_build(session.config, current)
+        except (JankiError, TypeError, ValueError) as exc:
+            build_error = str(exc)
+        preview_stem = self._finish_preview_stem()
+        if build_plan is not None and preview_stem and preview_stem not in {
+            deck.stem for deck in build_plan.decks
+        }:
+            self._error(404, "No such study-deck preview in this finish batch.")
+            return
         self._send(
             200,
             render_finish(
@@ -1057,6 +1119,13 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 dictionary_decision=dictionary_decision,
                 dictionary_action=dictionary_action,
                 banner=self._finish_banner(),
+                word_audio_plan=word_audio_plan,
+                word_audio_error=word_audio_error,
+                example_audio_plan=example_audio_plan,
+                example_audio_error=example_audio_error,
+                build_plan=build_plan,
+                build_error=build_error,
+                preview_stem=preview_stem,
             ),
         )
 
@@ -1359,9 +1428,152 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._finish_dictionary_plan(receipt_id, submission)
         elif isinstance(submission, DictionaryCommitSubmission):
             self._finish_dictionary_commit(receipt_id, submission)
+        elif isinstance(submission, BuildSubmission):
+            self._finish_build(receipt_id, submission)
+        elif isinstance(submission, (AudioWordsSubmission, AudioExamplesSubmission)):
+            self._finish_audio(receipt_id, submission)
         else:
             assert isinstance(submission, KanjiAddSubmission)
             self._finish_kanji(receipt_id, submission)
+
+    def _finish_build(
+        self,
+        receipt_id: str,
+        submission: BuildSubmission,
+    ) -> None:
+        """Build only the complete owner decks bound to this finish receipt."""
+        session = self.server.session
+        try:
+            execution = build_application.execute_finish_build(
+                session.config,
+                receipt_id,
+                expected_scope_fingerprint=submission.scope_fingerprint,
+                expected_plan_fingerprint=submission.plan_fingerprint,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, f"Could not build this finish batch: {exc}")
+            return
+        if execution.state != "complete":
+            paths = ", ".join(str(path) for path in execution.package_paths)
+            landed = f"Package(s) written: {paths}. " if paths else ""
+            build_note = (
+                f"The remaining build did not finish: {execution.build_error}. "
+                if execution.build_error
+                else ""
+            )
+            ledger_note = (
+                "Their export history did not finish: "
+                f"{execution.ledger_error}. "
+                if execution.ledger_error
+                else ""
+            )
+            self._error(
+                409,
+                landed
+                + build_note
+                + ledger_note
+                + "Reload the finish page and retry; a successful package is a "
+                "local build artifact and may be rebuilt at the same path.",
+            )
+            return
+        self._redirect(
+            f"/{session.token}/finish/{receipt_id}?build=complete"
+        )
+
+    def _finish_audio(
+        self,
+        receipt_id: str,
+        submission: AudioWordsSubmission | AudioExamplesSubmission,
+    ) -> None:
+        """Execute one rendered, exact, non-forced finish-batch audio plan."""
+        session = self.server.session
+        try:
+            scope = resolve_finish_scope(session.config, receipt_id)
+            if not secrets.compare_digest(
+                submission.scope_fingerprint, scope.fingerprint
+            ):
+                raise FinishFormError(
+                    "This exact finish scope changed after the audio plan was "
+                    "rendered. Nothing was sent; reload it."
+                )
+            words = isinstance(submission, AudioWordsSubmission)
+            execution = audio_application.execute_targeted_audio(
+                session.config,
+                scope.record_ids,
+                words=words,
+                examples=not words,
+                expected_fingerprint=submission.plan_fingerprint,
+                force=False,
+                prune=False,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, f"Could not create this audio: {exc}")
+            return
+        if not execution.succeeded:
+            plan = execution.plan
+            counts = None
+            provider = None
+            if plan is not None:
+                counts = plan.word_counts if words else plan.example_counts
+                provider = plan.word_provider if words else plan.example_provider
+            paid_call_possible = bool(
+                counts is not None
+                and provider is not None
+                and counts.provider_required > 0
+                and provider.access == "paid-network"
+            )
+            details = ["Audio did not finish."]
+            details.append(
+                "A paid provider call may have been billed."
+                if paid_call_possible
+                else "This exact action required no paid provider call."
+            )
+            if execution.stopped_by:
+                details.append(execution.stopped_by)
+            if execution.prune_error:
+                details.append(execution.prune_error)
+            if execution.ledger_error:
+                details.append(
+                    f"The canonical audio ledger did not finish: "
+                    f"{execution.ledger_error}."
+                )
+            details.append(
+                "This action wrote its record references."
+                if execution.record_references_written
+                else "This action did not write record references."
+            )
+            details.append(
+                "This action published canonical media."
+                if execution.media_published
+                else "This action did not publish canonical media."
+            )
+            details.append(
+                "This action committed its canonical audio ledger changes."
+                if execution.ledger_committed
+                else "This action did not commit canonical audio ledger changes."
+            )
+            if execution.pending_recovery:
+                details.append(
+                    "Exact recovery is durable in pending_audio; retry this same "
+                    "audio action to finish without rebilling those saved bytes."
+                )
+            self._error(409, " ".join(details))
+            return
+        plan = execution.plan
+        if plan is None:
+            self._error(
+                409,
+                "Audio finished, but its exact clip summary was unavailable. "
+                "Reload the finish page before deciding what remains.",
+            )
+            return
+        kind = "words" if isinstance(submission, AudioWordsSubmission) else "examples"
+        counts = plan.word_counts if words else plan.example_counts
+        self._redirect(
+            f"/{session.token}/finish/{receipt_id}?audio={kind}&"
+            f"created={execution.file_count}&recovered={counts.recoverable}&"
+            f"current={counts.current}"
+        )
 
     def _finish_dictionary_plan(
         self,
