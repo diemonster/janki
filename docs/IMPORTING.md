@@ -185,11 +185,73 @@ does not know about, are still there afterwards.
 
 ## From a photo or a PDF to cards
 
-A handout, a textbook page, a photo of a whiteboard: `janki extract` reads the
-vocabulary off it and `janki promote` decides what becomes real. Nothing in
-between touches your records.
+A handout, textbook page, or photo of a whiteboard can go from source to an
+Anki package in the local browser. The command line remains available for
+scripts and exact recovery work, but it is not required for reviewing cards,
+choosing their decks, or finishing a source.
 
-### Install the AI extra
+### Browser path
+
+Start the workbench after setup:
+
+```bash
+janki workbench
+```
+
+The address printed in the terminal is restricted to this computer and carries
+a new key for that workbench session. The page loads no remote assets. Its
+quick-start guide opens on the first dashboard view of that server session,
+collapses without changing any work, and remains available to reopen. Follow
+the source from top to bottom:
+
+1. **Add source material.** Choose a PDF, JPEG, PNG or HEIC file. This saves a
+   durable copy on this computer and sends nothing to a provider.
+2. **Read the source.** Open the saved source and use its separate reading
+   action. The confirmation page names the exact file, Anthropic provider,
+   model, purpose and paid API call. A missing `ANTHROPIC_API_KEY` refuses
+   before the source is sent.
+3. **Check the proposals.** Compare the cards with their source evidence. Edit
+   or remove a proposal explicitly; checking examples approves only the exact
+   Japanese sentences shown. Review the lesson's grammar separately.
+4. **Settle what is waiting.** A reading hold protects a card from receiving a
+   lasting identity based on a blank or contradicted reading. A vocabulary
+   table also needs a completeness decision: compare its promised source rows
+   yourself, or explicitly choose the separate paid model check. Completeness
+   does not judge the Japanese.
+5. **Choose a study deck and add.** Create a destination from the dashboard if
+   needed. Each word has one learning destination. Seeing the same word in
+   another lesson records that source without silently duplicating the card or
+   moving it to another deck. Review the exact add preview, then use its
+   separate add button.
+6. **Finish the source.** The finish page offers dictionary facts, kanji
+   reference, word audio, example audio, a card preview and the deck build, in
+   that order. Each provider is labelled local, networked or paid before its
+   action; a paid audio button names the source, provider, model and paid
+   network call. The page ends with the `.apkg` paths and the sync-first,
+   **Merge Notetypes** import reminder.
+
+Checking a card records approval for the content fingerprints of the exact
+Japanese examples displayed; it does not approve the meaning, source evidence,
+or any sentence added later. Grammar review is a separate mark bound to the
+matching current pattern set. If the staging rows or that pattern set changes
+while the review page is open, the submission refuses without a partial write;
+reload and review the current text. Editing or removing a proposal remains a
+separate, explicitly named action.
+
+“Meaning in this lesson” is deliberately source-specific: it is the sense this
+page taught, so dictionary enrichment does not replace it. Polite and casual
+examples are two complete learning contexts, not two translations of the same
+sentence. Formal or literary wording from the source remains visible as source
+context with its register explained.
+
+Closing the browser or restarting `janki workbench` does not lose a saved
+review or durably completed action; unsaved form text and an unconsumed preview
+are still ephemeral. The dashboard is rebuilt from the files in the
+repository, not browser history or browser storage. An interrupted paid
+operation remains visible and names its CLI recovery route; do not click a
+fresh paid action to replace one whose outcome is unknown.
+
+### CLI setup
 
 Extraction needs the Anthropic SDK, which is not installed by default so that
 every other command works without it:
@@ -199,7 +261,11 @@ python -m pip install -e '.[ai]'
 export ANTHROPIC_API_KEY='...'
 ```
 
-### 1. Extract
+The key is read only from the process environment. It is never accepted by a
+browser form or written to the repository, browser storage, a URL, a log, or an
+error page. A missing key stops before any private source is sent.
+
+### CLI 1: extract
 
 ```bash
 janki extract ~/Downloads/lesson-3.pdf ~/Desktop/IMG_0421.HEIC
@@ -260,7 +326,7 @@ proposes, you accept. And it never accepts a truncated answer: if the model runs
 out of room part-way through a page, the run fails rather than writing a file
 that looks complete and quietly lost half a table.
 
-### 2. Review
+### CLI 2: review
 
 Open the staging file. It is ordinary YAML, and it is yours to edit:
 
@@ -293,14 +359,29 @@ the model proposed but does not require you to keep it. You may delete a row or
 remove its stale `id` and re-identify it deliberately; leave the accounting
 metadata unchanged.
 
+For a CLI-only example review, read the final Japanese sentences and then set
+`source.raw_fields.example_authority: staging-review` on that row. This manual
+sentinel is a blanket mark, not a binding to the sentence text, so any later
+edit means you must read the examples again. The browser's exact binding and
+stale-page behavior are described in the Browser path above. Review a matching
+grammar set with `janki patterns --review 'lesson-3.pdf'`; that command makes no
+model call.
+
 `janki validate data/staging/lesson-3.pdf.yaml` lists every row still missing
 something.
 
-### 3. Promote
+### CLI 3: promote
 
 ```bash
 janki promote data/staging/lesson-3.pdf.yaml
 ```
+
+If a table's coverage is still unresolved, record the repository owner's
+comparison under the staging file's nested `coverage.approval` key, or use the
+workbench owner-confirmation form that writes that exact bound decision. The
+top-level `review_notes` may explain what needs attention, but it is not
+coverage authority. The alternative is the separate paid `--accept-coverage`
+source read; a broad promote command is neither approval.
 
 This is the only command that writes extracted words into your collection, and
 it checks the reading of every one against jpdb before it does. Three outcomes:
@@ -325,6 +406,49 @@ promote time. These records have never been in Anki, so there is no review
 history to orphan — which is exactly why this is the only place an ID may
 change.
 
+### CLI 4: finish and recover
+
+The workbench finish page scopes facts, kanji, audio and preview to the exact
+cards just added. The individual CLI commands remain useful for scripts and
+collection-wide maintenance:
+
+```bash
+janki enrich --jpdb 'word:話す:はなす'          # exact promoted IDs
+janki kanji 'word:話す:はなす'
+janki audio --words --examples 'word:話す:はなす'
+janki preview data/decks/verbs.yaml
+janki build --receipt RECEIPT
+```
+
+`janki refresh` automates enrichment, audio, and build, but its enrichment and
+audio steps cover the collection; `refresh --deck verbs` narrows only the build.
+Record promotion writes and prints `Finish receipt: RECEIPT`. Pass that opaque
+value to `janki build --receipt RECEIPT` to run the same fresh receipt-scoped
+build transaction as the workbench. A receipt also exists when records and the
+archive landed but the command exits non-zero because its ledger save failed;
+first make the ledger writable and follow the printed `janki status --rebuild`
+recovery, then continue the finish route. The `enrich`, `kanji`, and `audio`
+positional IDs limit their work to the promoted records; omit them only for
+intentional collection-wide maintenance.
+
+If a journaled extraction or paid completeness-check process disappears,
+inspect its durable record before doing anything else:
+
+```bash
+janki operations
+janki operations --show-reply ID   # exact still-bound reply, if one exists
+janki operations --end ID          # only after deciding the process is gone
+janki operations --forget ID       # after accounting for the outcome and cost
+```
+
+The listed operation tells you which action is valid. `outcome_unknown` is not
+permission to retry: a new request could be a second charge. Do not delete or
+edit `data/operations.json` or `data/.pending/` by hand. If exact paid audio
+bytes were saved before their final record write, `janki status` names the
+matching `janki audio` command; rerun that same selection so it can reuse the
+bytes without another provider call. See [QUALITY.md](QUALITY.md#paid-call-and-browser-recovery)
+for the state and failure-reporting contract.
+
 ### Registered repairs
 
 Use `janki repair PATH` to check a registered repair. The command shows the
@@ -341,12 +465,6 @@ field — with exactly one producer, which M8.3 deleted as model-audit logic; th
 rest went with it in M8.4. Content a person wrote is changed by that person, in
 the staging file or the record, or by a template clause that asks for something
 better next time.
-
-Then build as usual:
-
-```bash
-janki build data/decks/verbs.yaml
-```
 
 ## Inline deck notes
 

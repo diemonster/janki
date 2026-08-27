@@ -20,12 +20,14 @@ import pytest
 import yaml
 from test_workbench_fixtures import materialize
 
+from japanese_anki import staging
 from japanese_anki.application import (
     ADDED,
     CARDS_NEED_EDITS,
     COVERAGE_NEEDS_DECISION,
     DECK_NEEDS_DECISION,
     EXAMPLES_NEED_REVIEW,
+    FINISH_ARCHIVE_UNREADABLE,
     GRAMMAR_NEEDS_REVIEW,
     GRAMMAR_NONE,
     GRAMMAR_ONLY,
@@ -33,13 +35,20 @@ from japanese_anki.application import (
     GRAMMAR_UNKNOWN,
     JOURNEY_STATES,
     NOT_EXTRACTED,
+    PATTERN_STORE_UNREADABLE,
     READING_HOLD,
     READY_TO_ADD,
     STAGING_UNREADABLE,
     source_journeys,
 )
+from japanese_anki.application import journey as journey_application
+from japanese_anki.application import promotion as promotion_application
 from japanese_anki.config import ProjectConfig
-from japanese_anki.models import EXAMPLE_AUTHORITY_KEY, EXAMPLE_AUTHORITY_STAGING
+from japanese_anki.models import (
+    EXAMPLE_AUTHORITY_KEY,
+    EXAMPLE_AUTHORITY_STAGING,
+    VocabularyRecord,
+)
 
 CONFIG = """
 [paths]
@@ -73,6 +82,44 @@ def _stage(tmp_path: Path, scenario: str, *, filename: str | None = None) -> Any
     """Materialize one W0 fixture into this project's staging/pattern paths."""
     _project(tmp_path)
     return materialize(tmp_path, scenario, filename=filename)
+
+
+def _write_receipted_archive(
+    tmp_path: Path,
+    state: dict[str, Any],
+    records: list[VocabularyRecord],
+) -> promotion_application.PromotionBatch:
+    """Write one valid completed batch while a test controls the live handoff."""
+    live = state["staging_path"]
+    meta = state["meta"]
+    source_file = meta["source_file"]
+    run_fingerprint = promotion_application._archive_run_fingerprint(meta)
+    owners = {record.id: "lesson" for record in records}
+    record_ids = tuple(record.id for record in records)
+    receipt_id = promotion_application._promotion_receipt_id(
+        live.name,
+        run_fingerprint,
+        0,
+        source_file,
+        record_ids,
+        owners,
+    )
+    batch = promotion_application.PromotionBatch(
+        receipt_id=receipt_id,
+        archive_file=live.name,
+        archive_run_fingerprint=run_fingerprint,
+        archive_start_index=0,
+        source_file=source_file,
+        review_run_id=meta.get("review_run_id"),
+        promoted_ids=record_ids,
+        owner_stems=owners,
+    )
+    archive_meta = dict(meta)
+    archive_meta[staging.PROMOTION_BATCHES_KEY] = [batch.to_dict()]
+    archive = tmp_path / "staging" / "done"
+    archive.mkdir(parents=True, exist_ok=True)
+    staging.write_staging(archive / live.name, records, archive_meta)
+    return batch
 
 
 # --- the card track ---------------------------------------------------------
@@ -477,21 +524,174 @@ def test_a_source_read_for_unreviewed_grammar_asks_for_review_not_re_reading(
     assert journey.next_action == "Review this source's grammar"
 
 
-def test_a_promoted_source_stays_visible_instead_of_vanishing(tmp_path: Path) -> None:
-    """Found against the real corpus: promotion archives and prunes the staging
-    file, so a source that reads only live staging drops off the queue
-    entirely. Two of the corpus's five inbox sources were invisible. A source
-    disappearing reads as "janki lost my lesson", not "that one is done"."""
+def test_unreadable_pattern_history_never_calls_an_inbox_source_unextracted(
+    tmp_path: Path,
+) -> None:
+    _project(tmp_path)
+    source = tmp_path / "inbox" / "grammar-chart.pdf"
+    source.write_bytes(b"%PDF-1.7 fake")
+    (tmp_path / "patterns.json").write_text("{broken", encoding="utf-8")
+
+    journeys, warnings = source_journeys(ProjectConfig.load(tmp_path))
+
+    assert len(journeys) == 1
+    journey = journeys[0]
+    assert journey.source == source.name
+    assert journey.state == PATTERN_STORE_UNREADABLE
+    assert journey.state != NOT_EXTRACTED
+    assert journey.next_action == "Repair the grammar history named below"
+    assert (
+        "could not verify whether this source was already read for grammar"
+        in journey.detail
+    )
+    assert "will not offer another paid extraction for grammar-chart.pdf" in (
+        journey.detail
+    )
+    assert any("could not read grammar review state" in warning for warning in warnings)
+
+
+def test_every_promoted_batch_survives_restart_discovery(tmp_path: Path) -> None:
+    """A cumulative archive is the durable dashboard state, not server memory."""
+    state = _stage(tmp_path, "lesson_with_grammar", filename="week-8.pdf")
+    path = state["staging_path"]
+    records = state["records"]
+    meta = state["meta"]
+    archive_file = path.name
+    source_file = meta["source_file"]
+    run_fingerprint = promotion_application._archive_run_fingerprint(meta)
+    batches = []
+    for record in records:
+        owners = {record.id: "lesson"}
+        receipt_id = promotion_application._promotion_receipt_id(
+            archive_file,
+            run_fingerprint,
+            0,
+            source_file,
+            (record.id,),
+            owners,
+        )
+        batches.append(
+            promotion_application.PromotionBatch(
+                receipt_id=receipt_id,
+                archive_file=archive_file,
+                archive_run_fingerprint=run_fingerprint,
+                archive_start_index=0,
+                source_file=source_file,
+                review_run_id=meta["review_run_id"],
+                promoted_ids=(record.id,),
+                owner_stems=owners,
+            )
+        )
+    meta[staging.PROMOTION_BATCHES_KEY] = [batch.to_dict() for batch in batches]
+    archive = tmp_path / "staging" / "done"
+    archive.mkdir(parents=True, exist_ok=True)
+    staging.write_staging(archive / archive_file, records, meta)
+    path.unlink()
+
+    first = _journeys(tmp_path)["week-8.pdf"]
+    restarted = _journeys(tmp_path)["week-8.pdf"]
+
+    assert first.state == ADDED
+    assert first.next_action == "Add dictionary facts, audio, and build the deck"
+    assert first.finish_receipt_ids == tuple(batch.receipt_id for batch in batches)
+    assert restarted == first
+
+
+def test_a_partial_promotion_keeps_its_finish_receipt_beside_live_review(
+    tmp_path: Path,
+) -> None:
+    state = _stage(tmp_path, "lesson_with_grammar", filename="week-8.pdf")
+    records = state["records"]
+    batch = _write_receipted_archive(tmp_path, state, [records[0]])
+    staging.write_staging(
+        state["staging_path"],
+        list(records[1:]),
+        state["meta"],
+        force=True,
+    )
+
+    journey = _journeys(tmp_path)["week-8.pdf"]
+
+    assert journey.state == EXAMPLES_NEED_REVIEW
+    assert journey.staging_path == state["staging_path"]
+    assert journey.finish_receipt_ids == (batch.receipt_id,)
+
+
+def test_live_state_is_read_before_a_concurrent_promotion_handoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = _stage(tmp_path, "lesson_with_grammar", filename="week-8.pdf")
+    real_list = journey_application.list_finish_receipts
+    batch: promotion_application.PromotionBatch | None = None
+
+    def finish_promotion(config: ProjectConfig):
+        nonlocal batch
+        batch = _write_receipted_archive(tmp_path, state, list(state["records"]))
+        state["staging_path"].unlink()
+        return real_list(config)
+
+    monkeypatch.setattr(journey_application, "list_finish_receipts", finish_promotion)
+
+    journey = _journeys(tmp_path)["week-8.pdf"]
+
+    assert batch is not None
+    assert journey.state == EXAMPLES_NEED_REVIEW
+    assert journey.staging_path == state["staging_path"]
+    assert journey.finish_receipt_ids == (batch.receipt_id,)
+
+
+def test_any_invalid_done_receipt_blocks_paid_rereads_globally(
+    tmp_path: Path,
+) -> None:
     _project(tmp_path)
     (tmp_path / "inbox" / "week-8.pdf").write_bytes(b"%PDF-1.7 fake")
     archive = tmp_path / "staging" / "done"
     archive.mkdir(parents=True, exist_ok=True)
-    (archive / "week-8.pdf.yaml").write_text("records: []\n", encoding="utf-8")
+    (archive / "unrelated.yaml").write_text(
+        "records: []\npromotion_batches: broken\n", encoding="utf-8"
+    )
 
-    journey = _journeys(tmp_path)["week-8.pdf"]
+    journeys, warnings = source_journeys(ProjectConfig.load(tmp_path))
 
-    assert journey.state == ADDED
-    assert journey.next_action == "Add dictionary facts, audio, and build the deck"
+    assert len(journeys) == 1
+    assert journeys[0].state == FINISH_ARCHIVE_UNREADABLE
+    assert journeys[0].next_action == (
+        "Repair the completed-card archive named below"
+    )
+    assert "will not offer another paid extraction for week-8.pdf" in (
+        journeys[0].detail
+    )
+    assert "promotion_batches must be a list" in journeys[0].detail
+    assert "unrelated.yaml" in warnings[0]
+
+
+def test_a_concurrent_done_archive_replacement_asks_for_reload_not_repair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _project(tmp_path)
+    (tmp_path / "inbox" / "week-8.pdf").write_bytes(b"%PDF-1.7 fake")
+
+    def changed_while_read(_config: ProjectConfig) -> tuple[()]:
+        raise journey_application.FinishScopeError(
+            "[finish-archive-scan] done archive changed while read: "
+            f"{tmp_path / 'staging' / 'done'}"
+        )
+
+    monkeypatch.setattr(
+        journey_application,
+        "list_finish_receipts",
+        changed_while_read,
+    )
+
+    journeys, warnings = source_journeys(ProjectConfig.load(tmp_path))
+
+    assert len(journeys) == 1
+    assert journeys[0].state == FINISH_ARCHIVE_UNREADABLE
+    assert journeys[0].next_action.startswith("Reload this library")
+    assert "this source's file could not be read" not in journeys[0].state
+    assert "changed while read" in journeys[0].detail
+    assert "week-8.pdf" in journeys[0].detail
+    assert len(warnings) == 1
 
 
 def test_re_extracting_a_promoted_source_shows_the_newer_answer(
@@ -559,11 +759,15 @@ def test_ready_to_add_counts_as_waiting_on_the_person(tmp_path: Path) -> None:
     assert journey.needs_a_person is True
 
 
-def test_a_promoted_source_still_counts_as_waiting(tmp_path: Path) -> None:
+def test_a_historical_archive_without_a_receipt_stays_added(tmp_path: Path) -> None:
     _project(tmp_path)
     (tmp_path / "inbox" / "week-8.pdf").write_bytes(b"%PDF-1.7 fake")
     archive = tmp_path / "staging" / "done"
     archive.mkdir(parents=True, exist_ok=True)
     (archive / "week-8.pdf.yaml").write_text("records: []\n", encoding="utf-8")
 
-    assert _journeys(tmp_path)["week-8.pdf"].needs_a_person is True
+    journey = _journeys(tmp_path)["week-8.pdf"]
+
+    assert journey.state == ADDED
+    assert journey.finish_receipt_ids == ()
+    assert journey.needs_a_person is True

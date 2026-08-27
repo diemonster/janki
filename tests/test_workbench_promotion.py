@@ -143,6 +143,60 @@ def _file_state(path: Path) -> tuple[bool, bytes]:
     return path.is_file(), path.read_bytes() if path.is_file() else b""
 
 
+def test_owner_coverage_error_after_write_reports_current_state_as_unknown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, staging_path, _deck_path, _expected_ids = _promotion_project(tmp_path)
+    reason = "I compared each source row with the staged account."
+
+    def approve_then_fail(
+        config: ProjectConfig,
+        decision: coverage_application.CoverageDecision,
+        *,
+        reason: str,
+    ) -> None:
+        approve_coverage_as_owner(config, decision, reason=reason)
+        raise JankiError("The coverage response was lost after its write.")
+
+    server, _thread = _running(session)
+    try:
+        status, _headers, coverage_page = _request(
+            server, "GET", _add_url(session)
+        )
+        assert status == 200
+        monkeypatch.setattr(
+            workbench_server,
+            "approve_coverage_as_owner",
+            approve_then_fail,
+        )
+        fields = _with(
+            _form(coverage_page, "owner-coverage"),
+            reason=reason,
+            compared="confirmed",
+        )
+        refused, _headers, body = _post(server, session, fields)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    rendered = body.decode("utf-8")
+    assert refused == 409
+    assert "The coverage response was lost after its write." in rendered
+    assert (
+        "This action cannot safely prove that repository files are unchanged."
+        in rendered
+    )
+    assert "This action made no paid provider call." in rendered
+    assert "Nothing was approved" not in rendered
+    assert (
+        "reload the add page for this source and inspect its current coverage "
+        "decision before trying again" in rendered
+    )
+    _records, metadata = read_staging(staging_path)
+    assert metadata["coverage"]["approval"]["authority"] == "repository-owner"
+
+
 def test_owner_coverage_then_promotion_lands_the_previewed_deck(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -169,7 +223,11 @@ def test_owner_coverage_then_promotion_lands_the_previewed_deck(
             in rendered
         )
         assert "I compared the source rows myself" in rendered
-        assert "Ask Claude to check completeness" in rendered
+        assert (
+            "Send table.pdf to Anthropic using claude-opus-5 to check source-unit "
+            "completeness — paid API call"
+            in rendered
+        )
 
         incomplete_owner = _with(
             _form(coverage_page, "owner-coverage"),
@@ -244,6 +302,18 @@ def test_paid_model_coverage_is_one_use_journaled_and_provenanced(
 ) -> None:
     session, staging_path, _deck_path, _expected_ids = _promotion_project(tmp_path)
     sent: list[object] = []
+    prepared_client = object()
+    prepared: list[object] = []
+
+    def prepare_client() -> object:
+        prepared.append(prepared_client)
+        return prepared_client
+
+    real_run_model_coverage = workbench_server.run_model_coverage
+
+    def run_with_bound_client(*args: object, **kwargs: object) -> object:
+        assert kwargs.get("client") is prepared_client
+        return real_run_model_coverage(*args, **kwargs)  # type: ignore[arg-type]
 
     def review(
         *_args: object,
@@ -261,6 +331,16 @@ def test_paid_model_coverage_is_one_use_journaled_and_provenanced(
         )
 
     monkeypatch.setattr(coverage, "review_coverage", review)
+    monkeypatch.setattr(
+        workbench_server.claude_client,
+        "prepare_paid_client",
+        prepare_client,
+    )
+    monkeypatch.setattr(
+        workbench_server,
+        "run_model_coverage",
+        run_with_bound_client,
+    )
     server, _thread = _running(session)
     try:
         status, _headers, page = _request(server, "GET", _add_url(session))
@@ -289,6 +369,7 @@ def test_paid_model_coverage_is_one_use_journaled_and_provenanced(
         server.server_close()
 
     assert len(sent) == 1
+    assert prepared == [prepared_client]
     coverage_entries = [
         entry
         for entry in operations.OperationJournal.load(
@@ -324,7 +405,7 @@ def test_paid_model_coverage_is_one_use_journaled_and_provenanced(
         raise operations.OperationError("journal could not be settled")
 
     captured_failures: list[coverage_application.CoverageRunError] = []
-    real_run_model_coverage = workbench_server.run_model_coverage
+    real_run_model_coverage = coverage_application.run_model_coverage
 
     def observe_run_failure(*args: object, **kwargs: object) -> object:
         try:
@@ -377,8 +458,216 @@ def test_paid_model_coverage_is_one_use_journaled_and_provenanced(
     assert unsettled.state == "dispatching"
     assert unsettled.operation_id in refusal_text
     [captured_failure] = captured_failures
-    assert captured_failure.failure.outcome == "outcome_unknown"
-    assert captured_failure.failure.money_may_have_been_spent is True
+    assert captured_failure.failure is None
+    assert "outcome could not be classified" in refusal_text
+
+
+@pytest.mark.parametrize("commit_landed", [False, True])
+def test_model_coverage_reports_approval_saved_before_journal_commit_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    commit_landed: bool,
+) -> None:
+    session, staging_path, _deck_path, _expected_ids = _promotion_project(tmp_path)
+
+    def review(
+        *_args: object,
+        capture: object = None,
+        **kwargs: object,
+    ) -> coverage.CoverageVerdict:
+        assert callable(capture)
+        capture({"content": [{"type": "text", "text": "paid answer"}]})
+        return coverage.CoverageVerdict(
+            True,
+            "Everything is accounted for.",
+            str(kwargs["model"]),
+            "f" * 64,
+        )
+
+    monkeypatch.setattr(coverage, "review_coverage", review)
+    monkeypatch.setattr(
+        workbench_server.claude_client,
+        "prepare_paid_client",
+        lambda: object(),
+    )
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", _add_url(session))
+        assert status == 200
+        submission = _form(page, "model-coverage")
+        real_move = operations.OperationJournal._move_under_lock
+
+        def fail_committed_write(
+            self: operations.OperationJournal,
+            current: operations.OperationJournal,
+            operation_id: str,
+            state: str,
+            **kwargs: object,
+        ) -> operations.Operation:
+            if commit_landed:
+                result = real_move(self, current, operation_id, state, **kwargs)
+            if state == "committed":
+                raise operations.OperationError("journal commit write failed")
+            if commit_landed:
+                return result
+            return real_move(self, current, operation_id, state, **kwargs)
+
+        with monkeypatch.context() as failure_patch:
+            failure_patch.setattr(
+                operations.OperationJournal,
+                "_move_under_lock",
+                fail_committed_write,
+            )
+            refusal_status, _headers, refusal_body = _post(
+                server, session, submission
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    refusal_text = refusal_body.decode("utf-8")
+    assert refusal_status == 409
+    assert "model coverage approval was written" in refusal_text
+    assert "No coverage approval" not in refusal_text
+    assert "janki operations" in refusal_text
+    if commit_landed:
+        assert "paid-operation journal is committed" in refusal_text
+        assert "did not prove the operation committed" not in refusal_text
+    _records, meta = read_staging(staging_path)
+    assert meta["coverage"]["approval"]["authority"] == "model"
+    [entry] = [
+        item
+        for item in operations.OperationJournal.load(
+            session.config.operations_file
+        ).operations.values()
+        if item.kind == "coverage"
+    ]
+    assert entry.state == ("committed" if commit_landed else "result_captured")
+
+
+@pytest.mark.parametrize(
+    ("phase", "durable_state"),
+    [("authorize", "authorized"), ("dispatching", "dispatching")],
+)
+def test_model_coverage_routes_durable_write_ack_failures_to_operations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+    durable_state: str,
+) -> None:
+    session, _staging_path, _deck_path, _expected_ids = _promotion_project(tmp_path)
+    sent: list[object] = []
+    monkeypatch.setattr(
+        coverage,
+        "review_coverage",
+        lambda *_args, **_kwargs: sent.append(object()),
+    )
+    monkeypatch.setattr(
+        workbench_server.claude_client,
+        "prepare_paid_client",
+        lambda: object(),
+    )
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", _add_url(session))
+        assert status == 200
+        submission = _form(page, "model-coverage")
+        with monkeypatch.context() as failure_patch:
+            if phase == "authorize":
+                real_authorize = operations.OperationJournal.authorize
+
+                def write_then_fail(
+                    self: operations.OperationJournal,
+                    *args: object,
+                    **kwargs: object,
+                ) -> operations.Operation:
+                    real_authorize(self, *args, **kwargs)
+                    raise operations.OperationError(
+                        "authority write acknowledgement failed"
+                    )
+
+                failure_patch.setattr(
+                    operations.OperationJournal, "authorize", write_then_fail
+                )
+            else:
+                real_advance = operations.OperationJournal.advance
+
+                def advance_then_fail(
+                    self: operations.OperationJournal,
+                    operation_id: str,
+                    state: str,
+                    **kwargs: object,
+                ) -> operations.Operation:
+                    result = real_advance(self, operation_id, state, **kwargs)
+                    if state == "dispatching":
+                        raise operations.OperationError(
+                            "dispatch write acknowledgement failed"
+                        )
+                    return result
+
+                failure_patch.setattr(
+                    operations.OperationJournal, "advance", advance_then_fail
+                )
+            refusal_status, _headers, refusal_body = _post(
+                server, session, submission
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    refusal_text = refusal_body.decode("utf-8")
+    assert refusal_status == 409
+    assert "No provider request was dispatched" in refusal_text
+    assert "is present in the paid-operation journal" in refusal_text
+    assert "Run &#x27;janki operations&#x27; and inspect operation" in refusal_text
+    assert (
+        "No coverage approval, card, or paid-operation entry was written"
+        not in refusal_text
+    )
+    assert sent == []
+    [entry] = [
+        item
+        for item in operations.OperationJournal.load(
+            session.config.operations_file
+        ).operations.values()
+        if item.kind == "coverage"
+    ]
+    assert entry.state == durable_state
+    assert entry.operation_id in refusal_text
+
+
+def test_model_coverage_authorization_refusal_routes_to_general_operations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, _staging_path, _deck_path, _expected_ids = _promotion_project(tmp_path)
+    monkeypatch.setattr(
+        workbench_server.claude_client, "prepare_paid_client", lambda: object()
+    )
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", _add_url(session))
+        assert status == 200
+        submission = _form(page, "model-coverage")
+        with monkeypatch.context() as failure_patch:
+            failure_patch.setattr(
+                operations.OperationJournal,
+                "authorize",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    operations.OperationError("another operation blocks dispatch")
+                ),
+            )
+            refusal_status, _headers, refusal_body = _post(
+                server, session, submission
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    refusal_text = refusal_body.decode("utf-8")
+    assert refusal_status == 409
+    assert "attempted operation is not present" in refusal_text
+    assert "inspect the blocking evidence" in refusal_text
+    assert "inspect operation" not in refusal_text
 
 
 def test_a_changed_deck_makes_the_promotion_preview_stale_without_writes(

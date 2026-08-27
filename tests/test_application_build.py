@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from japanese_anki import ledger
+from japanese_anki import cli, ledger
 from japanese_anki.application import build as build_application
 from japanese_anki.application.finish import (
     FinishOwnerScope,
@@ -334,7 +334,7 @@ def test_stale_or_pending_dispatch_refuses_before_any_package_write(
 
     monkeypatch.setattr(build_application, "build_deck", unexpected_build)
 
-    with pytest.raises(build_application.FinishBuildError, match=message):
+    with pytest.raises(build_application.FinishBuildError, match=message) as raised:
         build_application.execute_finish_build(
             fixture.config,
             fixture.scope.receipt_id,
@@ -347,6 +347,10 @@ def test_stale_or_pending_dispatch_refuses_before_any_package_write(
         )
 
     assert not fixture.config.dist_dir.exists()
+    if case in {"scope", "plan"}:
+        refusal = str(raised.value)
+        assert "page" not in refusal.lower()
+        assert "retry from the durable finish receipt" in refusal
 
 
 def test_ledger_save_failure_reports_packages_as_landed(
@@ -380,6 +384,277 @@ def test_ledger_save_failure_reports_packages_as_landed(
     assert execution.ledger_error == "disk full after packages landed"
     assert len(execution.results) == 2
     assert all(path.is_file() for path in execution.package_paths)
+
+
+def test_cli_receipt_build_uses_the_exact_workbench_transaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    plan = build_application.plan_finish_build(fixture.config, fixture.scope)
+    resolve_calls: list[tuple[Path, str]] = []
+    plan_calls: list[tuple[Path, FinishScope]] = []
+    execute_calls: list[tuple[Path, str, str, str]] = []
+
+    def resolve(config: ProjectConfig, receipt_id: str) -> FinishScope:
+        resolve_calls.append((config.root, receipt_id))
+        return fixture.scope
+
+    def plan_build(
+        config: ProjectConfig, scope: FinishScope
+    ) -> build_application.FinishBuildPlan:
+        plan_calls.append((config.root, scope))
+        return plan
+
+    monkeypatch.setattr(cli, "resolve_finish_scope", resolve)
+    monkeypatch.setattr(build_application, "plan_finish_build", plan_build)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+
+    def unexpected_prompt(_prompt: str) -> str:
+        raise AssertionError("--yes must answer the gap prompt in advance")
+
+    monkeypatch.setattr("builtins.input", unexpected_prompt)
+
+    def execute(
+        _config: ProjectConfig,
+        receipt_id: str,
+        *,
+        expected_scope_fingerprint: str,
+        expected_plan_fingerprint: str,
+    ) -> object:
+        execute_calls.append(
+            (
+                _config.root,
+                receipt_id,
+                expected_scope_fingerprint,
+                expected_plan_fingerprint,
+            )
+        )
+        return SimpleNamespace(
+            state="complete",
+            results=(),
+            build_error=None,
+            ledger_error=None,
+        )
+
+    monkeypatch.setattr(build_application, "execute_finish_build", execute)
+
+    assert (
+        cli.main(
+            [
+                "--root",
+                str(fixture.config.root),
+                "build",
+                "--receipt",
+                fixture.scope.receipt_id,
+                "--yes",
+            ]
+        )
+        == 0
+    )
+    assert resolve_calls == [(fixture.config.root, fixture.scope.receipt_id)]
+    assert len(plan_calls) == 1
+    assert plan_calls[0][0] == fixture.config.root
+    assert plan_calls[0][1] is fixture.scope
+    assert execute_calls == [
+        (
+            fixture.config.root,
+            fixture.scope.receipt_id,
+            fixture.scope.fingerprint,
+            plan.fingerprint,
+        )
+    ]
+
+
+def test_cli_receipt_build_returns_nonzero_after_a_partial_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = _fixture(tmp_path)
+    plan = build_application.plan_finish_build(fixture.config, fixture.scope)
+    landed = SimpleNamespace(
+        output_path=fixture.config.root / "dist" / "alpha.apkg",
+        note_count=2,
+        card_types=("recognition",),
+        media_count=0,
+    )
+    monkeypatch.setattr(
+        cli, "resolve_finish_scope", lambda _config, _receipt: fixture.scope
+    )
+    monkeypatch.setattr(
+        build_application,
+        "plan_finish_build",
+        lambda _config, _scope: plan,
+    )
+    monkeypatch.setattr(
+        build_application,
+        "execute_finish_build",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            state="ledger_incomplete",
+            results=(landed,),
+            build_error=None,
+            ledger_error="disk full after the package landed",
+        ),
+    )
+
+    assert (
+        cli.main(
+            [
+                "--root",
+                str(fixture.config.root),
+                "build",
+                "--receipt",
+                fixture.scope.receipt_id,
+            ]
+        )
+        == 1
+    )
+    captured = capsys.readouterr()
+    assert "Built" in captured.out
+    assert "export history: disk full after the package landed" in captured.err
+
+
+def test_cli_receipt_build_reports_a_partial_package_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = _fixture(tmp_path)
+    plan = build_application.plan_finish_build(fixture.config, fixture.scope)
+    landed = SimpleNamespace(
+        output_path=fixture.config.root / "dist" / "beta.apkg",
+        note_count=2,
+        card_types=("recognition",),
+        media_count=0,
+    )
+    monkeypatch.setattr(
+        cli, "resolve_finish_scope", lambda _config, _receipt: fixture.scope
+    )
+    monkeypatch.setattr(
+        build_application,
+        "plan_finish_build",
+        lambda _config, _scope: plan,
+    )
+    monkeypatch.setattr(
+        build_application,
+        "execute_finish_build",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            state="build_incomplete",
+            results=(landed,),
+            build_error="alpha exporter refused after beta landed",
+            ledger_error=None,
+        ),
+    )
+
+    assert (
+        cli.main(
+            [
+                "--root",
+                str(fixture.config.root),
+                "build",
+                "--receipt",
+                fixture.scope.receipt_id,
+                "--yes",
+            ]
+        )
+        == 1
+    )
+    captured = capsys.readouterr()
+    assert "Built" in captured.out
+    assert "error: alpha exporter refused after beta landed" in captured.err
+    assert "export history" not in captured.err
+
+
+def test_cli_receipt_build_warns_and_a_decline_writes_no_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = _fixture(tmp_path)
+    plan = build_application.plan_finish_build(fixture.config, fixture.scope)
+    asked: list[str] = []
+    monkeypatch.setattr(
+        cli, "resolve_finish_scope", lambda _config, _receipt: fixture.scope
+    )
+    monkeypatch.setattr(
+        build_application,
+        "plan_finish_build",
+        lambda _config, _scope: plan,
+    )
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+
+    def decline(prompt: str) -> str:
+        asked.append(prompt)
+        return "n"
+
+    def unexpected_execute(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("a declined receipt build reached its transaction")
+
+    monkeypatch.setattr("builtins.input", decline)
+    monkeypatch.setattr(
+        build_application,
+        "execute_finish_build",
+        unexpected_execute,
+    )
+
+    assert (
+        cli.main(
+            [
+                "--root",
+                str(fixture.config.root),
+                "build",
+                "--receipt",
+                fixture.scope.receipt_id,
+            ]
+        )
+        == 0
+    )
+    captured = capsys.readouterr()
+    assert asked == ["Build them anyway? [y/N] "]
+    assert "2 of 2 receipt records have no word audio" in captured.err
+    assert "2 of 2 receipt records have no example sentence" in captured.err
+    assert "2 of 2 receipt records have no pitch accent" in captured.err
+    assert "Receipt build not started" in captured.out
+    assert not fixture.config.dist_dir.exists()
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ("decks/alpha.yaml",),
+        ("--all",),
+        ("--output", "dist/other.apkg"),
+        ("--only-new",),
+        ("--swept",),
+    ],
+)
+def test_cli_receipt_build_refuses_every_widening_or_override_option(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    extra: tuple[str, ...],
+) -> None:
+    fixture = _fixture(tmp_path)
+
+    def unexpected_resolve(*_args: object, **_kwargs: object) -> FinishScope:
+        raise AssertionError("a conflicting receipt build must refuse before planning")
+
+    monkeypatch.setattr(cli, "resolve_finish_scope", unexpected_resolve)
+
+    assert (
+        cli.main(
+            [
+                "--root",
+                str(fixture.config.root),
+                "build",
+                "--receipt",
+                fixture.scope.receipt_id,
+                *extra,
+            ]
+        )
+        == 1
+    )
+    assert "--receipt is an exact finish batch" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

@@ -30,12 +30,13 @@ import pytest
 import yaml
 from test_application_journey import _approve_examples, _project, _stage
 
-from japanese_anki import promote, staging
+from japanese_anki import operations, promote, staging
 from japanese_anki.application import (
     ADDED,
     EXAMPLES_NEED_REVIEW,
     GRAMMAR_NEEDS_REVIEW,
     NOT_EXTRACTED,
+    PATTERN_STORE_UNREADABLE,
     SourceJourney,
 )
 from japanese_anki.application.promotion import staged_ai_enrichment
@@ -54,6 +55,12 @@ from japanese_anki.workbench import (
     render_dashboard,
     render_source,
     review,
+)
+from japanese_anki.workbench import server as workbench_server
+from japanese_anki.workbench.render import (
+    FAILURE_STYLE_SOURCE,
+    FailureView,
+    render_failure,
 )
 
 
@@ -121,9 +128,82 @@ def test_a_wrong_token_is_indistinguishable_from_no_such_page(
         missing = _request(server, "GET", "/nope/")
         assert wrong[0] == missing[0] == 404
         assert wrong[2] == missing[2]
+        assert b"rather than reloading this POST" not in wrong[2]
+        assert (
+            b"Use the exact Workbench address printed when it started, then "
+            b"reload the current page." in wrong[2]
+        )
+        for heading in ("What happened", "What changed", "Money", "What to do next"):
+            assert heading.encode() in wrong[2]
+        assert b":root { color-scheme: light dark; }" in wrong[2]
+        assert b"pre { white-space: pre-wrap; overflow-wrap: anywhere; }" in wrong[2]
+        assert b"@media (max-width: 500px)" in wrong[2]
+        assert (
+            f"style-src 'self' {FAILURE_STYLE_SOURCE}"
+            in wrong[1]["content-security-policy"]
+        )
+        assert session.token.encode() not in wrong[2]
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_failure_views_require_and_escape_all_four_learner_facts() -> None:
+    with pytest.raises(ValueError, match="nonblank money"):
+        FailureView(
+            happened="failed",
+            changed="nothing",
+            money=" ",
+            next_step="go back",
+        )
+
+    rendered = render_failure(
+        FailureView(
+            happened="Could not use <source>",
+            changed="No file changed.",
+            money="No paid call.",
+            next_step="Return & retry.",
+        )
+    )
+
+    assert "Could not use &lt;source&gt;" in rendered
+    assert "Return &amp; retry." in rendered
+    assert "<source>" not in rendered
+    for heading in ("What happened", "What changed", "Money", "What to do next"):
+        assert f"<dt>{heading}</dt>" in rendered
+
+
+def test_error_truth_is_explicit_not_inferred_from_a_409_message() -> None:
+    captured: list[tuple[int, FailureView]] = []
+
+    class _Capture:
+        def _failure(self, status: int, failure: FailureView) -> None:
+            captured.append((status, failure))
+
+    handler = _Capture()
+    workbench_server._WorkbenchHandler._error(  # type: ignore[arg-type]
+        handler,
+        409,
+        "Nothing was written by this attempt.",
+    )
+    unknown = captured.pop()[1]
+    workbench_server._WorkbenchHandler._error(  # type: ignore[arg-type]
+        handler,
+        409,
+        "Nothing was written by this attempt.",
+        truth=workbench_server._ErrorTruth.LOCAL_NO_WRITE,
+    )
+    local = captured.pop()[1]
+
+    assert "cannot safely prove" in unknown.changed
+    assert "cannot safely prove whether a paid provider" in unknown.money
+    assert "janki operations" in unknown.next_step
+    assert local.changed == (
+        "This action stopped before any repository write; it did not change "
+        "repository files."
+    )
+    assert local.money == "This action made no paid provider call."
+    assert "janki operations" not in local.next_step
 
 
 def test_the_stylesheet_is_behind_the_token_too(tmp_path: Path) -> None:
@@ -209,7 +289,7 @@ def test_the_intake_preview_is_the_only_local_script_and_csp_binds_it(
         directives = set(headers["content-security-policy"].split("; "))
         assert directives == {
             "default-src 'none'",
-            "style-src 'self'",
+            f"style-src 'self' {FAILURE_STYLE_SOURCE}",
             f"script-src 'sha256-{digest}'",
             "img-src blob:",
             "frame-src blob:",
@@ -347,21 +427,28 @@ def test_the_grammar_badge_is_visible_beside_the_card_state(tmp_path: Path) -> N
     assert html.index(EXAMPLES_NEED_REVIEW) < html.index(GRAMMAR_NEEDS_REVIEW)
 
 
-def test_a_promoted_source_is_shown_without_a_review_command(
+def test_a_promoted_source_links_every_restart_safe_finish_receipt(
     tmp_path: Path,
 ) -> None:
     """It has no live staging file, so it has no cards left to review."""
+    first = "a" * 64
+    second = "b" * 64
     journeys = [
         SourceJourney(
             source="week-8.pdf",
             state=ADDED,
             next_action="Add dictionary facts, audio, and build the deck",
+            finish_receipt_ids=(first, second),
         )
     ]
 
-    html = _render(journeys)
+    html = _render(journeys, token="token")
 
     assert ADDED in html
+    assert f'/token/finish/{first}' in html
+    assert f'/token/finish/{second}' in html
+    assert "Finish dictionary, audio and deck build for week-8.pdf" in html
+    assert "batch 1 of 2" in html and "batch 2 of 2" in html
     # No stale instruction to run a command that no longer exists.
     assert "review-panel" not in html
 
@@ -401,11 +488,108 @@ def test_an_unreadable_file_is_shown_not_silently_dropped(tmp_path: Path) -> Non
     assert "broken.pdf.yaml" in html
 
 
+def test_dashboard_never_offers_paid_rereading_when_pattern_history_is_unreadable(
+    tmp_path: Path,
+) -> None:
+    _project(tmp_path)
+    (tmp_path / "inbox" / "grammar-chart.pdf").write_bytes(b"%PDF-1.7 fake")
+    (tmp_path / "patterns.json").write_text("{broken", encoding="utf-8")
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+    journeys, warnings = session.journeys()
+    html = _render(journeys, warnings=warnings, token=session.token)
+
+    assert len(journeys) == 1
+    assert journeys[0].state == PATTERN_STORE_UNREADABLE
+    assert PATTERN_STORE_UNREADABLE in html
+    assert "will not offer another paid extraction" in html
+    assert "See what reading this would send" not in html
+    assert f"/{session.token}/extract/" not in html
+
+
 def test_an_empty_corpus_explains_what_to_do(tmp_path: Path) -> None:
     html = _render([], root=tmp_path)
 
     assert "No sources yet" in html
     assert "inbox" in html
+
+
+def test_the_quick_start_tour_opens_on_the_first_dashboard_get_per_session(
+    tmp_path: Path,
+) -> None:
+    _project(tmp_path)
+    (tmp_path / "inbox" / "lesson.pdf").write_bytes(b"%PDF-1.7 source")
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    server, _thread = _running(session)
+    try:
+        first = _request(server, "GET", f"/{session.token}/")[2].decode("utf-8")
+        refreshed = _request(server, "GET", f"/{session.token}/")[2].decode("utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert '<details class="tour" open>' in first
+    assert '<details class="tour">' in refreshed
+    assert '<details class="tour" open>' not in refreshed
+    assert "Quick start and provider setup" in refreshed, "the tour stays reopenable"
+    for provider in (
+        "Anthropic · paid network model",
+        "jpdb · networked dictionary",
+        "KANJIDIC/KanjiVG · networked reference sources",
+        "VOICEVOX · local network engine",
+        "OpenAI · optional paid network audio",
+        "Codex · optional network enrichment through its CLI",
+    ):
+        assert f"<dt>{provider}</dt>" in first
+    assert "also reads example sentences unless OpenAI is selected" in first
+    assert "Anthropic is also the default provider" in first
+    assert "bare-record <code>janki enrich --ai</code>" in first
+    assert "alternative bare-record <code>janki enrich --ai</code> provider" in first
+    assert "<code>enrich_provider</code> to <code>codex</code>" in first
+    assert "separately installed, authenticated Codex CLI" in first
+    assert "CLI's login controls access and any billing" in first
+    assert "ANTHROPIC_API_KEY" in first
+    assert "JPDB_API_KEY" in first
+    assert "OPENAI_API_KEY" in first
+    assert "stops before contacting that provider" in first
+    assert "browser storage, URLs, logs, or error messages" in first
+
+
+def test_filenames_and_technical_values_are_not_marked_as_japanese(
+    tmp_path: Path,
+) -> None:
+    _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    journeys, warnings = session.journeys()
+
+    dashboard = _render(journeys, warnings=warnings, token=session.token)
+    source = render_source(session.detail("lesson-8.pdf"), token=session.token)
+
+    assert '<h2 class=name lang="ja">' not in dashboard
+    assert '<h2 class=name>' in dashboard
+    assert '<h1 lang="ja">lesson-8.pdf</h1>' not in source
+    assert '<h1>lesson-8.pdf</h1>' in source
+    assert '<dt>Stable ID</dt><dd lang="ja">' not in source
+    assert '<dt>Source sentence</dt><dd lang="ja">' in source
+    assert "<ruby>あげる<rt>あげる</rt></ruby>" in source
+
+
+def test_japanese_and_long_learner_text_remain_readable_at_phone_width() -> None:
+    assert (
+        ':lang(ja), .ja, .furigana {\n  font-family: "Hiragino Sans", '
+        '"Yu Gothic", Meiryo, "Noto Sans JP", system-ui, sans-serif;\n}'
+        in STYLE
+    )
+    assert "body {\n  margin: 0; padding: 1.5rem;\n  overflow-wrap: anywhere;" in STYLE
+    assert "button {\n  max-inline-size: 100%; white-space: normal;" in STYLE
+    assert (
+        "@media (max-width: 31.25rem) {\n"
+        "  body { padding: .75rem; }\n"
+        "  .source, .card, .pattern, .add-source { padding: .75rem; }\n"
+        "  .actions { gap: .75rem; }\n"
+        "}"
+        in STYLE
+    )
 
 
 def test_the_page_never_shows_machinery_vocabulary(tmp_path: Path) -> None:
@@ -452,6 +636,132 @@ def test_a_change_on_disk_shows_up_without_a_restart(tmp_path: Path) -> None:
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_restarted_dashboard_exposes_exact_paid_operation_recovery(
+    tmp_path: Path,
+) -> None:
+    _project(tmp_path)
+    config = ProjectConfig.load(tmp_path)
+    operation_id = "browser-restart-recovery"
+    operations.OperationJournal.load(config.operations_file).authorize(
+        operation_id,
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    # A new object stands in for a restarted workbench process. Nothing from
+    # the original session can be the source of this recovery notice.
+    restarted = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    server, _thread = _running(restarted)
+    try:
+        status, _headers, body = _request(
+            server, "GET", f"/{restarted.token}/"
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert status == 200
+    text = body.decode("utf-8")
+    assert "<h2>Recovery and operation notices</h2>" in text
+    assert "cleanup and do not block another call" in text
+    assert operation_id in text
+    assert f"janki operations --end {operation_id}" in text
+    assert "state: authorized" in text
+
+
+def test_dashboard_recovery_survives_an_operation_formatting_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _project(tmp_path)
+    config = ProjectConfig.load(tmp_path)
+    operations.OperationJournal.load(config.operations_file).authorize(
+        "format-refusal",
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+
+    def refuse_format(*_args: Any, **_kwargs: Any) -> list[str]:
+        raise operations.OperationError("ambiguous recovery evidence")
+
+    monkeypatch.setattr(workbench_server.status_module, "format_operations", refuse_format)
+    notices = WorkbenchSession.open(config).operation_recovery()
+
+    assert any("could not be formatted safely" in notice for notice in notices)
+    assert any("janki operations" in notice for notice in notices)
+
+
+def test_dashboard_recovery_reports_an_unreadable_operation_journal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _session(tmp_path)
+
+    def unreadable_journal(_path: Path) -> None:
+        raise operations.OperationError("journal is not a regular file")
+
+    monkeypatch.setattr(
+        workbench_server.operations.OperationJournal,
+        "load",
+        unreadable_journal,
+    )
+
+    notices = session.operation_recovery()
+
+    assert notices[0] == (
+        "The paid-operation journal could not be read. Repository changes and "
+        "billing state are unknown until it is repaired: journal is not a regular file"
+    )
+    assert notices[1] == (
+        "Repair the journal path, then run 'janki operations' before starting "
+        "another paid action."
+    )
+
+
+def test_dashboard_recovery_reports_an_unreadable_audio_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _session(tmp_path)
+
+    def unreadable_ledger(_path: Path) -> None:
+        raise workbench_server.ledger.LedgerError("ledger has invalid pending audio")
+
+    monkeypatch.setattr(workbench_server.ledger, "load", unreadable_ledger)
+
+    notices = session.operation_recovery()
+
+    assert notices == (
+        "The audio-recovery ledger could not be read: ledger has invalid pending audio",
+        "Run 'janki status' for the ledger's repair guidance before changing paid "
+        "audio recovery.",
+    )
+
+
+def test_dashboard_recovery_includes_pending_paid_audio_via_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _session(tmp_path)
+
+    class _Book:
+        pending_audio = {"one": {}, "two": {}}
+
+    monkeypatch.setattr(workbench_server.ledger, "load", lambda _path: _Book())
+    notices = session.operation_recovery()
+    rendered = _render([], recovery=notices)
+
+    assert "Pending audio recovery: 2 exact staged clips." in rendered
+    assert "Run &#x27;janki status&#x27;" in rendered
+    assert "<h2>Recovery and operation notices</h2>" in rendered
+    assert "do not start fresh synthesis for those clips" in rendered
 
 
 # --- W2a: one source, opened ------------------------------------------------
@@ -899,7 +1209,7 @@ def test_a_malformed_submission_is_refused(
     session = _staged(tmp_path)
     server, _thread = _running(session)
     try:
-        status, _headers, _body = _request(
+        status, _headers, response_body = _request(
             server,
             "POST",
             f"/{session.token}/source/table.pdf/approve",
@@ -911,6 +1221,9 @@ def test_a_malformed_submission_is_refused(
             body=body,
         )
         assert status == expected
+        assert b"refused before its action ran" in response_body
+        assert b"This refused request made no paid provider call." in response_body
+        assert b"cannot safely prove" not in response_body
     finally:
         server.shutdown()
         server.server_close()
@@ -920,7 +1233,7 @@ def test_an_oversized_form_is_refused_before_it_is_read(tmp_path: Path) -> None:
     session = _staged(tmp_path)
     server, _thread = _running(session)
     try:
-        status, _headers, _body = _request(
+        status, _headers, response_body = _request(
             server,
             "POST",
             f"/{session.token}/source/table.pdf/approve",
@@ -932,6 +1245,9 @@ def test_an_oversized_form_is_refused_before_it_is_read(tmp_path: Path) -> None:
             body=b"x" * 16,
         )
         assert status == 413
+        assert b"refused before its action ran" in response_body
+        assert b"This refused request made no paid provider call." in response_body
+        assert b"cannot safely prove" not in response_body
     finally:
         server.shutdown()
         server.server_close()
@@ -1477,10 +1793,50 @@ def test_an_uncertain_edit_write_never_claims_nothing_was_written(
         text = body.decode()
         assert "whether it landed is unknown" in text
         assert "Nothing was written" not in text
+        assert "This action made no paid provider call." in text
+        assert "janki operations" not in text
         assert "check the cards" in text
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_refused_local_compare_and_swap_reports_no_write_and_no_paid_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from japanese_anki.workbench import review as review_module
+
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    before = staging_path.read_bytes()
+    server, _thread = _running(session)
+
+    def stale(*_args: object, **_kwargs: object) -> None:
+        raise review_module.StaleReviewError("The staging file changed")
+
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        monkeypatch.setattr(review_module, "bound_replace", stale)
+        status, _headers, body = _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("ee0_0", "I jog through the park every morning.")],
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert status == 409
+    text = body.decode("utf-8")
+    assert "The staging file changed" in text
+    assert "This action stopped before any repository write" in text
+    assert "This action made no paid provider call." in text
+    assert "cannot safely prove" not in text
+    assert "janki operations" not in text
+    assert staging_path.read_bytes() == before
 
 
 def test_bound_replace_joins_the_staging_transaction_lock(

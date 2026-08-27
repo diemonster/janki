@@ -77,15 +77,24 @@ def _no_billed_client(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRe
     if request.node.get_closest_marker("allow_build_client"):
         return
 
-    def refuse(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError(
-            "This test reached claude_client.build_client(), which opens a "
-            "billed connection. Patch the parse_call your code path actually "
-            "uses — both providers if a config default decides it — or mark "
-            "the test @pytest.mark.allow_build_client if it means to."
-        )
+    class RefuseBilledTransport:
+        def __getattr__(self, name: str) -> object:
+            raise AssertionError(
+                "This test reached the Anthropic transport through "
+                f"client.{name}. Patch the parse_call your code path actually "
+                "uses — both providers if a config default decides it — or "
+                "mark the test @pytest.mark.allow_build_client if it means to."
+            )
 
-    monkeypatch.setattr(claude_client, "build_client", refuse)
+    def inert_client(*_args: object, **_kwargs: object) -> object:
+        return RefuseBilledTransport()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-only-never-send")
+    monkeypatch.setattr(claude_client, "build_client", inert_client)
+    # Keep the public preflight body in every journaled call path. Its bound
+    # test-only key reaches only the inert transport above, so a forgotten
+    # parse_call fake fails loudly without constructing or contacting a
+    # provider.
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

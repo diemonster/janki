@@ -26,6 +26,7 @@ from japanese_anki import (
     workbench,
 )
 from japanese_anki.application import audio as audio_application
+from japanese_anki.application import build as build_application
 from japanese_anki.application import coverage as coverage_application
 from japanese_anki.application import enrichment as enrichment_application
 from japanese_anki.application import kanji_addition as kanji_application
@@ -42,6 +43,7 @@ from japanese_anki.application.extraction import (
     durable_inbox_root,
     plan_extraction,
 )
+from japanese_anki.application.finish import resolve_finish_scope
 from japanese_anki.application.promotion import (
     POST_READING_GATES,
     PromotionDecision,
@@ -1941,6 +1943,16 @@ def command_extract(args: argparse.Namespace) -> int:
         print("\n".join(told))
         return 1
 
+    # The SDK otherwise discovers a missing key only as it begins dispatch.
+    # Bind it before the journal can say money may have been spent, and reuse
+    # this no-network client construction for every target in the consented
+    # batch.
+    try:
+        client = claude_client.prepare_paid_client()
+    except JankiError as exc:
+        print(f"Refusing before dispatch: {exc}", file=sys.stderr)
+        return 1
+
     written = 0
     journal = operations.OperationJournal.load(config.operations_file)
     for planned in plan.targets:
@@ -1959,6 +1971,7 @@ def command_extract(args: argparse.Namespace) -> int:
                 system=plan.system,
                 mode=plan.mode,
                 known=plan.skip_list,
+                client=client,
                 capture=capture_hook(config, journal, operation_id),
             )
         except JankiError as exc:
@@ -2284,6 +2297,10 @@ def _print_promotion_plan(plan: PromotionPlan) -> int:
 
 def _print_promotion_execution(result: PromotionExecutionResult) -> int:
     """Render one shared promotion transaction in the CLI's existing words."""
+    def print_finish_receipt() -> None:
+        if result.receipt_id is not None:
+            print(f"  Finish receipt: {result.receipt_id}")
+
     path = result.staging_path
     if result.state == "nothing":
         print(f"{path} holds no records; nothing to promote.")
@@ -2312,6 +2329,7 @@ def _print_promotion_execution(result: PromotionExecutionResult) -> int:
                 "already-archived row(s) were removed from the live review."
             )
         print(f"  Archived to {result.archive_path} (unchanged).")
+        print_finish_receipt()
         return 0
 
     if result.state == "nothing_lands":
@@ -2322,6 +2340,7 @@ def _print_promotion_execution(result: PromotionExecutionResult) -> int:
                 "already-archived row(s) were removed from the live review."
             )
             print(f"  Archived to {result.archive_path} (unchanged).")
+            print_finish_receipt()
         if result.held:
             print(
                 f"Nothing promoted: all {len(result.held)} row(s) are still held "
@@ -2371,6 +2390,7 @@ def _print_promotion_execution(result: PromotionExecutionResult) -> int:
             f"({result.removed} row(s) promoted)."
         )
     print(f"  Archived to {result.archive_path}")
+    print_finish_receipt()
     print(
         _ledger_line(
             result.ledger_added,
@@ -2594,12 +2614,16 @@ def _gap_counts(records: Sequence[VocabularyRecord]) -> dict[str, int]:
 
 
 def _confirm_gaps(
-    records: Sequence[VocabularyRecord], assume_yes: bool, *, stem: str
+    records: Sequence[VocabularyRecord],
+    assume_yes: bool,
+    *,
+    stem: str,
+    record_kind: str = "new records",
 ) -> bool:
-    """Report what the new records are missing, and ask before shipping them."""
+    """Report what the selected records are missing, and ask before shipping."""
     counts = _gap_counts(records)
     described = [
-        f"{counts[key]} of {len(records)} new records have {label}"
+        f"{counts[key]} of {len(records)} {record_kind} have {label}"
         for label, key in _BUILD_GAPS
         if counts[key]
     ]
@@ -2802,11 +2826,53 @@ def _finish_build(book: ledger.Ledger, built: bool) -> int:
 
 def command_build(args: argparse.Namespace) -> int:
     config = _load_config(args)
+    if args.receipt:
+        return _command_receipt_build(args, config)
     # Audio holds the same operation lock from its WAL/record snapshots through
     # publication and final ledger commit. A build therefore cannot pass the
     # pending gate and package the half between record CAS and media promotion.
     with exclusive_path_lock(config.root / ".janki-audio-operation"):
         return _command_build_locked(args, config)
+
+
+def _command_receipt_build(
+    args: argparse.Namespace, config: ProjectConfig
+) -> int:
+    """Run the browser's exact durable finish build from the CLI."""
+    if any((args.deck, args.all, args.output, args.only_new, args.swept)):
+        raise AnkiBuildError(
+            "--receipt is an exact finish batch; do not combine it with a deck "
+            "path, --all, --output, --only-new, or --swept."
+        )
+    scope = resolve_finish_scope(config, args.receipt)
+    plan = build_application.plan_finish_build(config, scope)
+    for deck in plan.decks:
+        if not _confirm_gaps(
+            deck.preview_records,
+            args.yes,
+            stem=deck.stem,
+            record_kind="receipt records",
+        ):
+            print("Receipt build not started.")
+            return 0
+    execution = build_application.execute_finish_build(
+        config,
+        args.receipt,
+        expected_scope_fingerprint=scope.fingerprint,
+        expected_plan_fingerprint=plan.fingerprint,
+    )
+    for result in execution.results:
+        cards = ", ".join(result.card_types)
+        plural = "" if result.note_count == 1 else "s"
+        print(
+            f"Built {result.output_path} — {result.note_count} note{plural}, "
+            f"cards: {cards}, media: {result.media_count}"
+        )
+    if execution.build_error:
+        print(f"error: {execution.build_error}", file=sys.stderr)
+    if execution.ledger_error:
+        print(f"error: export history: {execution.ledger_error}", file=sys.stderr)
+    return 0 if execution.state == "complete" else 1
 
 
 def _command_build_locked(args: argparse.Namespace, config: ProjectConfig) -> int:
@@ -3069,7 +3135,7 @@ def command_workbench(args: argparse.Namespace) -> int:
 
 
 def command_kanji(args: argparse.Namespace) -> int:
-    """Look up the characters this collection uses, once each.
+    """Look up the characters in the selected records, once each.
 
     Reference data, not card content: 前 is the same 前 in 名前 and 前線, so it
     is fetched per *character* and shared by every record that contains one.
@@ -3077,8 +3143,17 @@ def command_kanji(args: argparse.Namespace) -> int:
     request per new character rather than a re-download of everything.
     """
     config = _load_config(args)
-    plan = kanji_application.plan_corpus_kanji_addition(
-        config, refresh=args.refresh
+    if args.ids and args.refresh:
+        raise JankiError(
+            "janki kanji --refresh cannot be combined with record ids; targeted "
+            "finishing adds only missing reference data."
+        )
+    plan = (
+        kanji_application.plan_kanji_addition(config, args.ids)
+        if args.ids
+        else kanji_application.plan_corpus_kanji_addition(
+            config, refresh=args.refresh
+        )
     )
     if not plan.record_ids:
         print(f"No records to read characters from in {plan.canonical_path}.")
@@ -3859,6 +3934,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     build_command = subparsers.add_parser("build", help="Build one or all Anki decks")
     build_command.add_argument("deck", type=_path, nargs="?")
+    build_command.add_argument(
+        "--receipt",
+        metavar="ID",
+        help=(
+            "Build the exact complete owner decks for one durable promotion "
+            "receipt, using the same transaction as the workbench."
+        ),
+    )
     build_command.add_argument("--all", action="store_true")
     build_command.add_argument("--output", type=_path)
     build_command.add_argument(
@@ -3936,6 +4019,14 @@ def build_parser() -> argparse.ArgumentParser:
     kanji_parser = subparsers.add_parser(
         "kanji",
         help="Look up stroke order and on/kun readings for the characters in use.",
+    )
+    kanji_parser.add_argument(
+        "ids",
+        nargs="*",
+        metavar="ID",
+        help=(
+            "Exact record ids to finish. Omit for every record in the collection."
+        ),
     )
     kanji_parser.add_argument(
         "--refresh",

@@ -800,7 +800,36 @@ path, import steps.
   `kanji.py`, `audio_cmd.py`, `preview.py`, `exporters/anki.py`.
 - **Ships when:** PDF to `.apkg` without touching the terminal, YAML or JSON.
 
-### [ ] W6 Learner polish, accessibility and documentation
+### [~] W6 Learner polish, accessibility and documentation
+
+*Progress 2026-08-26. The automated/product half now ships: the README leads
+with the browser journey and retains exact receipt/record-scoped CLI recovery;
+the first dashboard view in each server session opens a reopenable provider
+guide. Paid source controls name file, provider, model, purpose and cost.
+Anthropic credentials are bound before journal authority, environment
+credentials are redacted from provider failures and durable operation detail,
+and missing Anthropic or jpdb keys get a no-contact four-fact refusal. Restart
+projection preserves historical paid archives, attaches every exact finish
+receipt even beside a partial live review, and exposes both model-operation and
+pending-audio CLI recovery. A fail-closed real-Chrome journey starts from a
+configured fixture whose corpus has no sources or records (project config and
+the destination deck are test setup), uploads and preserves a PDF, completes
+the table path with fake providers, and builds its `.apkg`. It denies
+non-loopback socket and name-resolution egress from the Python server process,
+allows only loopback/`blob:` requests from the tested workbench page, and
+checks a computed dark palette, one keyboard-visible focus target, 500px
+long-text wrapping and one exact `ruby`/`rt` attachment. It does not instrument
+Chrome's background processes or claim the UI created the project. `make gates`
+includes it when the Playwright driver and Chrome/Chromium are installed; a
+non-dev checkout without the driver or a machine without a browser skips the
+module, while an installed browser that fails to launch fails the gate.*
+
+*Still required before `[x]`: the owner must record one real vocabulary-table
+journey and one real lesson/dialogue journey, including browser/version and
+the resulting `.apkg` paths; record the chosen fixture's CLI/workbench durable
+artifact parity; and complete the full manual every-control keyboard/name,
+Japanese-font and accessibility pass. The automated table fixture is evidence
+for the browser mechanics, not a substitute for those owner gates.*
 
 Replace the README's PDF happy path with a short illustrated workbench guide,
 keeping a CLI reference for automation and recovery. Explain "meaning in this
@@ -839,8 +868,11 @@ future work):
   rendering, furigana attachment, long-English wrapping.
 - At least one end-to-end journey runs in a real browser. HTTP unit tests
   cannot establish Origin behaviour, PDF isolation, focus order,
-  double-submit handling, or the localhost boundary.
-- `make gates` stays offline with fake providers.
+  a duplicate browser submission, or the localhost boundary.
+- `make gates` uses fake providers, rejects non-loopback egress from janki's
+  Python process and remote requests from the tested workbench page, and never
+  downloads a browser. It does not claim to instrument Chrome's own background
+  processes.
 
 - **Depends on:** W5. **Files:** `README.md`, `docs/IMPORTING.md`,
   `docs/QUALITY.md`, `workbench/`, browser test.

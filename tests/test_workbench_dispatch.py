@@ -24,14 +24,58 @@ from test_application_journey import _project, _stage
 import japanese_anki.io as janki_io
 from conftest import seed_prompts
 from japanese_anki import inputs, operations, patterns, staging
+from japanese_anki.application.extraction import (
+    ANSWER_EMPTY,
+    ANSWER_SAVED,
+    ANSWER_UNAVAILABLE,
+    FORGOTTEN,
+    OUTCOME_UNKNOWN,
+    DispatchFailure,
+    ExtractionCompletionError,
+)
 from japanese_anki.claude_client import CallResult
 from japanese_anki.config import ProjectConfig
 from japanese_anki.io import DataError, atomic_write_text_bound
 from japanese_anki.staging import read_staging
 from japanese_anki.workbench import WorkbenchSession, make_server
+from japanese_anki.workbench import server as workbench_server
 
 PDF = b"%PDF-1.7 fake"
 RESPONSES = Path(__file__).parent / "fixtures" / "workbench" / "responses"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "cleanup_pending", "changed", "next_step"),
+    [
+        (ANSWER_SAVED, False, "exact provider answer is saved", "--show-reply op-1"),
+        (ANSWER_EMPTY, False, "reply contains no answer", "--show-reply op-1"),
+        (ANSWER_UNAVAILABLE, False, "bytes are unavailable", "janki operations"),
+        (FORGOTTEN, True, "forget decision is recorded", "--forget op-1"),
+        (FORGOTTEN, False, "no recovery answer remains", "Back button"),
+        (OUTCOME_UNKNOWN, False, "unsettled provider outcome", "Do not retry"),
+    ],
+)
+def test_paid_failure_pages_preserve_each_exact_journal_outcome(
+    outcome: str,
+    cleanup_pending: bool,
+    changed: str,
+    next_step: str,
+) -> None:
+    view = workbench_server._paid_dispatch_failure_view(
+        RuntimeError("provider stopped"),
+        DispatchFailure(
+            operation_id="op-1",
+            outcome=outcome,
+            cleanup_pending=cleanup_pending,
+        ),
+        unchanged="No card was written.",
+    )
+
+    assert changed in view.changed
+    assert next_step in view.next_step
+    assert view.money == (
+        "The provider request was dispatched and may already have been billed."
+    )
 
 
 class _DispatchForm(HTMLParser):
@@ -214,6 +258,38 @@ def _install_fake(monkeypatch: pytest.MonkeyPatch, fake: _FakeCall) -> None:
         "japanese_anki.extract.claude_client.parse_call",
         fake,
     )
+
+
+def test_missing_key_refuses_before_journal_authority_or_provider_contact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    server, _thread = _running(session)
+    fake = _FakeCall()
+    _install_fake(monkeypatch, fake)
+
+    def missing_key() -> object:
+        raise DataError("ANTHROPIC_API_KEY is not set; no provider was contacted")
+
+    monkeypatch.setattr(
+        "japanese_anki.workbench.server.claude_client.prepare_paid_client",
+        missing_key,
+    )
+    try:
+        form = _form(server, session)
+        status, _headers, payload = _post(server, form)
+
+        text = html.unescape(payload.decode("utf-8"))
+        assert status == 409
+        assert "ANTHROPIC_API_KEY is not set" in text
+        assert "No extraction operation was authorized" in text
+        assert "No provider was contacted and no paid call was made" in text
+        assert fake.calls == []
+        assert not session.config.operations_file.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_post_replans_and_refuses_a_request_changed_since_render(
@@ -1886,6 +1962,116 @@ def test_journal_failure_while_settling_a_provider_error_stays_on_the_page(
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_provider_errors_redact_environment_credentials_from_page_and_journal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    server, _thread = _running(session)
+    secret = "sk-ant-upstream-echo-must-disappear"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+
+    def provider_failure(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        raise DataError(f"authorization header contained {secret}")
+
+    monkeypatch.setattr(
+        "japanese_anki.extract.claude_client.parse_call", provider_failure
+    )
+    try:
+        form = _form(server, session)
+        status, _headers, payload = _post(server, form)
+
+        assert status == 200
+        assert secret.encode() not in payload
+        assert b"[redacted ANTHROPIC_API_KEY]" in payload
+        journal_bytes = session.config.operations_file.read_bytes()
+        assert secret.encode() not in journal_bytes
+        assert b"[redacted ANTHROPIC_API_KEY]" in journal_bytes
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_blank_provider_exception_still_finishes_the_failure_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    server, _thread = _running(session)
+
+    def provider_failure(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        raise RuntimeError()
+
+    monkeypatch.setattr(
+        "japanese_anki.extract.claude_client.parse_call", provider_failure
+    )
+    try:
+        form = _form(server, session)
+        status, _headers, payload = _post(server, form)
+
+        text = payload.decode("utf-8")
+        assert status == 200
+        assert "RuntimeError failed without details." in text
+        for heading in ("What happened", "What changed", "Money", "What to do next"):
+            assert heading in text
+        assert text.endswith("</main></body></html>")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected_happened"),
+    [
+        ("staging-saved", "Proposals remain saved at"),
+        ("operation", "OperationError failed without details."),
+        ("janki", "DataError failed without details."),
+    ],
+)
+def test_blank_completion_exceptions_still_finish_the_paid_answer_failure_page(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_kind: str,
+    expected_happened: str,
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    server, _thread = _running(session)
+    fake = _FakeCall()
+    _install_fake(monkeypatch, fake)
+    if failure_kind == "staging-saved":
+        failure: Exception = ExtractionCompletionError(
+            DataError(),
+            tmp_path / "staging" / "lesson.pdf.yaml",
+        )
+    elif failure_kind == "operation":
+        failure = operations.OperationError()
+    else:
+        failure = DataError()
+
+    def fail_completion(*_args: Any, **_kwargs: Any) -> None:
+        raise failure
+
+    monkeypatch.setattr(workbench_server, "complete_extraction", fail_completion)
+    try:
+        form = _form(server, session)
+        status, _headers, payload = _post(server, form)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    text = payload.decode("utf-8")
+    assert status == 200
+    assert expected_happened in text
+    for heading in ("What happened", "What changed", "Money", "What to do next"):
+        assert heading in text
+    assert "provider call completed and may have been billed" in text
+    assert text.endswith("</main></body></html>")
+    assert len(fake.calls) == 1
 
 
 def test_staging_directory_failure_after_dispatch_has_a_complete_recovery_page(

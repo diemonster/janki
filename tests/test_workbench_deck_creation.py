@@ -6,12 +6,18 @@ import re
 from pathlib import Path
 from urllib.parse import urlencode
 
+import pytest
 import yaml
 from test_workbench import _request, _running
 
-from japanese_anki.application.deck_creation import plan_study_deck
+from japanese_anki.application.deck_creation import (
+    StudyDeckCreationError,
+    create_study_deck,
+    plan_study_deck,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.workbench import WorkbenchSession
+from japanese_anki.workbench import server as workbench_server
 
 CONFIG = """
 [paths]
@@ -128,6 +134,74 @@ def test_preview_shows_exact_plan_and_create_publishes_that_deck(
         "production": True,
         "reading": False,
     }
+
+
+def test_create_error_after_publication_reports_the_deck_state_as_unknown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _session(tmp_path)
+    fields = [
+        ("action", "preview"),
+        ("csrf", session.csrf_token),
+        ("name", "Genki recovery"),
+        ("recognition", "on"),
+    ]
+    planned = plan_study_deck(
+        session.config,
+        name="Genki recovery",
+        recognition=True,
+        production=False,
+        reading=False,
+    )
+
+    def publish_then_fail(
+        config: ProjectConfig,
+        plan: workbench_server.StudyDeckCreationPlan,
+    ) -> None:
+        create_study_deck(config, plan)
+        raise StudyDeckCreationError(
+            "The create response was lost after deck publication."
+        )
+
+    server, _thread = _running(session)
+    try:
+        preview_status, _headers, preview = _post(server, session, fields)
+        assert preview_status == 200
+        monkeypatch.setattr(
+            workbench_server,
+            "create_study_deck",
+            publish_then_fail,
+        )
+        status, _headers, body = _post(
+            server,
+            session,
+            [
+                ("action", "create"),
+                ("csrf", session.csrf_token),
+                ("name", "Genki recovery"),
+                ("recognition", "on"),
+                ("plan_fingerprint", _fingerprint(preview)),
+            ],
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    rendered = body.decode("utf-8")
+    assert status == 409
+    assert "The create response was lost after deck publication." in rendered
+    assert (
+        "This action cannot safely prove that repository files are unchanged."
+        in rendered
+    )
+    assert "This action made no paid provider call." in rendered
+    assert "Nothing was created" not in rendered
+    assert (
+        "reload the dashboard and check whether the study deck was published "
+        "before trying to create it again" in rendered
+    )
+    assert planned.path.read_bytes() == planned.yaml_bytes
 
 
 def test_create_refuses_stale_preview_and_strictly_parses_authority(

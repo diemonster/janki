@@ -55,6 +55,80 @@ does draw つま across `、妻`.
 **It is not a device test.** AnkiMobile and AnkiDroid rendering, CSS and layout,
 and whether the Shirabe app answers its URL scheme are all still manual.
 
+## The workbench browser gate
+
+HTTP handler and HTML-parser tests are necessary, but they do not prove the
+browser boundary. They cannot establish what Chrome sends for a real form and
+Origin header, how it treats the isolated PDF display, or its focus behavior.
+
+`tests/test_workbench_browser.py` is the automated real-browser journey. It
+drives the workbench with Playwright against an installed Chrome or Chromium
+and local fake providers. A checkout without the optional Playwright test driver
+skips this module at collection; with the driver present, it skips only when no
+supported browser executable is installed and fails when an installed browser
+cannot launch. An HTTP client is not a substitute. Keep this one journey end to
+end instead of duplicating every handler test in a browser.
+
+The automated network claim has exact edges. The test removes provider keys,
+replaces every application provider, rejects non-loopback socket connections
+and name resolution attempted by the Python server process, and fails if a
+request issued by the tested workbench page leaves loopback or its local
+`blob:` preview. It therefore cannot contact or charge a real provider through
+janki. It does not instrument Chrome's own background processes and makes no
+broader Chrome-egress claim; Playwright is configured to use an already
+installed executable rather than downloading one during gates.
+
+That one table journey checks one keyboard-reachable action and its visible
+outline, a computed dark palette whose background is darker than its text, the
+500px responsive breakpoint with a deliberately unbroken English value, one
+exact `ruby`/`rt` pair, and a duplicate browser submission while the same
+one-use paid action is already in flight. Those are regression checks for the
+mechanics, not evidence that every workflow control, font fallback, source
+shape, or assistive technology has passed.
+
+Automation does not replace the owner acceptance gate. Before W6 is marked
+complete, the progress note in `docs/WORKBENCH_PLAN.md` must name the browser
+and version, the two real sources, the resulting `.apkg` paths, and the outcome
+of both of these runs:
+
+- one vocabulary-table source through save, paid reading, card review,
+  completeness, deck choice, add, dictionary facts, kanji, word and example
+  audio, preview, and build;
+- one lesson or dialogue source through the same path, including its grammar
+  review, without editing a repository file or running a workflow command.
+
+That note must also identify the fixture used for CLI/workbench parity. With
+the same selections, decisions, configuration and fake provider answers, both
+surfaces must leave identical records, review authority, source history, merge
+result, ledger, media, and deck membership. Package comparison is semantic
+because genanki timestamps prevent useful byte equality.
+
+The complete mechanical accessibility record belongs beside that evidence:
+keyboard path and visible focus, an accessible name for every control, a 500px
+viewport, dark mode, a Japanese font, attached furigana, and wrapping for long
+English. A green unit suite alone does not establish any of these manual gates.
+
+## Failure messages tell the whole result
+
+Every workbench failure answers four questions in learner language:
+
+1. What happened?
+2. Which durable changes completed, including a saved source, record, archive,
+   media file, ledger entry, package, or recovery artifact?
+3. Could money have been spent: no, yes, or unknown?
+4. What exact action should the learner take next?
+
+“Nothing changed” is truthful only when no relevant write completed and no
+request could have left the machine. A partial record/media/ledger transaction
+must name each part that landed. A lost response after dispatch must say that
+money may have been spent; it must not collapse into an ordinary retry prompt.
+Conversely, a missing API key must say that the provider was not contacted,
+while still acknowledging a source that was already saved during intake.
+
+Tests should assert the four facts, not a loose substring such as `none`: that
+word may appear in an unrelated summary and let the actual failure message
+regress unnoticed.
+
 ## The ledger and `janki status`
 
 `data/ledger.json` is machine-written, git-committed, and deliberately
@@ -67,15 +141,17 @@ finished. Card content stays in `vocabulary.json` and never appears here;
 timestamps and provenance history stay here and never appear in the records.
 Imports and `migrate-inline` write it — you do not edit it by hand.
 
-`data/operations.json` is the same idea for paid *model* calls, and
-`janki operations` is how you read it. A call is journalled before it is sent
-and its exact reply is written to disk before anything tries to parse it, so a
-crash cannot lose an answer you already paid for. janki will not start a
-second paid call while one is unaccounted for — a call still in flight, a
-reply nobody turned into staging, or an outcome nothing could determine. That
-block never lifts on its own, because only you can say a vanished process is
-gone: `janki operations --end ID` records that, and `--forget ID` journals the
-final decision once you have dealt with what it cost. That durable decision
+`data/operations.json` is the same idea for journaled paid *model* calls, and
+`janki operations` is how you read it. Extraction and the separate paid
+coverage check are journaled before they are sent, and their exact replies are
+written to disk before anything tries to parse them, so a crash cannot lose an
+answer you already paid for. `enrich --ai` does not yet use this journal; that
+is a known gap, not a recovery guarantee. janki will not start a second
+journaled call while one is unaccounted for — a call still in flight, a reply
+nobody turned into staging, or an outcome nothing could determine. That block
+never lifts on its own, because only you can say a vanished process is gone:
+`janki operations --end ID` records that, and `--forget ID` journals the final
+decision once you have dealt with what it cost. That durable decision
 immediately unblocks a new paid call; forget then retires exact recovery names
 only while their pending-directory inode remains bound. A missing or replaced
 namespace is preserved and never searched for elsewhere. If cleanup is
@@ -83,6 +159,39 @@ interrupted, the entry stays listed and the same ordinary `--forget ID` resumes
 it without another `--force` decision. If a run is interrupted and the next
 one refuses, that is this, and `janki operations` names the call and its
 executable recovery action.
+
+### Paid-call and browser recovery
+
+The workbench has no second database. On restart it issues a new session URL
+and reconstructs the dashboard from the durable inbox, live reviews, completed
+review archives, pattern store, operation journal, ledger, and deck files. A
+durably committed or saved action survives; a preview capability and text left
+only in an unsubmitted browser form do not. No workflow state or credential is
+recovered from cookies, local storage, or session storage.
+
+The same repository state drives recovery in both surfaces:
+
+- An extraction or paid completeness call is journaled before dispatch and
+  its exact answer is captured before parsing. `janki operations` names
+  anything still live, captured, uncertain, or awaiting cleanup.
+- `janki operations --show-reply ID` streams a still-bound captured answer
+  without adopting a replacement file or changing the operation.
+- If a process is known to be gone, `janki operations --end ID` records whether
+  it ended before sending or with an unknown outcome. An unknown outcome may
+  have cost money and is never retried automatically.
+- After the learner has accounted for the answer and charge,
+  `janki operations --forget ID` records that decision before cleaning only
+  the exact bound recovery names. The same command resumes interrupted cleanup.
+- A pending paid-audio row is recovered by rerunning the exact matching audio
+  selection. Saved matching bytes are finalized without another provider call;
+  a different text, voice, model, instruction, or target cannot claim them.
+
+Never repair recovery by editing or deleting `data/operations.json`,
+`data/.pending/`, `data/ledger.json`, or pending audio stages. Preserve the
+evidence and run the action that `janki operations` or `janki status` prints.
+If a provider key is missing after restart, set it in the shell environment
+that launches the workbench; the key never belongs in the recovery data or the
+browser.
 
 `janki status` reads both and summarizes them:
 

@@ -16,10 +16,38 @@ import yaml
 from japanese_anki import staging
 from japanese_anki.application import finish
 from japanese_anki.application import promotion as promotion_application
-from japanese_anki.application.finish import FinishScopeError, resolve_finish_scope
+from japanese_anki.application.finish import (
+    FinishReceipt,
+    FinishScopeError,
+    list_finish_receipts,
+    resolve_finish_scope,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.io import RecordsRevision
 from japanese_anki.models import SourceReference, VocabularyRecord
+
+
+@pytest.mark.parametrize(
+    ("source_file", "receipt_id", "record_count", "message"),
+    [
+        (" ", "a" * 64, 1, "nonblank source file"),
+        ("lesson.pdf", "A" * 64, 1, "lowercase SHA-256"),
+        ("lesson.pdf", "a" * 64, 0, "at least one record"),
+    ],
+    ids=["blank-source", "invalid-receipt", "empty-batch"],
+)
+def test_finish_receipt_rejects_invalid_durable_handles(
+    source_file: str,
+    receipt_id: str,
+    record_count: int,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        FinishReceipt(
+            source_file=source_file,
+            receipt_id=receipt_id,
+            record_count=record_count,
+        )
 
 
 def _record(
@@ -276,6 +304,19 @@ def test_each_receipt_selects_only_its_batch_from_one_cumulative_archive(
     ]
     staging.write_staging(path, [earlier, later], meta)
 
+    assert list_finish_receipts(config) == (
+        FinishReceipt(
+            source_file="lesson.pdf",
+            receipt_id=earlier_batch.receipt_id,
+            record_count=1,
+        ),
+        FinishReceipt(
+            source_file="lesson.pdf",
+            receipt_id=later_batch.receipt_id,
+            record_count=1,
+        ),
+    )
+
     earlier_scope = resolve_finish_scope(config, earlier_batch.receipt_id)
     later_scope = resolve_finish_scope(config, later_batch.receipt_id)
 
@@ -298,6 +339,22 @@ def test_archive_is_validated_against_its_actual_filename(tmp_path: Path) -> Non
 
     with pytest.raises(FinishScopeError, match="renamed.yaml.*done archive file"):
         resolve_finish_scope(config, receipt_id)
+
+
+def test_receipt_discovery_rejects_a_handle_that_no_longer_binds_its_batch(
+    tmp_path: Path,
+) -> None:
+    config, receipt_id, _records = _exact_scope(tmp_path)
+    archive = config.staging_dir / "done" / "lesson.yaml"
+    archived, meta = staging.read_staging(archive)
+    replacement = ("0" if receipt_id[-1] != "0" else "1")
+    meta[staging.PROMOTION_BATCHES_KEY][0]["receipt_id"] = (
+        receipt_id[:-1] + replacement
+    )
+    staging.write_staging(archive, archived, meta, force=True)
+
+    with pytest.raises(FinishScopeError, match="does not bind its exact source"):
+        list_finish_receipts(config)
 
 
 def test_duplicate_receipt_matches_are_refused_globally(

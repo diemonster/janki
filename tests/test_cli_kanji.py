@@ -91,6 +91,19 @@ def test_each_character_is_asked_for_once_however_many_words_use_it(
     assert "Looked up 3 character(s)" in capsys.readouterr().out
 
 
+def test_exact_record_ids_use_the_same_bounded_kanji_scope_as_the_workbench(
+    tmp_path: Path, transport: Transport
+) -> None:
+    first = record("名前", "なまえ")
+    second = record("学校", "がっこう")
+    outside = record("前線", "ぜんせん")
+    root = project(tmp_path, [first, second, outside])
+
+    assert cli.main(["--root", str(root), "kanji", first.id, second.id]) == 0
+
+    assert transport.asked == ["名", "前", "学", "校"]
+
+
 def test_only_the_missing_ones_are_fetched_on_a_second_run(
     tmp_path: Path, transport: Transport, capsys: pytest.CaptureFixture[str]
 ) -> None:

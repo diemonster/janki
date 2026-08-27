@@ -958,6 +958,36 @@ def test_an_unattended_run_refuses_to_send_rather_than_assuming_consent(
     assert "Nothing was sent." in captured.out
 
 
+def test_a_missing_key_refuses_before_authority_or_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path)
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    def missing_key() -> None:
+        raise JankiError(
+            "ANTHROPIC_API_KEY is not set; no provider was contacted"
+        )
+
+    monkeypatch.setattr(
+        cli.claude_client,
+        "prepare_paid_client",
+        missing_key,
+    )
+
+    code = cli.main(
+        ["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))]
+    )
+
+    assert code == 1
+    assert call.calls == []
+    assert not ProjectConfig.load(root).operations_file.exists()
+    assert "Refusing before dispatch" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     "typed,sent",
     [("y", True), ("yes", True), ("Y", True), ("", False), ("n", False), ("q", False)],

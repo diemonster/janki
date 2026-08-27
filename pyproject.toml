@@ -44,6 +44,13 @@ ai = [
 dev = [
   "pytest>=8,<9",
   "ruff>=0.6,<1",
+  # One workbench journey runs through a real installed browser. Playwright is
+  # the driver only: gates never download a browser or contact its CDN, and
+  # the test skips when neither an installed Chrome nor a previously installed
+  # Playwright Chromium is available. The module also collection-skips in a
+  # non-dev checkout without this driver; bootstrap installs `[dev]`, so that
+  # fallback does not hide a failed declared dependency install there.
+  "playwright>=1.55,<2",
   "japanese-anki[ai]",
   # Anki itself, so `tests/test_rendered_cards.py` can ask *Anki* what the
   # templates draw instead of reading their HTML off disk. Nothing in janki

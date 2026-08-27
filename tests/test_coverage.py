@@ -916,6 +916,33 @@ def test_owner_coverage_approval_is_bound_to_the_rendered_review(
             replacement_held.rename(replacement_source)
 
 
+def test_missing_key_refuses_coverage_before_journal_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from japanese_anki import operations
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = coverage_application.plan_model_coverage(config, staged)
+
+    def missing_key() -> object:
+        raise JankiError("ANTHROPIC_API_KEY is not set; no provider was contacted")
+
+    monkeypatch.setattr(
+        coverage_application.claude_client,
+        "prepare_paid_client",
+        missing_key,
+    )
+
+    with pytest.raises(JankiError, match="no provider was contacted"):
+        coverage_application.run_model_coverage(config, decision)
+
+    assert not config.operations_file.exists()
+    assert not (config.operations_file.parent / operations.PENDING_DIR).exists()
+
+
 def test_paid_coverage_is_authorized_and_captured_before_approval(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1397,3 +1424,212 @@ def test_a_paid_answer_is_kept_when_the_review_changes_during_the_call(
     assert f"operations --show-reply {entry.operation_id}" in str(raised.value)
     _records, meta = read_staging(staged)
     assert "approval" not in meta["coverage"]
+
+
+def test_approval_write_is_reported_when_only_journal_commit_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from japanese_anki import operations
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
+    from japanese_anki.staging import read_staging
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = coverage_application.plan_model_coverage(config, staged)
+
+    def review(*_args: Any, capture=None, **_kwargs: Any) -> coverage.CoverageVerdict:
+        assert capture is not None
+        capture({"content": [{"type": "text", "text": "paid answer"}]})
+        return coverage.CoverageVerdict(
+            True,
+            "Every source row is accounted for.",
+            decision.model,
+            decision.prompt_fingerprint,
+        )
+
+    real_move = operations.OperationJournal._move_under_lock
+
+    def fail_committed_write(
+        self: operations.OperationJournal,
+        current: operations.OperationJournal,
+        operation_id: str,
+        state: str,
+        **kwargs: Any,
+    ) -> operations.Operation:
+        if state == "committed":
+            raise operations.OperationError("journal commit write failed")
+        return real_move(self, current, operation_id, state, **kwargs)
+
+    monkeypatch.setattr(coverage_application.coverage, "review_coverage", review)
+    monkeypatch.setattr(
+        operations.OperationJournal,
+        "_move_under_lock",
+        fail_committed_write,
+    )
+
+    with pytest.raises(coverage_application.CoverageRunError) as raised:
+        coverage_application.run_model_coverage(config, decision, client=object())
+
+    assert raised.value.provider_dispatched is True
+    assert raised.value.approval_write == "written"
+    assert raised.value.operation_write == "present"
+    [entry] = operations.OperationJournal.load(config.operations_file).operations.values()
+    assert entry.state == "result_captured"
+    _records, meta = read_staging(staged)
+    assert meta["coverage"]["approval"]["authority"] == "model"
+
+
+def test_lost_committed_ack_reports_the_durable_committed_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from japanese_anki import operations
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = coverage_application.plan_model_coverage(config, staged)
+
+    def review(*_args: Any, capture=None, **_kwargs: Any) -> coverage.CoverageVerdict:
+        assert capture is not None
+        capture({"content": [{"type": "text", "text": "paid answer"}]})
+        return coverage.CoverageVerdict(
+            True, "Accounted for.", decision.model, decision.prompt_fingerprint
+        )
+
+    real_move = operations.OperationJournal._move_under_lock
+
+    def commit_then_fail(
+        self: operations.OperationJournal,
+        current: operations.OperationJournal,
+        operation_id: str,
+        state: str,
+        **kwargs: Any,
+    ) -> operations.Operation:
+        result = real_move(self, current, operation_id, state, **kwargs)
+        if state == "committed":
+            raise operations.OperationError("commit acknowledgement lost")
+        return result
+
+    monkeypatch.setattr(coverage_application.coverage, "review_coverage", review)
+    monkeypatch.setattr(
+        operations.OperationJournal, "_move_under_lock", commit_then_fail
+    )
+    with pytest.raises(coverage_application.CoverageRunError) as raised:
+        coverage_application.run_model_coverage(config, decision, client=object())
+
+    assert raised.value.approval_write == "written"
+    assert raised.value.operation_state == "committed"
+    [entry] = operations.OperationJournal.load(config.operations_file).operations.values()
+    assert entry.state == "committed"
+
+
+def test_approval_write_is_unknown_when_its_acknowledgement_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from japanese_anki import operations, staging
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
+    from japanese_anki.staging import read_staging
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = coverage_application.plan_model_coverage(config, staged)
+
+    def review(*_args: Any, capture=None, **_kwargs: Any) -> coverage.CoverageVerdict:
+        assert capture is not None
+        capture({"content": [{"type": "text", "text": "paid answer"}]})
+        return coverage.CoverageVerdict(
+            True,
+            "Every source row is accounted for.",
+            decision.model,
+            decision.prompt_fingerprint,
+        )
+
+    real_record = staging.record_coverage_approval_under_lock
+
+    def write_then_fail(*args: Any, **kwargs: Any) -> None:
+        real_record(*args, **kwargs)
+        raise staging.StagingError("approval write acknowledgement failed")
+
+    monkeypatch.setattr(coverage_application.coverage, "review_coverage", review)
+    monkeypatch.setattr(
+        staging,
+        "record_coverage_approval_under_lock",
+        write_then_fail,
+    )
+
+    with pytest.raises(coverage_application.CoverageRunError) as raised:
+        coverage_application.run_model_coverage(config, decision, client=object())
+
+    assert raised.value.provider_dispatched is True
+    assert raised.value.approval_write == "unknown"
+    assert raised.value.operation_write == "present"
+    [entry] = operations.OperationJournal.load(config.operations_file).operations.values()
+    assert entry.state == "result_captured"
+    _records, meta = read_staging(staged)
+    assert meta["coverage"]["approval"]["authority"] == "model"
+
+
+@pytest.mark.parametrize(
+    ("phase", "durable_state"),
+    [("authorize", "authorized"), ("dispatching", "dispatching")],
+)
+def test_journal_boundary_write_failures_preserve_possible_operation_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+    durable_state: str,
+) -> None:
+    from japanese_anki import operations
+    from japanese_anki.application import coverage as coverage_application
+    from japanese_anki.config import ProjectConfig
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = coverage_application.plan_model_coverage(config, staged)
+    sent: list[object] = []
+    monkeypatch.setattr(
+        coverage_application.coverage,
+        "review_coverage",
+        lambda *_args, **_kwargs: sent.append(object()),
+    )
+
+    if phase == "authorize":
+        real_authorize = operations.OperationJournal.authorize
+
+        def write_then_fail(
+            self: operations.OperationJournal, *args: Any, **kwargs: Any
+        ) -> operations.Operation:
+            real_authorize(self, *args, **kwargs)
+            raise operations.OperationError("authority write acknowledgement failed")
+
+        monkeypatch.setattr(operations.OperationJournal, "authorize", write_then_fail)
+    else:
+        real_advance = operations.OperationJournal.advance
+
+        def advance_then_fail(
+            self: operations.OperationJournal,
+            operation_id: str,
+            state: str,
+            **kwargs: Any,
+        ) -> operations.Operation:
+            result = real_advance(self, operation_id, state, **kwargs)
+            if state == "dispatching":
+                raise operations.OperationError(
+                    "dispatch write acknowledgement failed"
+                )
+            return result
+
+        monkeypatch.setattr(operations.OperationJournal, "advance", advance_then_fail)
+
+    with pytest.raises(coverage_application.CoverageRunError) as raised:
+        coverage_application.run_model_coverage(config, decision, client=object())
+
+    assert raised.value.provider_dispatched is False
+    assert raised.value.operation_write == "present"
+    assert raised.value.approval_write == "not_written"
+    assert sent == []
+    [entry] = operations.OperationJournal.load(config.operations_file).operations.values()
+    assert entry.state == durable_state

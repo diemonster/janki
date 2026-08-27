@@ -25,10 +25,12 @@ from japanese_anki.application.finish import (
 )
 from japanese_anki.application.kanji_addition import KanjiAdditionPlan
 from japanese_anki.application.promotion import decide_promotion, execute_promotion
+from japanese_anki.config import ProjectConfig
 from japanese_anki.enrich import EnrichResult
 from japanese_anki.io import RecordsRevision, load_records, save_records_json
 from japanese_anki.kanji import KanjiInfo, KanjiStore, load_store, save_store
 from japanese_anki.models import VocabularyRecord
+from japanese_anki.workbench import WorkbenchSession
 from japanese_anki.workbench import server as workbench_server
 from japanese_anki.workbench.finish import (
     AudioExamplesSubmission,
@@ -702,6 +704,35 @@ def test_finish_page_previews_exact_cards_and_routes_the_bound_full_build(
         )
 
 
+def test_paid_example_audio_button_names_its_exact_cost_bearing_call(
+    tmp_path: Path,
+) -> None:
+    session, old_finish_url, _promoted_ids = _promoted_finish(tmp_path)
+    receipt_id = old_finish_url.rsplit("/", 1)[-1]
+    config_path = tmp_path / "janki.toml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + '\n[tts]\nsentence_provider = "openai"\n'
+        + 'openai_model = "gpt-w6-audio"\n',
+        encoding="utf-8",
+    )
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    finish_url = f"/{session.token}/finish/{receipt_id}"
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", finish_url)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert status == 200
+    assert (
+        b"Create example sentence audio for table.pdf with OpenAI "
+        b"gpt-w6-audio \xe2\x80\x94 paid network call"
+        in page
+    )
+
+
 def test_finish_audio_posts_bind_the_scope_and_report_partial_transaction_truth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -843,6 +874,8 @@ def test_finish_audio_posts_bind_the_scope_and_report_partial_transaction_truth(
     assert b"published canonical media" in example_body
     assert b"did not commit canonical audio ledger" in example_body
     assert b"pending_audio" in example_body
+    for heading in (b"What happened", b"What changed", b"Money", b"What to do next"):
+        assert heading in example_body
     assert paid_status == 409
     assert b"paid provider call may have been billed" in paid_body
     assert b"required no paid provider call" not in paid_body
@@ -957,6 +990,80 @@ def test_stale_finish_scope_refuses_before_jpdb_lookup(
     assert refused == 409
     assert b"Nothing was looked up" in body
     assert constructed == []
+
+
+def test_missing_jpdb_key_names_the_no_contact_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, finish_url, _promoted_ids = _promoted_finish(tmp_path)
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+
+    def unexpected_client(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("missing credentials must refuse before client setup")
+
+    monkeypatch.setattr(jpdb, "JpdbClient", unexpected_client)
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", finish_url)
+        assert status == 200
+        refused, _headers, body = _post_finish(
+            server,
+            finish_url,
+            _form(page, "dictionary-plan"),
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    text = body.decode("utf-8")
+    assert refused == 409
+    assert "JPDB_API_KEY is not set" in text
+    assert "No dictionary lookup ran and no repository file was changed" in text
+    assert "jpdb was not contacted" in text
+    assert "Set JPDB_API_KEY" in text
+
+
+def test_jpdb_key_preflight_runs_before_client_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, finish_url, _promoted_ids = _promoted_finish(tmp_path)
+    dictionary = FakeJpdb(
+        {
+            "走る": [1, 11, "走る", "はしる", ["LHLL"], 101, ["vi", "v5r"]],
+            "食べる": [2, 22, "食べる", "たべる", ["LHH"], 202, ["vt", "v1"]],
+            "飲む": [3, 33, "飲む", "のむ", ["LH"], 303, ["vt", "v5m"]],
+        }
+    )
+    events: list[str] = []
+
+    def preflight() -> str:
+        events.append("key preflight")
+        return "test-key"
+
+    def construct(key: str):
+        assert key == "test-key"
+        events.append("client construction")
+        return client_for(dictionary)
+
+    monkeypatch.setattr(jpdb, "api_key_from_env", preflight)
+    monkeypatch.setattr(jpdb, "JpdbClient", construct)
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", finish_url)
+        assert status == 200
+        planned, _headers, _body = _post_finish(
+            server,
+            finish_url,
+            _form(page, "dictionary-plan"),
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert planned == 200
+    assert events == ["key preflight", "client construction"]
 
 
 def test_repository_change_during_jpdb_refuses_without_capability_or_write(

@@ -238,7 +238,7 @@ def _deck_configuration_snapshot(
     if current != paths:
         raise FinishBuildError(
             "[finish-build-decks-stale] the configured deck-file set changed "
-            "while it was being read; reload the finish page"
+            "while it was being read; retry from the durable finish receipt"
         )
     return paths, digest.hexdigest()
 
@@ -248,27 +248,27 @@ def _assert_scope_inputs_current(config: ProjectConfig, scope: FinishScope) -> N
     if scope.canonical_path != canonical:
         raise FinishBuildError(
             "[finish-build-canonical-changed] the receipt names a different "
-            "canonical collection; reload the finish page"
+            "canonical collection; retry from the durable finish receipt"
         )
     current_canonical = records_revision_fingerprint(records_revision(canonical))
     if current_canonical != scope.canonical_revision:
         raise FinishBuildError(
             "[finish-build-canonical-stale] the vocabulary collection changed "
-            "after the finish scope was read; reload it"
+            "after the finish scope was read; retry from the durable finish receipt"
         )
 
     paths, revision = _deck_configuration_snapshot(config)
     if revision != scope.deck_configuration_revision:
         raise FinishBuildError(
             "[finish-build-decks-stale] deck configuration changed after the "
-            "finish scope was read; reload it"
+            "finish scope was read; retry from the durable finish receipt"
         )
     configured = set(paths)
     for group in scope.owner_groups:
         if group.deck_path.resolve() not in configured:
             raise FinishBuildError(
                 f"[finish-build-owner-missing] owner deck {group.stem!r} is no "
-                "longer configured; reload the finish page"
+                "longer configured; retry from the durable finish receipt"
             )
 
 
@@ -299,7 +299,8 @@ def _owner_inputs_locked(
             if current_sources != initial_sources:
                 raise FinishBuildError(
                     "[finish-build-source-stale] an owner deck changed its record "
-                    "source while the build was being locked; reload it"
+                    "source while the build was being locked; retry from the "
+                    "durable finish receipt"
                 )
             _assert_scope_inputs_current(config, scope)
             yield
@@ -451,7 +452,7 @@ def execute_finish_build(
         if scope.fingerprint != expected_scope_fingerprint:
             raise FinishBuildError(
                 "[finish-build-scope-stale] the promoted-card scope changed "
-                "after this page was rendered; reload it"
+                "after it was planned; retry from the durable finish receipt"
             )
 
         with _owner_inputs_locked(config, scope):
@@ -459,7 +460,7 @@ def execute_finish_build(
             if plan.fingerprint != expected_plan_fingerprint:
                 raise FinishBuildError(
                     "[finish-build-plan-stale] the owner deck build changed "
-                    "after this page was rendered; reload it"
+                    "after it was planned; retry from the durable finish receipt"
                 )
 
             book = ledger.load(config.ledger_file)

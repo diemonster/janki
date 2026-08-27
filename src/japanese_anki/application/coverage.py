@@ -16,13 +16,12 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from japanese_anki import coverage, jpdb, operations, promote, prompts, staging
+from japanese_anki import claude_client, coverage, jpdb, operations, promote, prompts, staging
 from japanese_anki.application.extraction import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
     ANSWER_UNAVAILABLE,
     FORGOTTEN,
-    OUTCOME_UNKNOWN,
     DispatchFailure,
     capture_hook,
     classify_dispatch_failure,
@@ -55,17 +54,25 @@ class CoverageApplicationError(JankiError):
 
 
 class CoverageRunError(CoverageApplicationError):
-    """A dispatched completeness check did not become an approval."""
+    """A coverage transaction stopped after its one-use action was consumed."""
 
     def __init__(
         self,
         message: str,
         *,
         operation_id: str,
-        failure: DispatchFailure,
+        failure: DispatchFailure | None,
+        provider_dispatched: bool,
+        operation_write: Literal["absent", "present", "unknown"],
+        operation_state: str | None,
+        approval_write: Literal["not_written", "written", "unknown"],
     ) -> None:
         self.operation_id = operation_id
         self.failure = failure
+        self.provider_dispatched = provider_dispatched
+        self.operation_write = operation_write
+        self.operation_state = operation_state
+        self.approval_write = approval_write
         super().__init__(message)
 
 
@@ -459,6 +466,26 @@ def _failure_message(
     return f"Coverage check for {source} failed: {exc} {note} Operation {operation_id}."
 
 
+def _operation_write_state(
+    config: ProjectConfig, operation_id: str
+) -> Literal["absent", "present", "unknown"]:
+    """Conservatively classify a journal write whose caller saw an error."""
+    try:
+        current = operations.OperationJournal.load(config.operations_file)
+    except JankiError:
+        return "unknown"
+    return "present" if operation_id in current.operations else "absent"
+
+
+def _operation_state(config: ProjectConfig, operation_id: str) -> str | None:
+    try:
+        current = operations.OperationJournal.load(config.operations_file)
+    except JankiError:
+        return None
+    entry = current.operations.get(operation_id)
+    return entry.state if entry is not None else None
+
+
 def _require_payable_preflight(
     config: ProjectConfig,
     decision: CoverageDecision,
@@ -566,27 +593,57 @@ def run_model_coverage(
         reading_client=reading_client,
         skip_reading_check=skip_reading_check,
     )
+    paid_client = client if client is not None else claude_client.prepare_paid_client()
 
     operations.prepare_artifact_store(config.operations_file)
     prepare_bound_directory(fresh.staging_path.parent)
     journal = operations.OperationJournal.load(config.operations_file)
     operation_id = str(uuid.uuid4())
-    journal.authorize(
-        operation_id,
-        kind="coverage",
-        source_file=fresh.source_file,
-        source_sha256=fresh.source_sha256,
-        request_fp=fresh.request_fingerprint,
-        model=fresh.model,
-    )
-    journal.advance(operation_id, "dispatching")
+    try:
+        journal.authorize(
+            operation_id,
+            kind="coverage",
+            source_file=fresh.source_file,
+            source_sha256=fresh.source_sha256,
+            request_fp=fresh.request_fingerprint,
+            model=fresh.model,
+        )
+    except Exception as exc:  # noqa: BLE001 - durable write may have landed
+        operation_write = _operation_write_state(config, operation_id)
+        raise CoverageRunError(
+            f"Coverage check for {fresh.source_file} could not durably record "
+            f"its authority: {exc} Inspect 'janki operations' before authorizing "
+            "another paid call.",
+            operation_id=operation_id,
+            failure=None,
+            provider_dispatched=False,
+            operation_write=operation_write,
+            operation_state=_operation_state(config, operation_id),
+            approval_write="not_written",
+        ) from exc
+    try:
+        journal.advance(operation_id, "dispatching")
+    except Exception as exc:  # noqa: BLE001 - durable write may have landed
+        operation_write = _operation_write_state(config, operation_id)
+        raise CoverageRunError(
+            f"Coverage check for {fresh.source_file} could not durably record "
+            f"its dispatch boundary: {exc} Inspect operation {operation_id} with "
+            "'janki operations' before authorizing another paid call.",
+            operation_id=operation_id,
+            failure=None,
+            provider_dispatched=False,
+            operation_write=operation_write,
+            operation_state=_operation_state(config, operation_id),
+            approval_write="not_written",
+        ) from exc
+    approval_write: Literal["not_written", "written", "unknown"] = "not_written"
     try:
         verdict = coverage.review_coverage(
             fresh.prepared,
             dict(fresh.block or {}),
             model=fresh.model,
             instructions=fresh.instructions,
-            client=client,
+            client=paid_client,
             capture=capture_hook(config, journal, operation_id),
         )
         settle_dispatch(config, journal, operation_id, verdict)
@@ -607,14 +664,22 @@ def run_model_coverage(
             reason=reason,
         )
         with exclusive_path_lock(fresh.staging_path):
-            journal.commit_result(
-                operation_id,
-                lambda: staging.record_coverage_approval_under_lock(
+            def persist_approval() -> None:
+                nonlocal approval_write
+                # A writer error may happen before or after publication. Only
+                # a normal return proves the exact approval is durable.
+                approval_write = "unknown"
+                staging.record_coverage_approval_under_lock(
                     fresh.staging_path,
                     payload,
                     replace_existing=fresh.replace_existing,
                     expected_revision=fresh.staging_revision,
-                ),
+                )
+                approval_write = "written"
+
+            journal.commit_result(
+                operation_id,
+                persist_approval,
             )
     except Exception as exc:  # noqa: BLE001 - classify every failure after dispatch
         try:
@@ -622,23 +687,26 @@ def run_model_coverage(
                 config, journal, operation_id, exc
             )
         except JankiError as journal_error:
-            failure = DispatchFailure(
-                operation_id=operation_id,
-                outcome=OUTCOME_UNKNOWN,
-                money_may_have_been_spent=True,
-            )
             raise CoverageRunError(
                 f"Coverage check for {fresh.source_file} failed after dispatch: "
                 f"{exc} Janki could not settle operation {operation_id}: "
                 f"{journal_error}. This call may have been billed; do not retry "
                 "until you inspect janki operations.",
                 operation_id=operation_id,
-                failure=failure,
+                failure=None,
+                provider_dispatched=True,
+                operation_write=_operation_write_state(config, operation_id),
+                operation_state=_operation_state(config, operation_id),
+                approval_write=approval_write,
             ) from exc
         raise CoverageRunError(
             _failure_message(fresh.source_file, operation_id, exc, failure),
             operation_id=operation_id,
             failure=failure,
+            provider_dispatched=True,
+            operation_write=_operation_write_state(config, operation_id),
+            operation_state=_operation_state(config, operation_id),
+            approval_write=approval_write,
         ) from exc
     return CoverageRunResult(
         state="approved",

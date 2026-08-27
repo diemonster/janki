@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from threading import Event, Thread, current_thread
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -685,12 +686,57 @@ def test_promote_lands_records_the_archive_and_the_ledger(
     assert "word:話す:はなす" in stored(root)
     # The staging file is finished, so it is gone and archived.
     assert not path.exists()
-    archived, _ = read_staging(root / "staging" / "done" / "lesson.pdf.yaml")
+    archive_path = root / "staging" / "done" / "lesson.pdf.yaml"
+    archived, archived_meta = read_staging(archive_path)
     assert [item.id for item in archived] == ["word:話す:はなす"]
+    [batch] = promotion_application.promotion_batches(
+        archived_meta,
+        archived=archived,
+        archive_file=archive_path.name,
+    )
     book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
     entry = book["records"]["word:話す:はなす"]
     assert [source["type"] for source in entry["sources"]] == ["extract"]
-    assert "Promoted 1 record(s)" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Promoted 1 record(s)" in output
+    assert f"Finish receipt: {batch.receipt_id}" in output
+
+
+def test_cli_archive_retry_prints_its_finish_receipt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    receipt_id = "a" * 64
+    result = SimpleNamespace(
+        state="archive_retry",
+        staging_path=tmp_path / "staging" / "lesson.yaml",
+        archive_path=tmp_path / "staging" / "done" / "lesson.yaml",
+        empty_live_retry=False,
+        removed=1,
+        receipt_id=receipt_id,
+    )
+
+    assert cli._print_promotion_execution(result) == 0
+
+    assert f"Finish receipt: {receipt_id}" in capsys.readouterr().out
+
+
+def test_cli_retry_that_lands_nothing_prints_its_finish_receipt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    receipt_id = "b" * 64
+    result = SimpleNamespace(
+        state="nothing_lands",
+        staging_path=tmp_path / "staging" / "lesson.yaml",
+        archive_path=tmp_path / "staging" / "done" / "lesson.yaml",
+        retry_records=("word:話す:はなす",),
+        removed=1,
+        held=(),
+        receipt_id=receipt_id,
+    )
+
+    assert cli._print_promotion_execution(result) == 0
+
+    assert f"Finish receipt: {receipt_id}" in capsys.readouterr().out
 
 
 def test_the_cli_calls_the_shared_promotion_writer(

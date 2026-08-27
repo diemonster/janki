@@ -8,11 +8,67 @@ The repository is the source of truth. Anki packages are reproducible outputs:
 records live in git, and rebuilding a deck updates the notes in Anki rather than
 duplicating them.
 
+## Start with the workbench
+
+After setup, open the local workbench:
+
 ```bash
-janki extract ~/Downloads/lesson-3.pdf   # names the file and model, asks first
-janki promote data/staging/lesson-3.pdf.yaml
-janki refresh                            # enrich, voice, build what is new
+janki workbench
 ```
+
+The address it prints is for this computer and this workbench session. Quick
+start and provider setup opens on the first dashboard view of each workbench
+session; collapse it when you are done and reopen its summary whenever you need
+it. The ordinary path stays in the browser:
+
+```text
+ PDF or photo
+      │
+      ▼
+ Save on this computer ──► Read with the named model ──► Check the cards
+      no upload              direct paid action             your decisions
+                                                               │
+                                                               ▼
+ Anki ◄── Build the decks ◄── Add facts and audio ◄── Choose a study deck
+```
+
+1. Add a PDF or photo. Saving it puts a durable copy in this project; it does
+   not send the source anywhere.
+2. Open the source and choose the separate reading action. Before anything is
+   sent, the page names the file, provider, model, purpose, and paid API call.
+3. Check each proposed card against the page. Edit or remove it, approve the
+   Japanese examples you actually read, and review any grammar the lesson
+   teaches.
+4. Choose the one study deck that should teach each new word, creating it from
+   the dashboard first if needed. If janki held a card for a reading decision,
+   settle that before adding it.
+5. For a vocabulary table, confirm that the promised rows were all accounted
+   for. You can compare the source yourself or explicitly buy a separate model
+   completeness check; neither choice judges whether the Japanese is good.
+6. Add the cards, then follow the finish page through dictionary facts, kanji,
+   word and example audio, preview, and the final `.apkg` files. Sync Anki
+   first; import with **Merge Notetypes** ticked.
+
+A few labels matter:
+
+- **Meaning in this lesson** is the sense the source taught. A dictionary may
+  add facts about the word, but it does not replace that lesson meaning.
+- **Polite** and **casual** are two complete example slots, not translations of
+  one another. Source wording with a different register stays visible as source
+  context instead of being squeezed into either slot.
+- A **reading hold** protects the card's lasting identity. Janki leaves the
+  proposal waiting when a reading is blank or contradicted; it does not guess.
+- **Grammar review** means you read the lesson's proposed pattern set. It is a
+  separate decision from accepting example sentences and makes no new model
+  call.
+- **Coverage** asks whether every promised source unit was represented, not
+  whether its language is correct.
+- **Study-deck ownership** gives each word one durable learning destination.
+  Seeing the same word in another source adds history rather than duplicating
+  the card or silently moving it.
+
+For automation, batch work, and interrupted-call recovery, use the
+[CLI reference](#commands) and [full importing guide](docs/IMPORTING.md).
 
 ## Setup
 
@@ -35,10 +91,16 @@ Installing without bootstrap, add the AI extra for the two card-writing paths
 (`promote --accept-coverage`): `pip install -e '.[ai]'`. The `patterns` command
 only lists and reviews results already emitted by `extract`.
 
-Anthropic-backed model calls use your Anthropic key. Codex remains a supported
-provider for immediate `enrich --ai`, and needs `codex login` once — only if
-you set
-`enrich_provider = "codex"`.
+The first-run guide in the workbench keeps this distinction visible:
+
+| Service | What it does | Connection and cost |
+| --- | --- | --- |
+| Anthropic Claude | Reads PDFs and photos, checks a table's completeness when asked, and is the default `enrich --ai` provider for bare-word cards | Networked, paid API. `ANTHROPIC_API_KEY` is required. Claude Max is a separate subscription. |
+| jpdb | Supplies dictionary facts and witnesses readings | Networked account API, not a model call. `JPDB_API_KEY` is required. |
+| KANJIDIC / KanjiVG | Supplies kanji facts and stroke diagrams | Networked reference sources; no account or API key. |
+| VOICEVOX | Speaks words and, by default, examples | Local service on your computer; no API key or per-call bill. Voice terms still apply. |
+| OpenAI | Optionally speaks example sentences | Networked, paid API. `OPENAI_API_KEY` is required; ChatGPT billing is separate. |
+| Codex | Alternative `enrich --ai` provider for bare-word cards | Networked; run `codex login` and select `enrich_provider = "codex"`. It is not used to read a PDF or photo. |
 
 Provider credentials are environment variables:
 
@@ -52,8 +114,13 @@ export OPENAI_API_KEY='...'      # billed example-sentence audio when
                                  # sentence_provider = "openai"
 ```
 
-They are read from the environment only — never from `janki.toml`, never from a
-`.env` file, and none is ever written into the repository.
+They are read from the server process's environment only — never from
+`janki.toml`, a `.env` file, a browser form or browser storage. They are never
+put in repository files, URLs, logs, or error pages. A missing key stops the
+action before the private source or paid request is sent; enter the key in your
+shell environment and try the named action again. An OS credential-store setup
+and a double-clickable launcher are not part of v1; the supported path is the
+shell environment plus `janki workbench`.
 
 ## Getting material in
 
@@ -63,100 +130,38 @@ an import fills empty fields and reports conflicts instead of resolving them.
 
 ### A PDF or a photo
 
-```bash
-janki extract ~/Downloads/lesson-3.pdf ~/Desktop/IMG_0421.HEIC
-```
+Use the [workbench path above](#start-with-the-workbench) for PDF, JPEG, PNG and
+HEIC sources. One model pass proposes complete cards and any grammar or usage
+patterns the source teaches. Nothing reaches the collection until you review
+the result, choose its study decks, and use the separate add action. The finish
+page then keeps its dictionary, kanji, audio and preview work limited to the
+cards just added, while each final package contains its complete current deck.
 
-`extract` is the intake command that sends **your own documents** to a paid
-model, so it names the files and the model and asks before the first call. Add
-`--yes` to consent in advance; without it an unattended run refuses rather
-than sending, because there is nobody there to ask. Later,
-`promote --accept-coverage` sends the preserved source again only when you
-explicitly choose that model-backed coverage gate.
+The exact source handling, review contract, and scripted flags are in
+[From a photo or a PDF to cards](docs/IMPORTING.md#from-a-photo-or-a-pdf-to-cards).
 
-PDF, JPEG, PNG and HEIC. A file outside `data/inbox/` is copied into
-`data/inbox/scans/`; a file already in the durable inbox stays where it is. That
-durable file, not the path you typed, is what every record cites. Each input
-gets one staging file. One source call returns the complete proposed cards —
-English glosses, two annotated examples, a usage note, part of speech, source
-page and line — and the grammar or usage patterns the document teaches. An
-everyday polite or casual source sentence can be preserved and annotated;
-formal or literary source text stays verbatim in `context`, with its register
-explained in the usage note, while the two card examples keep their actual
-polite/casual slots. A table row with no sentence gets beginner-friendly
-examples from the same answer. The patterns also go to `data/patterns.json` as
-unreviewed proposals, with a recoverable copy beside the staged cards.
-
-Current schema-v5 runs require every selected candidate to arrive as a complete
-card: at least one nonblank meaning, exactly one complete polite and one
-complete casual example, plus reviewable source-kind evidence. A structurally
-incomplete response is refused before either staging or patterns are written;
-`enrich --ai` shares the complete value fields but keeps its returned example
-list cardinality flexible because it may preserve one reviewed example and fill
-only the other slot.
-
-Schema-v4 and newer runs also write fingerprinted `candidate_accounting` beside
-the editable rows. It binds the parsed, canonical, unusable, and duplicate
-candidate counts into coverage v2. If several parsed proposals mint one stable
-ID, janki keeps one canonical row and preserves every proposal in that
-collision group, with its original response index, for comparison during
-review. Do not edit or backfill this machine-owned block; deleting or correcting
-the ordinary `records` rows is still the human review workflow.
-
-Two different durable files cannot use one basename because staging and pattern
-review use that basename as their key. Letter case does not make the name
-unique. Janki refuses the collision before it calls a model; give each source a
-unique name before you put it in the inbox.
-
-Nothing reaches your collection yet. Open the staging file, fix what is wrong,
-and delete what is not worth a card. For the final human approvals, open the
-workbench:
+For CLI automation, the corresponding route begins:
 
 ```bash
-janki workbench
+janki extract ~/Downloads/lesson-3.pdf   # names the source, model and charge
+janki validate data/staging/lesson-3.pdf.yaml
+janki promote data/staging/lesson-3.pdf.yaml  # receipt prints; ledger failure still needs recovery
+janki enrich --jpdb 'word:話す:はなす'
+janki kanji 'word:話す:はなす'
+janki audio --words --examples 'word:話す:はなす'
+janki preview data/decks/verbs.yaml
+janki build --receipt RECEIPT
 ```
 
-It lists every source and what each is waiting for, and opening one shows its
-proposed cards beside their source evidence. The address it prints carries
-that session's key: the page is served only to this computer, and only to a
-request that presents the key. Adding a source sends it nowhere; a separate
-consent page names the source, model and API charge before an explicit button
-can start extraction. The workbench loads no remote asset. Checking a card
-immediately binds approval to the exact Japanese examples displayed; checking
-the pattern set marks that complete current set reviewed. Unchecked items are
-unchanged, and approval never edits content or promotes records; editing and
-removing proposals are separate, named actions. Meanings and other card fields
-are source-scoped display context, not part of the example approval. If either
-underlying file changes while the page is open, submission refuses so an older
-page cannot approve newer text.
-
-The manual equivalent for a card is to type
-`example_authority: staging-review` in that extract row's
-`source.raw_fields`. Promotion replaces that manual sentinel with the same
-sentence fingerprints the panel writes directly. Merely leaving a model
-proposal in the file is not acceptance. Then:
-
-```bash
-janki validate data/staging/lesson-3.pdf.yaml   # what is still incomplete
-janki promote data/staging/lesson-3.pdf.yaml    # merge the survivors in
-```
-
-Promote checks every reading against jpdb before writing, and holds back the
-ones no dictionary entry recognises.
-
-Paid answers remain attributable. Extraction records the source hash, mode,
-provider, model, schema version, separate hashes of the style/task/data/wire-
-schema channels, and one fingerprint of the complete provider-normalized
-request; its pattern proposal carries the same provenance. Bare-word AI writes
-the provider and complete-request fingerprint to the ledger or staging
-metadata. When a large staged AI run may
-replace an existing field, the staging file also binds that permission to the
-record id, field name, and exact old value. A concurrent edit makes the whole
-staged replacement stale instead of letting an older proposal overwrite it.
-Promotion carries extraction accounting into the done archive unchanged. If a
-process wrote the archive but did not prune the live review, the exact retry is
-idempotent; a concurrent replacement or divergent same-run row is kept and
-refused instead of being deleted or appended twice.
+`extract --yes` records advance consent for an unattended call; without it a
+non-interactive run sends nothing. `promote --accept-coverage` is a second,
+separately chosen paid source read. If either journaled source call is
+interrupted, do not send it again: run `janki operations`, follow the exact
+`--show-reply`, `--end` or `--forget` action it prints, and preserve
+`data/operations.json` and `data/.pending/`. Interrupted paid audio is resumed
+by rerunning the exact matching `janki audio` selection. See
+[docs/QUALITY.md](docs/QUALITY.md) for the recovery guarantees and the current
+`enrich --ai` journaling gap.
 
 ### A grammar handout
 
@@ -241,19 +246,20 @@ own collection is the newer side. Details and the measurements behind them:
 | Command | What it does |
 | --- | --- |
 | `janki extract FILE...` | Read each PDF or photo once into rich staged cards and unreviewed patterns |
-| `janki workbench` | Add and extract sources, inspect their state, and review staged cards and grammar locally |
+| `janki workbench` | Take a source through review, deck choice, adding, scoped facts/audio/preview, and a complete-deck build in the local browser |
 | `janki patterns [--review DOCUMENT]` | List or review patterns already emitted by `extract` |
 | `janki import-shirabe FILE.csv` | Import a Shirabe Jisho export |
 | `janki import-jpdb --deck NAME` | Import a jpdb deck (`--all-decks` for every one) |
 | `janki import-jpdb-reviews FILE` | Tag records jpdb already drills |
 | `janki repair PATH` | Show exact changes from registered safe repairs |
 | `janki promote FILE.yaml` | Move a reviewed staging file into the collection |
-| `janki enrich --jpdb` | Fill fields from the dictionary |
+| `janki enrich --jpdb [ID...]` | Fill dictionary fields for selected records, or every record when IDs are omitted |
 | `janki enrich --ai` | Propose English glosses, complete the polite/casual example slots, and add a usage note in one bare-word call |
-| `janki kanji` | Look up stroke order and on/kun readings |
-| `janki audio --words --examples` | Voice the words and the sentences |
+| `janki kanji [ID...]` | Add missing kanji reference for selected records, or the collection when IDs are omitted |
+| `janki audio --words --examples [ID...]` | Voice selected records, or the collection when IDs are omitted |
 | `janki validate [PATH]` | Check records, decks, or a staging file |
 | `janki build [DECK]` | Build one deck, or `--all` |
+| `janki build --receipt ID` | Resume the workbench's exact finish batch and build every complete owner deck it touches |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
 | `janki operations` | Paid model calls that block spending or need cleanup. `--show-reply ID` writes an exact still-bound reply to stdout without changing it; `--end ID` settles one that will never finish; `--forget ID` records the final decision, unblocks spending, and retires still-bound exact recovery names without adopting a replaced pending namespace |
@@ -263,7 +269,12 @@ non-zero rather than reporting a refresh that enriched nothing |
 
 Every command takes `--help`. `janki build` (and so `refresh --deck`) accepts a
 bare deck name as well as a path — `janki build verbs` finds
-`data/decks/verbs.yaml`. `validate`, `preview` and `migrate-inline` want the path.
+`data/decks/verbs.yaml`. A CLI promotion that lands records writes and prints
+its opaque finish receipt for `janki build --receipt ID`. The receipt can be
+durable even when the command then exits non-zero because the ledger save did
+not land; in that case, follow the printed `janki status --rebuild` recovery
+before treating the promotion as ready to finish. `validate`, `preview` and
+`migrate-inline` want the path.
 
 `refresh` runs four of these. Everything else — the importers, `extract`,
 `patterns`, `promote`, `kanji`, `validate`, `preview` and `status` — is yours to

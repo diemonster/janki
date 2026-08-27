@@ -32,23 +32,28 @@ import hashlib
 import json
 import os
 import secrets
+import shlex
 import stat
 import sys
+import threading
 import webbrowser
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from email import policy as email_policy
 from email.parser import BytesParser
+from enum import Enum, auto
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import extract, inputs, jpdb, ledger, operations, staging
+from japanese_anki import claude_client, extract, inputs, jpdb, ledger, operations, staging
+from japanese_anki import status as status_module
 from japanese_anki.application import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
     ANSWER_UNAVAILABLE,
     FORGOTTEN,
     CoverageDecision,
+    DispatchFailure,
     ExtractionCompletionError,
     ExtractionConsent,
     SourceJourney,
@@ -148,8 +153,10 @@ from japanese_anki.workbench.finish import (
     parse_finish_form,
 )
 from japanese_anki.workbench.render import (
+    FAILURE_STYLE_SOURCE,
     INTAKE_SCRIPT_SOURCE,
     STYLE,
+    FailureView,
     render_addition,
     render_card_check,
     render_consent,
@@ -159,6 +166,7 @@ from japanese_anki.workbench.render import (
     render_extraction_progress_start,
     render_extraction_progress_step,
     render_extraction_success,
+    render_failure,
     render_finish,
     render_reidentify,
     render_source,
@@ -218,6 +226,21 @@ class _StudyDeckSubmission:
     production: bool
     reading: bool
     plan_fingerprint: str | None
+
+
+class _ErrorTruth(Enum):
+    """Facts a generic controller error is allowed to claim.
+
+    This is explicit at the call site. Inferring transaction or billing truth
+    from exception prose made a truthful sentence depend on punctuation, while
+    inferring it from HTTP 409 conflated a stale local compare-and-swap with a
+    dispatched paid request.
+    """
+
+    REQUEST_REFUSED = auto()
+    LOCAL_NO_WRITE = auto()
+    LOCAL_WRITE_UNKNOWN = auto()
+    UNKNOWN = auto()
 
 
 def _study_deck_plan_fingerprint(plan: StudyDeckCreationPlan) -> str:
@@ -527,6 +550,15 @@ class WorkbenchSession:
     dictionary_actions: DictionaryActions = field(
         default_factory=DictionaryActions, repr=False, compare=False
     )
+    #: UI state only: the guide opens on the first dashboard GET in this
+    #: server session, then remains available as an ordinary collapsible
+    #: ``details`` element. The lock makes two simultaneous first GETs agree.
+    _dashboard_opened: bool = field(
+        default=False, init=False, repr=False, compare=False
+    )
+    _dashboard_lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def open(cls, config: ProjectConfig) -> WorkbenchSession:
@@ -538,6 +570,74 @@ class WorkbenchSession:
 
     def journeys(self) -> tuple[list[SourceJourney], list[str]]:
         return source_journeys(self.config)
+
+    def take_dashboard_tour_open(self) -> bool:
+        """Open the guide once per server session, independent of corpus state."""
+        with self._dashboard_lock:
+            first_open = not self._dashboard_opened
+            object.__setattr__(self, "_dashboard_opened", True)
+        return first_open
+
+    def operation_recovery(self) -> tuple[str, ...]:
+        """Current paid-operation and audio notices with their CLI routes."""
+        notices: list[str] = []
+        try:
+            journal = operations.OperationJournal.load(self.config.operations_file)
+            tracked = journal.tracked()
+        except JankiError as exc:
+            notices.extend(
+                (
+                    "The paid-operation journal could not be read. Repository "
+                    "changes and billing state are unknown until it is repaired: "
+                    + str(exc),
+                    "Repair the journal path, then run 'janki operations' before "
+                    "starting another paid action.",
+                )
+            )
+        else:
+            try:
+                notices.extend(
+                    status_module.format_operations(
+                        tracked,
+                        journal_path=self.config.operations_file,
+                        noun="still needing recovery",
+                    )
+                    if tracked
+                    else ()
+                )
+            except JankiError as exc:
+                notices.extend(
+                    (
+                        "The paid-operation entries could not be formatted safely: "
+                        + str(exc),
+                        "Run 'janki operations' in a terminal before deciding what "
+                        "to do with those entries.",
+                    )
+                )
+
+        try:
+            pending_audio = len(ledger.load(self.config.ledger_file).pending_audio)
+        except JankiError as exc:
+            notices.extend(
+                (
+                    "The audio-recovery ledger could not be read: " + str(exc),
+                    "Run 'janki status' for the ledger's repair guidance before "
+                    "changing paid audio recovery.",
+                )
+            )
+        else:
+            if pending_audio:
+                clip = "clip" if pending_audio == 1 else "clips"
+                notices.extend(
+                    (
+                        f"Pending audio recovery: {pending_audio} exact staged "
+                        f"{clip}.",
+                        "Run 'janki status' for the exact matching 'janki audio' "
+                        "recovery command; do not start fresh synthesis for "
+                        "those clips.",
+                    )
+                )
+        return tuple(notices)
 
     def detail(self, source: str):
         return source_detail(self.config, source)
@@ -683,8 +783,8 @@ class _ExtractionProgress:
     def success(self, outcome: object) -> None:
         self._write(render_extraction_success(self.name, outcome, token=self.token))
 
-    def failure(self, message: str, note: str) -> None:
-        self._write(render_extraction_failure(message, note))
+    def failure(self, failure: FailureView) -> None:
+        self._write(render_extraction_failure(failure))
 
 
 def _completion_refusal_note(config: ProjectConfig, operation_id: str) -> str:
@@ -747,15 +847,207 @@ def _completion_error_note(
     )
 
 
+def _exception_text(exc: BaseException) -> str:
+    """Never let an empty provider exception break the failure page itself."""
+    return str(exc).strip() or f"{type(exc).__name__} failed without details."
+
+
+def _paid_dispatch_failure_view(
+    exc: BaseException,
+    failure: DispatchFailure,
+    *,
+    unchanged: str,
+) -> FailureView:
+    """Render the exact journal classification shared by paid source calls."""
+    operation_id = failure.operation_id
+    outcome = failure.outcome
+    changed = unchanged
+    if outcome == ANSWER_SAVED:
+        changed += " The exact provider answer is saved in paid-operation recovery."
+        next_step = (
+            f"Read it with 'janki operations --show-reply {operation_id}', then "
+            "decide whether to keep or forget that recovery."
+        )
+    elif outcome == ANSWER_EMPTY:
+        changed += " The saved provider reply contains no answer."
+        next_step = (
+            f"Inspect its exact bytes with 'janki operations --show-reply "
+            f"{operation_id}'."
+        )
+    elif outcome == ANSWER_UNAVAILABLE:
+        changed += (
+            " The reply is recorded as captured, but its exact recovery bytes "
+            "are unavailable."
+        )
+        next_step = (
+            f"Inspect operation {operation_id} with 'janki operations' before "
+            "accepting that loss or attempting another call."
+        )
+    elif outcome == FORGOTTEN:
+        if failure.cleanup_pending:
+            changed += (
+                " Its forget decision is recorded; exact recovery-data cleanup "
+                "remains."
+            )
+            next_step = (
+                f"Finish cleanup with 'janki operations --forget {operation_id}'."
+            )
+        else:
+            changed += " It was already forgotten, so no recovery answer remains."
+            next_step = (
+                "Use your browser's Back button, reload the source, and inspect "
+                "its current state before authorizing any fresh paid call."
+            )
+    else:
+        changed += " The journal records an unsettled provider outcome."
+        next_step = (
+            f"Do not retry. Inspect operation {operation_id} with "
+            "'janki operations' and settle it first."
+        )
+    return FailureView(
+        happened=_exception_text(exc),
+        changed=changed,
+        money="The provider request was dispatched and may already have been billed.",
+        next_step=next_step,
+        technical_detail=f"Operation {operation_id}",
+    )
+
+
 class _WorkbenchHandler(LocalOnlyHandler):
     server: _WorkbenchServer
     error_title = "Workbench error"
     content_security_policy = (
-        "default-src 'none'; style-src 'self'; "
+        f"default-src 'none'; style-src 'self' {FAILURE_STYLE_SOURCE}; "
         f"script-src {INTAKE_SCRIPT_SOURCE}; img-src blob:; frame-src blob:; "
         "object-src 'none'; form-action 'self'; base-uri 'none'; "
         "frame-ancestors 'none'"
     )
+
+    def _failure(self, status: int, failure: FailureView) -> None:
+        """Render one complete refusal without exposing the session token."""
+        self._send(status, render_failure(failure, title=self.error_title))
+
+    def _refusal(self, status: int, message: str, *, next_step: str) -> None:
+        """A request rejected before its action or provider dispatch began."""
+        self._error(
+            status,
+            message,
+            truth=_ErrorTruth.REQUEST_REFUSED,
+            next_step=next_step,
+        )
+
+    def _error(
+        self,
+        status: int,
+        message: str,
+        *,
+        truth: _ErrorTruth | None = None,
+        next_step: str = "",
+    ) -> None:
+        """Give legacy call sites conservative four-part failure truth.
+
+        Only the explicit HTTP request-boundary statuses below prove their
+        action never ran. Every stronger 409 claim is selected explicitly with
+        :class:`_ErrorTruth`; the message is display text, never evidence. A
+        conflict or server failure without that boundary may arrive from a
+        partial write or paid call, so its fallback remains conservative.
+        High-value transactional handlers use :meth:`_failure` directly for
+        sharper answers.
+        """
+        if truth is None:
+            truth = (
+                _ErrorTruth.REQUEST_REFUSED
+                if status
+                in {
+                    400,
+                    401,
+                    403,
+                    404,
+                    405,
+                    408,
+                    411,
+                    413,
+                    414,
+                    415,
+                    431,
+                    501,
+                }
+                else _ErrorTruth.UNKNOWN
+            )
+        request_is_get = getattr(self, "command", "") == "GET"
+
+        if truth is _ErrorTruth.REQUEST_REFUSED:
+            changed = (
+                "This request was refused before its action ran; it did not "
+                "change repository files."
+            )
+            money = "This refused request made no paid provider call."
+            fallback_next = (
+                "Use the exact Workbench address printed when it started, then "
+                "reload the current page."
+                if request_is_get
+                else "Use your browser's Back button rather than reloading this "
+                "POST. Then use the exact Workbench address printed when it "
+                "started and reload the current page."
+            )
+        elif truth is _ErrorTruth.LOCAL_NO_WRITE:
+            changed = (
+                "This action stopped before any repository write; it did "
+                "not change repository files."
+            )
+            money = "This action made no paid provider call."
+            fallback_next = (
+                "Reload the current source or finish page and retry from its "
+                "fresh controls."
+                if request_is_get
+                else "Use your browser's Back button rather than reloading this "
+                "POST, then reload the current source or finish page and retry "
+                "from its fresh controls."
+            )
+        elif truth is _ErrorTruth.LOCAL_WRITE_UNKNOWN:
+            changed = (
+                "This action cannot safely prove that repository files are "
+                "unchanged. Reload the current page and inspect what is recorded."
+            )
+            money = "This action made no paid provider call."
+            fallback_next = (
+                "Reload the current source or finish page and inspect its state "
+                "before trying the local action again."
+                if request_is_get
+                else "Use your browser's Back button rather than reloading this "
+                "POST, then reload the current source or finish page and inspect "
+                "its state before trying the local action again."
+            )
+        else:
+            changed = (
+                "This refusal cannot safely prove that repository files are "
+                "unchanged. Reload the current source or finish page and inspect "
+                "what is now recorded."
+            )
+            money = (
+                "This refusal cannot safely prove whether a paid provider was "
+                "contacted. Before retrying a cost-bearing action, run 'janki "
+                "operations'; local-only actions carry no API charge."
+            )
+            fallback_next = (
+                "Use the exact Workbench address printed when it started, reload "
+                "the current source or finish page, and check 'janki operations' "
+                "before retrying anything paid."
+                if request_is_get
+                else "Use your browser's Back button rather than reloading this "
+                "POST. Then use the exact Workbench address printed when it "
+                "started, reload the current source or finish page, and check "
+                "'janki operations' before retrying anything paid."
+            )
+        self._failure(
+            status,
+            FailureView(
+                happened=message.strip() or "The action failed without details.",
+                changed=changed,
+                money=money,
+                next_step=next_step or fallback_next,
+            ),
+        )
 
     def _route(self) -> str | None:
         """The path beneath this session's token, or None if it is not ours.
@@ -917,11 +1209,15 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         if route == "/":
             journeys, warnings = self.server.session.journeys()
+            recovery = self.server.session.operation_recovery()
+            tour_open = self.server.session.take_dashboard_tour_open()
             self._send(
                 200,
                 render_dashboard(
                     journeys,
                     warnings=warnings,
+                    recovery=recovery,
+                    tour_open=tour_open,
                     root=self.server.session.config.root,
                     token=self.server.session.token,
                     csrf=self.server.session.csrf_token,
@@ -1073,7 +1369,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 current.record_ids,
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, f"Could not open this finish workflow: {exc}")
+            self._error(
+                409,
+                f"Could not open this finish workflow: {exc}",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
             return
         word_audio_plan = None
         word_audio_error = ""
@@ -1144,7 +1444,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 skip_reading_check=None,
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, f"Could not preview adding this source: {exc}")
+            self._error(
+                409,
+                f"Could not preview adding this source: {exc}",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
             return
         self._render_addition_decision(name, panel, decision)
 
@@ -1172,7 +1476,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 owner_decision = plan_coverage(session.config, panel.staging_path)
                 coverage_preview = project_coverage(owner_decision)
             except JankiError as exc:
-                self._error(409, f"Could not open this coverage decision: {exc}")
+                self._error(
+                    409,
+                    f"Could not open this coverage decision: {exc}",
+                    truth=_ErrorTruth.LOCAL_NO_WRITE,
+                )
                 return
             try:
                 model_decision = plan_model_coverage(
@@ -1253,7 +1561,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 name, data, inbox_root=session.config.scan_inbox
             )
         except JankiError as exc:
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN)
             return
         added = "1" if intake.stored else "0"
         self.send_response(303)
@@ -1451,7 +1759,19 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 expected_plan_fingerprint=submission.plan_fingerprint,
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, f"Could not build this finish batch: {exc}")
+            self._failure(
+                409,
+                FailureView(
+                    happened=f"Could not build this finish batch: {exc}",
+                    changed=(
+                        "No package or export-history write was proven by this "
+                        "attempt. Inspect the output paths before assuming they are "
+                        "unchanged."
+                    ),
+                    money="Building is local and made no paid provider call.",
+                    next_step="Reload this finish page and review the fresh build plan.",
+                ),
+            )
             return
         if execution.state != "complete":
             paths = ", ".join(str(path) for path in execution.package_paths)
@@ -1467,13 +1787,31 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 if execution.ledger_error
                 else ""
             )
-            self._error(
+            self._failure(
                 409,
-                landed
-                + build_note
-                + ledger_note
-                + "Reload the finish page and retry; a successful package is a "
-                "local build artifact and may be rebuilt at the same path.",
+                FailureView(
+                    happened="The complete finish-batch build did not finish.",
+                    changed=(
+                        landed
+                        + (
+                            "No package was proven written. "
+                            if not execution.package_paths
+                            else ""
+                        )
+                        + (
+                            "Export history was recorded for every successful "
+                            "package. "
+                            if execution.ledger_error is None
+                            else "Export history was not proven complete. "
+                        )
+                    ),
+                    money="Building is local and made no paid provider call.",
+                    next_step=(
+                        "Reload the finish page and retry. A successful package is "
+                        "a local artifact and may be rebuilt at the same path."
+                    ),
+                    technical_detail=build_note + ledger_note,
+                ),
             )
             return
         self._redirect(
@@ -1507,7 +1845,25 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 prune=False,
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, f"Could not create this audio: {exc}")
+            self._failure(
+                409,
+                FailureView(
+                    happened=f"Could not create this audio: {exc}",
+                    changed=(
+                        "This refusal could not prove whether record references, "
+                        "media, or the audio ledger changed."
+                    ),
+                    money=(
+                        "This refusal could not prove whether a paid audio provider "
+                        "was contacted."
+                    ),
+                    next_step=(
+                        "Reload this finish page. If it shows saved exact audio, "
+                        "repeat the matching action; otherwise inspect the ledger "
+                        "before retrying paid example audio."
+                    ),
+                ),
+            )
             return
         if not execution.succeeded:
             plan = execution.plan
@@ -1522,42 +1878,55 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 and counts.provider_required > 0
                 and provider.access == "paid-network"
             )
-            details = ["Audio did not finish."]
-            details.append(
-                "A paid provider call may have been billed."
-                if paid_call_possible
-                else "This exact action required no paid provider call."
-            )
+            technical = []
             if execution.stopped_by:
-                details.append(execution.stopped_by)
+                technical.append(execution.stopped_by)
             if execution.prune_error:
-                details.append(execution.prune_error)
+                technical.append(execution.prune_error)
             if execution.ledger_error:
-                details.append(
+                technical.append(
                     f"The canonical audio ledger did not finish: "
                     f"{execution.ledger_error}."
                 )
-            details.append(
+            changed = [
                 "This action wrote its record references."
                 if execution.record_references_written
-                else "This action did not write record references."
-            )
-            details.append(
+                else "This action did not write record references.",
                 "This action published canonical media."
                 if execution.media_published
-                else "This action did not publish canonical media."
-            )
-            details.append(
+                else "This action did not publish canonical media.",
                 "This action committed its canonical audio ledger changes."
                 if execution.ledger_committed
-                else "This action did not commit canonical audio ledger changes."
-            )
+                else "This action did not commit canonical audio ledger changes.",
+            ]
+            flag = "--words" if words else "--examples"
+            ids = " ".join(shlex.quote(record_id) for record_id in scope.record_ids)
             if execution.pending_recovery:
-                details.append(
-                    "Exact recovery is durable in pending_audio; retry this same "
-                    "audio action to finish without rebilling those saved bytes."
+                next_step = (
+                    "Exact recovery is durable in pending_audio. Repeat this same "
+                    "browser action, or run "
+                    f"'janki audio {flag} {ids}', to finish without rebilling "
+                    "the saved exact bytes."
                 )
-            self._error(409, " ".join(details))
+            else:
+                next_step = (
+                    "Reload this finish page and review the fresh audio plan before "
+                    "trying again."
+                )
+            self._failure(
+                409,
+                FailureView(
+                    happened="Audio did not finish.",
+                    changed=" ".join(changed),
+                    money=(
+                        "A paid provider call may have been billed."
+                        if paid_call_possible
+                        else "This exact action required no paid provider call."
+                    ),
+                    next_step=next_step,
+                    technical_detail=" ".join(technical),
+                ),
+            )
             return
         plan = execution.plan
         if plan is None:
@@ -1591,9 +1960,44 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     "This exact finish scope changed after the page was rendered. "
                     "Nothing was looked up; reload the current finish page."
                 )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._refusal(
+                409,
+                _exception_text(exc),
+                next_step=(
+                    "Use your browser's Back button, then reload the current "
+                    "finish page and review its exact card scope."
+                ),
+            )
+            return
+
+        try:
+            api_key = jpdb.api_key_from_env()
+        except JankiError as exc:
+            self._failure(
+                409,
+                FailureView(
+                    happened=_exception_text(exc),
+                    changed=(
+                        "No dictionary lookup ran and no repository file was "
+                        "changed."
+                    ),
+                    money=(
+                        "jpdb was not contacted; no paid model call or API charge "
+                        "was made."
+                    ),
+                    next_step=(
+                        "Set JPDB_API_KEY in the shell that starts janki, use your "
+                        "browser's Back button, then reload this finish page."
+                    ),
+                ),
+            )
+            return
+
+        try:
             decision = plan_dictionary_enrichment(
                 session.config,
-                jpdb.JpdbClient(jpdb.api_key_from_env()),
+                jpdb.JpdbClient(api_key),
                 scope.record_ids,
             )
             fresh = resolve_finish_scope(session.config, receipt_id)
@@ -1608,7 +2012,24 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 else ""
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, str(exc))
+            self._failure(
+                409,
+                FailureView(
+                    happened=_exception_text(exc),
+                    changed=(
+                        "The dictionary preview was not created and no repository "
+                        "file was changed."
+                    ),
+                    money=(
+                        "jpdb may have been contacted, but this action makes no "
+                        "paid model call."
+                    ),
+                    next_step=(
+                        "Use your browser's Back button, check the jpdb setup and "
+                        "repository state named above, then reload the finish page."
+                    ),
+                ),
+            )
             return
         self._finish_page(
             receipt_id,
@@ -1630,6 +2051,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This dictionary decision has already been used or expired. "
                 "Nothing was written; check the current facts again.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         decision = action.decision
@@ -1646,6 +2068,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This form does not match the dictionary result it displayed. "
                 "Nothing was written; check the current facts again.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         try:
@@ -1666,7 +2089,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 expected_fingerprint=submission.plan_fingerprint,
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN)
             return
         if committed.state == "committed_ledger_incomplete":
             self._error(
@@ -1675,6 +2098,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 f"ledger attribution did not: {committed.ledger_error}. The "
                 "records are saved; status --rebuild cannot recreate this "
                 "attribution.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
             )
             return
         self._redirect(
@@ -1717,7 +2141,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 expected_fingerprint=submission.plan_fingerprint,
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN)
             return
         if result.failures:
             failures = "; ".join(
@@ -1729,6 +2153,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 f"Saved {len(result.added)} new kanji lookup(s), but "
                 f"{len(result.failures)} lookup(s) failed: {failures}. Reload "
                 "and retry the remaining characters.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
             )
             return
         current = len(plan.already_known) + len(result.preserved_concurrent)
@@ -1761,20 +2186,38 @@ class _WorkbenchHandler(LocalOnlyHandler):
         if isinstance(submission, OwnerCoverageSubmission):
             try:
                 decision = plan_coverage(session.config, panel.staging_path)
-                if not secrets.compare_digest(
-                    submission.staging_fingerprint, decision.staging_revision
-                ):
-                    self._error(
-                        409,
-                        "This coverage account changed after the page was rendered. "
-                        "Nothing was approved; reload and compare the current one.",
-                    )
-                    return
+            except JankiError as exc:
+                self._error(
+                    409,
+                    f"{exc} Nothing was approved by this attempt.",
+                    truth=_ErrorTruth.LOCAL_NO_WRITE,
+                )
+                return
+            if not secrets.compare_digest(
+                submission.staging_fingerprint, decision.staging_revision
+            ):
+                self._error(
+                    409,
+                    "This coverage account changed after the page was rendered. "
+                    "Nothing was approved; reload and compare the current one.",
+                    truth=_ErrorTruth.LOCAL_NO_WRITE,
+                )
+                return
+            try:
                 approve_coverage_as_owner(
                     session.config, decision, reason=submission.reason
                 )
             except JankiError as exc:
-                self._error(409, f"{exc} Nothing was approved by this attempt.")
+                self._error(
+                    409,
+                    str(exc),
+                    truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+                    next_step=(
+                        "Use your browser's Back button rather than reloading this "
+                        "POST, then reload the add page for this source and inspect "
+                        "its current coverage decision before trying again."
+                    ),
+                )
                 return
             self._redirect(f"/{session.token}/source/{quote(name, safe='')}/add")
             return
@@ -1829,7 +2272,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 expected_preview_fingerprint=submission.preview_fingerprint,
             )
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
             return
 
         if checked.is_blocked and checked.gate != "coverage":
@@ -1838,6 +2281,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 f"After checking readings, these cards still cannot be added: "
                 f"{checked.error}",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         self._render_addition_decision(
@@ -1858,10 +2302,14 @@ class _WorkbenchHandler(LocalOnlyHandler):
         session = self.server.session
         action = session.consume_coverage_action(submission.coverage_action)
         if action is None:
-            self._error(
+            self._refusal(
                 409,
                 "This paid coverage action has already been used or is no longer "
-                "available. Nothing was sent; reload the current coverage page.",
+                "available. Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button, then reload the current "
+                    "coverage page to review a fresh action."
+                ),
             )
             return
         submitted = (
@@ -1883,10 +2331,14 @@ class _WorkbenchHandler(LocalOnlyHandler):
             action.prompt_fingerprint,
         )
         if submitted != expected:
-            self._error(
+            self._refusal(
                 409,
                 "This paid action does not match the completeness check the page "
-                "described. Nothing was sent; reload the coverage page.",
+                "described. Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button, then reload the coverage page "
+                    "and review its current action."
+                ),
             )
             return
         panel = session.panel(name)
@@ -1909,27 +2361,152 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 fresh.prompt_fingerprint,
             )
             if fresh_identity != expected:
-                self._error(
+                self._failure(
                     409,
-                    "The source, account, prompt, or request changed after this "
-                    "page was rendered. Nothing was sent; reload and review it.",
+                    FailureView(
+                        happened=(
+                            "The source, account, prompt, or request changed after "
+                            "this page was rendered."
+                        ),
+                        changed=(
+                            "No coverage approval, card, or paid-operation entry "
+                            "was written."
+                        ),
+                        money="No provider was contacted and no paid call was made.",
+                        next_step=(
+                            "Use your browser's Back button, reload the coverage "
+                            "page, and review the current action."
+                        ),
+                    ),
                 )
                 return
-            result = run_model_coverage(session.config, fresh)
+            client = claude_client.prepare_paid_client()
+            result = run_model_coverage(session.config, fresh, client=client)
         except CoverageRunError as exc:
-            self._error(409, str(exc))
+            if not exc.provider_dispatched:
+                if exc.operation_write == "present":
+                    operation_truth = (
+                        f"Operation {exc.operation_id} is present in the paid-operation "
+                        "journal and may still need to be settled."
+                    )
+                elif exc.operation_write == "unknown":
+                    operation_truth = (
+                        f"Janki could not prove whether operation {exc.operation_id} "
+                        "reached the paid-operation journal."
+                    )
+                else:
+                    operation_truth = (
+                        "The attempted operation is not present in the journal; the "
+                        "refusal may instead name another blocking operation."
+                    )
+                self._failure(
+                    409,
+                    FailureView(
+                        happened=_exception_text(exc),
+                        changed=(
+                            "No coverage approval or card was written. "
+                            + operation_truth
+                        ),
+                        money=(
+                            "No provider request was dispatched, so this coverage "
+                            "action incurred no provider charge."
+                        ),
+                        next_step=(
+                            "Run 'janki operations' and inspect the blocking evidence "
+                            "before authorizing any fresh paid coverage call."
+                            if exc.operation_write == "absent"
+                            else f"Run 'janki operations' and inspect operation "
+                            f"{exc.operation_id} before authorizing any fresh paid "
+                            "coverage call."
+                        ),
+                        technical_detail=(
+                            None
+                            if exc.operation_write == "absent"
+                            else f"Operation {exc.operation_id}"
+                        ),
+                    ),
+                )
+                return
+            if exc.approval_write == "written":
+                journal_truth = (
+                    "The paid-operation journal is committed."
+                    if exc.operation_state == "committed"
+                    else "The journal did not prove the operation committed."
+                )
+                approval_truth = (
+                    "The model coverage approval was written. No card was written; "
+                    + journal_truth
+                )
+            elif exc.approval_write == "unknown":
+                approval_truth = (
+                    "Whether the model coverage approval was written could not be "
+                    "proven. No card was written."
+                )
+            else:
+                approval_truth = "No coverage approval or card was written."
+            if exc.failure is None:
+                self._failure(
+                    409,
+                    FailureView(
+                        happened=_exception_text(exc),
+                        changed=approval_truth,
+                        money=(
+                            "The provider request was dispatched and may have been "
+                            "billed, but its outcome could not be classified."
+                        ),
+                        next_step=(
+                            "Run 'janki operations' and inspect the journal before "
+                            "retrying. Do not redispatch this operation."
+                        ),
+                        technical_detail=f"Operation {exc.operation_id}",
+                    ),
+                )
+                return
+            self._failure(
+                409,
+                _paid_dispatch_failure_view(
+                    exc,
+                    exc.failure,
+                    unchanged=approval_truth,
+                ),
+            )
             return
         except JankiError as exc:
-            # OperationError belongs here too. A paid gate refusal is an
-            # expected 409-style answer, never an unhandled server error.
-            self._error(409, f"{exc} Nothing was sent by this attempt.")
+            self._failure(
+                409,
+                FailureView(
+                    happened=_exception_text(exc),
+                    changed=(
+                        "No coverage approval, card, or paid-operation entry was "
+                        "written."
+                    ),
+                    money="No paid model call was dispatched.",
+                    next_step=(
+                        "Use your browser's Back button, correct the named setup or "
+                        "source-state problem, then reload the coverage page."
+                    ),
+                ),
+            )
             return
         if result.state == "declined":
-            self._error(
+            self._failure(
                 409,
-                f"{result.verdict.model} did not accept this coverage: "
-                f"{result.verdict.reason} Nothing was promoted. Operation "
-                f"{result.operation_id} keeps the paid reply for recovery.",
+                FailureView(
+                    happened=(
+                        f"{result.verdict.model} did not accept this coverage: "
+                        f"{result.verdict.reason}"
+                    ),
+                    changed=(
+                        "No coverage approval or card was written. Operation "
+                        f"{result.operation_id} keeps the exact reply for recovery."
+                    ),
+                    money="The completeness call completed and may have been billed.",
+                    next_step=(
+                        "Read the reply with 'janki operations --show-reply "
+                        f"{result.operation_id}', then record your decision with "
+                        "the operation command it shows."
+                    ),
+                ),
             )
             return
         self._redirect(f"/{session.token}/source/{quote(name, safe='')}/add")
@@ -1981,6 +2558,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     409,
                     "This promotion plan changed after the preview. Nothing was "
                     "promoted; reload and check the current result.",
+                    truth=_ErrorTruth.LOCAL_NO_WRITE,
                 )
                 return
             decision = resolve_promotion_for_execution(
@@ -2005,7 +2583,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 )
             result = execute_promotion(session.config, decision)
         except (JankiError, TypeError, ValueError) as exc:
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN)
             return
 
         if result.state in {
@@ -2023,6 +2601,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 f"{len(result.promoted)} card(s) reached the collection, but the "
                 f"ledger did not save: {result.ledger_error}. {kept}",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
             )
             return
         if result.receipt_id is not None:
@@ -2057,7 +2636,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 reading=submission.reading,
             )
         except StudyDeckCreationError as exc:
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
             return
         fingerprint = _study_deck_plan_fingerprint(plan)
         if submission.action == "preview":
@@ -2078,12 +2657,22 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This study-deck plan changed after the preview. Nothing was "
                 "created; preview it again.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         try:
             create_study_deck(session.config, plan)
         except StudyDeckCreationError as exc:
-            self._error(409, f"{exc} Nothing was created by this attempt.")
+            self._error(
+                409,
+                str(exc),
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST, then reload the dashboard and check whether the study "
+                    "deck was published before trying to create it again."
+                ),
+            )
             return
         self.send_response(303)
         self.send_header("Location", f"/{session.token}/")
@@ -2108,10 +2697,14 @@ class _WorkbenchHandler(LocalOnlyHandler):
 
         action = session.consume_extraction_action(submission.token)
         if action is None:
-            self._error(
+            self._refusal(
                 409,
                 "This paid action has already been used or is no longer available. "
-                "Nothing was sent. Reload the consent page before trying again.",
+                "Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button, then reload the consent page "
+                    "and review a fresh action."
+                ),
             )
             return
         if (
@@ -2121,17 +2714,25 @@ class _WorkbenchHandler(LocalOnlyHandler):
             or action.request_fingerprint != submission.request_fingerprint
             or action.replacement_offered != submission.replacement_offered
         ):
-            self._error(
+            self._refusal(
                 409,
                 "This paid action does not match the call the page described. "
-                "Nothing was sent. Reload the consent page before trying again.",
+                "Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button, then reload the consent page "
+                    "and review the current call."
+                ),
             )
             return
         if action.replacement_offered and not submission.replacement_confirmed:
-            self._error(
+            self._refusal(
                 409,
                 "Confirm that this re-read replaces the review named on the "
                 "page. Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button and confirm the named "
+                    "replacement only if you intend to discard that review."
+                ),
             )
             return
 
@@ -2151,10 +2752,24 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 force=force,
             )
         except JankiError as exc:
-            self._error(409, f"{exc} Nothing was sent.")
+            self._refusal(
+                409,
+                f"{exc} Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button, repair the named source-state "
+                    "problem, then reload the consent page."
+                ),
+            )
             return
         if len(plan.targets) != 1:
-            self._error(409, "That source no longer makes one extraction request.")
+            self._refusal(
+                409,
+                "That source no longer makes one extraction request.",
+                next_step=(
+                    "Use your browser's Back button and reload the source before "
+                    "reviewing any paid action."
+                ),
+            )
             return
         target = plan.targets[0]
         fresh_fingerprint = str(target.provenance["request_fingerprint"])
@@ -2162,42 +2777,87 @@ class _WorkbenchHandler(LocalOnlyHandler):
             fresh_fingerprint != action.request_fingerprint
             or target.source_sha256 != action.source_sha256
         ):
-            self._error(
+            self._refusal(
                 409,
                 "The extraction request changed after this page was rendered. "
-                "Nothing was sent. Reload and review the current call.",
+                "Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button, reload the consent page, and "
+                    "review the current call."
+                ),
             )
             return
 
         try:
             fresh_revision = extraction_replacement_revision(session.config, target)
         except JankiError as exc:
-            self._error(409, f"{exc} Nothing was sent.")
+            self._refusal(
+                409,
+                f"{exc} Nothing was sent.",
+                next_step=(
+                    "Use your browser's Back button, repair the named review-state "
+                    "problem, then reload the consent page."
+                ),
+            )
             return
         expected_revision = action.replacement_revision
         if fresh_revision is None or expected_revision is None:
             if fresh_revision != expected_revision:
-                self._error(
+                self._refusal(
                     409,
                     "The review changed after this page was rendered. Nothing was "
-                    "sent. Reload and review the current replacement.",
+                    "sent.",
+                    next_step=(
+                        "Use your browser's Back button, reload, and review the "
+                        "current replacement."
+                    ),
                 )
                 return
         elif fresh_revision.staging_sha256 != expected_revision.staging_sha256:
-            self._error(
+            self._refusal(
                 409,
                 "The review changed after this page was rendered. Nothing was sent. "
                 "Reload and review the current replacement.",
+                next_step=(
+                    "Use your browser's Back button, reload, and review the current "
+                    "replacement."
+                ),
             )
             return
         elif (
             fresh_revision.pattern_entry_sha256
             != expected_revision.pattern_entry_sha256
         ):
-            self._error(
+            self._refusal(
                 409,
                 "The grammar review changed after this page was rendered. Nothing "
-                "was sent. Reload and review the current replacement.",
+                "was sent.",
+                next_step=(
+                    "Use your browser's Back button, reload, and review the current "
+                    "replacement."
+                ),
+            )
+            return
+
+        try:
+            client = claude_client.prepare_paid_client()
+        except JankiError as exc:
+            self._failure(
+                409,
+                FailureView(
+                    happened=str(exc),
+                    changed=(
+                        "No extraction operation was authorized and no proposal "
+                        "or journal file was changed. The source remains saved in "
+                        "the corpus from its separate intake step."
+                    ),
+                    money="No provider was contacted and no paid call was made.",
+                    next_step=(
+                        "Set ANTHROPIC_API_KEY in the shell that starts janki. "
+                        "Use your browser's Back button, reload the consent page, "
+                        "and review the paid action again."
+                    ),
+                ),
             )
             return
 
@@ -2207,7 +2867,24 @@ class _WorkbenchHandler(LocalOnlyHandler):
             # GET happened to display; two old pages can both have seen clear.
             operation_id = authorize_dispatch(journal, target, model=plan.model)
         except JankiError as exc:
-            self._error(409, f"{exc} Nothing was sent by this attempt.")
+            self._failure(
+                409,
+                FailureView(
+                    happened=_exception_text(exc),
+                    changed=(
+                        "No proposal was staged. The operation journal may contain "
+                        "an unused authority if its final pre-dispatch write failed."
+                    ),
+                    money=(
+                        "Nothing was sent to a provider by this attempt; no paid "
+                        "provider request was made."
+                    ),
+                    next_step=(
+                        "Run 'janki operations' and settle any authority it shows "
+                        "before reloading the consent page."
+                    ),
+                ),
+            )
             return
 
         progress = _ExtractionProgress(self, name, session.token)
@@ -2228,6 +2905,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 system=plan.system,
                 mode=plan.mode,
                 known=plan.skip_list,
+                client=client,
                 capture=capture,
             )
         except Exception as exc:  # noqa: BLE001 - settle any dispatched call
@@ -2235,50 +2913,37 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 failure = classify_dispatch_failure(
                     session.config, journal, operation_id, exc
                 )
-                if failure.outcome == ANSWER_SAVED:
-                    note = (
-                        "Nothing was staged. The paid answer is recoverable with "
-                        f"'janki operations --show-reply {operation_id}'; "
-                        f"operation {operation_id}."
-                    )
-                elif failure.outcome == ANSWER_EMPTY:
-                    note = (
-                        "Nothing was staged. The paid reply was saved, but it "
-                        f"contains no answer; inspect its exact bytes with "
-                        f"'janki operations --show-reply {operation_id}'."
-                    )
-                elif failure.outcome == ANSWER_UNAVAILABLE:
-                    note = (
-                        "Nothing was staged. The reply was recorded as captured, "
-                        "but its exact recovery bytes are unavailable; "
-                        f"operation {operation_id}. Inspect janki operations "
-                        "before accepting that loss."
-                    )
-                elif failure.outcome == FORGOTTEN:
-                    if failure.cleanup_pending:
-                        note = (
-                            "Nothing was staged. The operation's forget decision "
-                            "is recorded; finish exact cleanup with "
-                            f"'janki operations --forget {operation_id}'."
-                        )
-                    else:
-                        note = (
-                            "Nothing was staged. The operation was already "
-                            "forgotten, so no recovery answer remains in janki "
-                            "operations."
-                        )
-                else:
-                    note = (
-                        "Nothing was staged. This call may already have been "
-                        f"billed; operation {operation_id}. Do not retry until "
-                        "you inspect janki operations."
-                    )
             except JankiError as journal_error:
-                note = (
-                    "Nothing was proven staged, and janki could not settle the "
-                    f"operation journal: {journal_error}"
+                progress.failure(
+                    FailureView(
+                        happened=_exception_text(exc),
+                        changed=(
+                            "Nothing was proven staged because janki could not "
+                            "settle the operation journal. It also could not prove "
+                            "whether exact recovery data were saved."
+                        ),
+                        money=(
+                            "The provider request was dispatched and may already "
+                            "have been billed."
+                        ),
+                        next_step=(
+                            "Do not retry the paid call. Repair the operation "
+                            "journal, then run 'janki operations'."
+                        ),
+                        technical_detail=(
+                            f"Operation {operation_id}; journal error: "
+                            f"{_exception_text(journal_error)}"
+                        ),
+                    )
                 )
-            progress.failure(str(exc), note)
+                return
+            progress.failure(
+                _paid_dispatch_failure_view(
+                    exc,
+                    failure,
+                    unchanged="Nothing was staged.",
+                )
+            )
             return
 
         progress.step("Saving proposals")
@@ -2297,24 +2962,52 @@ class _WorkbenchHandler(LocalOnlyHandler):
             )
         except ExtractionCompletionError as exc:
             progress.failure(
-                exc.detail,
-                f"The proposals are saved at {exc.staging_path}, including the "
-                "embedded pattern set. The separate pattern store was not "
-                "updated; reload the source and review that staging file.",
+                FailureView(
+                    happened=_exception_text(exc),
+                    changed=(
+                        f"The proposals were saved at {exc.staging_path}, including "
+                        "the embedded pattern set. The separate pattern store was "
+                        "not updated."
+                    ),
+                    money="The provider call completed and may have been billed.",
+                    next_step=(
+                        "Reload the source and review that saved proposal file; do "
+                        "not repeat extraction to repair the pattern-store copy."
+                    ),
+                    technical_detail=f"Operation {operation_id}",
+                )
             )
             return
         except operations.OperationError as exc:
             progress.failure(
-                str(exc),
-                _completion_refusal_note(session.config, operation_id),
+                FailureView(
+                    happened=_exception_text(exc),
+                    changed=(
+                        "The provider answer arrived, but this attempt could not "
+                        "prove that every proposal and journal transition committed."
+                    ),
+                    money="The provider call completed and may have been billed.",
+                    next_step=_completion_refusal_note(
+                        session.config, operation_id
+                    ),
+                    technical_detail=f"Operation {operation_id}",
+                )
             )
             return
         except JankiError as exc:
             progress.failure(
-                str(exc),
-                _completion_error_note(
-                    session.config,
-                    operation_id,
+                FailureView(
+                    happened=_exception_text(exc),
+                    changed=(
+                        "The provider answer arrived, but this attempt could not "
+                        "prove that every proposal and journal transition committed."
+                    ),
+                    money="The provider call completed and may have been billed.",
+                    next_step=_completion_error_note(
+                        session.config,
+                        operation_id,
+                    ),
+                    technical_detail=f"Operation {operation_id}",
                 ),
             )
             return
@@ -2347,6 +3040,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This source changed after the page was rendered. Nothing was "
                 "written. Reload and review the current cards.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         try:
@@ -2357,12 +3051,20 @@ class _WorkbenchHandler(LocalOnlyHandler):
         except review.PanelRequestError as exc:
             self._error(400, str(exc))
         except review.StaleReviewError as exc:
-            self._error(409, f"{exc}. Nothing was written by this attempt.")
+            self._error(
+                409,
+                f"{exc}. Nothing was written by this attempt.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
         except review.PartialReviewError as exc:
             # Never "nothing changed": say exactly which file landed.
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN)
         except JankiError as exc:
-            self._error(500, f"{exc}. Nothing was proven written.")
+            self._error(
+                500,
+                f"{exc}. Nothing was proven written.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+            )
         else:
             self._redirect_to_source(
                 source,
@@ -2400,6 +3102,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This source changed after the page was rendered. Nothing was "
                 "written. Reload and edit the current cards.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         try:
@@ -2428,7 +3131,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             )
         except review.StaleReviewError as exc:
             # Proven: the compare-and-swap refused before writing anything.
-            self._error(409, f"{exc}. Nothing was written by this attempt.")
+            self._error(
+                409,
+                f"{exc}. Nothing was written by this attempt.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
             return
         except review.IndeterminateWriteError as exc:
             # NOT proven. The write failed after its snapshot stopped matching,
@@ -2438,10 +3145,15 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 f"{exc} Reload this source and check the cards before editing "
                 "again.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
             )
             return
         except JankiError as exc:
-            self._error(500, f"{exc}. Nothing was proven written.")
+            self._error(
+                500,
+                f"{exc}. Nothing was proven written.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+            )
             return
         self._redirect_to_source(source, saved=0, grammar=False, edited=len(changed))
 
@@ -2488,6 +3200,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This source changed after the page was rendered. Nothing was "
                 "removed. Reload and review the current cards.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         try:
@@ -2515,16 +3228,25 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 label="staging file",
             )
         except review.StaleReviewError as exc:
-            self._error(409, f"{exc}. Nothing was removed by this attempt.")
+            self._error(
+                409,
+                f"{exc}. Nothing was removed by this attempt.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
             return
         except review.IndeterminateWriteError as exc:
             self._error(
                 409,
                 f"{exc} Reload this source and check which cards are there.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
             )
             return
         except JankiError as exc:
-            self._error(500, f"{exc}. Nothing was proven removed.")
+            self._error(
+                500,
+                f"{exc}. Nothing was proven removed.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+            )
             return
         self._redirect_to_source(source, removed=1)
 
@@ -2577,6 +3299,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This source changed after the page was rendered. Nothing was "
                 "assigned. Reload and review the current card.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         try:
@@ -2606,6 +3329,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 f"The study-deck plan could not be refreshed: {exc} Nothing "
                 "was assigned.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         if not secrets.compare_digest(
@@ -2615,6 +3339,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "The study-deck plan changed after this page was rendered. "
                 "Nothing was assigned. Reload and review the current tag diff.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         destination = fields["destination"][0]
@@ -2630,6 +3355,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 f"That study deck cannot take this card: {choice.refusal} "
                 "Nothing was assigned.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
 
@@ -2648,16 +3374,25 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 label="staging file",
             )
         except review.StaleReviewError as exc:
-            self._error(409, f"{exc}. Nothing was assigned by this attempt.")
+            self._error(
+                409,
+                f"{exc}. Nothing was assigned by this attempt.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
             return
         except review.IndeterminateWriteError as exc:
             self._error(
                 409,
                 f"{exc} Reload this source and check the card's study deck.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
             )
             return
         except JankiError as exc:
-            self._error(500, f"{exc}. Nothing was proven assigned.")
+            self._error(
+                500,
+                f"{exc}. Nothing was proven assigned.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+            )
             return
         self._redirect_to_source(source, assigned=1)
 
@@ -2734,6 +3469,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 409,
                 "This source changed after the page was rendered. Nothing was "
                 "changed. Reload and review the current cards.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
             )
             return
         try:
@@ -2772,7 +3508,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
         try:
             updated = reidentify.apply_reidentification(panel.records, plan)
         except reidentify.ReidentifyError as exc:
-            self._error(409, str(exc))
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
             return
         try:
             text = staging.render_staging_update(
@@ -2784,13 +3520,25 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 panel.staging_path, text, panel.staging_bytes, label="staging file"
             )
         except review.StaleReviewError as exc:
-            self._error(409, f"{exc}. Nothing was changed by this attempt.")
+            self._error(
+                409,
+                f"{exc}. Nothing was changed by this attempt.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
             return
         except review.IndeterminateWriteError as exc:
-            self._error(409, f"{exc} Reload this source and check the card.")
+            self._error(
+                409,
+                f"{exc} Reload this source and check the card.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+            )
             return
         except JankiError as exc:
-            self._error(500, f"{exc}. Nothing was proven changed.")
+            self._error(
+                500,
+                f"{exc}. Nothing was proven changed.",
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+            )
             return
         self._redirect_to_source(source, reidentified=1)
 

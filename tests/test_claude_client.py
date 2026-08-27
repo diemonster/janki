@@ -103,6 +103,49 @@ SCHEMA = Candidates
 # --- the optional dependency -------------------------------------------------
 
 
+@pytest.mark.allow_build_client
+def test_paid_client_preflight_binds_the_environment_key_before_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built: list[str] = []
+    sentinel = object()
+    monkeypatch.setattr(
+        claude_client,
+        "build_client",
+        lambda key: built.append(key) or sentinel,
+    )
+
+    with pytest.raises(ClaudeRequestError, match="no provider was contacted"):
+        claude_client.prepare_paid_client({})
+    assert built == []
+
+    assert (
+        claude_client.prepare_paid_client({"ANTHROPIC_API_KEY": "  paid-key  "})
+        is sentinel
+    )
+    assert built == ["paid-key"]
+
+
+@pytest.mark.allow_build_client
+def test_paid_client_preflight_redacts_a_constructor_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "sk-ant-client-setup-must-disappear"
+
+    def fail(_key: str) -> object:
+        raise RuntimeError(f"invalid Authorization header: {secret}")
+
+    monkeypatch.setattr(claude_client, "build_client", fail)
+
+    with pytest.raises(ClaudeRequestError) as excinfo:
+        claude_client.prepare_paid_client({"ANTHROPIC_API_KEY": secret})
+
+    message = str(excinfo.value)
+    assert secret not in message
+    assert "[redacted ANTHROPIC_API_KEY]" in message
+    assert "No provider was contacted" in message
+
+
 def test_a_missing_sdk_names_the_extra_that_installs_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -367,6 +410,83 @@ def test_an_sdk_request_error_becomes_a_clean_janki_error(
         parse_call("claude-opus-5", system_blocks("guide"), "go", SCHEMA, client)
 
     assert "output blocked by content filtering policy" in str(excinfo.value)
+
+
+def test_an_sdk_error_cannot_echo_the_environment_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "sk-ant-error-echo-must-disappear"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+
+    class FakeAPIError(Exception):
+        pass
+
+    class BrokenMessages:
+        def stream(self, **kwargs: Any) -> Any:
+            del kwargs
+            raise FakeAPIError(f"authorization header contained {secret}")
+
+    monkeypatch.setattr(
+        claude_client,
+        "load_anthropic",
+        lambda: SimpleNamespace(
+            APIError=FakeAPIError,
+            transform_schema=lambda schema: {"type": "object"},
+        ),
+    )
+
+    with pytest.raises(ClaudeRequestError) as excinfo:
+        parse_call(
+            "claude-opus-5",
+            system_blocks("guide"),
+            "go",
+            SCHEMA,
+            SimpleNamespace(messages=BrokenMessages()),
+        )
+
+    message = str(excinfo.value)
+    assert secret not in message
+    assert "[redacted ANTHROPIC_API_KEY]" in message
+
+
+def test_a_midstream_http_error_cannot_echo_the_environment_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+
+    secret = "sk-ant-midstream-echo-must-disappear"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+
+    class FakeAPIError(Exception):
+        pass
+
+    class BrokenMessages:
+        def stream(self, **kwargs: Any) -> Any:
+            del kwargs
+            raise httpx.ReadError(f"socket carried {secret}")
+
+    monkeypatch.setattr(
+        claude_client,
+        "load_anthropic",
+        lambda: SimpleNamespace(
+            APIError=FakeAPIError,
+            transform_schema=lambda schema: {"type": "object"},
+        ),
+    )
+
+    with pytest.raises(ClaudeRequestError) as excinfo:
+        parse_call(
+            "claude-opus-5",
+            system_blocks("guide"),
+            "go",
+            SCHEMA,
+            SimpleNamespace(messages=BrokenMessages()),
+        )
+
+    message = str(excinfo.value)
+    assert secret not in message
+    assert "[redacted ANTHROPIC_API_KEY]" in message
+    assert "failed mid-response" in message
 
 
 def test_the_sdk_helper_really_does_raise_on_a_truncated_answer() -> None:

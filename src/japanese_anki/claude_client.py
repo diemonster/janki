@@ -31,12 +31,14 @@ installed it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator, Sequence
+import os
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from japanese_anki import prompts
+from japanese_anki.credential_safety import redact_environment_credentials
 from japanese_anki.errors import JankiError
 
 __all__ = [
@@ -56,6 +58,7 @@ __all__ = [
     "build_client",
     "load_anthropic",
     "parse_call",
+    "prepare_paid_client",
     "read_style_guide",
     "submit_batch",
     "system_blocks",
@@ -286,6 +289,35 @@ def build_client(api_key: str | None = None) -> Any:
     return anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
 
 
+def prepare_paid_client(env: Mapping[str, str] | None = None) -> Any:
+    """Bind extraction/coverage credentials before authority is journaled.
+
+    The SDK normally defers a missing credential until request dispatch.  That
+    is too late for a journal whose ``dispatching`` state means money may have
+    been spent. These two journaled source-reading paths deliberately support
+    the documented environment variable, validate it locally, and pass the
+    bound key to the SDK constructor before either can authorize a call.
+    """
+    source = os.environ if env is None else env
+    key = str(source.get(API_KEY_ENV, "")).strip()
+    if not key:
+        raise ClaudeRequestError(
+            f"{API_KEY_ENV} is not set. Export it in the environment that "
+            "starts janki, then try the paid action again; no provider was "
+            "contacted."
+        )
+    try:
+        return build_client(key)
+    except JankiError:
+        raise
+    except Exception as exc:
+        detail = redact_environment_credentials(exc, source)
+        raise ClaudeRequestError(
+            f"Could not prepare the Anthropic client: {detail}. No provider "
+            "was contacted."
+        ) from exc
+
+
 def read_style_guide(root: Path) -> str:
     """The project's Japanese style guide, for the system prompt.
 
@@ -481,10 +513,12 @@ def parse_call(
         # call shape makes possible.
         api_error = getattr(load_anthropic(), "APIError", ())
         if api_error and isinstance(exc, api_error):
-            raise ClaudeRequestError(f"{model} request failed: {exc}") from exc
+            detail = redact_environment_credentials(exc)
+            raise ClaudeRequestError(f"{model} request failed: {detail}") from exc
         if isinstance(exc, _http_errors()):
+            detail = redact_environment_credentials(exc)
             raise ClaudeRequestError(
-                f"{model} request failed mid-response: {exc}"
+                f"{model} request failed mid-response: {detail}"
             ) from exc
         raise
     if capture is not None:

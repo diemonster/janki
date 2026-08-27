@@ -51,6 +51,7 @@ from japanese_anki.application.journey import (
     source_journeys,
 )
 from japanese_anki.config import ProjectConfig
+from japanese_anki.credential_safety import redact_environment_credentials
 from japanese_anki.errors import JankiError
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import (
@@ -824,7 +825,7 @@ def classify_dispatch_failure(
             current,
             operation_id=operation_id,
             state="outcome_unknown",
-            detail=str(exc),
+            detail=redact_environment_credentials(exc),
         )
         return DispatchFailure(
             operation_id=operation_id,

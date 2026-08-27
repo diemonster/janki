@@ -37,8 +37,10 @@ from japanese_anki.io import (
 
 __all__ = [
     "FinishOwnerScope",
+    "FinishReceipt",
     "FinishScope",
     "FinishScopeError",
+    "list_finish_receipts",
     "records_revision_fingerprint",
     "resolve_finish_scope",
 ]
@@ -54,6 +56,23 @@ def _is_sha256(value: object) -> bool:
         and len(value) == 64
         and all(character in "0123456789abcdef" for character in value)
     )
+
+
+@dataclass(frozen=True, slots=True)
+class FinishReceipt:
+    """One validated durable handle discovered in a done archive."""
+
+    source_file: str
+    receipt_id: str
+    record_count: int
+
+    def __post_init__(self) -> None:
+        if not self.source_file.strip():
+            raise ValueError("A finish receipt needs a nonblank source file")
+        if not _is_sha256(self.receipt_id):
+            raise ValueError("A finish receipt must be lowercase SHA-256 text")
+        if self.record_count < 1:
+            raise ValueError("A finish receipt must name at least one record")
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,25 +318,49 @@ def _done_archive_batches(config: ProjectConfig) -> tuple[_LocatedBatch, ...]:
             os.close(directory_fd)
 
 
-def _locate_receipt(config: ProjectConfig, receipt_id: str) -> _LocatedBatch:
-    matches = [
-        located
-        for located in _done_archive_batches(config)
-        if located.batch.receipt_id == receipt_id
-    ]
+def _validated_located_batches(config: ProjectConfig) -> tuple[_LocatedBatch, ...]:
+    """Return every archive batch after rejecting duplicate durable handles."""
+    located = _done_archive_batches(config)
+    by_receipt: dict[str, Path] = {}
+    for item in located:
+        previous = by_receipt.get(item.batch.receipt_id)
+        if previous is not None:
+            raise FinishScopeError(
+                f"[finish-receipt-ambiguous] promotion receipt "
+                f"{item.batch.receipt_id} appears in more than one done archive: "
+                f"{previous}, {item.archive_path}"
+            )
+        by_receipt[item.batch.receipt_id] = item.archive_path
+    return located
 
-    if not matches:
-        raise FinishScopeError(
-            f"[finish-receipt-not-found] no done archive contains promotion "
-            f"receipt {receipt_id}"
+
+def list_finish_receipts(config: ProjectConfig) -> tuple[FinishReceipt, ...]:
+    """List every validated promotion receipt in deterministic archive order.
+
+    Archive filenames are sorted by :func:`_done_archive_batches`; batches keep
+    their durable append order within each archive.  Discovery deliberately
+    does not inspect canonical records or current deck ownership.  Those are
+    mutable inputs and are re-proved by :func:`resolve_finish_scope` when a
+    receipt is opened or acted on.
+    """
+    return tuple(
+        FinishReceipt(
+            source_file=located.batch.source_file,
+            receipt_id=located.batch.receipt_id,
+            record_count=len(located.batch.promoted_ids),
         )
-    if len(matches) != 1:
-        paths = ", ".join(str(match.archive_path) for match in matches)
-        raise FinishScopeError(
-            f"[finish-receipt-ambiguous] promotion receipt {receipt_id} appears "
-            f"in more than one done archive: {paths}"
-        )
-    return matches[0]
+        for located in _validated_located_batches(config)
+    )
+
+
+def _locate_receipt(config: ProjectConfig, receipt_id: str) -> _LocatedBatch:
+    for located in _validated_located_batches(config):
+        if located.batch.receipt_id == receipt_id:
+            return located
+    raise FinishScopeError(
+        f"[finish-receipt-not-found] no done archive contains promotion "
+        f"receipt {receipt_id}"
+    )
 
 
 def _owner_groups(

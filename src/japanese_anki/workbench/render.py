@@ -19,6 +19,7 @@ import base64
 import hashlib
 import html
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -35,10 +36,14 @@ from japanese_anki.application.build import FinishBuildPlan, FinishDeckBuildPlan
 from japanese_anki.application.enrichment import DictionaryEnrichmentDecision
 from japanese_anki.application.finish import FinishScope
 from japanese_anki.application.kanji_addition import KanjiAdditionPlan
+from japanese_anki.credential_safety import redact_environment_credentials
 from japanese_anki.enrich import format_field_diff
 
 __all__ = [
+    "FAILURE_STYLE",
+    "FAILURE_STYLE_SOURCE",
     "STYLE",
+    "FailureView",
     "INTAKE_SCRIPT",
     "INTAKE_SCRIPT_SOURCE",
     "render_addition",
@@ -50,6 +55,7 @@ __all__ = [
     "render_extraction_progress_start",
     "render_extraction_progress_step",
     "render_extraction_success",
+    "render_failure",
     "render_finish",
     "render_reidentify",
     "render_source",
@@ -153,17 +159,76 @@ INTAKE_SCRIPT_SOURCE = "'sha256-" + base64.b64encode(
     hashlib.sha256(INTAKE_SCRIPT.encode("utf-8")).digest()
 ).decode("ascii") + "'"
 
+
+FAILURE_STYLE = """
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 1.5rem; overflow-wrap: anywhere;
+  font: 1rem/1.6 system-ui, sans-serif;
+  background: Canvas; color: CanvasText;
+}
+main { max-width: 60rem; min-inline-size: 0; margin: 0 auto; }
+.failure-facts dt { font-weight: 700; }
+.failure-facts dd { margin: 0 0 .75rem; }
+summary { cursor: pointer; min-height: 44px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 500px) { body { padding: .75rem; } }
+:focus-visible { outline: 3px solid Highlight; outline-offset: 3px; }
+""".strip()
+
+FAILURE_STYLE_SOURCE = "'sha256-" + base64.b64encode(
+    hashlib.sha256(FAILURE_STYLE.encode("utf-8")).digest()
+).decode("ascii") + "'"
+
+
+@dataclass(frozen=True, slots=True)
+class FailureView:
+    """The four learner-facing truths every failed action must carry."""
+
+    happened: str
+    changed: str
+    money: str
+    next_step: str
+    technical_detail: str = ""
+
+    def __post_init__(self) -> None:
+        for name in ("happened", "changed", "money", "next_step"):
+            if not str(getattr(self, name)).strip():
+                raise ValueError(f"A failure needs a nonblank {name.replace('_', ' ')}")
+
+
 STYLE = """
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
   margin: 0; padding: 1.5rem;
+  overflow-wrap: anywhere;
   font: 1rem/1.6 system-ui, sans-serif;
   background: Canvas; color: CanvasText;
 }
-main { max-width: 60rem; margin: 0 auto; }
+main { max-width: 60rem; min-inline-size: 0; margin: 0 auto; }
+:lang(ja), .ja, .furigana {
+  font-family: "Hiragino Sans", "Yu Gothic", Meiryo, "Noto Sans JP", system-ui, sans-serif;
+}
 h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
 .saved { color: GrayText; margin: 0 0 2rem; font-size: .9rem; }
+.tour {
+  border: 1px solid GrayText; border-radius: .5rem;
+  margin-block-end: 1.5rem; overflow: hidden;
+}
+.tour > summary {
+  padding: .75rem 1rem; font-size: 1rem; font-weight: 700; color: CanvasText;
+}
+.tour-body { border-block-start: 1px solid ButtonBorder; padding: 0 1rem 1rem; }
+.tour-body h2 { font-size: 1.2rem; }
+.tour-body h3 { font-size: 1rem; margin-block-end: .25rem; }
+.tour-body ol { padding-inline-start: 1.5rem; }
+.tour-body li { margin-block: .5rem; }
+.providers { margin: 0; }
+.providers > div { margin-block: .65rem; }
+.providers dt { font-weight: 700; }
+.providers dd { margin-inline-start: 0; }
 .source {
   border: 1px solid GrayText; border-radius: .5rem;
   padding: 1rem; margin-block-end: 1rem;
@@ -240,6 +305,7 @@ textarea[lang=ja] { font-size: 1.15rem; line-height: 1.9; }
   padding: .75rem; border: 1px solid GrayText; border-radius: .35rem; margin-top: .75rem; }
 input[type=checkbox] { inline-size: 1.4rem; block-size: 1.4rem; flex: none; }
 button {
+  max-inline-size: 100%; white-space: normal;
   min-height: 44px; padding: .65rem 1rem; font: inherit; font-weight: 700;
   cursor: pointer; border-radius: .35rem;
   background: ButtonFace; color: ButtonText; border: 1px solid ButtonBorder;
@@ -302,6 +368,8 @@ a.button:active { transform: translateY(1px); }
   padding-block-end: .5rem; border-block-end: 1px solid ButtonBorder;
 }
 .card h3 small { font-size: .85em; font-weight: 400; color: GrayText; }
+ruby { ruby-position: over; }
+rt { font-size: .55em; font-weight: 400; color: GrayText; }
 .card h4 { font-size: .95rem; margin: 1rem 0 .25rem; }
 /* Japanese wants room: generous size and leading so small kana and
    lookalike kanji stay apart (WORKBENCH_PLAN.md, "The words on the screen"). */
@@ -320,13 +388,52 @@ a { color: LinkText; }
 @media (min-width: 48rem) {
   .panels { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+@media (max-width: 31.25rem) {
+  body { padding: .75rem; }
+  .source, .card, .pattern, .add-source { padding: .75rem; }
+  .actions { gap: .75rem; }
+}
 :focus-visible { outline: 3px solid Highlight; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 """.strip()
 
 
 def _escaped(value: object) -> str:
-    return html.escape(str(value))
+    return html.escape(redact_environment_credentials(value))
+
+
+def _failure_facts(failure: FailureView) -> str:
+    rows = (
+        ("What happened", failure.happened),
+        ("What changed", failure.changed),
+        ("Money", failure.money),
+        ("What to do next", failure.next_step),
+    )
+    body = ['<dl class="failure-facts">']
+    for label, value in rows:
+        body.append(
+            f"<div class=field><dt>{_escaped(label)}</dt>"
+            f"<dd>{_escaped(value)}</dd></div>"
+        )
+    body.append("</dl>")
+    if failure.technical_detail:
+        body.append(
+            "<details><summary>Technical details</summary>"
+            f"<pre>{_escaped(failure.technical_detail)}</pre></details>"
+        )
+    return "".join(body)
+
+
+def render_failure(failure: FailureView, *, title: str = "Workbench error") -> str:
+    """A secret-free standalone refusal; it deliberately has no session link."""
+    return (
+        "<!doctype html><html lang=en><head><meta charset=utf-8>"
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{_escaped(title)}</title><style>{FAILURE_STYLE}</style>"
+        "</head><body><main>"
+        f"<h1>{_escaped(title)}</h1><section role=alert>"
+        f"{_failure_facts(failure)}</section></main></body></html>"
+    )
 
 
 def _source_link(journey: SourceJourney, prefix: str) -> str:
@@ -357,7 +464,7 @@ def _source_html(journey: SourceJourney, prefix: str = "") -> str:
         badges.append(f'<span class="badge grammar">{_escaped(journey.grammar)}</span>')
     parts = [
         '<article class="source">',
-        f'<h2 class=name lang="ja">{_source_link(journey, prefix)}</h2>',
+        f'<h2 class=name>{_source_link(journey, prefix)}</h2>',
         f'<p class=state>{_escaped(journey.state)}</p>',
     ]
     if badges:
@@ -366,6 +473,16 @@ def _source_html(journey: SourceJourney, prefix: str = "") -> str:
     parts.append(
         f'<p class=next><b>Next:</b> {_escaped(journey.next_action)}</p>'
     )
+    if prefix and journey.finish_receipt_ids:
+        count = len(journey.finish_receipt_ids)
+        for index, receipt_id in enumerate(journey.finish_receipt_ids, start=1):
+            target = f"{prefix}/finish/{receipt_id}"
+            suffix = f" — batch {index} of {count}" if count > 1 else ""
+            parts.append(
+                f'<p class=next><a class=button href="'
+                f'{html.escape(target, quote=True)}">Finish dictionary, audio '
+                f"and deck build for {_escaped(journey.source)}{suffix}</a></p>"
+            )
     if prefix and journey.state == NOT_EXTRACTED:
         # Goes to the page that *describes* the paid call, never straight at
         # one. Adding a file and sending it are two separate actions, and a
@@ -385,10 +502,67 @@ def _source_html(journey: SourceJourney, prefix: str = "") -> str:
     return "".join(parts)
 
 
+def _dashboard_tour(*, open_by_default: bool) -> str:
+    """A native, dismissible guide that needs no browser-side state."""
+    opened = " open" if open_by_default else ""
+    return (
+        f'<details class="tour"{opened}>'
+        "<summary>Quick start and provider setup</summary>"
+        '<div class="tour-body">'
+        "<h2>From lesson to deck</h2>"
+        "<ol>"
+        "<li><b>Add a PDF or photo.</b> Saving a source keeps a permanent "
+        "local copy. It sends nothing.</li>"
+        "<li><b>Ask the model to read it.</b> You see and confirm the exact "
+        "paid send first. The proposal keeps the meaning in this lesson, one "
+        "polite and one casual example, and any grammar the lesson teaches.</li>"
+        "<li><b>Make the human decisions.</b> Review the Japanese examples. A "
+        "reading hold pauses a card whose spelling-and-reading identity needs "
+        "your choice. Grammar review is separate. Coverage asks only whether "
+        "the promised source units are accounted for, not whether the Japanese "
+        "is good. Each card belongs to one study deck, and you choose which "
+        "one.</li>"
+        "<li><b>Finish and build.</b> Add dictionary facts, kanji reference and "
+        "audio, preview the cards, then build the Anki package.</li>"
+        "</ol>"
+        "<h3>What can contact another service</h3>"
+        '<dl class="providers">'
+        "<div><dt>Anthropic · paid network model</dt><dd>Claude reads PDFs and "
+        "photos after the separate consent page. Anthropic is also the default "
+        "provider for bare-record <code>janki enrich --ai</code>. It uses "
+        "<code>ANTHROPIC_API_KEY</code>.</dd></div>"
+        "<div><dt>jpdb · networked dictionary</dt><dd>It supplies word facts "
+        "and can witness a reading. It is not a model call and uses "
+        "<code>JPDB_API_KEY</code>.</dd></div>"
+        "<div><dt>KANJIDIC/KanjiVG · networked reference sources</dt><dd>They "
+        "supply kanji facts and stroke diagrams. They need no account or API "
+        "key.</dd></div>"
+        "<div><dt>VOICEVOX · local network engine</dt><dd>It creates word audio "
+        "and also reads example sentences unless OpenAI is selected for them. "
+        "It needs the local engine running, but no account or paid API call.</dd></div>"
+        "<div><dt>OpenAI · optional paid network audio</dt><dd>It can read "
+        "example sentences naturally and uses <code>OPENAI_API_KEY</code>. The "
+        "button names the model before a paid call.</dd></div>"
+        "<div><dt>Codex · optional network enrichment through its CLI</dt><dd>It is "
+        "the alternative bare-record <code>janki enrich --ai</code> provider; set "
+        "<code>enrich_provider</code> to <code>codex</code> to select it. It "
+        "launches the separately installed, authenticated Codex CLI; that "
+        "CLI's login controls access and any billing.</dd></div>"
+        "</dl>"
+        '<p class="status held"><b>Keys stay in your shell environment.</b> '
+        "janki never puts them in the repository, browser storage, URLs, logs, "
+        "or error messages. If a required key is missing, janki stops before "
+        "contacting that provider.</p>"
+        "</div></details>"
+    )
+
+
 def render_dashboard(
     journeys: Sequence[SourceJourney],
     *,
     warnings: Sequence[str] = (),
+    recovery: Sequence[str] = (),
+    tour_open: bool = False,
     root: Path | None = None,
     token: str = "",
     csrf: str = "",
@@ -419,6 +593,7 @@ def render_dashboard(
         f"<p class=saved>Saved on this computer{_saved_where(root)}. "
         f"{_escaped(heading)}.</p>",
     ]
+    body.append(_dashboard_tour(open_by_default=tour_open))
     if added is not None:
         name, stored = added
         body.append(
@@ -449,6 +624,15 @@ def render_dashboard(
         body.append('<section class="warnings"><h2>Could not be read</h2><ul>')
         body.extend(f"<li>{_escaped(warning)}</li>" for warning in warnings)
         body.append("</ul></section>")
+    if recovery:
+        body.append(
+            '<section class="warnings" role=alert><h2>Recovery and operation notices'
+            "</h2><p>The repository currently records provider work that may "
+            "need recovery, a decision, or cleanup. Some notices are about "
+            "cleanup and do not block another call. Follow the command named "
+            "for each state; never retry a request whose outcome is uncertain.</p>"
+            f"<pre>{_escaped(chr(10).join(recovery))}</pre></section>"
+        )
     if not journeys:
         where = "above" if csrf else "to your inbox folder"
         body.append(
@@ -651,6 +835,21 @@ def render_finish(
             if counts.provider_required == 0
             else f"Create {kind} audio"
         )
+        if (
+            counts.provider_required
+            and kind == "examples"
+            and provider.access == "paid-network"
+        ):
+            provider_name = {
+                "openai": "OpenAI",
+                "voicevox": "VOICEVOX",
+            }.get(provider.name.lower(), provider.name)
+            model = provider.settings.get("model", "").strip()
+            provider_and_model = " ".join(filter(None, (provider_name, model)))
+            label = (
+                f"Create example sentence audio for {scope.source_file} with "
+                f"{provider_and_model} — paid network call"
+            )
         body.extend(
             [
                 f'<form method=post action="{html.escape(action, quote=True)}">',
@@ -1051,8 +1250,10 @@ def _card_html(
     record = card.record
     parts = [
         f'<article class="card" id="card-{index + 1}">',
-        f'<h3 lang="ja">{_escaped(record.expression)}'
-        f" <small>{_escaped(record.reading)}</small></h3>",
+        # These are two explicit record fields, so attaching the full reading
+        # to the full expression makes no segmentation guess about Japanese.
+        f'<h3 lang="ja"><ruby>{_escaped(record.expression)}'
+        f"<rt>{_escaped(record.reading)}</rt></ruby></h3>",
     ]
     if record.furigana:
         parts.append(f'<p class="furigana" lang="ja">{_escaped(record.furigana)}</p>')
@@ -1247,18 +1448,22 @@ def _approval_html(card: Any) -> str:
 def _evidence_html(card: Any) -> str:
     raw = card.record.source.raw_fields
     rows = [
-        ("Stable ID", card.record.id),
-        ("Source page", raw.get("page")),
-        ("Source sentence", raw.get("context")),
-        ("Why it was included", raw.get("inclusion_reason")),
-        ("Confidence", raw.get("confidence")),
+        ("Stable ID", card.record.id, False),
+        ("Source page", raw.get("page"), False),
+        ("Source sentence", raw.get("context"), True),
+        ("Why it was included", raw.get("inclusion_reason"), False),
+        ("Confidence", raw.get("confidence"), False),
     ]
-    shown = "".join(
-        f"<div class=field><dt>{_escaped(label)}</dt>"
-        f'<dd lang="ja">{_escaped(value)}</dd></div>'
-        for label, value in rows
-        if value not in (None, "")
-    )
+    shown_rows = []
+    for label, value, japanese in rows:
+        if value in (None, ""):
+            continue
+        lang = ' lang="ja"' if japanese else ""
+        shown_rows.append(
+            f"<div class=field><dt>{_escaped(label)}</dt>"
+            f"<dd{lang}>{_escaped(value)}</dd></div>"
+        )
+    shown = "".join(shown_rows)
     return (
         "<details><summary>Source and technical details</summary>"
         f"<dl class=fields>{shown}</dl></details>"
@@ -1480,19 +1685,20 @@ def _coverage_actions(
                 "The verdict checks completeness, not the Japanese.</p>",
             ]
         )
+        paid_label = (
+            f"Send {_escaped(model_coverage.source_file)} to Anthropic using "
+            f"{_escaped(model)} to check source-unit completeness — paid API call"
+        )
         if busy:
             parts.extend(
                 [
-                    '<button type=submit disabled>Ask Claude to check '
-                    "completeness — paid API call"
-                    "</button>",
+                    f"<button type=submit disabled>{paid_label}</button>",
                     f'<p class="status problem">{_escaped(busy)}</p>',
                 ]
             )
         else:
             parts.append(
-                '<button type=submit>Ask Claude to check '
-                "completeness — paid API call</button>"
+                f"<button type=submit>{paid_label}</button>"
             )
         parts.append("</form>")
     else:
@@ -1772,7 +1978,7 @@ def render_source(
         f'<link rel=stylesheet href="{prefix}/style.css">',
         "</head><body><main>",
         f'<p><a href="{prefix}/">&larr; All sources</a></p>',
-        f'<h1 lang="ja">{_escaped(journey.source)}</h1>',
+        f'<h1>{_escaped(journey.source)}</h1>',
         f"<p class=saved>{_escaped(journey.state)}. "
         f"{_escaped(journey.next_action)}.</p>",
     ]
@@ -2250,8 +2456,8 @@ def render_consent(
         body.append(
             '<button type=submit name="dispatch" '
             f'value="{html.escape(dispatch, quote=True)}">Send {name} to '
-            f"{_escaped(consent.model)} to propose vocabulary cards and "
-            "grammar — paid API call</button></form>"
+            f"Anthropic using {_escaped(consent.model)} to propose vocabulary "
+            "cards and grammar — paid API call</button></form>"
         )
     body.append("</main></body></html>")
     return "".join(body)
@@ -2297,11 +2503,11 @@ def render_extraction_success(name: str, outcome: Any, *, token: str) -> str:
     )
 
 
-def render_extraction_failure(message: str, note: str) -> str:
+def render_extraction_failure(failure: FailureView) -> str:
     """Close a streamed page without claiming more than the journal proves."""
     return (
         "</ol>"
-        f'<p class="status problem" role=alert>{_escaped(message)}</p>'
-        f'<p class=counts>{_escaped(note)}</p>'
+        '<section class="status problem" role=alert>'
+        f"{_failure_facts(failure)}</section>"
         "</main></body></html>"
     )

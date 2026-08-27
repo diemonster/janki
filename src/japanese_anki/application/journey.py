@@ -23,7 +23,7 @@ important word" is the rules-engine anti-pattern `docs/DESIGN.md` names.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +32,7 @@ from japanese_anki.application.assignment import (
     evaluate_prospective_deck_ownership,
 )
 from japanese_anki.application.authority import needs_example_review
+from japanese_anki.application.finish import FinishScopeError, list_finish_receipts
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.models import VocabularyRecord
@@ -42,6 +43,7 @@ __all__ = [
     "COVERAGE_NEEDS_DECISION",
     "DECK_NEEDS_DECISION",
     "EXAMPLES_NEED_REVIEW",
+    "FINISH_ARCHIVE_UNREADABLE",
     "GRAMMAR_NEEDS_REVIEW",
     "GRAMMAR_NONE",
     "GRAMMAR_ONLY",
@@ -49,6 +51,7 @@ __all__ = [
     "GRAMMAR_UNKNOWN",
     "JOURNEY_STATES",
     "NOT_EXTRACTED",
+    "PATTERN_STORE_UNREADABLE",
     "READING_HOLD",
     "READY_TO_ADD",
     "STAGING_UNREADABLE",
@@ -72,10 +75,18 @@ READY_TO_ADD = "Ready to add"
 GRAMMAR_ONLY = "Grammar saved — no word cards to build"
 ADDED = "Added — dictionary/audio/build steps remain"
 STAGING_UNREADABLE = "Needs attention — this source's file could not be read"
+FINISH_ARCHIVE_UNREADABLE = (
+    "Needs attention — completed-card archive could not be verified"
+)
+PATTERN_STORE_UNREADABLE = (
+    "Needs attention — grammar history could not be verified"
+)
 
 #: Card-track states, in the structural priority order that picks one action.
 JOURNEY_STATES: tuple[str, ...] = (
+    FINISH_ARCHIVE_UNREADABLE,
     STAGING_UNREADABLE,
+    PATTERN_STORE_UNREADABLE,
     NOT_EXTRACTED,
     READING_HOLD,
     CARDS_NEED_EDITS,
@@ -110,6 +121,7 @@ class SourceJourney:
     deck_decision_count: int = 0
     detail: str = ""
     grammar_detail: str = ""
+    finish_receipt_ids: tuple[str, ...] = ()
 
     @property
     def needs_a_person(self) -> bool:
@@ -368,6 +380,9 @@ def _unextracted(
     config: ProjectConfig,
     accounted: set[str],
     store: Mapping[str, patterns.PatternSet],
+    receipt_ids_by_source: Mapping[str, tuple[str, ...]],
+    archive_issue: str,
+    store_issue: str,
 ) -> list[SourceJourney]:
     """Inbox files nothing durable speaks for yet.
 
@@ -377,7 +392,8 @@ def _unextracted(
     is archived and pruned the store is the sole surviving evidence the call
     happened. Checking staging alone reports such a source as unread and offers
     to read it again, which is an offer to spend money re-buying an answer the
-    repository already holds. The store is checked first for that reason.
+    repository already holds. The store is consulted before calling the source
+    unread for that reason.
     """
     if not config.scan_inbox.is_dir():
         return []
@@ -396,7 +412,34 @@ def _unextracted(
             # already spoke for it, and re-extraction after a promotion is
             # ordinary. The newer answer wins.
             continue
-        if (archive / live.name).exists():
+        archive_exists = (archive / live.name).exists()
+        if archive_issue:
+            # Receipt discovery validates the whole archive namespace so a
+            # malformed file cannot conceal a duplicate durable handle. Once
+            # that global proof fails, no source without live staging can be
+            # called unread safely: the bad archive may be the paid answer for
+            # this source even when its filename does not follow today's
+            # convention.
+            found.append(
+                SourceJourney(
+                    source=path.name,
+                    state=FINISH_ARCHIVE_UNREADABLE,
+                    next_action=(
+                        "Reload this library; if this remains, repair the "
+                        "completed-card archive"
+                        if archive_issue.startswith("[finish-archive-scan]")
+                        else "Repair the completed-card archive named below"
+                    ),
+                    detail=(
+                        "janki could not verify the completed-card archive, so "
+                        f"it will not offer another paid extraction for {path.name}: "
+                        f"{archive_issue}"
+                    ),
+                )
+            )
+            continue
+        finish_receipt_ids = receipt_ids_by_source.get(path.name, ())
+        if finish_receipt_ids:
             # Promoted: its staging was archived and pruned. Before this
             # branch the source simply vanished from the queue, which reads
             # as "janki lost my lesson" rather than "that one is done".
@@ -405,6 +448,40 @@ def _unextracted(
                     source=path.name,
                     state=ADDED,
                     next_action="Add dictionary facts, audio, and build the deck",
+                    finish_receipt_ids=finish_receipt_ids,
+                )
+            )
+            continue
+        if archive_exists:
+            # Historical promoted archives predate exact W5 finish receipts.
+            # Their rows are still durable evidence that this source was read
+            # and added, so never turn absence of a new receipt into an offer
+            # to buy the same extraction again. The old archive cannot safely
+            # manufacture the owner binding a bounded finish link would need.
+            found.append(
+                SourceJourney(
+                    source=path.name,
+                    state=ADDED,
+                    next_action="Add dictionary facts, audio, and build the deck",
+                )
+            )
+            continue
+        if store_issue:
+            # With no live review or completed-card archive, the grammar store
+            # is the only place a pattern-only paid extraction can survive.
+            # An unreadable store therefore cannot be treated as an empty one:
+            # doing so would turn lost evidence into an offer to buy the same
+            # answer again.
+            found.append(
+                SourceJourney(
+                    source=path.name,
+                    state=PATTERN_STORE_UNREADABLE,
+                    next_action="Repair the grammar history named below",
+                    detail=(
+                        "janki could not verify whether this source was already "
+                        "read for grammar, so it will not offer another paid "
+                        f"extraction for {path.name}: {store_issue}"
+                    ),
                 )
             )
             continue
@@ -461,8 +538,47 @@ def source_journeys(
         warnings.append(
             f"could not read grammar review state in {config.patterns_file}: {exc}"
         )
+    # Read live reviews first. Promotion publishes the done archive before it
+    # prunes the live review; this order means a concurrent promotion can leave
+    # a stale-but-safe review row or a fresh receipt row, never a false offer to
+    # pay for extraction after both reads miss opposite sides of the handoff.
     staged, accounted, staged_warnings = _staged_journeys(config, store, store_issue)
     warnings.extend(staged_warnings)
-    journeys = [*staged, *_unextracted(config, accounted, store)]
+
+    receipt_ids_by_source: dict[str, list[str]] = {}
+    archive_issue = ""
+    try:
+        for receipt in list_finish_receipts(config):
+            receipt_ids_by_source.setdefault(receipt.source_file, []).append(
+                receipt.receipt_id
+            )
+    except FinishScopeError as exc:
+        archive_issue = str(exc)
+        warnings.append(
+            f"could not read completed-card receipts in "
+            f"{config.staging_dir / 'done'}: {exc}"
+        )
+    receipt_ids = {
+        source: tuple(source_receipts)
+        for source, source_receipts in receipt_ids_by_source.items()
+    }
+    staged = [
+        replace(
+            journey,
+            finish_receipt_ids=receipt_ids.get(journey.source, ()),
+        )
+        for journey in staged
+    ]
+    journeys = [
+        *staged,
+        *_unextracted(
+            config,
+            accounted,
+            store,
+            receipt_ids,
+            archive_issue,
+            store_issue,
+        ),
+    ]
     journeys.sort(key=lambda journey: (JOURNEY_STATES.index(journey.state), journey.source))
     return journeys, warnings
