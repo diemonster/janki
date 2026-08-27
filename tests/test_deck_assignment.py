@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import japanese_anki.application.assignment as assignment_module
 import japanese_anki.application.promotion as promotion_application
 from japanese_anki.application.assignment import (
     AssignmentError,
@@ -298,6 +299,151 @@ def test_ownership_evaluation_distinguishes_exact_zero_multiple_and_unreadable(
     [unreadable] = evaluate_deck_ownership(config, [exact], [exact])
     assert unreadable.state == "unreadable"
     assert "week-b.yaml" in " ".join(unreadable.unreadable_decks)
+
+
+def test_ownership_projects_each_deck_once_for_a_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dashboard-sized batches must not reload the corpus per staged card."""
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    records = [
+        _record(tags=["week-a"]),
+        VocabularyRecord.from_dict(
+            {
+                **_record(tags=["week-b"]).to_dict(),
+                "id": "word:聞く:きく",
+                "expression": "聞く",
+                "reading": "きく",
+            }
+        ),
+        VocabularyRecord.from_dict(
+            {
+                **_record(tags=["week-a"]).to_dict(),
+                "id": "word:読む:よむ",
+                "expression": "読む",
+                "reading": "よむ",
+            }
+        ),
+    ]
+    real_project = assignment_module.project_deck_records
+    projected: list[str] = []
+
+    def observe_project(
+        deck_path: Path,
+        source_path: Path,
+        source_records: list[VocabularyRecord],
+    ) -> tuple[dict[str, object], list[VocabularyRecord]]:
+        projected.append(deck_path.name)
+        return real_project(deck_path, source_path, source_records)
+
+    monkeypatch.setattr(
+        assignment_module,
+        "project_deck_records",
+        observe_project,
+    )
+
+    evaluations = evaluate_deck_ownership(config, records, records)
+
+    assert [item.state for item in evaluations] == [
+        "exactly_one",
+        "exactly_one",
+        "exactly_one",
+    ]
+    assert projected == ["week-a.yaml", "week-b.yaml"]
+
+
+def test_batched_ownership_keeps_static_source_membership_without_projection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "legacy": {
+                "name": "Legacy",
+                "source": "../legacy.json",
+                "include_tags": ["legacy"],
+            },
+        },
+    )
+    target = _record(tags=["week-a"])
+    save_records_json(tmp_path / "legacy.json", [_record(tags=["legacy"])])
+    real_project = assignment_module.project_deck_records
+    projected: list[str] = []
+
+    def observe_project(
+        deck_path: Path,
+        source_path: Path,
+        source_records: list[VocabularyRecord],
+    ) -> tuple[dict[str, object], list[VocabularyRecord]]:
+        projected.append(deck_path.name)
+        return real_project(deck_path, source_path, source_records)
+
+    monkeypatch.setattr(
+        assignment_module,
+        "project_deck_records",
+        observe_project,
+    )
+
+    [evaluation] = evaluate_deck_ownership(config, [target], [target])
+
+    assert evaluation.state == "multiple"
+    assert evaluation.owner_stems == ("legacy", "week-a")
+    assert projected == ["week-a.yaml"]
+
+
+@pytest.mark.parametrize("message", ["prospective deck projection failed", ""])
+def test_one_batch_projection_failure_marks_every_target_unreadable_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, message: str
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    first = _record(tags=["week-a"])
+    second = VocabularyRecord.from_dict(
+        {
+            **_record(tags=["week-b"]).to_dict(),
+            "id": "word:聞く:きく",
+            "expression": "聞く",
+            "reading": "きく",
+        }
+    )
+    attempts = 0
+
+    def refuse_projection(*_args: object, **_kwargs: object) -> object:
+        nonlocal attempts
+        attempts += 1
+        raise AssignmentError(message)
+
+    monkeypatch.setattr(
+        assignment_module,
+        "project_deck_records",
+        refuse_projection,
+    )
+
+    evaluations = evaluate_deck_ownership(
+        config,
+        [first, second],
+        [first, second],
+    )
+
+    assert attempts == 1
+    assert [item.state for item in evaluations] == ["unreadable", "unreadable"]
+    assert all(item.memberships == () for item in evaluations)
+    assert all(
+        item.unreadable_decks == (message,)
+        for item in evaluations
+    )
 
 
 @pytest.mark.parametrize(

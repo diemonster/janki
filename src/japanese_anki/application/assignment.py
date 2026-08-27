@@ -271,25 +271,35 @@ def _tag_diff(
     )
 
 
-def _memberships(
+def _membership_ids(
     config: ProjectConfig,
     rules: Sequence[_WordDeckRule],
-    record: VocabularyRecord,
     collection: Sequence[VocabularyRecord],
-) -> tuple[DeckMembership, ...]:
-    found: list[DeckMembership] = []
+) -> dict[Path, frozenset[str]]:
+    """Project each deck once against one prospective collection."""
+    projected: dict[Path, frozenset[str]] = {}
     canonical = config.normalized_file.resolve()
     for rule in rules:
         if rule.source_path == canonical:
-            _deck_config, projected = project_deck_records(
+            _deck_config, records = project_deck_records(
                 rule.path, canonical, collection
             )
-            takes = any(item.id == record.id for item in projected)
+            projected[rule.path] = frozenset(item.id for item in records)
         else:
-            # Assigning a staged row changes only the canonical collection.
-            # A deck reading another source is unaffected, so its currently
-            # resolved record set is the build's exact answer.
-            takes = record.id in rule.resolved_ids
+            # Assigning staged rows changes only the canonical collection.
+            # A deck reading another source is unaffected.
+            projected[rule.path] = rule.resolved_ids
+    return projected
+
+
+def _memberships_from_ids(
+    rules: Sequence[_WordDeckRule],
+    record: VocabularyRecord,
+    membership_ids: dict[Path, frozenset[str]],
+) -> tuple[DeckMembership, ...]:
+    found: list[DeckMembership] = []
+    for rule in rules:
+        takes = record.id in membership_ids[rule.path]
         refusal = None if takes else rule.selection.refusal(record)
         found.append(
             DeckMembership(
@@ -304,6 +314,20 @@ def _memberships(
             )
         )
     return tuple(found)
+
+
+def _memberships(
+    config: ProjectConfig,
+    rules: Sequence[_WordDeckRule],
+    record: VocabularyRecord,
+    collection: Sequence[VocabularyRecord],
+) -> tuple[DeckMembership, ...]:
+    """Project one collection, then describe one record's memberships."""
+    return _memberships_from_ids(
+        rules,
+        record,
+        _membership_ids(config, rules, collection),
+    )
 
 
 def evaluate_deck_ownership(
@@ -344,17 +368,21 @@ def evaluate_deck_ownership(
         _assignable_from_rules(config, rules)
     except JankiError as exc:
         configuration_problems.append(str(exc))
+    membership_ids: dict[Path, frozenset[str]] = {}
+    membership_issue: str | None = None
+    try:
+        membership_ids = _membership_ids(config, rules, prospective_collection)
+    except JankiError as exc:
+        membership_issue = str(exc)
 
     evaluations: list[DeckOwnershipEvaluation] = []
     for record in targets:
         problems = list(configuration_problems)
-        try:
-            memberships = _memberships(
-                config, rules, record, prospective_collection
-            )
-        except JankiError as exc:
+        if membership_issue is not None:
             memberships = ()
-            problems.append(str(exc))
+            problems.append(membership_issue)
+        else:
+            memberships = _memberships_from_ids(rules, record, membership_ids)
         owner_count = sum(item.takes for item in memberships)
         if problems:
             state: DeckOwnershipState = "unreadable"
