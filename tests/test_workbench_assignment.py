@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote, urlencode
 
+import pytest
 import yaml
 from test_application_journey import _stage
 from test_workbench import _request, _running
 
+import japanese_anki.application.assignment as assignment_module
 from japanese_anki import staging as staging_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.io import save_records_json
+from japanese_anki.models import VocabularyRecord
 from japanese_anki.staging import read_staging, write_staging
 from japanese_anki.workbench import WorkbenchSession
+from japanese_anki.workbench import server as workbench_server
 
 
 def _write_deck(root: Path, stem: str, name: str, intake_tag: str) -> None:
@@ -143,6 +149,48 @@ def test_source_page_offers_configured_deck_stems_and_exact_tag_diffs(
     )
 
 
+def test_source_page_plans_one_matrix_without_reloading_per_card_and_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, staging_path = _assignment_project(tmp_path)
+    records, _meta = read_staging(staging_path)
+    real_census = assignment_module._word_deck_census
+    real_project = assignment_module.project_deck_records
+    census_calls = 0
+    projected: list[str] = []
+
+    def observe_census(
+        config: ProjectConfig,
+    ) -> tuple[tuple[object, ...], tuple[str, ...]]:
+        nonlocal census_calls
+        census_calls += 1
+        return real_census(config)
+
+    def observe_project(
+        deck_path: Path,
+        source_path: Path,
+        source_records: Sequence[VocabularyRecord],
+    ) -> tuple[dict[str, Any], list[VocabularyRecord]]:
+        projected.append(deck_path.name)
+        return real_project(deck_path, source_path, source_records)
+
+    monkeypatch.setattr(assignment_module, "_word_deck_census", observe_census)
+    monkeypatch.setattr(assignment_module, "project_deck_records", observe_project)
+
+    offers = workbench_server._assignment_offers(
+        session.config,
+        records,
+        staging_path,
+    )
+
+    assert len(offers) == 3
+    assert all(len(offer.choices) == 2 for offer in offers)
+    assert census_calls == 1
+    # Two decks are projected once for current ownership, then once for each
+    # of the two rendered destinations. The record count is not a multiplier.
+    assert projected == ["lesson.yaml", "old.yaml"] * 3
+
+
 def test_assignment_replans_then_writes_only_the_selected_staging_row(
     tmp_path: Path,
 ) -> None:
@@ -162,6 +210,50 @@ def test_assignment_replans_then_writes_only_the_selected_staging_row(
     assert after[0] == replace(before[0], tags=["personal", "lesson-intake"])
     assert after[1:] == before[1:]
     assert after_meta == before_meta
+
+
+def test_assignment_post_rebinds_the_full_rendered_destination_matrix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, staging_path = _assignment_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _source_url(session))
+        fingerprint = _fingerprint(page)
+        before = staging_path.read_bytes()
+        real_plans = workbench_server.plan_deck_assignments
+
+        def change_only_the_unselected_choice(
+            *args: Any, **kwargs: Any
+        ) -> tuple[tuple[assignment_module.DeckAssignmentAttempt, ...], ...]:
+            matrix = real_plans(*args, **kwargs)
+            row = list(matrix[0])
+            old_index = next(
+                index
+                for index, attempt in enumerate(row)
+                if attempt.destination.stem == "old"
+            )
+            row[old_index] = replace(
+                row[old_index],
+                plan=None,
+                refusal="the unselected destination changed",
+            )
+            return (tuple(row),)
+
+        monkeypatch.setattr(
+            workbench_server,
+            "plan_deck_assignments",
+            change_only_the_unselected_choice,
+        )
+
+        status, _headers, body = _post(server, session, fingerprint)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert status == 409
+    assert b"plan changed" in body
+    assert staging_path.read_bytes() == before
 
 
 def test_assignment_refuses_a_changed_plan_or_staging_snapshot(

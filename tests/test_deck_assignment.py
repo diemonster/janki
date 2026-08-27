@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -16,6 +18,7 @@ from japanese_anki.application.assignment import (
     evaluate_deck_ownership,
     evaluate_prospective_deck_ownership,
     plan_deck_assignment,
+    plan_deck_assignments,
 )
 from japanese_anki.application.promotion import (
     POST_READING_GATES,
@@ -444,6 +447,202 @@ def test_one_batch_projection_failure_marks_every_target_unreadable_once(
         item.unreadable_decks == (message,)
         for item in evaluations
     )
+
+
+def test_assignment_matrix_keeps_duplicate_id_rows_independent(tmp_path: Path) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    first = _record(tags=["first-note"])
+    second = replace(
+        first,
+        meanings=["a separately proposed sense"],
+        tags=["second-note"],
+        source=replace(first.source, imported_from="page-b.pdf", row=2),
+    )
+
+    matrix = plan_deck_assignments(config, [first, second])
+
+    assert len(matrix) == 2
+    assert [attempt.destination.stem for attempt in matrix[0]] == [
+        "week-a",
+        "week-b",
+    ]
+    for attempt in matrix[0]:
+        assert attempt.plan is not None
+        assert attempt.plan.prospective_record.meanings == ["to speak"]
+        assert "first-note" in attempt.plan.assigned_record.tags
+        assert attempt.plan.proposals[0].imported_from == "page-a.pdf"
+    for attempt in matrix[1]:
+        assert attempt.plan is not None
+        assert attempt.plan.prospective_record.meanings == [
+            "a separately proposed sense"
+        ]
+        assert "second-note" in attempt.plan.assigned_record.tags
+        assert attempt.plan.proposals[0].imported_from == "page-b.pdf"
+
+
+def test_assignment_matrix_batches_unique_rows_but_isolates_each_repeated_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    first = _record(tags=[])
+    repeated = replace(
+        first,
+        id="word:聞く:きく",
+        expression="聞く",
+        reading="きく",
+    )
+    records = [
+        first,
+        repeated,
+        replace(
+            repeated,
+            meanings=["a separately proposed sense"],
+            source=replace(repeated.source, imported_from="page-b.pdf"),
+        ),
+        replace(
+            first,
+            id="word:読む:よむ",
+            expression="読む",
+            reading="よむ",
+        ),
+    ]
+    real_project = assignment_module.project_deck_records
+    projected: list[str] = []
+
+    def observe_project(
+        deck_path: Path,
+        source_path: Path,
+        source_records: list[VocabularyRecord],
+    ) -> tuple[dict[str, Any], list[VocabularyRecord]]:
+        projected.append(deck_path.name)
+        return real_project(deck_path, source_path, source_records)
+
+    monkeypatch.setattr(
+        assignment_module,
+        "project_deck_records",
+        observe_project,
+    )
+
+    matrix = plan_deck_assignments(config, records)
+
+    assert len(matrix) == 4
+    # Per destination: one projection group carries both unique IDs, while the
+    # two occurrences of the repeated ID remain isolated. Each group reads two
+    # canonical-backed decks, for 3 groups * 2 decks * 2 destinations.
+    assert len(projected) == 12
+
+
+def test_assignment_matrix_matches_every_isolated_cell_with_real_deck_rules(
+    tmp_path: Path,
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+            "legacy": {
+                "name": "Legacy exact source",
+                "source": "../legacy.json",
+                "include_tags": ["legacy"],
+            },
+        },
+    )
+    existing = _record(tags=["week-a"])
+    inline_target = replace(
+        existing,
+        id="word:読む:よむ",
+        expression="読む",
+        reading="よむ",
+        tags=[],
+    )
+    static_overlap = replace(
+        existing,
+        id="word:聞く:きく",
+        expression="聞く",
+        reading="きく",
+        tags=[],
+    )
+    save_records_json(config.normalized_file, [existing])
+    save_records_json(
+        tmp_path / "legacy.json",
+        [replace(static_overlap, tags=["legacy"])],
+    )
+    week_a_path = config.deck_dir / "week-a.yaml"
+    week_a = yaml.safe_load(week_a_path.read_text(encoding="utf-8"))
+    week_a["notes"] = [replace(inline_target, tags=["inline-only"]).to_dict()]
+    week_a_path.write_text(
+        yaml.safe_dump(week_a, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    records = [existing, inline_target, static_overlap]
+
+    matrix = plan_deck_assignments(config, records)
+
+    assert any(attempt.plan is not None for row in matrix for attempt in row)
+    assert any(attempt.plan is None for row in matrix for attempt in row)
+    for record, row in zip(records, matrix, strict=True):
+        for attempt in row:
+            try:
+                isolated = plan_deck_assignment(
+                    config,
+                    record,
+                    attempt.destination.stem,
+                )
+            except AssignmentError as exc:
+                assert attempt.plan is None
+                assert attempt.refusal == str(exc)
+            else:
+                assert attempt.refusal is None
+                assert attempt.plan == isolated
+
+
+def test_assignment_matrix_preserves_a_blank_current_projection_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    current = _record(tags=[])
+    save_records_json(config.normalized_file, [current])
+    real_memberships = assignment_module._membership_ids
+    calls = 0
+
+    def blank_first_projection(
+        *args: Any, **kwargs: Any
+    ) -> dict[Path, frozenset[str]]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise AssignmentError("")
+        return real_memberships(*args, **kwargs)
+
+    monkeypatch.setattr(
+        assignment_module,
+        "_membership_ids",
+        blank_first_projection,
+    )
+
+    [attempts] = plan_deck_assignments(config, [current])
+
+    assert calls == 1
+    assert all(attempt.plan is None for attempt in attempts)
+    assert [attempt.refusal for attempt in attempts] == ["", ""]
 
 
 @pytest.mark.parametrize(

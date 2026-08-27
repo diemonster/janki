@@ -12,6 +12,7 @@ plan.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -33,6 +34,7 @@ from japanese_anki.models import VocabularyRecord
 __all__ = [
     "AssignableWordDeck",
     "AssignmentError",
+    "DeckAssignmentAttempt",
     "DeckAssignmentPlan",
     "DeckMembership",
     "DeckOwnershipEvaluation",
@@ -43,6 +45,7 @@ __all__ = [
     "evaluate_deck_ownership",
     "evaluate_prospective_deck_ownership",
     "plan_deck_assignment",
+    "plan_deck_assignments",
     "require_exact_deck_ownership",
 ]
 
@@ -143,6 +146,26 @@ class DeckAssignmentPlan:
     memberships: tuple[DeckMembership, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class DeckAssignmentAttempt:
+    """One destination's exact plan, or its exact refusal."""
+
+    destination: AssignableWordDeck
+    plan: DeckAssignmentPlan | None
+    refusal: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedAssignment:
+    index: int
+    current: VocabularyRecord
+    destination: AssignableWordDeck
+    sibling_proposals: tuple[VocabularyRecord, ...]
+    existing_owner: str | None
+    tag_diff: DeckTagDiff
+    assigned_record: VocabularyRecord
+
+
 def _word_deck_census(
     config: ProjectConfig,
 ) -> tuple[tuple[_WordDeckRule, ...], tuple[str, ...]]:
@@ -233,13 +256,6 @@ def _occurrence(record: VocabularyRecord) -> ProposalOccurrence:
     )
 
 
-def _prospective_collection(
-    canonical: Sequence[VocabularyRecord], assigned: VocabularyRecord
-) -> tuple[list[VocabularyRecord], VocabularyRecord]:
-    records = _merge_prospective_collection(canonical, [assigned])
-    return records, next(record for record in records if record.id == assigned.id)
-
-
 def _merge_prospective_collection(
     canonical: Sequence[VocabularyRecord], incoming: Sequence[VocabularyRecord]
 ) -> list[VocabularyRecord]:
@@ -314,20 +330,6 @@ def _memberships_from_ids(
             )
         )
     return tuple(found)
-
-
-def _memberships(
-    config: ProjectConfig,
-    rules: Sequence[_WordDeckRule],
-    record: VocabularyRecord,
-    collection: Sequence[VocabularyRecord],
-) -> tuple[DeckMembership, ...]:
-    """Project one collection, then describe one record's memberships."""
-    return _memberships_from_ids(
-        rules,
-        record,
-        _membership_ids(config, rules, collection),
-    )
 
 
 def evaluate_deck_ownership(
@@ -450,6 +452,270 @@ def require_exact_deck_ownership(
     return evaluations
 
 
+def _finish_assignment_plan(
+    rules: Sequence[_WordDeckRule],
+    prepared: _PreparedAssignment,
+    prospective: VocabularyRecord,
+    membership_ids: dict[Path, frozenset[str]],
+) -> DeckAssignmentPlan:
+    memberships = _memberships_from_ids(rules, prospective, membership_ids)
+    chosen = next(
+        item for item in memberships if item.stem == prepared.destination.stem
+    )
+    if not chosen.takes:
+        raise AssignmentError(
+            f"{prepared.destination.name} does not select the card after assignment: "
+            f"{chosen.refusal or 'its deck rule refused the card'}."
+        )
+    other_owners = [
+        item
+        for item in memberships
+        if item.takes and item.stem != prepared.destination.stem
+    ]
+    if other_owners:
+        names = ", ".join(item.name for item in other_owners)
+        raise AssignmentError(
+            f"The prospective record for {prepared.destination.name} would also "
+            f"select {names}; change the deck rules or review the record tags first."
+        )
+    return DeckAssignmentPlan(
+        record_id=prepared.current.id,
+        destination=prepared.destination,
+        proposals=tuple(
+            _occurrence(record)
+            for record in (prepared.current, *prepared.sibling_proposals)
+        ),
+        existing_owner=prepared.existing_owner,
+        tag_diff=prepared.tag_diff,
+        assigned_record=prepared.assigned_record,
+        prospective_record=prospective,
+        memberships=memberships,
+    )
+
+
+def _plan_prepared_group(
+    config: ProjectConfig,
+    rules: Sequence[_WordDeckRule],
+    canonical: Sequence[VocabularyRecord],
+    prepared: Sequence[_PreparedAssignment],
+) -> dict[int, DeckAssignmentAttempt]:
+    """Plan distinct ids together, falling back if a shared projection refuses."""
+    try:
+        collection = _merge_prospective_collection(
+            canonical,
+            [item.assigned_record for item in prepared],
+        )
+        by_id = {record.id: record for record in collection}
+        membership_ids = _membership_ids(config, rules, collection)
+    except JankiError as exc:
+        if len(prepared) == 1:
+            item = prepared[0]
+            return {
+                item.index: DeckAssignmentAttempt(
+                    destination=item.destination,
+                    plan=None,
+                    refusal=str(exc),
+                )
+            }
+        found: dict[int, DeckAssignmentAttempt] = {}
+        for item in prepared:
+            found.update(_plan_prepared_group(config, rules, canonical, [item]))
+        return found
+
+    found = {}
+    for item in prepared:
+        try:
+            plan = _finish_assignment_plan(
+                rules,
+                item,
+                by_id[item.current.id],
+                membership_ids,
+            )
+        except JankiError as exc:
+            found[item.index] = DeckAssignmentAttempt(
+                destination=item.destination,
+                plan=None,
+                refusal=str(exc),
+            )
+        else:
+            found[item.index] = DeckAssignmentAttempt(
+                destination=item.destination,
+                plan=plan,
+                refusal=None,
+            )
+    return found
+
+
+def plan_deck_assignments(
+    config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    *,
+    destination_stems: Sequence[str] | None = None,
+    sibling_proposals: Sequence[Sequence[VocabularyRecord]] | None = None,
+) -> tuple[tuple[DeckAssignmentAttempt, ...], ...]:
+    """Plan a record-by-destination matrix from one repository snapshot.
+
+    Every cell remains the same independent assignment plan the single-record
+    API returns. Distinct stable ids can share one prospective collection for a
+    destination because merging, inline overrides, and deck selection are all
+    record-local. Duplicate ids deliberately fall back to one-record groups so
+    two separately rendered rows cannot influence one another's claim.
+    """
+    rules = _word_deck_rules(config)
+    all_destinations = _assignable_from_rules(config, rules)
+    if destination_stems is None:
+        destinations = all_destinations
+    else:
+        by_stem = {deck.stem: deck for deck in all_destinations}
+        selected: list[AssignableWordDeck] = []
+        for stem in destination_stems:
+            destination = by_stem.get(stem)
+            if destination is None:
+                raise AssignmentError(
+                    f"No assignable word deck has deck stem {stem!r}."
+                )
+            selected.append(destination)
+        destinations = tuple(selected)
+
+    sibling_rows = (
+        tuple(() for _record in records)
+        if sibling_proposals is None
+        else tuple(tuple(items) for items in sibling_proposals)
+    )
+    if len(sibling_rows) != len(records):
+        raise AssignmentError(
+            "Deck-assignment sibling proposals must align with the rendered records."
+        )
+    try:
+        canonical = (
+            load_records(config.normalized_file)
+            if config.normalized_file.exists()
+            else []
+        )
+    except JankiError as exc:
+        raise AssignmentError(str(exc)) from exc
+
+    canonical_matches: dict[str, list[VocabularyRecord]] = {}
+    for record in canonical:
+        canonical_matches.setdefault(record.id, []).append(record)
+    existing_indices = [
+        index
+        for index, record in enumerate(records)
+        if len(canonical_matches.get(record.id, ())) == 1
+    ]
+    current_membership_ids: dict[Path, frozenset[str]] = {}
+    current_membership_issue: str | None = None
+    if existing_indices:
+        try:
+            current_membership_ids = _membership_ids(config, rules, canonical)
+        except JankiError as exc:
+            current_membership_issue = str(exc)
+
+    known_intake_tags = frozenset(
+        destination.intake_tag for destination in all_destinations
+    )
+    rows: list[list[DeckAssignmentAttempt | None]] = [
+        [None for _destination in destinations] for _record in records
+    ]
+    prepared_by_destination: list[list[_PreparedAssignment]] = [
+        [] for _destination in destinations
+    ]
+    for index, (current, siblings) in enumerate(
+        zip(records, sibling_rows, strict=True)
+    ):
+        problem: str | None = None
+        existing_owner: _WordDeckRule | None = None
+        if any(proposal.id != current.id for proposal in siblings):
+            problem = (
+                "Sibling proposals shown for a deck assignment must have the same "
+                "stable id as the current staged card."
+            )
+        matching = canonical_matches.get(current.id, [])
+        if problem is None and len(matching) > 1:
+            problem = (
+                f"The canonical collection has more than one {current.id}; resolve "
+                "that duplicate before assignment."
+            )
+        if problem is None and matching:
+            if current_membership_issue is not None:
+                problem = current_membership_issue
+            else:
+                current_memberships = _memberships_from_ids(
+                    rules,
+                    matching[0],
+                    current_membership_ids,
+                )
+                owner_stems = {
+                    item.stem for item in current_memberships if item.takes
+                }
+                owners = [rule for rule in rules if rule.stem in owner_stems]
+                if len(owners) > 1:
+                    names = ", ".join(owner.name for owner in owners)
+                    problem = (
+                        f"{current.id} already belongs to more than one word deck "
+                        f"({names}); resolve its existing membership before assignment."
+                    )
+                elif owners:
+                    existing_owner = owners[0]
+
+        for destination_index, destination in enumerate(destinations):
+            refusal = problem
+            if (
+                refusal is None
+                and existing_owner is not None
+                and existing_owner.stem != destination.stem
+            ):
+                refusal = (
+                    f"{current.id} already belongs to {existing_owner.name} "
+                    f"({existing_owner.stem}); moving it to {destination.name} "
+                    "requires an explicit reassignment review."
+                )
+            if refusal is not None:
+                rows[index][destination_index] = DeckAssignmentAttempt(
+                    destination=destination,
+                    plan=None,
+                    refusal=refusal,
+                )
+                continue
+            diff = _tag_diff(
+                current,
+                known_intake_tags=known_intake_tags,
+                chosen_intake_tag=destination.intake_tag,
+            )
+            prepared_by_destination[destination_index].append(
+                _PreparedAssignment(
+                    index=index,
+                    current=current,
+                    destination=destination,
+                    sibling_proposals=siblings,
+                    existing_owner=(
+                        existing_owner.stem if existing_owner is not None else None
+                    ),
+                    tag_diff=diff,
+                    assigned_record=replace(current, tags=list(diff.after)),
+                )
+            )
+
+    for destination_index, prepared in enumerate(prepared_by_destination):
+        if not prepared:
+            continue
+        ids = [item.current.id for item in prepared]
+        counts = Counter(ids)
+        unique = [item for item in prepared if counts[item.current.id] == 1]
+        repeated = [item for item in prepared if counts[item.current.id] > 1]
+        groups = ([unique] if unique else []) + [[item] for item in repeated]
+        for group in groups:
+            attempts = _plan_prepared_group(config, rules, canonical, group)
+            for index, attempt in attempts.items():
+                rows[index][destination_index] = attempt
+
+    if any(attempt is None for row in rows for attempt in row):
+        raise AssignmentError("Deck-assignment planning left an incomplete choice matrix.")
+    return tuple(
+        tuple(attempt for attempt in row if attempt is not None) for row in rows
+    )
+
+
 def plan_deck_assignment(
     config: ProjectConfig,
     current: VocabularyRecord,
@@ -474,84 +740,17 @@ def plan_deck_assignment(
     contract that binds review to exact old canonical tags; this service does
     not invent it.
     """
-    rules = _word_deck_rules(config)
-    destinations = _assignable_from_rules(config, rules)
-    destination = next(
-        (deck for deck in destinations if deck.stem == destination_stem), None
+    attempts = plan_deck_assignments(
+        config,
+        [current],
+        destination_stems=[destination_stem],
+        sibling_proposals=[sibling_proposals],
     )
-    if destination is None:
-        raise AssignmentError(f"No assignable word deck has deck stem {destination_stem!r}.")
-
-    if any(proposal.id != current.id for proposal in sibling_proposals):
+    attempt = attempts[0][0]
+    if attempt.plan is None:
         raise AssignmentError(
-            "Sibling proposals shown for a deck assignment must have the same "
-            "stable id as the current staged card."
+            attempt.refusal
+            if attempt.refusal is not None
+            else "Deck assignment was refused."
         )
-    record_id = current.id
-    try:
-        canonical = (
-            load_records(config.normalized_file)
-            if config.normalized_file.exists()
-            else []
-        )
-    except JankiError as exc:
-        raise AssignmentError(str(exc)) from exc
-    matching = [record for record in canonical if record.id == record_id]
-    if len(matching) > 1:
-        raise AssignmentError(
-            f"The canonical collection has more than one {record_id}; resolve "
-            "that duplicate before assignment."
-        )
-    existing = matching[0] if matching else None
-    existing_owner: _WordDeckRule | None = None
-    if existing is not None:
-        current_memberships = _memberships(config, rules, existing, canonical)
-        owner_stems = {item.stem for item in current_memberships if item.takes}
-        owners = [rule for rule in rules if rule.stem in owner_stems]
-        if len(owners) > 1:
-            names = ", ".join(owner.name for owner in owners)
-            raise AssignmentError(
-                f"{record_id} already belongs to more than one word deck "
-                f"({names}); resolve its existing membership before assignment."
-            )
-        if len(owners) == 1:
-            existing_owner = owners[0]
-            if existing_owner.stem != destination.stem:
-                raise AssignmentError(
-                    f"{record_id} already belongs to {existing_owner.name} "
-                    f"({existing_owner.stem}); moving it to {destination.name} "
-                    "requires an explicit reassignment review."
-                )
-
-    diff = _tag_diff(
-        current,
-        known_intake_tags=frozenset(deck.intake_tag for deck in destinations),
-        chosen_intake_tag=destination.intake_tag,
-    )
-    assigned = replace(current, tags=list(diff.after))
-    collection, prospective = _prospective_collection(canonical, assigned)
-    memberships = _memberships(config, rules, prospective, collection)
-    chosen_membership = next(item for item in memberships if item.stem == destination.stem)
-    if not chosen_membership.takes:
-        raise AssignmentError(
-            f"{destination.name} does not select the card after assignment: "
-            f"{chosen_membership.refusal or 'its deck rule refused the card'}."
-        )
-    other_owners = [item for item in memberships if item.takes and item.stem != destination.stem]
-    if other_owners:
-        names = ", ".join(item.name for item in other_owners)
-        raise AssignmentError(
-            f"The prospective record for {destination.name} would also select "
-            f"{names}; change the deck rules or review the record tags first."
-        )
-
-    return DeckAssignmentPlan(
-        record_id=record_id,
-        destination=destination,
-        proposals=tuple(_occurrence(record) for record in (current, *sibling_proposals)),
-        existing_owner=existing_owner.stem if existing_owner is not None else None,
-        tag_diff=diff,
-        assigned_record=assigned,
-        prospective_record=prospective,
-        memberships=memberships,
-    )
+    return attempt.plan

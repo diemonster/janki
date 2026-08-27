@@ -78,12 +78,11 @@ from japanese_anki.application import (
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import build as build_application
 from japanese_anki.application.assignment import (
-    AssignableWordDeck,
     AssignmentError,
+    DeckAssignmentAttempt,
     DeckAssignmentPlan,
     ProposalOccurrence,
-    assignable_word_decks,
-    plan_deck_assignment,
+    plan_deck_assignments,
 )
 from japanese_anki.application.coverage import CoverageRunError
 from japanese_anki.application.deck_creation import (
@@ -368,10 +367,9 @@ def _assignment_claim(choice: _DeckAssignmentChoice) -> dict[str, object]:
 
 
 def _assignment_offer(
-    config: ProjectConfig,
     record: VocabularyRecord,
     card: int,
-    decks: Sequence[AssignableWordDeck],
+    attempts: Sequence[DeckAssignmentAttempt],
     *,
     sibling_proposals: Sequence[VocabularyRecord] = (),
 ) -> _DeckAssignmentOffer:
@@ -384,35 +382,16 @@ def _assignment_offer(
         )
         for proposal in (record, *sibling_proposals)
     )
-    choices: list[_DeckAssignmentChoice] = []
-    for deck in decks:
-        try:
-            plan = plan_deck_assignment(
-                config,
-                record,
-                deck.stem,
-                sibling_proposals=sibling_proposals,
-            )
-        except AssignmentError as exc:
-            choices.append(
-                _DeckAssignmentChoice(
-                    stem=deck.stem,
-                    name=deck.name,
-                    intake_tag=deck.intake_tag,
-                    plan=None,
-                    refusal=str(exc),
-                )
-            )
-        else:
-            choices.append(
-                _DeckAssignmentChoice(
-                    stem=deck.stem,
-                    name=deck.name,
-                    intake_tag=deck.intake_tag,
-                    plan=plan,
-                    refusal=None,
-                )
-            )
+    choices = [
+        _DeckAssignmentChoice(
+            stem=attempt.destination.stem,
+            name=attempt.destination.name,
+            intake_tag=attempt.destination.intake_tag,
+            plan=attempt.plan,
+            refusal=attempt.refusal,
+        )
+        for attempt in attempts
+    ]
     claims = {
         "card": card,
         "record_id": record.id,
@@ -446,19 +425,23 @@ def _assignment_offers(
     records: Sequence[VocabularyRecord],
     current_path: Path,
 ) -> tuple[_DeckAssignmentOffer, ...]:
-    decks = assignable_word_decks(config)
     siblings = _staged_sibling_proposals(
         config,
         current_path,
         frozenset(record.id for record in records),
     )
+    sibling_rows = tuple(siblings.get(record.id, ()) for record in records)
+    matrix = plan_deck_assignments(
+        config,
+        records,
+        sibling_proposals=sibling_rows,
+    )
     return tuple(
         _assignment_offer(
-            config,
             record,
             card,
-            decks,
-            sibling_proposals=siblings.get(record.id, ()),
+            matrix[card],
+            sibling_proposals=sibling_rows[card],
         )
         for card, record in enumerate(records)
     )
@@ -3311,18 +3294,22 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._error(400, "That assignment names a card which is not on this page.")
             return
         try:
-            decks = assignable_word_decks(session.config)
             siblings = _staged_sibling_proposals(
                 session.config,
                 panel.staging_path,
                 frozenset({panel.records[card].id}),
             )
-            offer = _assignment_offer(
+            sibling_rows = (siblings.get(panel.records[card].id, ()),)
+            attempts = plan_deck_assignments(
                 session.config,
+                [panel.records[card]],
+                sibling_proposals=sibling_rows,
+            )
+            offer = _assignment_offer(
                 panel.records[card],
                 card,
-                decks,
-                sibling_proposals=siblings.get(panel.records[card].id, ()),
+                attempts[0],
+                sibling_proposals=sibling_rows[0],
             )
         except JankiError as exc:
             self._error(
