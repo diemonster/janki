@@ -167,6 +167,13 @@ def test_empty_targeted_audio_never_widens_to_the_corpus(tmp_path: Path) -> None
             words=True,
             word_provider=provider,
         )
+    with pytest.raises(AudioPlanError, match="empty scope never means"):
+        audio_application.execute_targeted_audio(
+            config,
+            [],
+            words=True,
+            word_provider=provider,
+        )
 
     corpus = plan_corpus_audio(
         config,
@@ -766,3 +773,96 @@ def test_example_audio_plan_runs_provider_length_validation_without_dispatch(
             word_provider=Provider("voicevox", 7),
             sentence_provider=LengthProvider("openai", "onyx", suffix=".mp3"),
         )
+
+
+def test_targeted_executor_uses_the_fresh_exact_plan_ids(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = _record("話す", "はなす")
+    outside = _record("本", "ほん")
+    config = _project(tmp_path, [selected, outside])
+    provider = Provider("voicevox", 7)
+    displayed = plan_targeted_audio(
+        config,
+        [selected.id],
+        words=True,
+        word_provider=provider,
+    )
+    generated_ids: list[tuple[str, ...]] = []
+
+    def capture(records: list[VocabularyRecord], **kwargs: object):
+        generated_ids.append(tuple(kwargs["ids"]))  # type: ignore[arg-type]
+        return audio_application.audio_cmd.AudioResult(records=list(records))
+
+    monkeypatch.setattr(audio_application.audio_cmd, "generate_audio", capture)
+
+    outcome = audio_application.execute_targeted_audio(
+        config,
+        [selected.id],
+        words=True,
+        expected_fingerprint=displayed.fingerprint,
+        word_provider=provider,
+    )
+
+    assert outcome.succeeded
+    assert outcome.plan is not None
+    assert outcome.plan.record_ids == (selected.id,)
+    assert generated_ids == [(selected.id,)]
+
+
+def test_targeted_executor_replans_and_refuses_a_changed_rendered_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = _record("話す", "はなす")
+    config = _project(tmp_path, [selected])
+    provider = Provider("voicevox", 7)
+    displayed = plan_targeted_audio(
+        config,
+        [selected.id],
+        words=True,
+        word_provider=provider,
+    )
+    selected.usage_notes = "Changed after the page rendered."
+    config.normalized_file.write_text(
+        json.dumps([selected.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        audio_application.audio_cmd,
+        "generate_audio",
+        lambda *args, **kwargs: pytest.fail("a stale plan must not reach synthesis"),
+    )
+
+    with pytest.raises(AudioPlanError, match="changed after it was displayed"):
+        audio_application.execute_targeted_audio(
+            config,
+            [selected.id],
+            words=True,
+            expected_fingerprint=displayed.fingerprint,
+            prune=True,
+            word_provider=provider,
+        )
+    assert not config.ledger_file.exists()
+
+
+def test_cli_routes_audio_through_the_shared_executor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _project(tmp_path, [])
+    calls: list[tuple[Path, bool]] = []
+
+    def execute(received: ProjectConfig, **kwargs: object):
+        calls.append((received.root, bool(kwargs["words"])))
+        return audio_application.AudioExecutionOutcome(
+            state="no-records",
+            plan=None,
+            output_dir=received.media_dir / "audio",
+            no_records=True,
+        )
+
+    monkeypatch.setattr(audio_application, "execute_corpus_audio", execute)
+
+    assert cli.main(["--root", str(config.root), "audio", "--words"]) == 0
+    assert calls == [(config.root, True)]

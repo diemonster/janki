@@ -1,9 +1,9 @@
-"""Plan one exact audio scope without contacting a speech provider.
+"""Plan and execute one exact durable audio transaction.
 
-The durable audio transaction still lives in the CLI while it is extracted in
-small, reviewable pieces.  This module owns the first shared seam: the browser
-can describe an exact nonempty set of promoted records, provider cost class,
-and clip scope without allowing an empty id list to mean the whole corpus.
+The browser and CLI share this module all the way from an exact display plan to
+the write-ahead provider transaction.  Targeted calls never interpret an empty
+id set as the corpus, and a browser can bind its click to the fresh plan that is
+recomputed under every repository-owner lock before any provider is contacted.
 """
 
 from __future__ import annotations
@@ -11,7 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
@@ -20,15 +21,69 @@ from japanese_anki import audio_cmd, ledger, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import deck_declared_record_versions
-from japanese_anki.io import RecordsRevision, load_records_snapshot
+from japanese_anki.io import (
+    DataError,
+    RecordsRevision,
+    exclusive_path_lock,
+    load_records,
+    load_records_snapshot,
+    load_structured,
+    records_revision,
+    save_records_json_locked,
+)
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.tts import SpeechProvider, openai_tts, voicevox
 
 AudioAccess = Literal["local-network", "paid-network"]
+AudioPhase = Literal[
+    "Preparing audio",
+    "Creating audio",
+    "Saving audio",
+    "Cleaning up audio",
+]
+AudioExecutionState = Literal[
+    "complete",
+    "no-records",
+    "records-stale",
+    "generation-stopped",
+    "finalization-stopped",
+    "prune-incomplete",
+    "ledger-incomplete",
+]
+AudioProgress = Callable[[AudioPhase], None]
 
 
 class AudioPlanError(JankiError):
     """An audio request does not name one exact canonical scope."""
+
+
+@dataclass(frozen=True, slots=True)
+class AudioExecutionOutcome:
+    """Truthful, surface-neutral result of one durable audio transaction."""
+
+    state: AudioExecutionState
+    plan: AudioPlan | None
+    output_dir: Path
+    file_count: int = 0
+    written_record_ids: tuple[str, ...] = ()
+    up_to_date: int = 0
+    pruned_paths: tuple[Path, ...] = ()
+    warnings: tuple[str, ...] = ()
+    guessed_accent: tuple[str, ...] = ()
+    no_reading: tuple[str, ...] = ()
+    stopped_by: str | None = None
+    prune_error: str | None = None
+    ledger_error: str | None = None
+    pending_recovery: bool = False
+    record_references_written: bool = False
+    media_published: bool = False
+    ledger_committed: bool = False
+    no_records: bool = False
+    prune_requested: bool = False
+
+    @property
+    def succeeded(self) -> bool:
+        return self.state in {"complete", "no-records"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +340,7 @@ def _plan_records(
     word_provider: SpeechProvider | None,
     sentence_provider: SpeechProvider | None,
     protected_records: Sequence[VocabularyRecord],
+    ledger_book: ledger.Ledger | None = None,
 ) -> AudioPlan:
     if not words and not examples:
         raise AudioPlanError(
@@ -325,7 +381,11 @@ def _plan_records(
         requirements = audio_cmd.audio_clip_requirements(
             records,
             wanted=set(ids),
-            book=ledger.load(config.ledger_file.resolve()),
+            book=(
+                ledger_book
+                if ledger_book is not None
+                else ledger.load(config.ledger_file.resolve())
+            ),
             audio_dir=config.media_dir.resolve() / audio_cmd.AUDIO_SUBDIR,
             word_provider=word_provider,
             prepared_examples=prepared,
@@ -473,6 +533,7 @@ def plan_audio_records(
     word_provider: SpeechProvider | None = None,
     sentence_provider: SpeechProvider | None = None,
     protected_records: Sequence[VocabularyRecord] = (),
+    ledger_book: ledger.Ledger | None = None,
 ) -> AudioPlan:
     """Plan the CLI's already owner-locked record universe without reloading it."""
     exact_ids = None if record_ids is None else _exact_ids(record_ids)
@@ -488,4 +549,635 @@ def plan_audio_records(
         word_provider=word_provider,
         sentence_provider=sentence_provider,
         protected_records=protected_records,
+        ledger_book=ledger_book,
+    )
+
+
+def _emit_progress(progress: AudioProgress | None, phase: AudioPhase) -> None:
+    """Progress is advisory and must never interrupt the durable transaction."""
+    if progress is None:
+        return
+    try:
+        progress(phase)
+    except Exception:
+        # A disconnected browser or failed status sink cannot be allowed to
+        # strand paid bytes between the WAL and their canonical commit.
+        return
+
+
+def _save_audio_ledger(book: ledger.Ledger) -> ledger.LedgerError | None:
+    """Return a final ledger failure after records/media already landed."""
+    try:
+        book.save()
+    except ledger.LedgerError as exc:
+        return exc
+    return None
+
+
+def _persist_audio_wal(
+    book: ledger.Ledger, keys: Sequence[str], *, replace: bool = False
+) -> ledger.Ledger:
+    """Durably merge only this call's additive paid-audio WAL rows."""
+    book.merge_pending_audio(keys, replace=replace)
+    return book
+
+
+def _audio_deck_source_paths(deck_paths: Sequence[Path]) -> set[Path]:
+    """Record files that current deck definitions make durable audio owners."""
+    sources: set[Path] = set()
+    for deck_path in deck_paths:
+        raw = load_structured(deck_path)
+        if not isinstance(raw, Mapping):
+            raise DataError(f"Deck file must contain a mapping: {deck_path}")
+        deck_config = raw.get("deck") or {}
+        if not isinstance(deck_config, Mapping):
+            raise DataError(f"The deck section must be a mapping: {deck_path}")
+        source = deck_config.get("source")
+        if source:
+            sources.add((deck_path.parent / str(source)).resolve())
+    return sources
+
+
+def _assert_audio_owners_current(
+    revisions: Mapping[Path, RecordsRevision],
+    *,
+    config: ProjectConfig,
+    deck_paths: Sequence[Path],
+    source_paths: set[Path],
+) -> None:
+    current_decks = [path.resolve() for path in status.deck_files(config)]
+    expected_decks = [path.resolve() for path in deck_paths]
+    if current_decks != expected_decks:
+        raise DataError(
+            "The deck file set changed after the audio owner census; refusing "
+            "to publish or prune media until the command is re-run."
+        )
+    if _audio_deck_source_paths(current_decks) != source_paths:
+        raise DataError(
+            "A deck source dependency changed after the audio owner census; "
+            "refusing to publish or prune media until the command is re-run."
+        )
+    for path, expected in revisions.items():
+        if records_revision(path).text != expected.text:
+            raise DataError(
+                f"Audio owner file {path} changed after its locked snapshot; "
+                "refusing to publish or prune media from stale references. Re-run."
+            )
+
+
+def _cleanup_unclaimed_audio_stages(
+    config: ProjectConfig,
+    book: ledger.Ledger,
+    records: Sequence[VocabularyRecord],
+    *,
+    chosen: str | None,
+    word_provider: SpeechProvider | None = None,
+) -> list[str]:
+    """Clean no-row stages only after protecting every current exact request."""
+    if not records:
+        current_keys: set[str] = set()
+    else:
+        try:
+            words = word_provider or resolve_word_provider(config, chosen)
+            sentences = resolve_sentence_provider(config, chosen, words)
+            current_keys = audio_cmd.current_pending_audio_keys(
+                records,
+                book=book,
+                word_provider=words,
+                sentence_provider=sentences,
+            )
+        except JankiError as exc:
+            return [
+                "could not prove which unregistered pending stages remain "
+                f"current, so none were removed: {exc}"
+            ]
+    return audio_cmd.cleanup_unclaimed_pending_stages(
+        book,
+        config.media_dir.resolve() / audio_cmd.AUDIO_SUBDIR,
+        current_keys=current_keys,
+    )
+
+
+def _selected_pending(
+    book: ledger.Ledger, selected_slots: set[tuple[str, str]]
+) -> bool:
+    return any(
+        isinstance(entry, Mapping)
+        and (str(entry.get("record_id") or ""), str(entry.get("of") or ""))
+        in selected_slots
+        for entry in book.pending_audio.values()
+    )
+
+
+def execute_targeted_audio(
+    config: ProjectConfig,
+    record_ids: Sequence[str],
+    *,
+    words: bool = False,
+    examples: bool = False,
+    expected_fingerprint: str | None = None,
+    force: bool = False,
+    prune: bool = False,
+    chosen_provider: str | None = None,
+    progress: AudioProgress | None = None,
+    word_provider: SpeechProvider | None = None,
+    sentence_provider: SpeechProvider | None = None,
+) -> AudioExecutionOutcome:
+    """Execute audio for one exact nonempty id set; it can never widen.
+
+    A rendered surface supplies ``expected_fingerprint``. ``None`` is reserved
+    for the immediate CLI path, whose first plan is already made under this
+    transaction's operation and repository-owner locks.
+    """
+    return _execute_audio(
+        config,
+        _exact_ids(record_ids),
+        words=words,
+        examples=examples,
+        expected_fingerprint=expected_fingerprint,
+        force=force,
+        prune=prune,
+        chosen_provider=chosen_provider,
+        progress=progress,
+        word_provider=word_provider,
+        sentence_provider=sentence_provider,
+    )
+
+
+def execute_corpus_audio(
+    config: ProjectConfig,
+    *,
+    words: bool = False,
+    examples: bool = False,
+    expected_fingerprint: str | None = None,
+    force: bool = False,
+    prune: bool = False,
+    chosen_provider: str | None = None,
+    progress: AudioProgress | None = None,
+    word_provider: SpeechProvider | None = None,
+    sentence_provider: SpeechProvider | None = None,
+) -> AudioExecutionOutcome:
+    """Execute the CLI's explicit whole-corpus audio maintenance operation."""
+    return _execute_audio(
+        config,
+        None,
+        words=words,
+        examples=examples,
+        expected_fingerprint=expected_fingerprint,
+        force=force,
+        prune=prune,
+        chosen_provider=chosen_provider,
+        progress=progress,
+        word_provider=word_provider,
+        sentence_provider=sentence_provider,
+    )
+
+
+def _execute_audio(
+    config: ProjectConfig,
+    record_ids: tuple[str, ...] | None,
+    *,
+    words: bool,
+    examples: bool,
+    expected_fingerprint: str | None,
+    force: bool,
+    prune: bool,
+    chosen_provider: str | None,
+    progress: AudioProgress | None,
+    word_provider: SpeechProvider | None,
+    sentence_provider: SpeechProvider | None,
+) -> AudioExecutionOutcome:
+    """Take the operation lock before any repository or ledger snapshot."""
+    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+        return _execute_audio_locked(
+            config,
+            record_ids,
+            words=words,
+            examples=examples,
+            expected_fingerprint=expected_fingerprint,
+            force=force,
+            prune=prune,
+            chosen_provider=chosen_provider,
+            progress=progress,
+            word_provider=word_provider,
+            sentence_provider=sentence_provider,
+        )
+
+
+def _execute_audio_locked(
+    config: ProjectConfig,
+    record_ids: tuple[str, ...] | None,
+    *,
+    words: bool,
+    examples: bool,
+    expected_fingerprint: str | None,
+    force: bool,
+    prune: bool,
+    chosen_provider: str | None,
+    progress: AudioProgress | None,
+    word_provider: SpeechProvider | None,
+    sentence_provider: SpeechProvider | None,
+) -> AudioExecutionOutcome:
+    """Lock every current record owner before taking its exact snapshot."""
+    _emit_progress(progress, "Preparing audio")
+    deck_paths = status.deck_files(config)
+    source_paths = _audio_deck_source_paths(deck_paths)
+    owner_paths = sorted(
+        {
+            config.normalized_file.resolve(),
+            *(path.resolve() for path in deck_paths),
+            *source_paths,
+        },
+        key=lambda path: str(path),
+    )
+    with ExitStack() as locks:
+        for path in owner_paths:
+            locks.enter_context(exclusive_path_lock(path))
+        owner_revisions = {path: records_revision(path) for path in owner_paths}
+        _assert_audio_owners_current(
+            owner_revisions,
+            config=config,
+            deck_paths=deck_paths,
+            source_paths=source_paths,
+        )
+        return _execute_audio_owner_locked(
+            config,
+            record_ids,
+            deck_paths,
+            source_paths,
+            owner_revisions,
+            words=words,
+            examples=examples,
+            expected_fingerprint=expected_fingerprint,
+            force=force,
+            prune=prune,
+            chosen_provider=chosen_provider,
+            progress=progress,
+            word_provider=word_provider,
+            sentence_provider=sentence_provider,
+        )
+
+
+def _execute_audio_owner_locked(
+    config: ProjectConfig,
+    record_ids: tuple[str, ...] | None,
+    deck_paths: Sequence[Path],
+    source_paths: set[Path],
+    owner_revisions: dict[Path, RecordsRevision],
+    *,
+    words: bool,
+    examples: bool,
+    expected_fingerprint: str | None,
+    force: bool,
+    prune: bool,
+    chosen_provider: str | None,
+    progress: AudioProgress | None,
+    word_provider: SpeechProvider | None,
+    sentence_provider: SpeechProvider | None,
+) -> AudioExecutionOutcome:
+    """Run the provider/WAL/record/media/ledger transaction under owner locks."""
+    output_path = config.normalized_file.resolve()
+    output_revision = owner_revisions[output_path]
+    records = load_records(output_path) if output_path.exists() else []
+    output_dir = config.media_dir.resolve() / audio_cmd.AUDIO_SUBDIR
+    if not records and record_ids is not None:
+        raise AudioPlanError(f"No audio record has id {record_ids[0]!r}.")
+    if not records and expected_fingerprint is not None:
+        raise AudioPlanError(
+            "The audio scope changed after it was displayed; nothing was sent. "
+            "Reload and review the fresh clip plan."
+        )
+    if not records and not prune:
+        return AudioExecutionOutcome(
+            state="no-records",
+            plan=None,
+            output_dir=output_dir,
+            no_records=True,
+            prune_requested=False,
+        )
+
+    protected_records = [
+        record
+        for deck_path in deck_paths
+        for record in deck_declared_record_versions(deck_path)
+    ]
+    media_dir = config.media_dir.resolve()
+    warnings: list[str] = []
+    book: ledger.Ledger | None = None
+    words_engine: SpeechProvider | None = None
+    sentences_engine: SpeechProvider | None = None
+    plan: AudioPlan | None = None
+    if expected_fingerprint is not None:
+        words_engine = word_provider or resolve_word_provider(config, chosen_provider)
+        sentences_engine = sentence_provider or (
+            resolve_sentence_provider(config, chosen_provider, words_engine)
+            if examples
+            else words_engine
+        )
+        book = ledger.load(config.ledger_file)
+        plan = plan_audio_records(
+            config,
+            records,
+            output_revision,
+            record_ids,
+            words=words,
+            examples=examples,
+            force=force,
+            chosen_provider=chosen_provider,
+            word_provider=words_engine,
+            sentence_provider=sentences_engine,
+            protected_records=protected_records,
+            ledger_book=book,
+        )
+        if plan.fingerprint != expected_fingerprint:
+            raise AudioPlanError(
+                "The audio scope changed after it was displayed; nothing was sent. "
+                "Reload and review the fresh clip plan."
+            )
+    if prune:
+        # Missing-record WAL rows can never match a future request. Retire them
+        # before provider resolution so recovery does not depend on an engine.
+        book = book or ledger.load(config.ledger_file)
+        book.save()
+        deleted_pending = book.discard_pending_audio_for_missing_records(
+            record.id for record in records
+        )
+        if deleted_pending:
+            book.save()
+            warnings.extend(
+                audio_cmd.cleanup_pending_stages(deleted_pending, output_dir)
+            )
+        if not records:
+            try:
+                removed = audio_cmd.prune_unreferenced(
+                    protected_records,
+                    media_dir,
+                    book,
+                    persist=lambda current: current.save(),
+                    assert_current=lambda: _assert_audio_owners_current(
+                        owner_revisions,
+                        config=config,
+                        deck_paths=deck_paths,
+                        source_paths=source_paths,
+                    ),
+                )
+            except audio_cmd.PruneError as exc:
+                return AudioExecutionOutcome(
+                    state="prune-incomplete",
+                    plan=None,
+                    output_dir=output_dir,
+                    pruned_paths=tuple(exc.removed),
+                    warnings=tuple(warnings),
+                    prune_error=str(exc),
+                    no_records=True,
+                    prune_requested=True,
+                )
+            _assert_audio_owners_current(
+                owner_revisions,
+                config=config,
+                deck_paths=deck_paths,
+                source_paths=source_paths,
+            )
+            warnings.extend(
+                _cleanup_unclaimed_audio_stages(
+                    config,
+                    book,
+                    protected_records,
+                    chosen=chosen_provider,
+                )
+            )
+            return AudioExecutionOutcome(
+                state="no-records",
+                plan=None,
+                output_dir=output_dir,
+                pruned_paths=tuple(removed),
+                warnings=tuple(warnings),
+                no_records=True,
+                prune_requested=True,
+            )
+
+    words_engine = words_engine or word_provider or resolve_word_provider(
+        config, chosen_provider
+    )
+    # A words-only run must not fail because an unused sentence provider is
+    # unavailable or misconfigured.
+    sentences_engine = sentences_engine or sentence_provider or (
+        resolve_sentence_provider(config, chosen_provider, words_engine)
+        if examples
+        else words_engine
+    )
+    if book is None:
+        book = ledger.load(config.ledger_file)
+    if not prune:
+        # A static read-only failure is knowable before a paid provider call.
+        book.save()
+
+    if plan is None:
+        plan = plan_audio_records(
+            config,
+            records,
+            output_revision,
+            record_ids,
+            words=words,
+            examples=examples,
+            force=force,
+            chosen_provider=chosen_provider,
+            word_provider=words_engine,
+            sentence_provider=sentences_engine,
+            protected_records=protected_records,
+            ledger_book=book,
+        )
+
+    _emit_progress(progress, "Creating audio")
+    result = audio_cmd.generate_audio(
+        records,
+        provider=words_engine,
+        sentence_provider=sentences_engine,
+        book=book,
+        media_dir=media_dir,
+        words=words,
+        examples=examples,
+        ids=plan.record_ids,
+        force=force,
+        protected_records=protected_records,
+        stage_only=True,
+        persist_pending=lambda current, key: _persist_audio_wal(
+            current, [key], replace=force
+        ),
+    )
+    generation_stopped = bool(result.stopped_by)
+    record_references_written = False
+    media_published = False
+    ledger_committed = False
+    selected_slots = {
+        (record_id, kind)
+        for record_id in plan.record_ids
+        for kind, enabled in (("word", words), ("example", examples))
+        if enabled
+    }
+    stale_selected_pending = any(
+        isinstance(entry, Mapping)
+        and (str(entry.get("record_id") or ""), str(entry.get("of") or ""))
+        in selected_slots
+        and key not in result.pending_keys
+        for key, entry in book.pending_audio.items()
+    )
+    warnings.extend(result.warnings)
+    _emit_progress(progress, "Saving audio")
+
+    if (
+        result.pending_keys
+        or stale_selected_pending
+        or result.file_count
+        or result.records != records
+    ):
+        try:
+            save_records_json_locked(output_path, result.records, expected=output_revision)
+            record_references_written = result.records != records
+            owner_revisions[output_path] = records_revision(output_path)
+        except DataError as exc:
+            return AudioExecutionOutcome(
+                state="records-stale",
+                plan=plan,
+                output_dir=output_dir,
+                file_count=result.file_count,
+                written_record_ids=tuple(result.written),
+                up_to_date=result.up_to_date,
+                warnings=tuple(warnings),
+                guessed_accent=tuple(result.guessed_accent),
+                no_reading=tuple(result.no_reading),
+                stopped_by=(
+                    f"{exc} Paid audio from this run remains staged in "
+                    "pending_audio; re-run the same command to adopt an exact "
+                    "request/profile without another provider call. Canonical "
+                    "media and its audio ledger entries were not changed."
+                ),
+                pending_recovery=bool(result.pending_keys) or stale_selected_pending,
+                prune_requested=prune,
+            )
+
+    ledger_error: ledger.LedgerError | None = None
+    committed_pending: list[dict[str, object]] = []
+    ledger_changed = False
+    if result.pending_keys:
+        try:
+            audio_cmd.promote_pending_audio(
+                book,
+                result.pending_keys,
+                output_dir,
+                assert_current=lambda: _assert_audio_owners_current(
+                    owner_revisions,
+                    config=config,
+                    deck_paths=deck_paths,
+                    source_paths=source_paths,
+                ),
+            )
+            media_published = True
+            committed_pending = audio_cmd.commit_promoted_audio(
+                book, result.pending_keys, result.records
+            )
+            ledger_changed = True
+        except JankiError as exc:
+            result.stopped_by = result.stopped_by or str(exc)
+    if not result.stopped_by:
+        retired = book.discard_pending_audio_for_slots(selected_slots)
+        if retired:
+            committed_pending.extend(retired)
+            ledger_changed = True
+    if ledger_changed:
+        ledger_error = _save_audio_ledger(book)
+        if ledger_error is None:
+            ledger_committed = True
+            warnings.extend(
+                audio_cmd.cleanup_pending_stages(committed_pending, output_dir)
+            )
+
+    _emit_progress(progress, "Cleaning up audio")
+    prune_error = ""
+    removed: list[Path] = []
+    if prune and ledger_error is None:
+        deleted_pending = book.discard_pending_audio_for_missing_records(
+            record.id for record in result.records
+        )
+        if deleted_pending:
+            ledger_error = _save_audio_ledger(book)
+            if ledger_error is None:
+                warnings.extend(
+                    audio_cmd.cleanup_pending_stages(deleted_pending, output_dir)
+                )
+        prune_protected_records = [
+            record
+            for deck_path in deck_paths
+            for record in deck_declared_record_versions(deck_path)
+        ]
+        if ledger_error is None:
+            try:
+                removed = audio_cmd.prune_unreferenced(
+                    [*result.records, *prune_protected_records],
+                    media_dir,
+                    book,
+                    persist=lambda current: current.save(),
+                    assert_current=lambda: _assert_audio_owners_current(
+                        owner_revisions,
+                        config=config,
+                        deck_paths=deck_paths,
+                        source_paths=source_paths,
+                    ),
+                )
+            except audio_cmd.PruneError as exc:
+                removed = exc.removed
+                prune_error = str(exc)
+
+    if not result.stopped_by and not prune_error and ledger_error is None:
+        _assert_audio_owners_current(
+            owner_revisions,
+            config=config,
+            deck_paths=deck_paths,
+            source_paths=source_paths,
+        )
+        warnings.extend(
+            _cleanup_unclaimed_audio_stages(
+                config,
+                book,
+                [*result.records, *protected_records],
+                chosen=chosen_provider,
+                word_provider=words_engine,
+            )
+        )
+
+    if generation_stopped:
+        state: AudioExecutionState = "generation-stopped"
+    elif result.stopped_by:
+        state = "finalization-stopped"
+    elif prune_error:
+        state = "prune-incomplete"
+    elif ledger_error is not None:
+        state = "ledger-incomplete"
+    else:
+        state = "complete"
+    selected_pending = _selected_pending(book, selected_slots)
+    # A failed save leaves the prior on-disk WAL intact even though the
+    # in-memory book has already converted or retired those rows.
+    pending_recovery = (
+        ledger_changed if ledger_error is not None else selected_pending
+    )
+    return AudioExecutionOutcome(
+        state=state,
+        plan=plan,
+        output_dir=output_dir,
+        file_count=result.file_count,
+        written_record_ids=tuple(result.written),
+        up_to_date=result.up_to_date,
+        pruned_paths=tuple(removed),
+        warnings=tuple(warnings),
+        guessed_accent=tuple(result.guessed_accent),
+        no_reading=tuple(result.no_reading),
+        stopped_by=result.stopped_by or None,
+        prune_error=prune_error or None,
+        ledger_error=str(ledger_error) if ledger_error is not None else None,
+        pending_recovery=pending_recovery,
+        record_references_written=record_references_written,
+        media_published=media_published,
+        ledger_committed=ledger_committed,
+        prune_requested=prune,
     )

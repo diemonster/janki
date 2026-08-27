@@ -748,7 +748,7 @@ def test_same_address_cas_failure_keeps_old_media_and_canonical_ledger(
     staged = root / "media" / "audio" / pending["staged_file"]
     assert staged.is_file() and staged.read_bytes() == b"new voice"
 
-    real_save_records = cli.save_records_json_locked
+    real_save_records = audio_application.save_records_json_locked
     guarded_writes = 0
 
     def count_guarded_write(*args: object, **kwargs: object) -> None:
@@ -756,7 +756,9 @@ def test_same_address_cas_failure_keeps_old_media_and_canonical_ledger(
         guarded_writes += 1
         real_save_records(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(cli, "save_records_json_locked", count_guarded_write)
+    monkeypatch.setattr(
+        audio_application, "save_records_json_locked", count_guarded_write
+    )
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
     assert len(replacement.said) == 1, "the exact pending request was adopted"
@@ -857,7 +859,15 @@ def test_failed_final_ledger_commit_recovers_promoted_audio_without_rebilling(
 
     monkeypatch.setattr(cli.ledger.Ledger, "save", fail_the_canonical_commit)
 
-    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+    outcome = audio_application.execute_corpus_audio(
+        ProjectConfig.load(root), words=True
+    )
+
+    assert outcome.state == "ledger-incomplete"
+    assert outcome.record_references_written is True
+    assert outcome.media_published is True
+    assert outcome.ledger_committed is False
+    assert outcome.pending_recovery is True
 
     [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
     target = root / "media" / saved["audio"]
@@ -872,6 +882,86 @@ def test_failed_final_ledger_commit_recovers_promoted_audio_without_rebilling(
     final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
     assert "pending_audio" not in final
     assert final["records"][record().id]["audio"][0]["voice"] == 53
+
+
+def test_shared_executor_reports_provider_partial_state_truthfully(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from japanese_anki.errors import JankiError
+
+    class DiesOnSecond(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if self.said:
+                raise JankiError("engine went away")
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    root = project(
+        tmp_path,
+        [record(), record(id="word:箸:はし", expression="箸")],
+    )
+    provider = DiesOnSecond(audio=b"first paid clip", voice=53)
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_word_provider",
+        lambda config, chosen: provider,
+    )
+
+    outcome = audio_application.execute_corpus_audio(
+        ProjectConfig.load(root), words=True
+    )
+
+    assert outcome.state == "generation-stopped"
+    assert outcome.file_count == 1
+    assert "engine went away" in (outcome.stopped_by or "")
+    assert outcome.record_references_written is True
+    assert outcome.media_published is True
+    assert outcome.ledger_committed is True
+    assert outcome.pending_recovery is False
+
+
+@pytest.mark.parametrize(
+    ("failure", "recovery"),
+    [("provider", False), ("wal", True)],
+)
+def test_shared_executor_does_not_claim_an_unfinished_phase_landed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    recovery: bool,
+) -> None:
+    from japanese_anki.errors import JankiError
+
+    class FailsImmediately(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            raise JankiError("engine went away")
+
+    root = project(tmp_path, [record()])
+    provider = FailsImmediately() if failure == "provider" else FakeVoice()
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_word_provider",
+        lambda config, chosen: provider,
+    )
+    if failure == "wal":
+        monkeypatch.setattr(
+            audio_application,
+            "_persist_audio_wal",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                ledger_mod.LedgerError("ledger became read-only")
+            ),
+        )
+
+    outcome = audio_application.execute_corpus_audio(
+        ProjectConfig.load(root), words=True
+    )
+
+    assert outcome.state == "generation-stopped"
+    assert outcome.file_count == 0
+    assert outcome.record_references_written is False
+    assert outcome.media_published is False
+    assert outcome.ledger_committed is False
+    assert outcome.pending_recovery is recovery
 
 
 def test_concurrent_ledger_change_merges_the_additive_wal_without_losing_paid_audio(
@@ -959,14 +1049,21 @@ def test_audio_operation_lock_is_held_before_records_and_ledger_snapshots(
         def __exit__(self, *exc: object) -> None:
             events.append("unlocked")
 
-    monkeypatch.setattr(cli, "exclusive_path_lock", lambda path: Guard())
+    monkeypatch.setattr(
+        audio_application, "exclusive_path_lock", lambda path: Guard()
+    )
 
-    def inspect_snapshots(args: object, config: object) -> int:
+    def inspect_snapshots(*args: object, **kwargs: object):
         assert events == ["locked"]
         events.append("snapshots")
-        return 0
+        return audio_application.AudioExecutionOutcome(
+            state="no-records",
+            plan=None,
+            output_dir=root / "media" / "audio",
+            no_records=True,
+        )
 
-    monkeypatch.setattr(cli, "_command_audio_locked", inspect_snapshots)
+    monkeypatch.setattr(audio_application, "_execute_audio_locked", inspect_snapshots)
 
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
     assert events == ["locked", "snapshots", "unlocked"]
@@ -1034,12 +1131,12 @@ def test_stage_is_self_describing_if_wal_persistence_is_interrupted(
     root = project(tmp_path, [record()])
     provider = FakeVoice(audio=b"paid exactly once", voice=53)
     monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
-    real_persist = cli._persist_audio_wal
+    real_persist = audio_application._persist_audio_wal
 
     def interrupt_after_stage(*args: object, **kwargs: object) -> None:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(cli, "_persist_audio_wal", interrupt_after_stage)
+    monkeypatch.setattr(audio_application, "_persist_audio_wal", interrupt_after_stage)
     with pytest.raises(KeyboardInterrupt):
         cli.main(["--root", str(root), "audio", "--words"])
 
@@ -1048,7 +1145,7 @@ def test_stage_is_self_describing_if_wal_persistence_is_interrupted(
     stages = list((root / "media" / "audio" / ".pending").glob("*.stage"))
     assert len(stages) == 1 and stages[0].read_bytes() == b"paid exactly once"
 
-    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    monkeypatch.setattr(audio_application, "_persist_audio_wal", real_persist)
     provider.reachable = False
     assert cli.main(["--root", str(root), "audio", "--words"]) == 0
 
@@ -1066,9 +1163,9 @@ def test_unregistered_stage_is_retired_when_its_request_can_no_longer_match(
     root = project(tmp_path, [item])
     provider = FakeVoice(audio=b"old completed render", voice=53)
     monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
-    real_persist = cli._persist_audio_wal
+    real_persist = audio_application._persist_audio_wal
     monkeypatch.setattr(
-        cli,
+        audio_application,
         "_persist_audio_wal",
         lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
     )
@@ -1084,7 +1181,7 @@ def test_unregistered_stage_is_retired_when_its_request_can_no_longer_match(
     (root / "vocabulary.json").write_text(
         json.dumps(payload, ensure_ascii=False), encoding="utf-8"
     )
-    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    monkeypatch.setattr(audio_application, "_persist_audio_wal", real_persist)
     command = ["--root", str(root), "audio", "--words"]
     if retirement == "deleted":
         command.append("--prune")
@@ -1103,9 +1200,9 @@ def test_targeted_run_preserves_another_current_requests_unregistered_stage(
     root = project(tmp_path, [first, second])
     provider = FakeVoice(audio=b"paid render", voice=53)
     monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
-    real_persist = cli._persist_audio_wal
+    real_persist = audio_application._persist_audio_wal
     monkeypatch.setattr(
-        cli,
+        audio_application,
         "_persist_audio_wal",
         lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
     )
@@ -1115,7 +1212,7 @@ def test_targeted_run_preserves_another_current_requests_unregistered_stage(
         (root / "media" / "audio" / ".pending").glob("*.stage")
     )
 
-    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    monkeypatch.setattr(audio_application, "_persist_audio_wal", real_persist)
     assert cli.main(["--root", str(root), "audio", second.id, "--words"]) == 0
 
     assert first_stage.is_file()
@@ -1269,7 +1366,15 @@ def test_deck_source_owner_revision_is_rechecked_before_media_promotion(
     provider = AddsSourceOwner(audio=b"selected new bytes", voice=53)
     monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: provider)
 
-    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+    outcome = audio_application.execute_corpus_audio(
+        ProjectConfig.load(root), words=True
+    )
+
+    assert outcome.state == "finalization-stopped"
+    assert outcome.record_references_written is True
+    assert outcome.media_published is False
+    assert outcome.ledger_committed is False
+    assert outcome.pending_recovery is True
 
     assert target.read_bytes() == b"other owner old bytes"
     assert json.loads(source.read_text(encoding="utf-8"))[0]["audio"].endswith(
@@ -1483,9 +1588,9 @@ def test_force_retry_adopts_valid_sibling_of_corrupt_same_key_wal(
         staged_sha256=corrupt_sha,
     )
     book.save()
-    real_persist = cli._persist_audio_wal
+    real_persist = audio_application._persist_audio_wal
     monkeypatch.setattr(
-        cli,
+        audio_application,
         "_persist_audio_wal",
         lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
     )
@@ -1495,7 +1600,7 @@ def test_force_retry_adopts_valid_sibling_of_corrupt_same_key_wal(
     assert len(provider.said) == 1
     assert len(list(corrupt_stage.parent.glob(f"{key}-*.stage"))) == 2
 
-    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    monkeypatch.setattr(audio_application, "_persist_audio_wal", real_persist)
     assert cli.main(["--root", str(root), "audio", "--words", "--force"]) == 0
 
     assert len(provider.said) == 1
