@@ -1021,7 +1021,11 @@ def build_deck(
             claimed,
             drawn_fields,
             deck_max_meanings,
-            render_kanji_html(kanji_store.for_text(record.expression)),
+            render_kanji_html(
+                kanji_store.for_text(record.expression),
+                record_expression=record.expression,
+                record_reading=record.reading,
+            ),
         )
         # `validate_records` refuses this on the record, which is the earlier
         # and better error. This covers what that check cannot see, because not

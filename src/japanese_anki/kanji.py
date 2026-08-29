@@ -21,9 +21,10 @@ one, and the three a commercial paper card chose (前線, 名前, 目の前) are
 that set with ``nf08``, ``nf02`` and ``nf07``. So candidates are filtered to
 tagged entries and ranked by the ``nfXX`` band, which is a frequency decile.
 
-**Attribution.** KANJIDIC2 is CC BY-SA 4.0 (EDRDG) and KanjiVG is CC BY-SA 3.0
-(Ulrich Apel). A personal deck is fine; a deck that is *shared* has to credit
-both, the same way VOICEVOX's per-character terms apply only on sharing.
+**Attribution.** KANJIDIC2 and JMdict are CC BY-SA 4.0 (EDRDG), and KanjiVG is
+CC BY-SA 3.0 (Ulrich Apel). A personal deck is fine; a deck that is *shared*
+has to credit all three, the same way VOICEVOX's per-character terms apply only
+on sharing.
 """
 
 from __future__ import annotations
@@ -496,11 +497,19 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
 CANVAS = 109
 
 
-def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
+def render_kanji_html(
+    entries: Iterable[KanjiInfo],
+    *,
+    record_expression: str = "",
+    record_reading: str = "",
+) -> str:
     """The collapsible block a card shows, or ``""`` when there is nothing.
 
     One ``<details>`` per character so a two-kanji word does not force the
     reader to open both, and so the summary can carry the character itself.
+    When the shared reference entry contains the card's exact dictionary pair,
+    that row is reserved before the display cap.  Exact text equality is a
+    structural match; this renderer does not decide how any Japanese is read.
     """
     import html as html_mod
 
@@ -567,40 +576,55 @@ def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
         # never rendered. That is the same loss the round robin exists to stop.
         with_examples = [r for r in info.readings if r.examples]
         without_examples = [r for r in info.readings if not r.examples]
-        rows = []
+        rows: list[tuple[Reading, Example | None]] = []
         depth_limit = max((len(r.examples) for r in with_examples), default=0)
         for depth in range(depth_limit):
             for reading in with_examples:
                 if depth >= len(reading.examples):
                     continue
                 example = reading.examples[depth]
-                label = "音" if reading.kind == "on" else "訓"
-                written = html_mod.escape(example.written) if example else ""
-                pronounced = html_mod.escape(example.pronounced) if example else ""
-                gloss = html_mod.escape(example.gloss) if example else ""
-                rows.append(
-                    '<div class="kanji-example">'
-                    f'<span class="kanji-kind">{label}</span>'
-                    f'<span class="kanji-reading">{html_mod.escape(reading.reading)}</span>'
-                    f'<span class="kanji-word">{written}</span>'
-                    f'<span class="kanji-kana">{pronounced}</span>'
-                    f'<span class="kanji-gloss">{gloss}</span>'
-                    "</div>"
-                )
+                rows.append((reading, example))
+
+        # The fetcher orders readings and examples using JMdict's word-priority
+        # evidence. Preserve that evidence-derived order for the ordinary
+        # stream, but first reserve the exact pair this particular vocabulary
+        # card teaches. Both strings are required: spelling alone would select
+        # the wrong member of a homograph pair.
+        focus_index = next(
+            (
+                index
+                for index, (_reading, example) in enumerate(rows)
+                if example is not None
+                and example.written == record_expression
+                and example.pronounced == record_reading
+            ),
+            None,
+        )
+        if focus_index is not None:
+            rows.insert(0, rows.pop(focus_index))
+
         for reading in without_examples:
+            rows.append((reading, None))
+
+        rendered_rows = []
+        for reading, example in rows[:MAX_EXAMPLE_ROWS]:
             label = "音" if reading.kind == "on" else "訓"
-            rows.append(
+            written = html_mod.escape(example.written) if example else ""
+            pronounced = html_mod.escape(example.pronounced) if example else ""
+            gloss = html_mod.escape(example.gloss) if example else ""
+            rendered_rows.append(
                 '<div class="kanji-example">'
                 f'<span class="kanji-kind">{label}</span>'
                 f'<span class="kanji-reading">{html_mod.escape(reading.reading)}</span>'
-                '<span class="kanji-word"></span>'
-                '<span class="kanji-kana"></span>'
-                '<span class="kanji-gloss"></span>'
+                f'<span class="kanji-word">{written}</span>'
+                f'<span class="kanji-kana">{pronounced}</span>'
+                f'<span class="kanji-gloss">{gloss}</span>'
                 "</div>"
             )
-        if rows:
-            kept = "".join(rows[:MAX_EXAMPLE_ROWS])
-            parts.append(f'<div class="kanji-examples">{kept}</div>')
+        if rendered_rows:
+            parts.append(
+                f'<div class="kanji-examples">{"".join(rendered_rows)}</div>'
+            )
 
         blocks.append(
             f'<details class="kanji"><summary>{html_mod.escape(info.character)}</summary>'

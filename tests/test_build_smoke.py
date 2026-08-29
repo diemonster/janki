@@ -232,7 +232,9 @@ def test_the_build_refuses_a_separator_that_reached_a_field_off_the_record(
     from japanese_anki.exporters import anki
 
     monkeypatch.setattr(
-        anki, "render_kanji_html", lambda _info: "<div>stroke\x1forder</div>"
+        anki,
+        "render_kanji_html",
+        lambda _info, **_context: "<div>stroke\x1forder</div>",
     )
 
     with pytest.raises(anki.AnkiBuildError) as excinfo:

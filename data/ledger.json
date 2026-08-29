@@ -11913,13 +11913,13 @@
           "voice": "onyx"
         },
         {
-          "at": "2026-08-17",
+          "at": "2026-08-29",
           "content_fp": "cdb50f99c046bd78713b00256baaf573b8f05547ef648f9bd6837cf68929bb75",
           "file": "janki-46010193bd99.mp3",
           "of": "example",
           "provider": "openai",
           "settings": {
-            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.\n\nIn 雨、まだ止まないの？, pronounce 止まない as やまない, not とまない.",
             "model": "gpt-4o-mini-tts"
           },
           "speed": 1.0,

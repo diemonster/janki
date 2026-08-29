@@ -59,13 +59,23 @@ The data is looked up per *character* and shared: 前 is the same 前 in 名前 
 contains it. Re-running costs one request per new character. A build never
 needs the network — a character not looked up simply has no block.
 
-Example words are ranked by JMdict's frequency tags. Untagged entries are
-dropped rather than ranked last, so a rare character shows its readings with
-no example rather than an obscure one that looks endorsed.
+The card's exact spelling-and-reading pair gets the first example row when it
+is present in the reference data. The remaining rows preserve the source order
+derived from JMdict's word-priority tags, with one example per reading before a
+reading gets a second. Untagged entries are dropped rather than ranked last, so
+a rare character shows its readings with no example rather than an obscure one
+that looks endorsed. The four-row display is therefore useful to this card
+first and biased toward common vocabulary after that.
 
-Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev and
-**KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is fine; a deck you
-share must credit both — the same footing as the VOICEVOX voice terms.
+JMdict's tags are a word-priority signal, not a percentage distribution over a
+kanji's readings. janki does not import jpdb's displayed reading percentages;
+doing that would require a supported data and redistribution contract rather
+than depending on public-page HTML.
+
+Sources are **KANJIDIC2** and **JMdict** (CC BY-SA 4.0, EDRDG) via
+kanjiapi.dev, and **KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is
+fine; a deck you share must credit all three — the same footing as the VOICEVOX
+voice terms.
 
 ## Nothing checks the sentences
 

@@ -425,6 +425,45 @@ def test_every_reading_gets_a_row_before_any_gets_a_second() -> None:
     assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
 
 
+def test_the_cards_exact_dictionary_pair_wins_the_row_budget() -> None:
+    """The card's own dictionary pair is structural context, not a Japanese
+    guess.  Both halves matter: a homograph with another pronunciation must
+    not take the reserved row."""
+    from japanese_anki.kanji import Example, Reading
+
+    def reading(text: str, written: str, pronounced: str) -> Reading:
+        return Reading(
+            kind="kun",
+            reading=text,
+            examples=(Example(written=written, pronounced=pronounced, gloss="example"),),
+        )
+
+    rendered = render_kanji_html(
+        [
+            KanjiInfo(
+                character="食",
+                readings=(
+                    reading("ショク", "食事", "しょくじ"),
+                    reading("ジキ", "断食", "だんじき"),
+                    reading("く(う)", "食べる", "くう"),  # wrong homograph pair
+                    reading("く(らう)", "食らう", "くらう"),
+                    reading("た(べる)", "食べる", "たべる"),
+                ),
+            )
+        ],
+        record_expression="食べる",
+        record_reading="たべる",
+    )
+
+    first_row = rendered.split('<div class="kanji-example">', 1)[1].split("</div>", 1)[0]
+    assert "た(べる)" in first_row and "たべる" in first_row
+    assert "くう" not in first_row, "spelling alone cannot select a pronunciation"
+    assert rendered.count('<div class="kanji-example">') == 4, "the cap still holds"
+    assert rendered.index("食事") < rendered.index("断食") < rendered.index("くう"), (
+        "the source-ranked commonality order survives after the exact row"
+    )
+
+
 def test_an_example_less_reading_never_takes_a_row_from_one_with_examples() -> None:
     """The renderer cannot assume the caller sorted anything. `data/kanji.json`
     is committed and hand-editable, and older copies are in KANJIDIC's kana

@@ -875,6 +875,103 @@ def test_the_kanji_section_reaches_the_card(tmp_path: Path) -> None:
     assert "使う" in section and "to use" in section, "the kun'yomi example"
 
 
+def test_the_exporter_reserves_a_kanji_row_for_the_records_exact_pair(
+    tmp_path: Path,
+) -> None:
+    """Passing only the shared character entry loses context at the four-row
+    cap.  The exporter must also pass the exact record spelling and reading."""
+    _project(tmp_path)
+    _kanji_file(
+        tmp_path,
+        {
+            "食": {
+                "stroke_count": 9,
+                "meanings": ["eat", "food"],
+                "readings": [
+                    {
+                        "kind": "on",
+                        "reading": "ショク",
+                        "examples": [
+                            {
+                                "written": "食品",
+                                "pronounced": "しょくひん",
+                                "gloss": "food",
+                            },
+                        ],
+                    },
+                    {
+                        "kind": "on",
+                        "reading": "ジキ",
+                        "examples": [
+                            {
+                                "written": "断食",
+                                "pronounced": "だんじき",
+                                "gloss": "fasting",
+                            },
+                        ],
+                    },
+                    {
+                        "kind": "kun",
+                        "reading": "く(う)",
+                        "examples": [
+                            {
+                                "written": "食う",
+                                "pronounced": "くう",
+                                "gloss": "to eat",
+                            },
+                        ],
+                    },
+                    {
+                        "kind": "kun",
+                        "reading": "く(らう)",
+                        "examples": [
+                            {
+                                "written": "食らう",
+                                "pronounced": "くらう",
+                                "gloss": "to eat",
+                            },
+                        ],
+                    },
+                    {
+                        "kind": "kun",
+                        "reading": "た(べる)",
+                        "examples": [
+                            {
+                                "written": "食べる",
+                                "pronounced": "たべる",
+                                "gloss": "to eat",
+                            },
+                        ],
+                    },
+                ],
+                "strokes": [],
+            }
+        }
+    )
+    _write_records(
+        tmp_path,
+        [
+            VocabularyRecord(
+                id="word:食べる:たべる",
+                expression="食べる",
+                reading="たべる",
+                meanings=["to eat"],
+            )
+        ],
+    )
+
+    build_deck(
+        tmp_path / "decks" / "d.yaml",
+        ProjectConfig.load(tmp_path),
+        tmp_path / "o.apkg",
+    )
+
+    names, values = _fields(tmp_path / "o.apkg")
+    section = values[names.index("KanjiInfo")]
+    assert "食べる" in section and "たべる" in section
+    assert section.count('<div class="kanji-example">') == 4
+
+
 def test_a_stroke_cell_per_stroke_each_adding_one(tmp_path: Path) -> None:
     """The progression is the whole point — a single finished glyph says nothing
     about the order it is written in. Cell n draws strokes 1..n, with the newest
