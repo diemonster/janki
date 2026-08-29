@@ -54,37 +54,6 @@ class FakeVoice:
         return self.audio
 
 
-class FakeInstructionVoice(FakeVoice):
-    """A provider whose prepared clips share one observable transport."""
-
-    def __init__(
-        self,
-        *,
-        instructions: str = "Global.",
-        said_with_settings: list[tuple[str, bool, str]] | None = None,
-    ) -> None:
-        super().__init__()
-        self.instructions = instructions
-        self.said_with_settings = said_with_settings if said_with_settings is not None else []
-
-    @property
-    def settings(self) -> dict[str, str]:
-        return {"instructions": self.instructions} if self.instructions.strip() else {}
-
-    def for_clip(self, instructions: str) -> FakeInstructionVoice:
-        pieces = [part.strip() for part in (self.instructions, instructions) if part.strip()]
-        return FakeInstructionVoice(
-            instructions="\n\n".join(pieces),
-            said_with_settings=self.said_with_settings,
-        )
-
-    def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
-        self.said_with_settings.append(
-            (text_or_kana, forced_accent, self.instructions)
-        )
-        return self.audio
-
-
 def record(**overrides: Any) -> VocabularyRecord:
     values: dict[str, Any] = {
         "id": "word:橋:はし",
@@ -1553,6 +1522,57 @@ def test_changed_word_request_supersedes_same_slot_pending_wal(
     assert not old_stage.exists()
 
 
+def test_changed_spoken_japanese_supersedes_same_slot_pending_wal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    display = "雨、まだ止まないの？"
+    spoken = "雨、まだやまないの？"
+    root = project(
+        tmp_path,
+        [record(examples=[ExampleSentence(japanese=display)])],
+    )
+
+    class ChangesSpokenInputOnce(FakeVoice):
+        changed = False
+
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if not self.changed:
+                payload = json.loads(
+                    (root / "vocabulary.json").read_text(encoding="utf-8")
+                )
+                payload[0]["examples"][0]["spoken_japanese"] = spoken
+                (root / "vocabulary.json").write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                )
+                self.changed = True
+            self.audio = text_or_kana.encode("utf-8")
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = ChangesSpokenInputOnce(voice=53)
+    monkeypatch.setattr(
+        audio_application, "resolve_word_provider", lambda config, chosen: provider
+    )
+    monkeypatch.setattr(
+        audio_application,
+        "resolve_sentence_provider",
+        lambda config, chosen, words: provider,
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
+    interrupted = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    [old_pending] = interrupted["pending_audio"].values()
+    old_stage = root / "media" / "audio" / old_pending["staged_file"]
+    assert old_stage.is_file()
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
+
+    assert provider.said == [(display, False), (spoken, False)]
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert "pending_audio" not in final
+    assert not old_stage.exists()
+
+
 def test_force_retry_adopts_valid_sibling_of_corrupt_same_key_wal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2580,43 +2600,16 @@ def test_a_provider_flag_overriding_the_file_still_selects_the_sentence_voice(
     assert audio_application.resolve_sentence_provider(config, "voicevox", words).voice == 52
 
 
-def test_voicevox_refuses_clip_instructions_before_any_synthesis(tmp_path: Path) -> None:
-    words = FakeVoice(voice=13)
-    sentences = FakeVoice(voice=52)
-    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
-    item = record(
-        examples=[
-            ExampleSentence(
-                japanese="橋を渡る。",
-                instructions="Pronounce 橋 as はし with odaka accent.",
-            )
-        ]
-    )
-
-    with pytest.raises(AudioError, match="instructions.*OpenAI"):
-        generate_audio(
-            [item],
-            provider=words,
-            sentence_provider=sentences,
-            book=book,
-            media_dir=tmp_path / "media",
-            words=True,
-            examples=True,
-        )
-
-    assert words.said == [] and sentences.said == []
-    assert book.records == {}
-    assert not (tmp_path / "media").exists()
-
-
-def test_words_only_ignores_dormant_example_instructions(tmp_path: Path) -> None:
+def test_words_only_ignores_dormant_spoken_japanese(tmp_path: Path) -> None:
     words = FakeVoice(voice=13)
 
     result = generate_audio(
         [
             record(
                 examples=[
-                    ExampleSentence(japanese="橋を渡る。", instructions="Clip help.")
+                    ExampleSentence(
+                        japanese="橋を渡る。", spoken_japanese="はしをわたる。"
+                    )
                 ]
             )
         ],
@@ -2631,14 +2624,16 @@ def test_words_only_ignores_dormant_example_instructions(tmp_path: Path) -> None
     assert words.said == [("ハシ'", True)]
 
 
-def test_an_unselected_instructed_record_does_not_block_a_targeted_run(
+def test_an_unselected_spoken_override_does_not_block_a_targeted_run(
     tmp_path: Path,
 ) -> None:
     selected = record(id="word:橋:はし")
     unrelated = record(
         id="word:箸:はし",
         expression="箸",
-        examples=[ExampleSentence(japanese="箸を使う。", instructions="Clip help.")],
+        examples=[
+            ExampleSentence(japanese="箸を使う。", spoken_japanese="はしをつかう。")
+        ],
     )
     words = FakeVoice(voice=13)
 
@@ -2657,32 +2652,111 @@ def test_an_unselected_instructed_record_does_not_block_a_targeted_run(
     assert words.said == [("ハシ'", True)]
 
 
-def test_conflicting_instructions_for_one_clip_refuse_before_any_synthesis(
+def test_conflicting_spoken_japanese_for_one_clip_refuses_before_synthesis(
     tmp_path: Path,
 ) -> None:
-    provider = FakeInstructionVoice()
+    provider = FakeVoice(voice=52)
     book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
     item = record(
         examples=[
-            ExampleSentence(japanese="橋を渡る。", instructions="First."),
-            ExampleSentence(japanese="橋を渡る。", instructions="Second."),
+            ExampleSentence(
+                japanese="雨、まだ止まないの？",
+                spoken_japanese="雨、まだやまないの？",
+            ),
+            ExampleSentence(
+                japanese="雨、まだ止まないの？",
+                spoken_japanese="雨、まだとまないの？",
+            ),
         ]
     )
 
-    with pytest.raises(AudioError, match="same audio file.*different instructions"):
+    with pytest.raises(AudioError, match="same audio file.*different spoken Japanese"):
         generate_audio(
             [item],
             provider=FakeVoice(),
             sentence_provider=provider,
             book=book,
             media_dir=tmp_path / "media",
-            words=True,
+            words=False,
             examples=True,
         )
 
-    assert provider.said_with_settings == []
+    assert provider.said == []
     assert book.records == {}
     assert not (tmp_path / "media").exists()
+
+
+def test_spoken_japanese_is_the_exact_paid_request_and_wal_input(
+    tmp_path: Path,
+) -> None:
+    display = "雨、まだ止まないの？"
+    spoken = "雨、まだやまないの？"
+    example = ExampleSentence(japanese=display, spoken_japanese=spoken)
+    item = record(examples=[example])
+    provider = FakeVoice(voice=52)
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    result = generate_audio(
+        [item],
+        provider=FakeVoice(),
+        sentence_provider=provider,
+        book=book,
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+        stage_only=True,
+    )
+
+    assert provider.said == [(spoken, False)]
+    assert result.records[0].examples[0].japanese == display
+    expected_name = (
+        "janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(item, example)}.wav"
+    )
+    assert Path(result.records[0].examples[0].audio).name == expected_name
+    [pending] = book.pending_audio.values()
+    assert pending["request"] == {"forced_accent": False, "input": spoken}
+    assert pending["content_fp"] == ledger_mod.example_audio_content_fingerprint(
+        example
+    )
+
+
+def test_current_pending_audio_key_binds_the_exact_spoken_japanese(
+    tmp_path: Path,
+) -> None:
+    display = "雨、まだ止まないの？"
+    spoken = "雨、まだやまないの？"
+    example = ExampleSentence(japanese=display, spoken_japanese=spoken)
+    item = record(reading="", examples=[example])
+    words = FakeVoice(voice=13)
+    sentences = FakeVoice(voice=52)
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    target = (
+        "janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(item, example)}.wav"
+    )
+
+    keys = audio_cmd.current_pending_audio_keys(
+        [item],
+        book=book,
+        word_provider=words,
+        sentence_provider=sentences,
+    )
+
+    assert keys == {
+        book.pending_audio_key_for(
+            item.id,
+            of="example",
+            target=target,
+            request_input=spoken,
+            forced_accent=False,
+            content_fp=ledger_mod.example_audio_content_fingerprint(example),
+            provider=sentences.name,
+            voice=sentences.voice,
+            speed=sentences.speed,
+            settings=sentences.settings,
+        )
+    }
 
 
 def test_two_distinct_example_identities_cannot_resolve_to_one_filename(
@@ -2957,7 +3031,7 @@ def test_selected_word_cannot_overwrite_a_foreign_referenced_example_file(
         generate_audio(
             [protected, selected],
             provider=words,
-            sentence_provider=FakeInstructionVoice(),
+            sentence_provider=FakeVoice(),
             book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
             media_dir=tmp_path / "media",
             words=True,
@@ -3021,13 +3095,13 @@ def test_the_command_protects_audio_referenced_only_by_an_inline_deck_note(
     assert "Different audio identities resolve to the same filename" in capsys.readouterr().err
 
 
-def test_an_inline_override_with_different_instructions_cannot_share_a_clip(
+def test_an_inline_override_with_different_spoken_japanese_cannot_share_a_clip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     selected = record(
         examples=[
-            ExampleSentence(japanese="橋を渡る。", instructions="Normalized.")
+            ExampleSentence(japanese="橋を渡る。", spoken_japanese="はしをわたる。")
         ]
     )
     target_name = (
@@ -3041,7 +3115,7 @@ def test_an_inline_override_with_different_instructions_cannot_share_a_clip(
             ExampleSentence(
                 japanese="橋を渡る。",
                 audio=f"audio/{target_name}",
-                instructions="Inline.",
+                spoken_japanese="きょうをわたる。",
             )
         ],
     )
@@ -3055,7 +3129,7 @@ def test_an_inline_override_with_different_instructions_cannot_share_a_clip(
         ),
         encoding="utf-8",
     )
-    provider = FakeInstructionVoice(instructions="Global.")
+    provider = FakeVoice(voice=52)
     monkeypatch.setattr(
         audio_application, "resolve_word_provider", lambda config, chosen: FakeVoice()
     )
@@ -3066,7 +3140,7 @@ def test_an_inline_override_with_different_instructions_cannot_share_a_clip(
     )
 
     assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
-    assert provider.said_with_settings == []
+    assert provider.said == []
 
 
 def test_an_inline_word_variant_cannot_share_the_normalized_word_clip(
@@ -3285,14 +3359,12 @@ def test_a_dormant_word_address_does_not_block_a_selected_example(
 def test_duplicate_selected_record_ids_refuse_before_any_synthesis(tmp_path: Path) -> None:
     first = record(
         examples=[
-            ExampleSentence(japanese="一。", instructions="First."),
-            ExampleSentence(japanese="二。", instructions="Second."),
+            ExampleSentence(japanese="一。"),
+            ExampleSentence(japanese="二。"),
         ]
     )
-    second = record(
-        examples=[ExampleSentence(japanese="三。", instructions="Third.")]
-    )
-    sentences = FakeInstructionVoice()
+    second = record(examples=[ExampleSentence(japanese="三。")])
+    sentences = FakeVoice(voice=52)
     book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
 
     with pytest.raises(AudioError, match="duplicate record id"):
@@ -3306,19 +3378,19 @@ def test_duplicate_selected_record_ids_refuse_before_any_synthesis(tmp_path: Pat
             examples=True,
         )
 
-    assert sentences.said_with_settings == []
+    assert sentences.said == []
     assert book.records == {}
     assert not (tmp_path / "media").exists()
 
 
-def test_duplicate_examples_with_one_instruction_share_one_paid_clip(
+def test_duplicate_examples_with_one_spoken_input_share_one_paid_clip(
     tmp_path: Path,
 ) -> None:
-    provider = FakeInstructionVoice()
+    provider = FakeVoice(voice=52)
     item = record(
         examples=[
-            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
-            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
+            ExampleSentence(japanese="橋を渡る。", spoken_japanese="はしをわたる。"),
+            ExampleSentence(japanese="橋を渡る。", spoken_japanese="はしをわたる。"),
         ]
     )
 
@@ -3332,9 +3404,7 @@ def test_duplicate_examples_with_one_instruction_share_one_paid_clip(
         examples=True,
     )
 
-    assert provider.said_with_settings == [
-        ("橋を渡る。", False, "Global.\n\nSame.")
-    ]
+    assert provider.said == [("はしをわたる。", False)]
     assert result.file_count == 1
     assert result.records[0].examples[0].audio == result.records[0].examples[1].audio
 
@@ -3344,12 +3414,12 @@ def test_duplicate_examples_reuse_a_current_reference_regardless_of_order(
     tmp_path: Path,
     blank_position: int,
 ) -> None:
-    provider = FakeInstructionVoice()
+    provider = FakeVoice(voice=52)
     book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
     original = record(
         examples=[
-            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
-            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
+            ExampleSentence(japanese="橋を渡る。", spoken_japanese="はしをわたる。"),
+            ExampleSentence(japanese="橋を渡る。", spoken_japanese="はしをわたる。"),
         ]
     )
     first = generate_audio(
@@ -3364,7 +3434,7 @@ def test_duplicate_examples_reuse_a_current_reference_regardless_of_order(
     current = first.records[0].examples[0].audio
     examples = list(first.records[0].examples)
     examples[blank_position] = replace(examples[blank_position], audio="")
-    provider.said_with_settings.clear()
+    provider.said.clear()
 
     second = generate_audio(
         [replace(first.records[0], examples=examples)],
@@ -3376,7 +3446,7 @@ def test_duplicate_examples_reuse_a_current_reference_regardless_of_order(
         examples=True,
     )
 
-    assert provider.said_with_settings == []
+    assert provider.said == []
     assert second.file_count == 0
     assert second.up_to_date == 1
     assert [example.audio for example in second.records[0].examples] == [
@@ -3429,33 +3499,6 @@ def test_the_command_persists_a_duplicate_reference_repair_without_a_write(
         current,
     ]
     assert provider.said == []
-
-
-def test_a_later_invalid_selected_clip_blocks_every_earlier_synthesis(
-    tmp_path: Path,
-) -> None:
-    first = record(id="word:橋:はし")
-    second = record(
-        id="word:箸:はし",
-        expression="箸",
-        examples=[ExampleSentence(japanese="箸を使う。", instructions="Clip help.")],
-    )
-    words = FakeVoice(voice=13)
-    sentences = FakeVoice(voice=52)
-
-    with pytest.raises(AudioError, match="instructions.*OpenAI"):
-        generate_audio(
-            [first, second],
-            provider=words,
-            sentence_provider=sentences,
-            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
-            media_dir=tmp_path / "media",
-            words=True,
-            examples=True,
-        )
-
-    assert words.said == [] and sentences.said == []
-    assert not (tmp_path / "media").exists()
 
 
 def test_an_openai_model_that_cannot_honor_instructions_refuses_in_preflight() -> None:
@@ -3551,7 +3594,7 @@ def test_a_blank_openai_model_refuses_before_word_or_sentence_synthesis(
     assert not (root / "media").exists()
 
 
-def test_invalid_utf8_clip_instructions_refuse_the_whole_run_in_preflight(
+def test_invalid_utf8_spoken_japanese_refuses_the_whole_run_in_preflight(
     tmp_path: Path,
 ) -> None:
     from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
@@ -3572,11 +3615,11 @@ def test_invalid_utf8_clip_instructions_refuse_the_whole_run_in_preflight(
     item = record(
         examples=[
             ExampleSentence(japanese="一。"),
-            ExampleSentence(japanese="二。", instructions="\ud800"),
+            ExampleSentence(japanese="二。", spoken_japanese="\ud800"),
         ]
     )
 
-    with pytest.raises(AudioError, match="instructions.*valid UTF-8"):
+    with pytest.raises(AudioError, match="speech input.*valid UTF-8"):
         generate_audio(
             [item],
             provider=words,
@@ -3592,15 +3635,15 @@ def test_invalid_utf8_clip_instructions_refuse_the_whole_run_in_preflight(
     assert not (tmp_path / "media").exists()
 
 
-def test_editing_one_clip_instruction_revoices_only_that_clip_in_place(
+def test_editing_one_spoken_japanese_revoices_only_that_clip_in_place(
     tmp_path: Path,
 ) -> None:
-    provider = FakeInstructionVoice()
+    provider = FakeVoice(voice=52)
     book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
     original = record(
         examples=[
-            ExampleSentence(japanese="橋を渡る。", instructions="First."),
-            ExampleSentence(japanese="毎日話す。", instructions="Second."),
+            ExampleSentence(japanese="橋を渡る。"),
+            ExampleSentence(japanese="毎日話す。"),
         ]
     )
     first = generate_audio(
@@ -3613,10 +3656,10 @@ def test_editing_one_clip_instruction_revoices_only_that_clip_in_place(
         examples=True,
     )
     before = [example.audio for example in first.records[0].examples]
-    provider.said_with_settings.clear()
+    provider.said.clear()
     edited = record(
         examples=[
-            replace(first.records[0].examples[0], instructions="Changed."),
+            replace(first.records[0].examples[0], spoken_japanese="はしをわたる。"),
             first.records[0].examples[1],
         ]
     )
@@ -3631,14 +3674,12 @@ def test_editing_one_clip_instruction_revoices_only_that_clip_in_place(
         examples=True,
     )
 
-    assert provider.said_with_settings == [
-        ("橋を渡る。", False, "Global.\n\nChanged.")
-    ]
+    assert provider.said == [("はしをわたる。", False)]
     assert second.up_to_date == 1
     assert [example.audio for example in second.records[0].examples] == before
     entries = {entry["file"]: entry for entry in book.records[original.id]["audio"]}
-    assert entries[Path(before[0]).name]["settings"]["instructions"] == (
-        "Global.\n\nChanged."
+    assert entries[Path(before[0]).name]["content_fp"] == (
+        ledger_mod.example_audio_content_fingerprint(edited.examples[0])
     )
 
 

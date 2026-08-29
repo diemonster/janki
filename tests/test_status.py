@@ -273,7 +273,7 @@ def test_the_record_universe_is_the_normalized_file_plus_inline_deck_notes(
     assert "By source type: manual 1, shirabe 1" in out
 
 
-def test_stale_audio_sees_each_durable_inline_render_profile(
+def test_stale_audio_sees_each_durable_inline_spoken_request(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -286,7 +286,7 @@ def test_stale_audio_sees_each_durable_inline_render_profile(
         ".mp3"
     )
 
-    def inline(instructions: str) -> dict[str, Any]:
+    def inline(spoken_japanese: str) -> dict[str, Any]:
         return _raw(
             "話す",
             "はなす",
@@ -294,7 +294,7 @@ def test_stale_audio_sees_each_durable_inline_render_profile(
                 {
                     "japanese": sentence,
                     "audio": f"audio/{filename}",
-                    "instructions": instructions,
+                    "spoken_japanese": spoken_japanese,
                 }
             ],
         )
@@ -303,8 +303,8 @@ def test_stale_audio_sees_each_durable_inline_render_profile(
         tmp_path,
         [],
         {
-            "a": {"deck": {"name": "A"}, "notes": [inline("A.")]},
-            "b": {"deck": {"name": "B"}, "notes": [inline("B.")]},
+            "a": {"deck": {"name": "A"}, "notes": [inline("毎日はなす。")]},
+            "b": {"deck": {"name": "B"}, "notes": [inline("まいにち話す。")]},
         },
     )
     (root / "janki.toml").write_text(
@@ -323,10 +323,10 @@ def test_stale_audio_sees_each_durable_inline_render_profile(
         speed=1.0,
         settings={
             "model": "gpt-4o-mini-tts",
-            "instructions": "Global.\n\nB.",
+            "instructions": "Global.",
         },
         content_fp=example_audio_content_fingerprint(
-            ExampleSentence(japanese=sentence)
+            ExampleSentence(japanese=sentence, spoken_japanese="まいにち話す。")
         ),
     )
     book.save()
@@ -459,13 +459,13 @@ def test_word_voice_does_not_decide_whether_openai_examples_are_stale(
     assert "Stale audio: 0" in capsys.readouterr().out
 
 
-def test_status_compares_each_openai_examples_effective_instructions(
+def test_status_compares_each_examples_exact_spoken_japanese_request(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     example = ExampleSentence(
         japanese="毎日話す。",
         audio="audio/janki-example.mp3",
-        instructions="Pronounce 毎日 as まいにち.",
+        spoken_japanese="まいにち話す。",
     )
     record = _record("話す", "はなす")
     # ExampleSentence intentionally has no public serializer of its own; the
@@ -481,16 +481,15 @@ def test_status_compares_each_openai_examples_effective_instructions(
     config = ProjectConfig.load(root)
     words = audio_application.resolve_word_provider(config, None)
     sentences = audio_application.resolve_sentence_provider(config, None, words)
-    prepared = sentences.for_clip(example.instructions)
     book = ledger.load(root / "ledger.json")
     book.record_audio(
         record.id,
         file="janki-example.mp3",
         of="example",
-        provider=prepared.name,
-        voice=prepared.voice,
-        speed=prepared.speed,
-        settings=prepared.settings,
+        provider=sentences.name,
+        voice=sentences.voice,
+        speed=sentences.speed,
+        settings=sentences.settings,
         content_fp=example_audio_content_fingerprint(example),
     )
     book.save()
@@ -498,7 +497,7 @@ def test_status_compares_each_openai_examples_effective_instructions(
     assert _status(root) == 0
     assert "Stale audio: 0" in capsys.readouterr().out
 
-    record.examples[0].instructions = "Changed."
+    record.examples[0].spoken_japanese = "毎日はなす。"
     (root / "vocabulary.json").write_text(
         json.dumps([record.to_dict()], ensure_ascii=False), encoding="utf-8"
     )
@@ -507,108 +506,19 @@ def test_status_compares_each_openai_examples_effective_instructions(
     assert "Stale audio: 1" in capsys.readouterr().out
 
 
-def test_status_explains_when_the_sentence_engine_cannot_honor_clip_instructions(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    example = ExampleSentence(
-        japanese="毎日話す。",
-        audio="audio/janki-example.wav",
-        instructions="Pronounce 毎日 as まいにち.",
-    )
-    record = _record("話す", "はなす")
-    record.examples = [example]
-    root = _project(tmp_path, [record.to_dict()])
-    book = ledger.load(root / "ledger.json")
-    book.record_audio(
-        record.id,
-        file="janki-example.wav",
-        of="example",
-        provider="voicevox",
-        voice=46,
-        speed=1.0,
-        settings={},
-        content_fp=example_audio_content_fingerprint(example),
-    )
-    book.save()
-
-    assert _status(root) == 0
-
-    captured = capsys.readouterr()
-    assert "Stale audio: 1" in captured.out
-    assert "cannot honor 1 example-audio profile" in captured.err
-    assert record.id in captured.err
-    assert "OpenAI" in captured.err
-
-
-def test_status_checks_normalized_audio_even_when_an_inline_note_shadows_it(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    normalized = _raw(
-        "話す",
-        "はなす",
-        examples=[
-            {
-                "japanese": "毎日話す。",
-                "instructions": "Pronounce 毎日 as まいにち.",
-            }
-        ],
-    )
-    inline = _raw(
-        "話す",
-        "はなす",
-        examples=[{"japanese": "毎日話す。"}],
-    )
-    root = _project(
-        tmp_path,
-        [normalized],
-        {"inline": {"deck": {"name": "Inline"}, "notes": [inline]}},
-    )
-
-    assert _status(root) == 0
-
-    captured = capsys.readouterr()
-    assert "cannot honor 1 example-audio profile" in captured.err
-    assert normalized["id"] in captured.err
-    assert "'janki audio --examples' will refuse before synthesis" in captured.err
-
-
-def test_status_does_not_apply_audio_refusals_to_inline_only_notes(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    inline = _raw(
-        "話す",
-        "はなす",
-        examples=[
-            {
-                "japanese": "毎日話す。",
-                "instructions": "Pronounce 毎日 as まいにち.",
-            }
-        ],
-    )
-    root = _project(
-        tmp_path,
-        [],
-        {"inline": {"deck": {"name": "Inline"}, "notes": [inline]}},
-    )
-
-    assert _status(root) == 0
-
-    captured = capsys.readouterr()
-    assert "cannot honor" not in captured.err
-    assert "'janki audio --examples' will refuse" not in captured.err
-
-
-def test_status_warns_when_shadowed_normalized_openai_input_exceeds_the_api_limit(
+def test_status_warns_when_shadowed_spoken_japanese_exceeds_the_api_limit(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     record = _raw(
         "話す",
         "はなす",
-        examples=[{"japanese": "長" * 4097}],
+        examples=[
+            {
+                "japanese": "毎日話す。",
+                "spoken_japanese": "長" * 4097,
+            }
+        ],
     )
     inline = _raw(
         "話す",
@@ -628,7 +538,7 @@ def test_status_warns_when_shadowed_normalized_openai_input_exceeds_the_api_limi
     assert _status(root) == 0
 
     captured = capsys.readouterr()
-    assert "cannot honor 1 example-audio profile" in captured.err
+    assert "cannot accept 1 example-audio request" in captured.err
     assert record["id"] in captured.err
     assert "4096-character limit" in captured.err
     assert "'janki audio --examples' will refuse before synthesis" in captured.err

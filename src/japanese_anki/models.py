@@ -118,11 +118,11 @@ class ExampleSentence:
     english: str = ""
     # Media-dir-relative filename of this sentence's generated audio (M5.3).
     audio: str = ""
-    #: Optional human-written steering appended to the configured OpenAI
-    #: sentence instructions for this clip only. It is deliberately absent
-    #: from model-generated example schemas: this is the escape hatch for a
-    #: person who listened, not another answer for the model to invent.
-    instructions: str = ""
+    #: Optional human-written text sent to the sentence provider instead of
+    #: ``japanese``. It is deliberately absent from model-generated example
+    #: schemas: this is the escape hatch for a person who listened, not another
+    #: answer for the model to invent. Janki never derives it from furigana.
+    spoken_japanese: str = ""
     #: ``polite`` (〜ます/です) or ``casual`` (plain form), or empty for an
     #: example written before the distinction existed. A learner meets both and
     #: they are not interchangeable — a textbook teaches ます first and a friend
@@ -150,28 +150,28 @@ class ExampleSentence:
         position: int | None = None,
     ) -> ExampleSentence:
         data = _checked_mapping(data, "examples", "a list of example mappings")
-        instruction_value = data.get("instructions", "")
-        if instruction_value is None:
-            instructions = ""
-        elif not isinstance(instruction_value, str):
+        spoken_value = data.get("spoken_japanese", "")
+        if spoken_value is None:
+            spoken_japanese = ""
+        elif not isinstance(spoken_value, str):
             field_name = (
-                f"examples[{position}].instructions"
+                f"examples[{position}].spoken_japanese"
                 if position is not None
-                else "examples.instructions"
+                else "examples.spoken_japanese"
             )
             raise ModelError(
                 f"'{field_name}' must be text or empty, got "
-                f"{type(instruction_value).__name__} ({_excerpt(instruction_value)})"
+                f"{type(spoken_value).__name__} ({_excerpt(spoken_value)})"
             )
         else:
-            instructions = instruction_value.strip()
+            spoken_japanese = spoken_value.strip()
         return cls(
             japanese=str(data.get("japanese", "")).strip(),
             furigana=str(data.get("furigana", "")).strip(),
             romaji=str(data.get("romaji", "")).strip(),
             english=str(data.get("english", "")).strip(),
             audio=str(data.get("audio", "")).strip(),
-            instructions=instructions,
+            spoken_japanese=spoken_japanese,
             register=str(data.get("register", "")).strip().lower(),
         )
 
@@ -287,14 +287,13 @@ class VocabularyRecord:
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
-        # M8.1 is intentionally not a whole-file schema migration. ``audio``
-        # rewrites the complete collection after changing one record, so an
-        # ordinary dataclass serialization would add ``instructions: ""`` to
-        # every historical example. Empty means the exact legacy render
-        # profile and stays absent; only the human-authored override is stored.
+        # The override is deliberately sparse. ``audio`` rewrites the complete
+        # collection after changing one record, so ordinary dataclass
+        # serialization must not add ``spoken_japanese: ""`` to every example.
+        # Only the human-authored replacement input is stored.
         for example in payload["examples"]:
-            if not str(example.get("instructions") or "").strip():
-                example.pop("instructions", None)
+            if not str(example.get("spoken_japanese") or "").strip():
+                example.pop("spoken_japanese", None)
         return payload
 
     @property

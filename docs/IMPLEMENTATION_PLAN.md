@@ -35,7 +35,7 @@ marked "supersedes design").
    into `FIELD_NAMES` (append-only, and only in task M5.4). Schema
    fields (`pitch_accent`, `audio_accent`, `frequency_rank`,
    `ExampleSentence.audio`) are added **only** in M2.2, while the sparse
-   human-owned `ExampleSentence.instructions` escape hatch is M8.1 — if an
+   human-owned `ExampleSentence.spoken_japanese` escape hatch is M8.1 — if an
    earlier task needs one, use defensive access, don't add fields early.
 6. **No live network calls in tests.** Every client (jpdb, Claude,
    VOICEVOX, OpenAI speech) takes an injectable transport; tests use fakes with
@@ -3618,15 +3618,16 @@ does not fit its reading takes the same fallback rather than staying the last
 silent refusal, and still warns.
 
 The sentence-side completion adds sparse, human-owned
-`examples[].instructions`. Empty values stay absent from JSON. A clip's value
-supplements the configured OpenAI baseline with one blank line between them;
-the exact effective text is both the API request and the ledger render profile,
-so changing one hint makes only that clip stale. Engines that cannot honor a
-hint refuse the whole selected run before synthesis, and `status` explains the
-configuration instead of reporting an unexplained stale count. Models that do
-not apply instructions are refused, as are unsupported legacy voice/model
-pairs, a blank model, invalid UTF-8 request text, and over-limit OpenAI request
-fields.
+`examples[].spoken_japanese`. Empty values stay absent from JSON. When present,
+the value is the exact sentence-provider input; otherwise the displayed
+`japanese` value is sent. Janki never derives the override from furigana or
+otherwise reads Japanese. The displayed sentence remains the card text and
+stable filename identity, while the effective spoken input binds the paid
+request, content fingerprint, and write-ahead row, so changing one override
+makes only that clip stale. The configured OpenAI `instructions` remain a
+collection-wide pace and delivery setting. A blank model, invalid UTF-8 input,
+over-limit OpenAI request fields, and unsupported legacy voice/model pairs all
+refuse before synthesis.
 
 The advertised Azure surface is deleted: no module, config key, dependency,
 environment key, or `--provider` choice remains. `_speech_provider` retains the
@@ -3640,19 +3641,20 @@ stale; regeneration writes/repoints to the new address, and only then is the old
 file orphaned and pruneable. The
 frozen concatenation/48-bit formula can collide, so preflight compares every
 selected destination against every other selected destination and every audio
-reference in the supplied record universe, using the exact prepared per-clip
-provider suffix. It refuses before writing rather than overwriting a clip that
-another card still plays. Duplicate sentences with identical instructions
-share one paid clip regardless of list order, and a reference-only repair is
+reference in the supplied record universe, using the exact sentence-provider
+suffix and effective spoken input. It refuses before writing rather than overwriting a clip that
+another card still plays. Duplicate sentences with identical effective spoken
+input share one paid clip regardless of list order, and a reference-only repair is
 persisted even when no new bytes were written.
 
-No billed regeneration and no vocabulary/media migration: legacy
-empty-instruction ledger profiles keep their exact settings shape, and the
-repository's current 191 records / 343 examples round-trip with zero
-`instructions` keys, zero stale clips, and zero address collisions. The 534
-current ledger `content_fp` values were mechanically rebound in place from the
-old normalized 48-bit digest to a raw, framed SHA-256 over the exact provider
-request; filenames and audio bytes did not move.
+No corpus-wide vocabulary/media migration: sparse records without an override
+round-trip without acquiring a key. The later reviewed 止む correction replaced
+the failed clip-specific prose-steering experiment with the first
+`spoken_japanese` value; its displayed text and filename stayed fixed while
+only that clip became stale. The existing ledger `content_fp` values had
+already been mechanically rebound in place from the old normalized 48-bit
+digest to a raw, framed SHA-256 over the exact provider request; filenames and
+audio bytes did not move.
 
 The adversarial audio review also replaced direct paid writes with a per-clip
 transaction. Each result is atomically staged under `audio/.pending`, merged

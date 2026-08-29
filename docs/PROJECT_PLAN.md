@@ -116,10 +116,11 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
 
 - Pitch-pattern → AquesTalk conversion module with a golden test set.
 - `janki audio`: VOICEVOX word audio with forced reading + accent
-  (accent_phrases flow), OpenAI sentence audio with sparse per-clip
-  instructions; identity-addressed file naming plus content/render-profile
-  stale-audio detection. Paid results use a per-clip write-ahead transaction,
-  so a record/ledger race or interrupted batch resumes from exact staged bytes
+  (accent_phrases flow), OpenAI sentence audio with sparse human-owned exact
+  spoken-text overrides; identity-addressed file naming plus
+  content/render-profile stale-audio detection. The effective spoken input is
+  bound into each paid request and per-clip write-ahead transaction, so a
+  record/ledger race or interrupted batch resumes from exact staged bytes
   rather than billing for the same request again.
 - Exporter media-dir resolution, notetype-upgrade verification against a
   live collection, template updates, `build --only-new`, `janki refresh`.

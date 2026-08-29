@@ -310,10 +310,10 @@ sentence_provider = "openai"  # or leave unset for VOICEVOX throughout
 profile = "User 1"            # only needed with several Anki profiles
 ```
 
-One sentence that needs pronunciation help can carry an optional
-`examples[].instructions` string in `vocabulary.json`. It supplements the
-configured OpenAI sentence prompt and re-voices only that clip; VOICEVOX
-refuses a clip instruction rather than ignoring it.
+One sentence that needs an explicit reading can carry an optional,
+human-written `examples[].spoken_japanese` string in `vocabulary.json`. It is
+the exact TTS input and re-voices only that clip; the displayed `japanese` and
+stable media filename stay unchanged. janki never derives the override.
 
 ## Where things live
 

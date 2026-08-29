@@ -16,7 +16,7 @@ without knowing which engine it is holding.
 
 from __future__ import annotations
 
-from typing import Protocol, TypeVar, cast, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from japanese_anki.errors import JankiError
 
@@ -24,7 +24,6 @@ __all__ = [
     "RenderProfile",
     "SpeechProvider",
     "TtsError",
-    "clip_provider",
     "validate_utterance",
 ]
 
@@ -110,30 +109,6 @@ class SpeechProvider(RenderProfile, Protocol):
         the flag, not by lacking the method.
         """
         ...
-
-
-_Profile = TypeVar("_Profile", bound=RenderProfile)
-
-
-def clip_provider(provider: _Profile, instructions: str) -> _Profile:
-    """Prepare one utterance's render profile.
-
-    Blank steering is backward-compatible with every provider. Nonblank
-    steering is optional provider capability: ignoring it would write a clip a
-    listener already said was wrong and then ledger it as current. Providers
-    that support it expose ``for_clip``; OpenAI uses that seam to append the
-    override to its collection-wide baseline.
-    """
-    value = str(instructions or "").strip()
-    prepare = getattr(provider, "for_clip", None)
-    if callable(prepare):
-        return cast(_Profile, prepare(value))
-    if not value:
-        return provider
-    raise TtsError(
-        f"{provider.name} cannot apply per-clip instructions. Set [tts] "
-        'sentence_provider = "openai" to use OpenAI for an example\'s instructions.'
-    )
 
 
 def validate_utterance(provider: RenderProfile, text: str) -> None:

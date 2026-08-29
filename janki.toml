@@ -57,10 +57,10 @@ voicevox_speaker = 53               # 麒ヶ島宗麟 — chosen for accent audi
 # environment — never in this file.
 sentence_provider = "openai"
 openai_voice = "onyx"
-# janki leaves the API's optional speed at its 1.0 default; pace and
-# pronunciation steering are asked for in prose instead.
-# A sentence needing extra pronunciation help may add a sparse
-# examples[].instructions value in vocabulary.json; it supplements this text.
+# janki leaves the API's optional speed at its 1.0 default; collection-wide
+# pace and delivery style are asked for in prose instead. A reviewed
+# sentence-specific reading belongs in sparse examples[].spoken_japanese; it
+# becomes the exact TTS input and is not appended to these instructions.
 openai_instructions = """\
 Read this as a native speaker of standard Tokyo Japanese, for someone learning \
 the language. Speak noticeably slower than conversational pace, clearly and \

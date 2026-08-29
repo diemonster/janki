@@ -82,8 +82,15 @@ owns:
   the engine's own accent and a ledger mark saying so.
 - **OpenAI TTS** — audio for example *sentences*, read naturally. A sentence
   carries context that disambiguates, and no accent data janki has covers a
-  whole sentence. Steering is prose instructions in config; if one clip needs
-  help, the reading rides along in that clip's instructions.
+  whole sentence. Collection-wide pace and delivery style are prose
+  instructions in config. If a provider misreads one reviewed sentence, a
+  human may add sparse `examples[].spoken_japanese`; janki sends that exact
+  nonblank text instead of the displayed `japanese`, and never derives it
+  automatically.
+  The displayed sentence remains the card text and stable filename identity;
+  the effective spoken input participates in the content/request fingerprint
+  and audio write-ahead record, so changing it stales only that clip without
+  renaming it.
 - **Derivation** — mechanics janki owns: romaji transliterated from the
   model's furigana (for a bare word, from its reading), and the conjugation
   tables that fill the Conjugations field and build the drill decks.

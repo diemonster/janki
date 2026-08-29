@@ -25,11 +25,11 @@ enriches the card, it never audits the model, and what the sentence says is the
 model's answer to a template that asked precisely.
 
 Files are identity-addressed (``janki-<fingerprint><provider suffix>``): a word
-by record id, an example by record id plus Japanese text. Change a sentence and
-its audio moves to a new name; change a voice or per-clip instruction and the
-ledger makes that stable file stale so it is rewritten in place. ``--prune``
-sweeps what neither a durable card nor a pending paid-audio transaction
-references.
+by record id, an example by record id plus displayed Japanese text. Change the
+displayed sentence and its audio moves to a new name; change a voice or the
+human-owned spoken input and the ledger makes that stable file stale so it is
+rewritten in place. ``--prune`` sweeps what neither a durable card nor a
+pending paid-audio transaction references.
 """
 
 from __future__ import annotations
@@ -52,7 +52,6 @@ from japanese_anki.models import (
 from japanese_anki.tts import (
     SpeechProvider,
     TtsError,
-    clip_provider,
     validate_utterance,
 )
 
@@ -799,10 +798,11 @@ def _example_audio(
     """
     examples: list[ExampleSentence] = []
     changed = False
-    # Identical sentence text within one record is one identity-addressed clip.
+    # Identical displayed sentence text within one record is one
+    # identity-addressed clip.
     # Find a current referenced member *before* walking stored order: otherwise
     # ``[blank, current]`` pays to overwrite a clip that ``[current, blank]``
-    # reuses for free. Preflight has already proved duplicate instructions agree.
+    # reuses for free. Preflight has already proved duplicate spoken inputs agree.
     resolved: dict[str, str] = {}
     if not force or stage_only:
         for position, example in enumerate(record.examples):
@@ -820,7 +820,7 @@ def _example_audio(
                 of="example",
                 content_fp=ledger_mod.example_audio_content_fingerprint(example),
                 expected=expected,
-                request_input=example.japanese,
+                request_input=ledger_mod.example_audio_request(example),
                 forced_accent=False,
                 audio_dir=audio_dir,
                 provider=provider,
@@ -863,9 +863,10 @@ def _example_audio(
             changed = changed or example.audio != audio
             continue
         content_fp = ledger_mod.example_audio_content_fingerprint(example)
+        request_input = ledger_mod.example_audio_request(example)
 
         try:
-            data = provider.synthesize(example.japanese, forced_accent=False)
+            data = provider.synthesize(request_input, forced_accent=False)
             name = (
                 f"janki-"
                 f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
@@ -878,7 +879,7 @@ def _example_audio(
                     record_id=record.id,
                     of="example",
                     target=name,
-                    request_input=example.japanese,
+                    request_input=request_input,
                     forced_accent=False,
                     content_fp=content_fp,
                     provider=provider,
@@ -1062,35 +1063,29 @@ def prepare_example_audio_profiles(
     """Resolve and validate every example profile without contacting a provider.
 
     Planning and execution share this deterministic preflight so a displayed
-    action cannot conceal a duplicate-instruction conflict, unsupported
-    steering, or a provider request-length refusal that execution already
-    knows before spending.
+    action cannot conceal conflicting exact inputs for one stable file or a
+    provider request refusal that execution already knows before spending.
     """
     prepared: dict[str, list[SpeechProvider]] = {}
     for record in records:
         seen: dict[str, str] = {}
         profiles: list[SpeechProvider] = []
         for example in record.examples:
-            instruction = example.instructions.strip()
+            request_input = ledger_mod.example_audio_request(example)
             if example.japanese:
                 previous = seen.get(example.japanese)
-                if previous is not None and previous != instruction:
+                if previous is not None and previous != request_input:
                     raise AudioError(
                         f"{record.id} has the same audio file for duplicate "
                         f"sentence {example.japanese!r} but different "
-                        "instructions. Make the instructions agree or keep "
+                        "spoken Japanese. Make spoken_japanese agree or keep "
                         "only one copy of the sentence."
                     )
-                seen[example.japanese] = instruction
+                seen[example.japanese] = request_input
             try:
-                profile = (
-                    clip_provider(sentence_provider, instruction)
-                    if example.japanese
-                    else sentence_provider
-                )
                 if example.japanese:
-                    validate_utterance(profile, example.japanese)
-                profiles.append(profile)
+                    validate_utterance(sentence_provider, request_input)
+                profiles.append(sentence_provider)
             except TtsError as exc:
                 raise AudioError(f"{record.id}: {exc}") from exc
         prepared[record.id] = profiles
@@ -1273,7 +1268,7 @@ def audio_clip_requirements(
                         f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
                         f"{provider.suffix}"
                     ),
-                    request_input=example.japanese,
+                    request_input=ledger_mod.example_audio_request(example),
                     forced_accent=False,
                     named=example.audio,
                     audio_dir=audio_dir,
@@ -1407,17 +1402,15 @@ def _refuse_address_collisions(
                     "example",
                     record.id,
                     example.japanese,
+                    ledger_mod.example_audio_request(example),
                     ledger_mod.example_audio_content_fingerprint(example),
-                    example.instructions.strip(),
                 ),
                     f"example reference {record.id} / {example.japanese}",
                     False,
                 )
 
-    # Selected destinations use the exact utterance-scoped provider that the
-    # synthesis loop will use. A future provider may vary its suffix in
-    # ``for_clip``; looking only at the collection-level provider would then
-    # preflight a different path from the one actually written.
+    # Selected destinations use the exact provider and request input that the
+    # synthesis loop will use.
     for record in records:
         if record.id not in wanted:
             continue
@@ -1449,8 +1442,8 @@ def _refuse_address_collisions(
                         "example",
                         record.id,
                         example.japanese,
+                        ledger_mod.example_audio_request(example),
                         ledger_mod.example_audio_content_fingerprint(example),
-                        example.instructions.strip(),
                     ),
                     f"selected example {record.id} / {example.japanese}",
                     True,
@@ -1487,25 +1480,38 @@ def _refuse_address_collisions(
                 # above still represents that old request identity.
                 continue
         else:
-            instruction = ""
+            displayed = ""
             for record in [*records, *protected_records]:
                 if record.id != str(entry["record_id"]):
                     continue
                 for example in record.examples:
                     if (
-                        example.japanese == str(request["input"])
+                        Path(example.audio).name == str(entry["target"])
+                        and ledger_mod.example_audio_request(example)
+                        == str(request["input"])
                         and ledger_mod.example_audio_content_fingerprint(example)
                         == str(entry["content_fp"])
                     ):
-                        instruction = example.instructions.strip()
+                        displayed = example.japanese
                         break
             identity = (
                 "example",
                 str(entry["record_id"]),
+                displayed,
                 str(request["input"]),
                 str(entry["content_fp"]),
-                instruction,
             )
+            target_owners = owners.get(str(entry["target"]).casefold(), {})
+            same_selected_slot = any(
+                candidate[:2] == ("example", str(entry["record_id"])) and selected
+                for candidate, (_, selected) in target_owners.items()
+            )
+            if same_selected_slot and identity not in target_owners:
+                # Example filenames stay stable when only the human-owned
+                # spoken input changes. The former request's WAL is superseded
+                # by a new selected request unless a durable reference above
+                # still owns that exact old identity.
+                continue
         add(
             str(entry["target"]),
             identity,
@@ -1752,7 +1758,6 @@ def current_pending_audio_keys(
         for example in record.examples:
             if not example.japanese:
                 continue
-            profile = clip_provider(sentence_provider, example.instructions.strip())
             keys.add(
                 book.pending_audio_key_for(
                     record.id,
@@ -1760,15 +1765,15 @@ def current_pending_audio_keys(
                     target=(
                         f"janki-"
                         f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
-                        f"{profile.suffix}"
+                        f"{sentence_provider.suffix}"
                     ),
-                    request_input=example.japanese,
+                    request_input=ledger_mod.example_audio_request(example),
                     forced_accent=False,
                     content_fp=ledger_mod.example_audio_content_fingerprint(example),
-                    provider=profile.name,
-                    voice=profile.voice,
-                    speed=profile.speed,
-                    settings=profile.settings,
+                    provider=sentence_provider.name,
+                    voice=sentence_provider.voice,
+                    speed=sentence_provider.speed,
+                    settings=sentence_provider.settings,
                 )
             )
     return keys

@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from japanese_anki.errors import JankiError
-from japanese_anki.models import ExampleSentence, ModelError, VocabularyRecord
+from japanese_anki.models import ModelError, VocabularyRecord
 
 
 def _raw(**overrides: Any) -> dict[str, Any]:
@@ -164,51 +164,48 @@ def test_the_new_fields_round_trip_through_to_dict() -> None:
     assert VocabularyRecord.from_dict(stored).to_dict() == stored
 
 
-def test_example_audio_instructions_are_sparse_and_round_trip() -> None:
-    """The per-clip escape hatch is human-owned and optional.
+def test_example_spoken_japanese_is_sparse_human_curation() -> None:
+    """The display sentence and exact TTS input are separate reviewed values.
 
-    Old records must not acquire an empty key on the next audio run: M8.1 is
-    explicitly a no-migration change, and ``audio`` saves the whole collection
-    after writing one clip.  A real instruction, on the other hand, is durable
-    review data and must survive the JSON round trip exactly after trimming the
-    hand-edited field's outer whitespace.
+    Most examples need no override and must not acquire an empty key when an
+    audio run rewrites the collection. A real override survives exactly after
+    trimming; a malformed value refuses instead of becoming provider input.
     """
     old = VocabularyRecord.from_dict(
-        _raw(examples=[{"japanese": "毎日食べる。"}])
+        _raw(examples=[{"japanese": "雨、まだ止まないの？"}])
     )
     null = VocabularyRecord.from_dict(
-        _raw(examples=[{"japanese": "毎日食べる。", "instructions": None}])
+        _raw(
+            examples=[
+                {"japanese": "雨、まだ止まないの？", "spoken_japanese": None}
+            ]
+        )
     )
-    instructed = VocabularyRecord.from_dict(
+    helped = VocabularyRecord.from_dict(
         _raw(
             examples=[
                 {
-                    "japanese": "毎日食べる。",
-                    "instructions": "  Pronounce 毎日 as まいにち.  ",
+                    "japanese": "雨、まだ止まないの？",
+                    "spoken_japanese": "  雨、まだやまないの？  ",
                 }
             ]
         )
     )
 
-    assert old.examples[0].instructions == ""
-    assert "instructions" not in old.to_dict()["examples"][0]
-    assert null.examples[0].instructions == ""
-    assert "instructions" not in null.to_dict()["examples"][0]
-    assert instructed.examples[0].instructions == "Pronounce 毎日 as まいにち."
-    stored = instructed.to_dict()
-    assert stored["examples"][0]["instructions"] == "Pronounce 毎日 as まいにち."
+    assert old.examples[0].spoken_japanese == ""
+    assert "spoken_japanese" not in old.to_dict()["examples"][0]
+    assert null.examples[0].spoken_japanese == ""
+    assert "spoken_japanese" not in null.to_dict()["examples"][0]
+    assert helped.examples[0].spoken_japanese == "雨、まだやまないの？"
+    stored = helped.to_dict()
+    assert stored["examples"][0]["spoken_japanese"] == "雨、まだやまないの？"
     assert VocabularyRecord.from_dict(stored).to_dict() == stored
 
-    direct = VocabularyRecord.from_dict(_raw())
-    direct.examples = [ExampleSentence(japanese="毎日食べる。", instructions="   ")]
-    assert "instructions" not in direct.to_dict()["examples"][0]
-
-
 @pytest.mark.parametrize("value", [12, True, ["read slowly"], {"reading": "x"}])
-def test_example_audio_instructions_refuse_non_text(value: Any) -> None:
-    with pytest.raises(ModelError, match=r"examples\[0\]\.instructions.*text"):
+def test_example_spoken_japanese_refuses_non_text(value: Any) -> None:
+    with pytest.raises(ModelError, match=r"examples\[0\]\.spoken_japanese.*text"):
         VocabularyRecord.from_dict(
-            _raw(examples=[{"japanese": "毎日食べる。", "instructions": value}])
+            _raw(examples=[{"japanese": "毎日食べる。", "spoken_japanese": value}])
         )
 
 

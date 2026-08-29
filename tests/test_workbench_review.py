@@ -93,7 +93,7 @@ def _record(name: str, reading: str, *, authority: str = "") -> VocabularyRecord
                 romaji="neko desu",
                 english="It is a cat.",
                 audio="example.mp3",
-                instructions="Keep <exact>.",
+                spoken_japanese=f"{reading}<exact>.",
                 register="polite",
             ),
             ExampleSentence(

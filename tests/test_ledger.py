@@ -24,6 +24,7 @@ from japanese_anki.ledger import (
     LedgerError,
     example_audio_content_fingerprint,
     example_audio_filename_fingerprint,
+    example_audio_request,
     word_audio_content_fingerprint,
     word_audio_filename_fingerprint,
 )
@@ -60,32 +61,6 @@ class _AudioProfile:
         self.voice = voice
         self.speed = speed
         self.settings = settings or {}
-
-    def for_clip(self, instructions: str) -> _AudioProfile:
-        effective = "\n\n".join(
-            part.strip()
-            for part in (self.settings.get("instructions", ""), instructions)
-            if part.strip()
-        )
-        settings = dict(self.settings)
-        if effective:
-            settings["instructions"] = effective
-        else:
-            settings.pop("instructions", None)
-        return _AudioProfile(
-            self.name,
-            self.voice,
-            speed=self.speed,
-            settings=settings,
-        )
-
-
-class _ProfileWithoutClipInstructions:
-    name = "voicevox"
-    voice = 52
-    speed = 1.0
-    settings: dict[str, str] = {}
-
 
 WORD_PROFILE = _AudioProfile("voicevox", 46)
 EXAMPLE_PROFILE = _AudioProfile("openai", "onyx")
@@ -1034,19 +1009,27 @@ def test_example_audio_filenames_are_per_record_but_content_is_shared() -> None:
     )
 
 
-def test_clip_instructions_are_render_settings_not_audio_identity() -> None:
+def test_spoken_japanese_changes_content_but_not_the_stable_file_address() -> None:
     record = _record()
-    plain = ExampleSentence(japanese="毎日話す。")
+    plain = ExampleSentence(japanese="雨、まだ止まないの？")
     helped = ExampleSentence(
-        japanese="毎日話す。",
-        instructions="Pronounce 毎日 as まいにち.",
+        japanese="雨、まだ止まないの？",
+        spoken_japanese="雨、まだやまないの？",
     )
 
-    assert example_audio_filename_fingerprint(record, plain) == (
-        example_audio_filename_fingerprint(record, helped)
+    assert example_audio_request(plain) == plain.japanese
+    assert example_audio_request(
+        ExampleSentence(japanese=plain.japanese, spoken_japanese="   ")
+    ) == plain.japanese
+    assert example_audio_request(helped) == helped.spoken_japanese
+    assert example_audio_content_fingerprint(helped) == _raw_audio_fingerprint(
+        "example", helped.spoken_japanese
     )
-    assert example_audio_content_fingerprint(plain) == (
-        example_audio_content_fingerprint(helped)
+    assert example_audio_content_fingerprint(helped) != (
+        example_audio_content_fingerprint(plain)
+    )
+    assert example_audio_filename_fingerprint(record, helped) == (
+        example_audio_filename_fingerprint(record, plain)
     )
 
 
@@ -1166,7 +1149,7 @@ def test_stale_audio_catches_an_edited_reading_and_an_edited_example(tmp_path: P
     assert _stale_audio(book, [record]) == [record.id]
 
 
-def test_stale_audio_uses_each_examples_effective_instructions(tmp_path: Path) -> None:
+def test_stale_audio_follows_the_exact_spoken_japanese_input(tmp_path: Path) -> None:
     base = _AudioProfile(
         "openai",
         "onyx",
@@ -1175,19 +1158,17 @@ def test_stale_audio_uses_each_examples_effective_instructions(tmp_path: Path) -
     example = ExampleSentence(
         japanese="毎日話す。",
         audio="audio/janki-example.mp3",
-        instructions="Clip.",
     )
     record = _record(examples=[example])
     book = ledger_module.load(tmp_path / "ledger.json")
-    prepared = base.for_clip(example.instructions)
     book.record_audio(
         record.id,
         file="janki-example.mp3",
         of="example",
-        provider=prepared.name,
-        voice=prepared.voice,
-        speed=prepared.speed,
-        settings=prepared.settings,
+        provider=base.name,
+        voice=base.voice,
+        speed=base.speed,
+        settings=base.settings,
         content_fp=example_audio_content_fingerprint(example),
     )
 
@@ -1195,37 +1176,9 @@ def test_stale_audio_uses_each_examples_effective_instructions(tmp_path: Path) -
         [record], word_provider=WORD_PROFILE, example_provider=base
     ) == []
 
-    record.examples[0].instructions = "Changed."
+    record.examples[0].spoken_japanese = "まいにちはなす。"
     assert book.stale_audio(
         [record], word_provider=WORD_PROFILE, example_provider=base
-    ) == [record.id]
-
-
-def test_an_instructed_example_is_stale_under_an_engine_that_cannot_honor_it(
-    tmp_path: Path,
-) -> None:
-    example = ExampleSentence(
-        japanese="毎日話す。",
-        audio="audio/janki-example.wav",
-        instructions="Clip help.",
-    )
-    record = _record(examples=[example])
-    book = ledger_module.load(tmp_path / "ledger.json")
-    book.record_audio(
-        record.id,
-        file="janki-example.wav",
-        of="example",
-        provider="voicevox",
-        voice=52,
-        speed=1.0,
-        settings={},
-        content_fp=example_audio_content_fingerprint(example),
-    )
-
-    assert book.stale_audio(
-        [record],
-        word_provider=WORD_PROFILE,
-        example_provider=_ProfileWithoutClipInstructions(),
     ) == [record.id]
 
 

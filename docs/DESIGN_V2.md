@@ -336,12 +336,13 @@ Design points:
   we don't have).
 - **Audio entries carry a `content_fp`** — a raw, length-framed SHA-256 over
   what was spoken (the exact forced AquesTalk request plus its forced flag, or
-  the bare reading and natural flag, for word audio; the exact sentence text
-  for example audio). This is deliberately stronger than the frozen filename
-  digest: NFKC-equivalent strings can sound different, and a currency check
-  must detect that even when both resolve to the same identity address. Edit an
-  example sentence and `status`/`audio` flag regeneration. File naming is
-  covered in the Audio section.
+  the bare reading and natural flag, for word audio; the exact effective spoken
+  input for example audio). This is deliberately stronger than the frozen
+  filename digest: NFKC-equivalent strings can sound different, and a currency
+  check must detect that even when both resolve to the same identity address.
+  Edit an example sentence or its human-owned `spoken_japanese` override and
+  `status`/`audio` flag regeneration. File naming is covered in the Audio
+  section.
 - **`pending_audio` is a sparse, top-level write-ahead log.** It is absent when
   empty and separate from canonical `records[*].audio`: each row binds one
   staged file to the exact provider request, render profile, target filename,
@@ -564,22 +565,25 @@ hand-waved, because the naive rule is wrong for the largest accent class:
 natural reading matters more than forcing one isolated word's accent drop.
 `openai_instructions` is the collection-wide baseline: standard Tokyo
 Japanese, a clear learner-friendly pace, natural pitch accent, and brief pauses
-at commas. A sparse, human-written `ExampleSentence.instructions` value is
-appended for one clip that needs pronunciation help. The exact effective text
-is sent and ledgered per clip. Words remain on VOICEVOX because that is the
-provider that accepts janki's explicit accent shape.
+at commas. A sparse, human-written `ExampleSentence.spoken_japanese` value is
+the exact TTS input for one clip that needs an explicit reading; otherwise the
+provider receives `ExampleSentence.japanese`. janki never derives the override.
+Words remain on VOICEVOX because that is the provider that accepts janki's
+explicit accent shape.
 
 **Mechanics:**
 
 - Files land in `data/media/audio/`, named `janki-<fp><provider suffix>` where
-  the fingerprint is over **record identity and spoken text, not position**:
-  `fp(record_id)` for word audio, `fp(record_id + example.japanese)` for
-  sentence audio. Editing a sentence leaves its old reference visibly stale;
-  regeneration writes the new address and repoints the record, at which point
-  the old file is orphaned and pruneable. Reordering does not change an
-  address. `status`/`audio` compare the ledger's exact request
-  `content_fp` against current record content to catch
-  staleness, and `audio --prune` removes orphaned files.
+  the filename fingerprint is over **record identity and displayed text, not
+  position**: `fp(record_id)` for word audio, `fp(record_id +
+  example.japanese)` for sentence audio. Editing the displayed sentence leaves
+  its old reference visibly stale; regeneration writes the new address and
+  repoints the record, at which point the old file is orphaned and pruneable.
+  Reordering does not change an address. A `spoken_japanese` edit leaves that
+  address alone, but the effective spoken input participates in the exact
+  request, `content_fp`, and audio WAL, so `status`/`audio` detect the clip as
+  stale and refuse to adopt paid bytes for a different utterance. `audio
+  --prune` removes orphaned files.
 - Fingerprint names also fix a real exporter hazard: media dedup is by
   path but packaging is by basename, so two files both named `audio.mp3`
   would collide inside an `.apkg`. The `janki-` prefix namespaces us in
@@ -612,10 +616,11 @@ provider that accepts janki's explicit accent shape.
 - `audio_accent: str` — optional per-record override for audio generation.
 - `frequency_rank: int | None` — jpdb corpus rank.
 
-`ExampleSentence` gains `audio: str` and sparse `instructions: str`. The latter
-is omitted when empty, so current records and current audio need no migration;
-it is a human escape hatch and is not part of the model-generated example
-schema.
+`ExampleSentence` gains `audio: str` and sparse `spoken_japanese: str`. The
+latter is omitted when empty, so examples that need no override gain no
+serialized key. It is human-owned exact TTS input, never derived, and is not
+part of the model-generated example schema. Adding or editing it deliberately
+makes that clip stale while preserving its stable filename.
 
 `SourceReference.raw_fields` stays `dict[str, str]` — PDF provenance
 (page, confidence) is stringified into it rather than growing the model.
@@ -623,9 +628,10 @@ schema.
 Dataclass-change side effect, stated accurately: merge counts are *not*
 affected (loaded and merged records both get the new defaults, so equality
 holds). The earlier always-serialized schema additions above caused a one-time
-whole-file JSON diff when they landed. M8.1's sparse `instructions` field does
-not: `VocabularyRecord.to_dict()` removes it when empty, so the new escape hatch
-adds no keys to existing examples and requires no collection rewrite.
+whole-file JSON diff when they landed. M8.1's sparse `spoken_japanese` field
+does not: `VocabularyRecord.to_dict()` removes it when empty, so the new
+exact-input override adds no keys to existing examples and requires no
+collection rewrite.
 
 **Pitch-accent display is decided now, not punted**: the builder renders
 the pattern to inline HTML (span-per-mora with border styling — the
@@ -761,8 +767,8 @@ free.
 2. The always-serialized M2.2 dataclass additions caused no merge-count churn
    but did cause a one-time whole-file JSON diff on first save; external
    tooling parsing `vocabulary.json` must tolerate those keys. M8.1's sparse
-   `ExampleSentence.instructions` addition is omitted when empty and causes no
-   rewrite or new key in existing records.
+   `ExampleSentence.spoken_japanese` addition is omitted when empty and causes
+   no rewrite or new key in existing records.
 3. Existing decks build identically until the new note fields ship: GUIDs,
    model IDs, deck IDs unchanged. The note-field append path is
    empirically verified against a live collection before it ships (see

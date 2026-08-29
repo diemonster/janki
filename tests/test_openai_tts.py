@@ -111,45 +111,6 @@ def test_empty_instructions_are_left_out_entirely() -> None:
     assert "instructions" not in api.body
 
 
-@pytest.mark.parametrize(
-    ("global_instructions", "clip_instructions", "expected"),
-    [
-        ("Global.", "Clip.", "Global.\n\nClip."),
-        ("Global.", "   ", "Global."),
-        ("   ", "Clip.", "Clip."),
-        ("   ", "   ", None),
-    ],
-)
-def test_clip_instructions_append_to_the_global_instructions(
-    global_instructions: str,
-    clip_instructions: str,
-    expected: str | None,
-) -> None:
-    """A clip hint augments the collection-wide pace/style contract; it does
-    not replace it. The prepared profile is also the exact ledger profile."""
-    api = FakeApi()
-    base = provider(api, instructions=global_instructions)
-
-    prepared = base.for_clip(clip_instructions)
-    prepared.synthesize("テスト。", forced_accent=False)
-
-    if expected is None:
-        assert "instructions" not in api.body
-        assert prepared.settings == {
-            "model": openai_tts.DEFAULT_MODEL,
-            "instructions": "",
-        }
-    else:
-        assert api.body["instructions"] == expected
-        assert prepared.settings["instructions"] == expected
-    assert api.body["input"] == "テスト。", (
-        "steering belongs in instructions, never in the spoken sentence"
-    )
-    assert base.instructions == global_instructions.strip(), (
-        "preparing one clip cannot mutate another"
-    )
-
-
 @pytest.mark.parametrize("model", ["tts-1", "tts-1-hd"])
 def test_the_models_that_ignore_instructions_are_refused_before_a_request(
     model: str,
@@ -197,7 +158,7 @@ def test_sentence_length_is_checked_at_the_documented_boundary() -> None:
     ("field", "build"),
     [
         ("input", lambda: provider(FakeApi()).validate_utterance("\ud800")),
-        ("instructions", lambda: provider(FakeApi()).for_clip("\ud800")),
+        ("instructions", lambda: provider(FakeApi(), instructions="\ud800")),
     ],
 )
 def test_request_text_must_be_utf8_before_transport(
@@ -229,44 +190,6 @@ def test_a_supported_legacy_model_voice_remains_usable() -> None:
         "テスト。", forced_accent=False
     )
     assert api.body["voice"] == "onyx"
-
-
-def test_prepared_clip_profiles_are_independent() -> None:
-    api = FakeApi()
-    base = provider(api, instructions="Global.")
-    first = base.for_clip("First.")
-    second = base.for_clip("Second.")
-
-    first.synthesize("一。", forced_accent=False)
-    first_body = dict(api.body)
-    second.synthesize("二。", forced_accent=False)
-
-    assert first_body["instructions"] == "Global.\n\nFirst."
-    assert api.body["instructions"] == "Global.\n\nSecond."
-    assert base.settings["instructions"] == "Global."
-
-
-def test_a_prepared_clip_preserves_the_configured_voice_model_and_profile() -> None:
-    api = FakeApi()
-    base = provider(
-        api,
-        voice="ash",
-        model="gpt-4o-mini-tts-2025-12-15",
-        instructions="Global.",
-    )
-
-    prepared = base.for_clip("Clip.")
-    prepared.synthesize("一。", forced_accent=False)
-
-    assert api.body["voice"] == "ash"
-    assert api.body["model"] == "gpt-4o-mini-tts-2025-12-15"
-    assert api.body["instructions"] == "Global.\n\nClip."
-    assert "speed" not in api.body
-    assert prepared.speed == 1.0
-    assert prepared.settings == {
-        "model": "gpt-4o-mini-tts-2025-12-15",
-        "instructions": "Global.\n\nClip.",
-    }
 
 
 def test_mp3_is_requested_not_wav() -> None:

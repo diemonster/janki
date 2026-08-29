@@ -99,7 +99,6 @@ from japanese_anki.staging import (
 )
 from japanese_anki.tts import (
     TtsError,
-    clip_provider,
     validate_utterance,
 )
 from japanese_anki.validation import (
@@ -3372,15 +3371,16 @@ def command_status(args: argparse.Namespace) -> int:
                 if not example.japanese:
                     continue
                 try:
-                    profile = clip_provider(example_provider, example.instructions)
-                    validate_utterance(profile, example.japanese)
+                    validate_utterance(
+                        example_provider, ledger.example_audio_request(example)
+                    )
                 except TtsError as exc:
                     incompatible.append((record.id, position, exc))
         if incompatible:
             record_id, position, first_error = incompatible[0]
             profile_warnings.append(
-                "the configured sentence engine cannot honor "
-                f"{len(incompatible)} example-audio profile(s); first is "
+                "the configured sentence engine cannot accept "
+                f"{len(incompatible)} example-audio request(s); first is "
                 f"{record_id} example {position}: {first_error} "
                 "'janki audio --examples' will refuse before synthesis."
             )

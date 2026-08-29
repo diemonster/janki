@@ -450,32 +450,9 @@ def test_corrupt_exact_recovery_refuses_unless_force_explicitly_replaces_it(
     assert not config.ledger_file.exists()
 
 
-def test_per_example_effective_profile_is_bound_to_each_clip(tmp_path: Path) -> None:
-    class InstructionProvider(Provider):
-        def __init__(self, instructions: str = "Natural.") -> None:
-            super().__init__("openai", "onyx", suffix=".mp3")
-            self.instructions = instructions
-
-        @property
-        def settings(self) -> dict[str, str]:
-            return {"instructions": self.instructions}
-
-        @settings.setter
-        def settings(self, value: dict[str, str]) -> None:
-            # Provider.__init__ assigns this before the explicit base profile is
-            # installed; the property keeps the focused fake protocol-shaped.
-            return None
-
-        def for_clip(self, instructions: str) -> InstructionProvider:
-            return InstructionProvider(
-                "\n\n".join(part for part in (self.instructions, instructions.strip()) if part)
-            )
-
-    item = _record("話す", "はなす")
-    item.examples = [
-        ExampleSentence(japanese="話します。", instructions="Slowly."),
-        ExampleSentence(japanese="話した。", instructions="Casually."),
-    ]
+def test_example_plan_displays_the_exact_spoken_japanese_request(tmp_path: Path) -> None:
+    item = _record("止む", "やむ", "雨、まだ止まないの？")
+    item.examples[0].spoken_japanese = "雨、まだやまないの？"
     config = _project(tmp_path, [item])
 
     plan = plan_targeted_audio(
@@ -483,13 +460,19 @@ def test_per_example_effective_profile_is_bound_to_each_clip(tmp_path: Path) -> 
         [item.id],
         examples=True,
         word_provider=Provider("voicevox", 7),
-        sentence_provider=InstructionProvider(),
+        sentence_provider=Provider("openai", "onyx", suffix=".mp3"),
     )
 
-    assert [clip.provider.settings for clip in plan.clips] == [
-        {"instructions": "Natural.\n\nSlowly."},
-        {"instructions": "Natural.\n\nCasually."},
-    ]
+    [clip] = plan.clips
+    assert clip.request_input == "雨、まだやまないの？"
+    assert clip.target == (
+        "janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(item, item.examples[0])}"
+        ".mp3"
+    )
+    assert clip.content_fingerprint == ledger_mod.example_audio_content_fingerprint(
+        item.examples[0]
+    )
 
 
 def test_audio_fingerprint_binds_canonical_revision_even_for_the_same_records(
@@ -711,47 +694,23 @@ def test_audio_fingerprint_binds_force_paths_and_complete_provider_profile(
     assert len(fingerprints) == 11
 
 
-@pytest.mark.parametrize(
-    ("sentences", "match"),
-    [
-        (
-            [
-                ExampleSentence(japanese="話す。", instructions="slow"),
-                ExampleSentence(japanese="話す。", instructions="fast"),
-            ],
-            "different instructions",
-        ),
-        (
-            [ExampleSentence(japanese="話す。", instructions="slow")],
-            "cannot apply per-clip instructions",
-        ),
-    ],
-)
-def test_example_audio_plan_refuses_the_same_deterministic_profiles_as_execution(
+def test_example_audio_plan_refuses_conflicting_spoken_inputs_for_one_file(
     tmp_path: Path,
-    sentences: list[ExampleSentence],
-    match: str,
 ) -> None:
-    class SteeringProvider(Provider):
-        def for_clip(self, instructions: str) -> SteeringProvider:
-            return self
-
     item = _record("話す", "はなす")
-    item.examples = sentences
+    item.examples = [
+        ExampleSentence(japanese="話す。", spoken_japanese="はなす。"),
+        ExampleSentence(japanese="話す。", spoken_japanese="わす。"),
+    ]
     config = _project(tmp_path, [item])
-    sentence_provider: Provider = (
-        SteeringProvider("openai", "onyx", suffix=".mp3")
-        if len(sentences) > 1
-        else Provider("openai", "onyx", suffix=".mp3")
-    )
 
-    with pytest.raises(AudioPlanError, match=match):
+    with pytest.raises(AudioPlanError, match="different spoken Japanese"):
         plan_targeted_audio(
             config,
             [item.id],
             examples=True,
             word_provider=Provider("voicevox", 7),
-            sentence_provider=sentence_provider,
+            sentence_provider=Provider("openai", "onyx", suffix=".mp3"),
         )
 
 

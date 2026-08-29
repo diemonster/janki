@@ -230,25 +230,6 @@ class OpenAiSpeechProvider:
     def instructions(self) -> str:
         return self._instructions
 
-    def for_clip(self, instructions: str) -> OpenAiSpeechProvider:
-        """An independent provider carrying one clip's effective prompt."""
-        parts = [
-            part.strip()
-            for part in (self._instructions, str(instructions or ""))
-            if part.strip()
-        ]
-        effective = "\n\n".join(parts)
-        self._validate_instructions(effective)
-        if effective == self._instructions:
-            return self
-        return OpenAiSpeechProvider(
-            voice=self._voice,
-            model=self._model,
-            instructions=effective,
-            api_key=self._api_key,
-            transport=self._transport,
-        )
-
     def _validate_instructions(self, instructions: str) -> None:
         _require_utf8(instructions, field="instructions")
         if instructions and self._model in _MODELS_WITHOUT_INSTRUCTIONS:

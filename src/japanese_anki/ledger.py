@@ -91,7 +91,7 @@ from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.io import DataError, atomic_write_text, exclusive_path_lock
 from japanese_anki.models import ExampleSentence, VocabularyRecord, example_accepted
-from japanese_anki.tts import RenderProfile, TtsError, clip_provider
+from japanese_anki.tts import RenderProfile
 
 
 class LedgerError(JankiError):
@@ -562,7 +562,18 @@ def word_audio_request(record: VocabularyRecord) -> tuple[str, bool, str | None]
 
 def example_audio_content_fingerprint(example: ExampleSentence) -> str:
     """What example audio says, without filename-style normalization."""
-    return _audio_content_fingerprint("example", example.japanese)
+    return _audio_content_fingerprint("example", example_audio_request(example))
+
+
+def example_audio_request(example: ExampleSentence) -> str:
+    """The exact sentence-provider input for one example.
+
+    A sparse, human-owned override can disambiguate a reading after listening.
+    The displayed sentence remains the stable file address, and janki never
+    derives this value from Japanese content or furigana.
+    """
+    spoken = example.spoken_japanese.strip()
+    return spoken or example.japanese
 
 
 def _audio_content_fingerprint(*parts: str) -> str:
@@ -1807,22 +1818,13 @@ class Ledger:
                 referenced = [
                     entry for entry in example_entries if entry.get("file") == example_file
                 ]
-                profile = example_provider
-                if profile is not None:
-                    try:
-                        profile = clip_provider(profile, example.instructions)
-                    except TtsError:
-                        # A configured engine that cannot honor an explicit
-                        # clip setting cannot describe this file as current.
-                        result.append(record.id)
-                        break
                 # No ledger entry is the unvoiced-example signal, not a second
                 # stale signal for the same hole.
                 if referenced and not any(
                     _audio_entry_is_current(
                         entry,
                         content_fp=example_audio_content_fingerprint(example),
-                        profile=profile,
+                        profile=example_provider,
                     )
                     for entry in referenced
                 ):
