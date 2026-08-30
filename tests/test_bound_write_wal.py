@@ -1709,6 +1709,52 @@ def test_write_once_temp_retirement_restores_answer_if_public_changes(
     ]
 
 
+def test_bound_bytes_refuses_a_different_planned_directory(
+    tmp_path: Path,
+) -> None:
+    planned = tmp_path / "planned"
+    replacement = tmp_path / "replacement"
+    planned.mkdir()
+    replacement.mkdir()
+    replacement_details = replacement.stat()
+    path = planned / "answer.json"
+
+    with pytest.raises(DataError, match="Bound target directory changed"):
+        io.atomic_write_bytes_bound(
+            path,
+            b"paid answer",
+            expected_absent=True,
+            expected_directory_identity=(
+                replacement_details.st_dev,
+                replacement_details.st_ino,
+            ),
+        )
+
+    assert list(planned.iterdir()) == []
+
+
+def test_bound_bytes_does_not_recreate_a_missing_planned_directory(
+    tmp_path: Path,
+) -> None:
+    planned = tmp_path / "planned"
+    moved = tmp_path / "moved"
+    planned.mkdir()
+    planned_details = planned.stat()
+    expected_identity = (planned_details.st_dev, planned_details.st_ino)
+    planned.rename(moved)
+
+    with pytest.raises(DataError):
+        io.atomic_write_bytes_bound(
+            planned / "answer.json",
+            b"paid answer",
+            expected_absent=True,
+            expected_directory_identity=expected_identity,
+        )
+
+    assert not planned.exists()
+    assert list(moved.iterdir()) == []
+
+
 def test_write_once_cleanup_refuses_a_public_replacement_after_validation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

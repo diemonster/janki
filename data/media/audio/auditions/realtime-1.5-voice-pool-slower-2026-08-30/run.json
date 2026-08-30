@@ -1,0 +1,373 @@
+{
+  "version": 1,
+  "run_id": "realtime-1.5-voice-pool-slower-2026-08-30",
+  "model": "gpt-realtime-1.5",
+  "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+  "pace_request": {
+    "method": "instruction",
+    "target": "approximately 75% of normal conversational speed",
+    "preserve": "natural Japanese intonation and connected phrasing"
+  },
+  "sample_rate": 24000,
+  "voices": [
+    "cedar",
+    "ash",
+    "echo",
+    "verse"
+  ],
+  "source_file": "data/normalized/vocabulary.json",
+  "source_sha256": "63bb36e5e7480381c886b31ad2f7cb26e884412524219c13d22e1b25019f3670",
+  "samples": [
+    {
+      "number": 1,
+      "slug": "temperature",
+      "directory": "01-temperature",
+      "record_id": "word:体温:たいおん",
+      "sentence": "体温、測ったの？三十八度もあるんだ。",
+      "furigana": "体温[たいおん]、 測[はか]ったの？ 三十八度[さんじゅうはちど]もあるんだ。",
+      "content_fingerprint": "acac86d82bde2cc45c7efff19173003ea8ebe05e544b5795568c14c141899813",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "cedar",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "体温、測ったの？三十八度もあるんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "cedar"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "575b19d9cf88ac822ac1ce2b2ef4f1679b3648b0b8560adfc95aa43ca6a7f787",
+          "operation_id": "da005af5-90f7-5d06-b058-b7a407bbcca6"
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "ash",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "体温、測ったの？三十八度もあるんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "ash"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "c6884b2470a1bf574126caf0345a10ddead78de74aa863d299e28dbfbdd68e33",
+          "operation_id": "cf97c725-cbf5-504f-b44d-b24f0db0538e"
+        },
+        {
+          "label": "C",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "echo",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "体温、測ったの？三十八度もあるんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "echo"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "92f31eb912cd19bee3a440db1b9f2088cbf8840345f8eb5a75f63a7f9ef124d2",
+          "operation_id": "13b5d5b9-bc4a-5536-9b9a-8dd6741d7943"
+        },
+        {
+          "label": "D",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "verse",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "体温、測ったの？三十八度もあるんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "verse"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "80ab95e2852607c030a1014eca13ace92bbdcc29f124e6f3dc225e4914ff3871",
+          "operation_id": "995ef94f-537d-535c-89b9-416c15ed76eb"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "slug": "flight",
+      "directory": "02-flight",
+      "record_id": "word:飛行機:ひこうき",
+      "sentence": "夏休みに飛行機で北海道へ行くつもりです。",
+      "furigana": "夏休[なつやす]みに 飛行機[ひこうき]で 北海道[ほっかいどう]へ 行[い]くつもりです。",
+      "content_fingerprint": "c302aa279675c8b329c51f73bd6010219f54bdc8960f1a662116a46fdd71034e",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "echo",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "夏休みに飛行機で北海道へ行くつもりです。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "echo"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "ce6eeafb6b3c6f0c81dc4c41496f7c0668f7145b3396c9b303524bdd2582983f",
+          "operation_id": "e2e90d3f-c43d-5088-9637-1fc91e4e732e"
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "verse",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "夏休みに飛行機で北海道へ行くつもりです。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "verse"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "2722f2a26548f52fd8a19b72b3ceb2255e7adbb8c1163bc01c9a4e8e10362d30",
+          "operation_id": "613d2bd1-d1e5-5030-b0e4-624c8fcdfafd"
+        },
+        {
+          "label": "C",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "cedar",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "夏休みに飛行機で北海道へ行くつもりです。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "cedar"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "f920119a17018cc3d1611c62994c5c89ad327c5254a0f83fe1cd2de7c112a857",
+          "operation_id": "9f01b1ac-2eea-51f9-99bc-3a255b1e4422"
+        },
+        {
+          "label": "D",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "ash",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "夏休みに飛行機で北海道へ行くつもりです。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "ash"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "512d77081210b49563b2513e46b3ae06eac95007a720869511176e79a0001c6f",
+          "operation_id": "158cc70c-341d-59ef-93c9-245c1cbe92d1"
+        }
+      ]
+    }
+  ],
+  "plan_fingerprint": "152b884829fa4708eac1b979d9b3c347c9c23f6666be2a70aa988f1b05015b22"
+}

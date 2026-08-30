@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "label": "D",
+  "model": "gpt-realtime-1.5",
+  "voice": "ash",
+  "operation_id": "158cc70c-341d-59ef-93c9-245c1cbe92d1",
+  "request_fingerprint": "512d77081210b49563b2513e46b3ae06eac95007a720869511176e79a0001c6f",
+  "response_file": "02-flight/responses/D.json",
+  "audio_file": "02-flight/D.wav",
+  "status": "complete",
+  "response_sha256": "6819634cdb5e670d13543dc1aa9a1a2c1bf8b541fb0d56b78c5821c8bb323f7f",
+  "audio_sha256": "2d48c458a08a648f55f52c7046f5d20efb595cfb01cab76c0f2daa6779e74276",
+  "transcript": "夏休みに飛行機で北海道へ行くつもりです。",
+  "usage": {
+    "total_tokens": 189,
+    "input_tokens": 81,
+    "output_tokens": 108,
+    "input_token_details": {
+      "text_tokens": 81,
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "cached_tokens": 0,
+      "cached_tokens_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0
+      }
+    },
+    "output_token_details": {
+      "text_tokens": 27,
+      "audio_tokens": 81
+    }
+  },
+  "error": ""
+}

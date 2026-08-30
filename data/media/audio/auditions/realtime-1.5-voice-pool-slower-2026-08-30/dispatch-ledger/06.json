@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "run_id": "realtime-1.5-voice-pool-slower-2026-08-30",
+  "plan_fingerprint": "152b884829fa4708eac1b979d9b3c347c9c23f6666be2a70aa988f1b05015b22",
+  "sequence": 6,
+  "sample_number": 2,
+  "label": "B",
+  "operation_id": "613d2bd1-d1e5-5030-b0e4-624c8fcdfafd",
+  "request_fingerprint": "2722f2a26548f52fd8a19b72b3ceb2255e7adbb8c1163bc01c9a4e8e10362d30",
+  "send_may_have_been_attempted": true
+}

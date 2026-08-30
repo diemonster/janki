@@ -3695,6 +3695,7 @@ def atomic_write_bytes_bound(
     data: bytes,
     *,
     expected_absent: bool = False,
+    expected_directory_identity: tuple[int, int] | None = None,
 ) -> None:
     """Atomically replace one regular directory entry without following links.
 
@@ -3704,7 +3705,9 @@ def atomic_write_bytes_bound(
     descriptor also binds the temp and replace operations to the same real
     directory entry. ``expected_absent`` makes a recovery artifact write-once:
     a reply already captured under that operation ID is evidence, never a
-    target for a later callback to replace.
+    target for a later callback to replace. ``expected_directory_identity``
+    refuses before recovery or temporary allocation unless the opened parent
+    is the directory an earlier plan bound.
     """
     target = Path(path).absolute()
     temporary_name = ""
@@ -3714,10 +3717,20 @@ def atomic_write_bytes_bound(
     try:
         with (
             exclusive_path_lock(_cas_lock_path(target)),
-            _open_bound_directory(target.parent, create=True) as binding,
+            _open_bound_directory(
+                target.parent,
+                create=expected_directory_identity is None,
+            ) as binding,
             contextlib.ExitStack() as cleanup,
         ):
             directory_fd = binding.descriptor
+            parent = os.fstat(directory_fd)
+            if expected_directory_identity is not None and (
+                _directory_identity(parent) != expected_directory_identity
+            ):
+                raise DataError(
+                    f"Bound target directory changed: {target.parent}"
+                )
             _recover_bound_target_under_lock(binding, target)
 
             def cleanup_temporary() -> None:

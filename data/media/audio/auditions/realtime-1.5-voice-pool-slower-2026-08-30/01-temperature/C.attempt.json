@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "run_id": "realtime-1.5-voice-pool-slower-2026-08-30",
+  "plan_fingerprint": "152b884829fa4708eac1b979d9b3c347c9c23f6666be2a70aa988f1b05015b22",
+  "sample_number": 1,
+  "label": "C",
+  "operation_id": "13b5d5b9-bc4a-5536-9b9a-8dd6741d7943",
+  "request_fingerprint": "92f31eb912cd19bee3a440db1b9f2088cbf8840345f8eb5a75f63a7f9ef124d2",
+  "model": "gpt-realtime-1.5",
+  "voice": "echo",
+  "send_may_have_been_attempted": true
+}

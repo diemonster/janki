@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "label": "D",
+  "model": "gpt-realtime-1.5",
+  "voice": "verse",
+  "operation_id": "995ef94f-537d-535c-89b9-416c15ed76eb",
+  "request_fingerprint": "80ab95e2852607c030a1014eca13ace92bbdcc29f124e6f3dc225e4914ff3871",
+  "response_file": "01-temperature/responses/D.json",
+  "audio_file": "01-temperature/D.wav",
+  "status": "complete",
+  "response_sha256": "e5a64563fe0f6a8a985ff4329637c0583cf0285f54de40307b442612fcbd3d56",
+  "audio_sha256": "09831b6f2c71172d95064e1f3254f97ef09e73f89eb39d594990d7f93c80b8b5",
+  "transcript": "体温、測ったの？三十八度もあるんだ。",
+  "usage": {
+    "total_tokens": 402,
+    "input_tokens": 278,
+    "output_tokens": 124,
+    "input_token_details": {
+      "text_tokens": 80,
+      "audio_tokens": 198,
+      "image_tokens": 0,
+      "cached_tokens": 0,
+      "cached_tokens_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0
+      }
+    },
+    "output_token_details": {
+      "text_tokens": 28,
+      "audio_tokens": 96
+    }
+  },
+  "error": ""
+}

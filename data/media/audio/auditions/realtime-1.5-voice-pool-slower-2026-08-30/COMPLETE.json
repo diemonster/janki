@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "run_id": "realtime-1.5-voice-pool-slower-2026-08-30",
+  "plan_fingerprint": "152b884829fa4708eac1b979d9b3c347c9c23f6666be2a70aa988f1b05015b22",
+  "answer_key_sha256": "0235d9fa6940f3b925eaebe2b8c10ef96b0c81caff3293697ead107dcfe2c5c6",
+  "new_paid_calls": 8,
+  "reused_paid_calls": 0,
+  "results": [
+    {
+      "number": 1,
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "9f180c90dbd784ba232c107f3ea8cfc45e6f7e63bb827cd086abe2df01584503",
+      "audio_sha256": "6bb1b03417d0cb45b5bd3f78ee318e3e0fc8f1594f16ea9c9f1ea0f9bb3ba106"
+    },
+    {
+      "number": 1,
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "9bc9b4cd971ae26465d15779104106a73a3ec87ee9a3db008e52ed8c7eafc511",
+      "audio_sha256": "2ef84f6802873701e238e4c5f7db1eab612660eb87b471f3f55160bbd2f637a8"
+    },
+    {
+      "number": 1,
+      "label": "C",
+      "status": "complete",
+      "response_sha256": "a35e286926ff875ad9158d0454707be3e5879eb70dc1e67c1b0e4c1554e33d7d",
+      "audio_sha256": "9a0b4ebd034d0affcc047b9bad9e8243402f007b68dbf00d0c1a6a5ca8ac0530"
+    },
+    {
+      "number": 1,
+      "label": "D",
+      "status": "complete",
+      "response_sha256": "e5a64563fe0f6a8a985ff4329637c0583cf0285f54de40307b442612fcbd3d56",
+      "audio_sha256": "09831b6f2c71172d95064e1f3254f97ef09e73f89eb39d594990d7f93c80b8b5"
+    },
+    {
+      "number": 2,
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "fedd5024c96fc6c7fac6568cef928d9dedafd73a02bb2d6dbd369e9b1456e7ae",
+      "audio_sha256": "824ea70d9875482f69a8ca2cf6f73a20e0ac2a6a6fa741b9f47035b2e3a88947"
+    },
+    {
+      "number": 2,
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "cadaa5d24dc124c78874010ba6dc68f8fe44b2c4d2a50deb4be39653c305403f",
+      "audio_sha256": "db818584a2f642c637ca169d31245074b86a129161a24176cb75d7b3332e99b5"
+    },
+    {
+      "number": 2,
+      "label": "C",
+      "status": "complete",
+      "response_sha256": "7b354abcd0dde5cc8b6d0ce00108ebed520496b6aa0e13406068b50fa9c85edc",
+      "audio_sha256": "1c6cf9a12207a5b8a7282707af48a20128599b3d243eb929936737ed14bb035f"
+    },
+    {
+      "number": 2,
+      "label": "D",
+      "status": "complete",
+      "response_sha256": "6819634cdb5e670d13543dc1aa9a1a2c1bf8b541fb0d56b78c5821c8bb323f7f",
+      "audio_sha256": "2d48c458a08a648f55f52c7046f5d20efb595cfb01cab76c0f2daa6779e74276"
+    }
+  ]
+}
