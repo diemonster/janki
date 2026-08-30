@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "run_id": "yamanai-onyx-2026-08-29",
+  "plan_fingerprint": "44eb9564ae4a3a2cfb13f224a343cf78a2184c1d641326dccdd02929c3f09d83",
+  "answer_key_sha256": "82294c0e856e17223ccd15207c76edca79afd1adce7d5d2e84c614aa827879be",
+  "results": [
+    {
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "ac6e2fc2a620a27e880ed9ec263596b6110336a5e3078b9953673589c4a110b5",
+      "audio_sha256": "9827b8313a0a2c6f1b39e7dba1b31c1201ba4d76f01b37d0a132a17d8f7b88c2"
+    },
+    {
+      "label": "C",
+      "status": "complete",
+      "response_sha256": "d3b83369a0c9efc057b89213391630f8d370a4c58c9436a1176bc04db1f16358",
+      "audio_sha256": "99b7971da3a10259424efd3013dd65d0d7506759933726953c9e1c3a7766e60e"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "run_id": "yamanai-onyx-2026-08-29",
+  "paired_run": "data/media/audio/auditions/yamanai-2026-08-29/run.json",
+  "paired_plan_fingerprint": "10c82d8067b5719f779ecaedbd67ceea762db1c6dbfa7d79473c8ce12db75fe1",
+  "sentence": "雨、まだやまないの？",
+  "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+  "voice": "onyx",
+  "excluded": {
+    "B": "gpt-realtime-2.1 does not document onyx as a supported voice",
+    "D": "gpt-realtime-1.5 does not document onyx as a supported voice"
+  },
+  "candidates": [
+    {
+      "label": "A",
+      "model": "gpt-4o-mini-tts",
+      "protocol": "speech",
+      "endpoint": "https://api.openai.com/v1/audio/speech",
+      "voice": "onyx",
+      "request": {
+        "model": "gpt-4o-mini-tts",
+        "voice": "onyx",
+        "input": "雨、まだやまないの？",
+        "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+        "response_format": "pcm"
+      },
+      "request_fingerprint": "f27b39b16d2e493d77530159d699d3286b31889fba7f196b21a13b6f8ae0484d",
+      "operation_id": "83386742-8079-50c7-be1d-139fe5808697"
+    },
+    {
+      "label": "C",
+      "model": "gpt-audio-1.5",
+      "protocol": "chat",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "voice": "onyx",
+      "request": {
+        "model": "gpt-audio-1.5",
+        "modalities": [
+          "text",
+          "audio"
+        ],
+        "audio": {
+          "voice": "onyx",
+          "format": "wav"
+        },
+        "messages": [
+          {
+            "role": "developer",
+            "content": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace."
+          },
+          {
+            "role": "user",
+            "content": "雨、まだやまないの？"
+          }
+        ]
+      },
+      "request_fingerprint": "fb8e209cf4931ad7dbcbc8eb63ae9b1db7f495920950acea403c0fd6b58fec6e",
+      "operation_id": "644751c1-e33d-5690-be5e-28be16d9779f"
+    }
+  ],
+  "plan_fingerprint": "44eb9564ae4a3a2cfb13f224a343cf78a2184c1d641326dccdd02929c3f09d83"
+}

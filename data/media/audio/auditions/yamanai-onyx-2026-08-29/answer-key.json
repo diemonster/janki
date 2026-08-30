@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "run_id": "yamanai-onyx-2026-08-29",
+  "paired_run": "data/media/audio/auditions/yamanai-2026-08-29/run.json",
+  "paired_plan_fingerprint": "10c82d8067b5719f779ecaedbd67ceea762db1c6dbfa7d79473c8ce12db75fe1",
+  "sentence": "雨、まだやまないの？",
+  "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+  "voice": "onyx",
+  "excluded": {
+    "B": "gpt-realtime-2.1 does not document onyx as a supported voice",
+    "D": "gpt-realtime-1.5 does not document onyx as a supported voice"
+  },
+  "candidates": [
+    {
+      "label": "A",
+      "model": "gpt-4o-mini-tts",
+      "protocol": "speech",
+      "endpoint": "https://api.openai.com/v1/audio/speech",
+      "voice": "onyx",
+      "request": {
+        "model": "gpt-4o-mini-tts",
+        "voice": "onyx",
+        "input": "雨、まだやまないの？",
+        "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+        "response_format": "pcm"
+      },
+      "request_fingerprint": "f27b39b16d2e493d77530159d699d3286b31889fba7f196b21a13b6f8ae0484d",
+      "operation_id": "83386742-8079-50c7-be1d-139fe5808697",
+      "status": "complete",
+      "response_file": "responses/A.json",
+      "audio_file": "A.wav",
+      "result_file": "A.result.json",
+      "response_sha256": "ac6e2fc2a620a27e880ed9ec263596b6110336a5e3078b9953673589c4a110b5",
+      "transcript": "",
+      "usage": null,
+      "error": "",
+      "audio_sha256": "9827b8313a0a2c6f1b39e7dba1b31c1201ba4d76f01b37d0a132a17d8f7b88c2"
+    },
+    {
+      "label": "C",
+      "model": "gpt-audio-1.5",
+      "protocol": "chat",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "voice": "onyx",
+      "request": {
+        "model": "gpt-audio-1.5",
+        "modalities": [
+          "text",
+          "audio"
+        ],
+        "audio": {
+          "voice": "onyx",
+          "format": "wav"
+        },
+        "messages": [
+          {
+            "role": "developer",
+            "content": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace."
+          },
+          {
+            "role": "user",
+            "content": "雨、まだやまないの？"
+          }
+        ]
+      },
+      "request_fingerprint": "fb8e209cf4931ad7dbcbc8eb63ae9b1db7f495920950acea403c0fd6b58fec6e",
+      "operation_id": "644751c1-e33d-5690-be5e-28be16d9779f",
+      "status": "complete",
+      "response_file": "responses/C.json",
+      "audio_file": "C.wav",
+      "result_file": "C.result.json",
+      "response_sha256": "d3b83369a0c9efc057b89213391630f8d370a4c58c9436a1176bc04db1f16358",
+      "transcript": "雨、まだやまないの？",
+      "usage": {
+        "prompt_tokens": 56,
+        "completion_tokens": 51,
+        "total_tokens": 107,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0,
+          "text_tokens": 56,
+          "image_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 35,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "text_tokens": 16
+        }
+      },
+      "error": "",
+      "audio_sha256": "99b7971da3a10259424efd3013dd65d0d7506759933726953c9e1c3a7766e60e"
+    }
+  ],
+  "plan_fingerprint": "44eb9564ae4a3a2cfb13f224a343cf78a2184c1d641326dccdd02929c3f09d83"
+}

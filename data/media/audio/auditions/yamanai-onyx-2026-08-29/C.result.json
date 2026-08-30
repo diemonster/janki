@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "label": "C",
+  "operation_id": "644751c1-e33d-5690-be5e-28be16d9779f",
+  "request_fingerprint": "fb8e209cf4931ad7dbcbc8eb63ae9b1db7f495920950acea403c0fd6b58fec6e",
+  "response_file": "responses/C.json",
+  "audio_file": "C.wav",
+  "status": "complete",
+  "response_sha256": "d3b83369a0c9efc057b89213391630f8d370a4c58c9436a1176bc04db1f16358",
+  "transcript": "雨、まだやまないの？",
+  "usage": {
+    "prompt_tokens": 56,
+    "completion_tokens": 51,
+    "total_tokens": 107,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "text_tokens": 56,
+      "image_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 35,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": 16
+    }
+  },
+  "error": "",
+  "audio_sha256": "99b7971da3a10259424efd3013dd65d0d7506759933726953c9e1c3a7766e60e"
+}

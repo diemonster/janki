@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "label": "A",
+  "operation_id": "83386742-8079-50c7-be1d-139fe5808697",
+  "request_fingerprint": "f27b39b16d2e493d77530159d699d3286b31889fba7f196b21a13b6f8ae0484d",
+  "response_file": "responses/A.json",
+  "audio_file": "A.wav",
+  "status": "complete",
+  "response_sha256": "ac6e2fc2a620a27e880ed9ec263596b6110336a5e3078b9953673589c4a110b5",
+  "transcript": "",
+  "usage": null,
+  "error": "",
+  "audio_sha256": "9827b8313a0a2c6f1b39e7dba1b31c1201ba4d76f01b37d0a132a17d8f7b88c2"
+}
