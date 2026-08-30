@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-multisentence-2026-08-29",
+  "plan_fingerprint": "dcf3f87a1e82a86bf36289422f4090c5a94d4855f2322447dfc88d860f934c16",
+  "sample_number": 4,
+  "sample_directory": "04-temperature",
+  "label": "B",
+  "operation_id": "a6cf0b65-1d06-5911-98b2-fd8136067d18",
+  "request_fingerprint": "d95f62ca6a37db991ddfa77232d62f479f670d8e40c44486365662eceb92c8a1",
+  "model": "gpt-realtime-2.1",
+  "send_may_have_been_attempted": true
+}

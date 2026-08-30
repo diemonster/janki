@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-multisentence-2026-08-29",
+  "plan_fingerprint": "dcf3f87a1e82a86bf36289422f4090c5a94d4855f2322447dfc88d860f934c16",
+  "sample_number": 2,
+  "sample_directory": "02-fish-market",
+  "label": "B",
+  "operation_id": "c959a4c2-7514-5259-98cc-154d0dbcadb4",
+  "request_fingerprint": "5681e07ca6526e6adb8bc831bd811824ad274f5b60ac0e6ef49e3b767f56ced0",
+  "model": "gpt-realtime-2.1",
+  "send_may_have_been_attempted": true
+}

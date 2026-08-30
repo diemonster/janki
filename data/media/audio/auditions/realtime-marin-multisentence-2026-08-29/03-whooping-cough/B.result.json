@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "label": "B",
+  "operation_id": "e397f20d-31cb-55e3-be3e-19d842d39d81",
+  "request_fingerprint": "cc3a34b90b87b13b80eb61f0b218768f46f854d8518de18a3e824cfd1721d426",
+  "response_file": "03-whooping-cough/responses/B.json",
+  "audio_file": "03-whooping-cough/B.wav",
+  "status": "complete",
+  "response_sha256": "9621c2b5acae5135224754979cab09ffac3c76adf67c7b5e0b1349af1ed49132",
+  "transcript": "この咳、百日咳かもしれない。",
+  "usage": {
+    "total_tokens": 127,
+    "input_tokens": 55,
+    "output_tokens": 72,
+    "input_token_details": {
+      "text_tokens": 55,
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "cached_tokens": 0,
+      "cached_tokens_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0
+      }
+    },
+    "output_token_details": {
+      "text_tokens": 24,
+      "audio_tokens": 48
+    }
+  },
+  "error": "",
+  "audio_sha256": "c902762e90e91e99e005a03b30cfeda0032da0ee08e9359eda15e381ca0c734c"
+}

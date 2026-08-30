@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-multisentence-2026-08-29",
+  "plan_fingerprint": "dcf3f87a1e82a86bf36289422f4090c5a94d4855f2322447dfc88d860f934c16",
+  "sample_number": 3,
+  "sample_directory": "03-whooping-cough",
+  "label": "B",
+  "operation_id": "e397f20d-31cb-55e3-be3e-19d842d39d81",
+  "request_fingerprint": "cc3a34b90b87b13b80eb61f0b218768f46f854d8518de18a3e824cfd1721d426",
+  "model": "gpt-realtime-1.5",
+  "send_may_have_been_attempted": true
+}

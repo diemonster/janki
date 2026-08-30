@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-multisentence-2026-08-29",
+  "plan_fingerprint": "dcf3f87a1e82a86bf36289422f4090c5a94d4855f2322447dfc88d860f934c16",
+  "sample_number": 5,
+  "sample_directory": "05-flight",
+  "label": "B",
+  "operation_id": "cf38115e-4135-57a5-97b1-d1365ac53f2a",
+  "request_fingerprint": "16638f8cb1b27d7710e04110c34be6fbe95c72916638c3a6a2b7c8e6acb5bb53",
+  "model": "gpt-realtime-1.5",
+  "send_may_have_been_attempted": true
+}

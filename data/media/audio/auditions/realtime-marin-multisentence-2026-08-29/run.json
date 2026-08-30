@@ -1,0 +1,464 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-multisentence-2026-08-29",
+  "voice": "marin",
+  "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+  "sample_rate": 24000,
+  "source_file": "data/normalized/vocabulary.json",
+  "source_sha256": "63bb36e5e7480381c886b31ad2f7cb26e884412524219c13d22e1b25019f3670",
+  "samples": [
+    {
+      "number": 1,
+      "slug": "yamanai",
+      "directory": "01-yamanai",
+      "record_id": "word:止む:やむ",
+      "sentence": "雨、まだやまないの？",
+      "furigana": "雨[あめ]、まだ 止[や]まないの？",
+      "reused_from": "data/media/audio/auditions/yamanai-2026-08-29",
+      "source_plan_fingerprint": "10c82d8067b5719f779ecaedbd67ceea762db1c6dbfa7d79473c8ce12db75fe1",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-2.1",
+          "voice": "marin",
+          "audio_source": "data/media/audio/auditions/yamanai-2026-08-29/B.wav",
+          "audio_sha256": "9c3c23d5b807595dcc83bc2aad88c0895ca2829f6f015fbfafd78c5236d20e95",
+          "response_source": "data/media/audio/auditions/yamanai-2026-08-29/responses/B.json",
+          "response_sha256": "caf85ecd0889adb8123124e8f2383f1cee8017d91c5d4d4286624735b6dc5d14",
+          "transcript": "雨、まだやまないの？",
+          "usage": {
+            "total_tokens": 123,
+            "input_tokens": 56,
+            "output_tokens": 67,
+            "input_token_details": {
+              "text_tokens": 56,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 20,
+              "audio_tokens": 47
+            }
+          }
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-1.5",
+          "voice": "marin",
+          "audio_source": "data/media/audio/auditions/yamanai-2026-08-29/D.wav",
+          "audio_sha256": "c69052a29562b04aa3760862d6a4795815ef6f208edb4a6433446362864f33da",
+          "response_source": "data/media/audio/auditions/yamanai-2026-08-29/responses/D.json",
+          "response_sha256": "f9208dc9031c8718711775e8754bd0381e1568bbfd980ef7530334d1e4701e6b",
+          "transcript": "雨、まだやまないの?",
+          "usage": {
+            "total_tokens": 96,
+            "input_tokens": 50,
+            "output_tokens": 46,
+            "input_token_details": {
+              "text_tokens": 50,
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "cached_tokens": 0,
+              "cached_tokens_details": {
+                "text_tokens": 0,
+                "audio_tokens": 0,
+                "image_tokens": 0
+              }
+            },
+            "output_token_details": {
+              "text_tokens": 15,
+              "audio_tokens": 31
+            }
+          }
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "slug": "fish-market",
+      "directory": "02-fish-market",
+      "record_id": "word:魚市場:うおいちば",
+      "sentence": "この魚、魚市場で買ったんだ。",
+      "furigana": "この 魚[さかな]、 魚市場[うおいちば]で 買[か]ったんだ。",
+      "source_file": "data/normalized/vocabulary.json",
+      "source_sha256": "63bb36e5e7480381c886b31ad2f7cb26e884412524219c13d22e1b25019f3670",
+      "content_fingerprint": "7624fcf5d23b2b82f4df1fb7a201dc04e39778b9f394ac4d3d4187c495030b31",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "この魚、魚市場で買ったんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "5681e07ca6526e6adb8bc831bd811824ad274f5b60ac0e6ef49e3b767f56ced0",
+          "operation_id": "838fe4d9-4d73-581b-a9fb-6ab283d263f7"
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-2.1",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "この魚、魚市場で買ったんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "5681e07ca6526e6adb8bc831bd811824ad274f5b60ac0e6ef49e3b767f56ced0",
+          "operation_id": "c959a4c2-7514-5259-98cc-154d0dbcadb4"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "slug": "whooping-cough",
+      "directory": "03-whooping-cough",
+      "record_id": "word:百日咳:ひゃくにちぜき",
+      "sentence": "この咳、百日咳かもしれない。",
+      "furigana": "この 咳[せき]、 百日咳[ひゃくにちぜき]かもしれない。",
+      "source_file": "data/normalized/vocabulary.json",
+      "source_sha256": "63bb36e5e7480381c886b31ad2f7cb26e884412524219c13d22e1b25019f3670",
+      "content_fingerprint": "dfb71e042664934cb8596f3411c68094f56aef8aad6a5117d27ed2e006a2f769",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-2.1",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "この咳、百日咳かもしれない。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "cc3a34b90b87b13b80eb61f0b218768f46f854d8518de18a3e824cfd1721d426",
+          "operation_id": "242ec2ac-d6ec-5225-8347-4fd36392ea45"
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "この咳、百日咳かもしれない。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "cc3a34b90b87b13b80eb61f0b218768f46f854d8518de18a3e824cfd1721d426",
+          "operation_id": "e397f20d-31cb-55e3-be3e-19d842d39d81"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "slug": "temperature",
+      "directory": "04-temperature",
+      "record_id": "word:体温:たいおん",
+      "sentence": "体温、測ったの？三十八度もあるんだ。",
+      "furigana": "体温[たいおん]、 測[はか]ったの？ 三十八度[さんじゅうはちど]もあるんだ。",
+      "source_file": "data/normalized/vocabulary.json",
+      "source_sha256": "63bb36e5e7480381c886b31ad2f7cb26e884412524219c13d22e1b25019f3670",
+      "content_fingerprint": "acac86d82bde2cc45c7efff19173003ea8ebe05e544b5795568c14c141899813",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "体温、測ったの？三十八度もあるんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "d95f62ca6a37db991ddfa77232d62f479f670d8e40c44486365662eceb92c8a1",
+          "operation_id": "28186557-b672-59f1-87d1-f6fe6ac3bf21"
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-2.1",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "体温、測ったの？三十八度もあるんだ。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "d95f62ca6a37db991ddfa77232d62f479f670d8e40c44486365662eceb92c8a1",
+          "operation_id": "a6cf0b65-1d06-5911-98b2-fd8136067d18"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "slug": "flight",
+      "directory": "05-flight",
+      "record_id": "word:飛行機:ひこうき",
+      "sentence": "夏休みに飛行機で北海道へ行くつもりです。",
+      "furigana": "夏休[なつやす]みに 飛行機[ひこうき]で 北海道[ほっかいどう]へ 行[い]くつもりです。",
+      "source_file": "data/normalized/vocabulary.json",
+      "source_sha256": "63bb36e5e7480381c886b31ad2f7cb26e884412524219c13d22e1b25019f3670",
+      "content_fingerprint": "c302aa279675c8b329c51f73bd6010219f54bdc8960f1a662116a46fdd71034e",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-2.1",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "夏休みに飛行機で北海道へ行くつもりです。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "16638f8cb1b27d7710e04110c34be6fbe95c72916638c3a6a2b7c8e6acb5bb53",
+          "operation_id": "16af06a6-3104-5aba-b3e2-68059ea5a326"
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-1.5",
+          "protocol": "realtime",
+          "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+          "voice": "marin",
+          "request": {
+            "type": "response.create",
+            "response": {
+              "conversation": "none",
+              "input": [
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "夏休みに飛行機で北海道へ行くつもりです。"
+                    }
+                  ]
+                }
+              ],
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+              "output_modalities": [
+                "audio"
+              ],
+              "audio": {
+                "output": {
+                  "format": {
+                    "type": "audio/pcm",
+                    "rate": 24000
+                  },
+                  "voice": "marin"
+                }
+              },
+              "tool_choice": "none"
+            }
+          },
+          "request_fingerprint": "16638f8cb1b27d7710e04110c34be6fbe95c72916638c3a6a2b7c8e6acb5bb53",
+          "operation_id": "cf38115e-4135-57a5-97b1-d1365ac53f2a"
+        }
+      ]
+    }
+  ],
+  "plan_fingerprint": "dcf3f87a1e82a86bf36289422f4090c5a94d4855f2322447dfc88d860f934c16"
+}

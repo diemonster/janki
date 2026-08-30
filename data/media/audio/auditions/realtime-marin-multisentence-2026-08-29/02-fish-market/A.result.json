@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "label": "A",
+  "operation_id": "838fe4d9-4d73-581b-a9fb-6ab283d263f7",
+  "request_fingerprint": "5681e07ca6526e6adb8bc831bd811824ad274f5b60ac0e6ef49e3b767f56ced0",
+  "response_file": "02-fish-market/responses/A.json",
+  "audio_file": "02-fish-market/A.wav",
+  "status": "complete",
+  "response_sha256": "c35a4413d59053c3cd4970a6fb29696f216fb08752b1760222137ff6bf733b91",
+  "transcript": "この魚、魚市場で買ったんだ.",
+  "usage": {
+    "total_tokens": 136,
+    "input_tokens": 53,
+    "output_tokens": 83,
+    "input_token_details": {
+      "text_tokens": 53,
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "cached_tokens": 0,
+      "cached_tokens_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0
+      }
+    },
+    "output_token_details": {
+      "text_tokens": 22,
+      "audio_tokens": 61
+    }
+  },
+  "error": "",
+  "audio_sha256": "685c2fa0b2f37e69ea27cc567e811db0981db1906a1326aec7e73186ef9f2f1e"
+}

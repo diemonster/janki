@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "label": "B",
+  "operation_id": "cf38115e-4135-57a5-97b1-d1365ac53f2a",
+  "request_fingerprint": "16638f8cb1b27d7710e04110c34be6fbe95c72916638c3a6a2b7c8e6acb5bb53",
+  "response_file": "05-flight/responses/B.json",
+  "audio_file": "05-flight/B.wav",
+  "status": "complete",
+  "response_sha256": "13ec834e1ee931de188f448bc9d65f617f55fdda6fb6f1615dea9a2504c8fbb1",
+  "transcript": "夏休みに飛行機で北海道へ行くつもりです。",
+  "usage": {
+    "total_tokens": 153,
+    "input_tokens": 58,
+    "output_tokens": 95,
+    "input_token_details": {
+      "text_tokens": 58,
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "cached_tokens": 0,
+      "cached_tokens_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0
+      }
+    },
+    "output_token_details": {
+      "text_tokens": 27,
+      "audio_tokens": 68
+    }
+  },
+  "error": "",
+  "audio_sha256": "e71db9b50e38f1d5f2edac32f42a1b3631ad7f54c4897be04fbff398d3991ed9"
+}

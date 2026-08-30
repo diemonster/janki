@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-multisentence-2026-08-29",
+  "plan_fingerprint": "dcf3f87a1e82a86bf36289422f4090c5a94d4855f2322447dfc88d860f934c16",
+  "answer_key_sha256": "445254c5687a7cd99ad37f64816401aa9e56de38563d95366026671005cf7dfc",
+  "new_paid_calls": 8,
+  "reused_paid_calls": 2,
+  "results": [
+    {
+      "number": 2,
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "c35a4413d59053c3cd4970a6fb29696f216fb08752b1760222137ff6bf733b91",
+      "audio_sha256": "685c2fa0b2f37e69ea27cc567e811db0981db1906a1326aec7e73186ef9f2f1e"
+    },
+    {
+      "number": 2,
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "49c00c5b25998050d81a641370d58e2ca4a5876111b40477dda1f2e5a24ff650",
+      "audio_sha256": "05203aa7090cbfcd5acf9d78350a34f95ec2bd476693b3a3e1709ab0e2f7f5dc"
+    },
+    {
+      "number": 3,
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "9f1361d5289e7d39c7c20f89c0970595834b9e39059406978506c691c1f2437e",
+      "audio_sha256": "9aebd90a78a2e7cb24b841f53a5768501045193a894f5c097f6d6885ae570cbf"
+    },
+    {
+      "number": 3,
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "9621c2b5acae5135224754979cab09ffac3c76adf67c7b5e0b1349af1ed49132",
+      "audio_sha256": "c902762e90e91e99e005a03b30cfeda0032da0ee08e9359eda15e381ca0c734c"
+    },
+    {
+      "number": 4,
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "1b76c2cb462b26d5b284a9683c785f787d02cdee2f7c485dcfedfe06a29cc1c7",
+      "audio_sha256": "60465f1848ba412b9f1b92e372a99f618f6da42e0d5966c1435a90b295011d4c"
+    },
+    {
+      "number": 4,
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "5f779837fe1e7e0721410c398584221983ef73547635b1687a07e9da57fd10c7",
+      "audio_sha256": "66bc5917b81353a1afda7337748447429db5efb9c0d25bd61c8ef563a05506b4"
+    },
+    {
+      "number": 5,
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "fa56a9998db2ee1b703ba9934f276c5b17a951d9269224a336d4173fb05ebc8f",
+      "audio_sha256": "ddd860b445ab81b11cce94e4eabc52c486f0c462c5e54f99132609f169b597ea"
+    },
+    {
+      "number": 5,
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "13ec834e1ee931de188f448bc9d65f617f55fdda6fb6f1615dea9a2504c8fbb1",
+      "audio_sha256": "e71db9b50e38f1d5f2edac32f42a1b3631ad7f54c4897be04fbff398d3991ed9"
+    }
+  ]
+}

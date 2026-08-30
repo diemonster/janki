@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "label": "A",
+  "operation_id": "28186557-b672-59f1-87d1-f6fe6ac3bf21",
+  "request_fingerprint": "d95f62ca6a37db991ddfa77232d62f479f670d8e40c44486365662eceb92c8a1",
+  "response_file": "04-temperature/responses/A.json",
+  "audio_file": "04-temperature/A.wav",
+  "status": "complete",
+  "response_sha256": "1b76c2cb462b26d5b284a9683c785f787d02cdee2f7c485dcfedfe06a29cc1c7",
+  "transcript": "体温、測ったの？三十八度もあるんだ。",
+  "usage": {
+    "total_tokens": 145,
+    "input_tokens": 57,
+    "output_tokens": 88,
+    "input_token_details": {
+      "text_tokens": 57,
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "cached_tokens": 0,
+      "cached_tokens_details": {
+        "text_tokens": 0,
+        "audio_tokens": 0,
+        "image_tokens": 0
+      }
+    },
+    "output_token_details": {
+      "text_tokens": 26,
+      "audio_tokens": 62
+    }
+  },
+  "error": "",
+  "audio_sha256": "60465f1848ba412b9f1b92e372a99f618f6da42e0d5966c1435a90b295011d4c"
+}
