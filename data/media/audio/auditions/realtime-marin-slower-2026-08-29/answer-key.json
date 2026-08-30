@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-slower-2026-08-29",
+  "voice": "marin",
+  "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+  "pace_request": {
+    "method": "instruction",
+    "target": "approximately 75% of normal conversational speed",
+    "preserve": "natural Japanese intonation and connected phrasing"
+  },
+  "sample_rate": 24000,
+  "source_file": "data/normalized/vocabulary.json",
+  "source_sha256": "63bb36e5e7480381c886b31ad2f7cb26e884412524219c13d22e1b25019f3670",
+  "content_fingerprint": "acac86d82bde2cc45c7efff19173003ea8ebe05e544b5795568c14c141899813",
+  "sample": {
+    "number": 4,
+    "slug": "temperature",
+    "record_id": "word:体温:たいおん",
+    "sentence": "体温、測ったの？三十八度もあるんだ。",
+    "furigana": "体温[たいおん]、 測[はか]ったの？ 三十八度[さんじゅうはちど]もあるんだ。",
+    "baseline": {
+      "run_id": "realtime-marin-multisentence-2026-08-29",
+      "plan_fingerprint": "dcf3f87a1e82a86bf36289422f4090c5a94d4855f2322447dfc88d860f934c16",
+      "answer_key_sha256": "445254c5687a7cd99ad37f64816401aa9e56de38563d95366026671005cf7dfc",
+      "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a natural pace.",
+      "candidates": [
+        {
+          "label": "A",
+          "model": "gpt-realtime-1.5",
+          "audio_file": "data/media/audio/auditions/realtime-marin-multisentence-2026-08-29/04-temperature/A.wav",
+          "audio_sha256": "60465f1848ba412b9f1b92e372a99f618f6da42e0d5966c1435a90b295011d4c",
+          "response_file": "data/media/audio/auditions/realtime-marin-multisentence-2026-08-29/04-temperature/responses/A.json",
+          "response_sha256": "1b76c2cb462b26d5b284a9683c785f787d02cdee2f7c485dcfedfe06a29cc1c7"
+        },
+        {
+          "label": "B",
+          "model": "gpt-realtime-2.1",
+          "audio_file": "data/media/audio/auditions/realtime-marin-multisentence-2026-08-29/04-temperature/B.wav",
+          "audio_sha256": "66bc5917b81353a1afda7337748447429db5efb9c0d25bd61c8ef563a05506b4",
+          "response_file": "data/media/audio/auditions/realtime-marin-multisentence-2026-08-29/04-temperature/responses/B.json",
+          "response_sha256": "5f779837fe1e7e0721410c398584221983ef73547635b1687a07e9da57fd10c7"
+        }
+      ]
+    },
+    "candidates": [
+      {
+        "label": "A",
+        "model": "gpt-realtime-1.5",
+        "protocol": "realtime",
+        "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+        "voice": "marin",
+        "request": {
+          "type": "response.create",
+          "response": {
+            "conversation": "none",
+            "input": [
+              {
+                "type": "message",
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "体温、測ったの？三十八度もあるんだ。"
+                  }
+                ]
+              }
+            ],
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "output_modalities": [
+              "audio"
+            ],
+            "audio": {
+              "output": {
+                "format": {
+                  "type": "audio/pcm",
+                  "rate": 24000
+                },
+                "voice": "marin"
+              }
+            },
+            "tool_choice": "none"
+          }
+        },
+        "request_fingerprint": "6c08de646275530505c1007ba67d884d4e7a4480ccd2200823b29eba89cfc07f",
+        "operation_id": "e8e63dd8-86c3-51d1-b67c-ffe2a931d181"
+      },
+      {
+        "label": "B",
+        "model": "gpt-realtime-2.1",
+        "protocol": "realtime",
+        "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1",
+        "voice": "marin",
+        "request": {
+          "type": "response.create",
+          "response": {
+            "conversation": "none",
+            "input": [
+              {
+                "type": "message",
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "体温、測ったの？三十八度もあるんだ。"
+                  }
+                ]
+              }
+            ],
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "output_modalities": [
+              "audio"
+            ],
+            "audio": {
+              "output": {
+                "format": {
+                  "type": "audio/pcm",
+                  "rate": 24000
+                },
+                "voice": "marin"
+              }
+            },
+            "tool_choice": "none"
+          }
+        },
+        "request_fingerprint": "6c08de646275530505c1007ba67d884d4e7a4480ccd2200823b29eba89cfc07f",
+        "operation_id": "a5fe89dd-6141-5cbf-99e5-a5ccdf627ad3"
+      }
+    ]
+  },
+  "plan_fingerprint": "d4a1566602929010ef19eea9fba778ff6a7d19c6bdc2b1df46c58ca7959fd8b5",
+  "results": [
+    {
+      "version": 1,
+      "label": "A",
+      "model": "gpt-realtime-1.5",
+      "operation_id": "e8e63dd8-86c3-51d1-b67c-ffe2a931d181",
+      "request_fingerprint": "6c08de646275530505c1007ba67d884d4e7a4480ccd2200823b29eba89cfc07f",
+      "response_file": "responses/A.json",
+      "audio_file": "A.wav",
+      "status": "complete",
+      "response_sha256": "30dd1bd435317ea71f88348a6d18f8b3ce59e5896a9ecafa4778fa6baf2311d7",
+      "transcript": "体温、測ったの？ 三十八度もあるんだ。",
+      "usage": {
+        "total_tokens": 198,
+        "input_tokens": 80,
+        "output_tokens": 118,
+        "input_token_details": {
+          "text_tokens": 80,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 28,
+          "audio_tokens": 90
+        }
+      },
+      "error": "",
+      "audio_sha256": "c040d3ea9d5f9f689a33bb4ca147f5e5464a15ad6f9dc86f476773541a1dd193"
+    },
+    {
+      "version": 1,
+      "label": "B",
+      "model": "gpt-realtime-2.1",
+      "operation_id": "a5fe89dd-6141-5cbf-99e5-a5ccdf627ad3",
+      "request_fingerprint": "6c08de646275530505c1007ba67d884d4e7a4480ccd2200823b29eba89cfc07f",
+      "response_file": "responses/B.json",
+      "audio_file": "B.wav",
+      "status": "complete",
+      "response_sha256": "4384b8cbe509ab342cac53984bb729ef2122c4dd6cbf06fab041ca9ce639bb95",
+      "transcript": "体温、測ったの？三十八度もあるんだ。",
+      "usage": {
+        "total_tokens": 220,
+        "input_tokens": 86,
+        "output_tokens": 134,
+        "input_token_details": {
+          "text_tokens": 86,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "cached_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 49,
+          "audio_tokens": 85,
+          "reasoning_tokens": 20
+        }
+      },
+      "error": "",
+      "audio_sha256": "b968eceef2da8ed614a55e77d0ca3c80d5b72e5d8fce3428eedc4b403efc8f66"
+    }
+  ]
+}

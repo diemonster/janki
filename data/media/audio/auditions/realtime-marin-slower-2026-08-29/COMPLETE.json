@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-slower-2026-08-29",
+  "plan_fingerprint": "d4a1566602929010ef19eea9fba778ff6a7d19c6bdc2b1df46c58ca7959fd8b5",
+  "answer_key_sha256": "95412c3548e909346d0c90befc96f706d8de59d7d75b1e95f4622f49993143fc",
+  "new_paid_calls": 2,
+  "reused_paid_calls": 0,
+  "results": [
+    {
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "30dd1bd435317ea71f88348a6d18f8b3ce59e5896a9ecafa4778fa6baf2311d7",
+      "audio_sha256": "c040d3ea9d5f9f689a33bb4ca147f5e5464a15ad6f9dc86f476773541a1dd193"
+    },
+    {
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "4384b8cbe509ab342cac53984bb729ef2122c4dd6cbf06fab041ca9ce639bb95",
+      "audio_sha256": "b968eceef2da8ed614a55e77d0ca3c80d5b72e5d8fce3428eedc4b403efc8f66"
+    }
+  ]
+}

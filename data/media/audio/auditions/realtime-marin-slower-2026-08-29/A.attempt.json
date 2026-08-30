@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "run_id": "realtime-marin-slower-2026-08-29",
+  "plan_fingerprint": "d4a1566602929010ef19eea9fba778ff6a7d19c6bdc2b1df46c58ca7959fd8b5",
+  "sample_number": 4,
+  "label": "A",
+  "operation_id": "e8e63dd8-86c3-51d1-b67c-ffe2a931d181",
+  "request_fingerprint": "6c08de646275530505c1007ba67d884d4e7a4480ccd2200823b29eba89cfc07f",
+  "model": "gpt-realtime-1.5",
+  "send_may_have_been_attempted": true
+}
