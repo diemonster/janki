@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "run_id": "yamanai-2026-08-29",
+  "plan_fingerprint": "10c82d8067b5719f779ecaedbd67ceea762db1c6dbfa7d79473c8ce12db75fe1",
+  "answer_key_sha256": "dd1fbbd708ab812e841e54f6966b66929945f7cbb556d8cfced1ba257749142e",
+  "results": [
+    {
+      "label": "A",
+      "status": "complete",
+      "response_sha256": "91604ff646735e87a454353a14f9650fbba2902125f956bdc885c2a573333a4b",
+      "audio_sha256": "e23a8f06ccad85178c3f26b321fb6cf183f7b54e65e4569f0b0502a9003e0f11"
+    },
+    {
+      "label": "B",
+      "status": "complete",
+      "response_sha256": "caf85ecd0889adb8123124e8f2383f1cee8017d91c5d4d4286624735b6dc5d14",
+      "audio_sha256": "9c3c23d5b807595dcc83bc2aad88c0895ca2829f6f015fbfafd78c5236d20e95"
+    },
+    {
+      "label": "C",
+      "status": "complete",
+      "response_sha256": "c52c45f70f87658a3b25e71e2bf948df6666e99b61baaf307dbc95dcd8dc6c98",
+      "audio_sha256": "fbc9fda67704b3cd39a727d1e49e7622ab1cdc44cda88c4dc572201d148288ea"
+    },
+    {
+      "label": "D",
+      "status": "complete",
+      "response_sha256": "f9208dc9031c8718711775e8754bd0381e1568bbfd980ef7530334d1e4701e6b",
+      "audio_sha256": "c69052a29562b04aa3760862d6a4795815ef6f208edb4a6433446362864f33da"
+    }
+  ]
+}
