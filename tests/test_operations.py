@@ -423,7 +423,7 @@ def test_receipt_and_cleanup_shapes_cannot_be_swapped(tmp_path: Path) -> None:
 def test_committed_repository_operation_journal_loads() -> None:
     loaded = OperationJournal.load(ROOT / "data" / "operations.json")
 
-    assert "1a85e6fd-bb25-43fd-aabd-658895bdbaf5" in loaded.operations
+    assert loaded.operations == {}
 
 
 def test_an_existing_journal_write_is_bound_to_the_bytes_it_loaded(

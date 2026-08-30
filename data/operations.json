@@ -1,33 +1,4 @@
 {
   "version": 1,
-  "operations": {
-    "1a85e6fd-bb25-43fd-aabd-658895bdbaf5": {
-      "kind": "extract",
-      "state": "result_captured",
-      "source_file": "medical-conditions-vocab.pdf",
-      "source_sha256": "2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1",
-      "request_fp": "cbdf3d4b2d62bc6b17eec95529e13d42aee1fd31602f92812a6446053da43b8f",
-      "model": "claude-opus-5",
-      "authorized_at": "2026-08-23T18:42:44+00:00",
-      "updated_at": "2026-08-23T18:46:29+00:00",
-      "artifact": {
-        "relative_name": ".pending/1a85e6fd-bb25-43fd-aabd-658895bdbaf5.json",
-        "directory_identity": [16777234, 118842689],
-        "entry_state": [16777234, 118842690, 50571, 1787510789230276964, 1787510789230530463],
-        "sha256": "21c61a3d72e09dcf6c00d53a6c1742202546b53bba3713e8a63534c280315c99",
-        "terminal_marker": null
-      }
-    },
-    "be867ad4-f42e-4dc7-a068-e213cbfeddf8": {
-      "kind": "extract",
-      "state": "outcome_unknown",
-      "source_file": "medical-conditions-vocab.pdf",
-      "source_sha256": "2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1",
-      "request_fp": "27435645b16b0fef176c27a1a03c7458314a90aa5ac28a847fbe7e7f7dc59bd2",
-      "model": "claude-opus-5",
-      "authorized_at": "2026-08-23T19:10:04+00:00",
-      "updated_at": "2026-08-23T19:13:55+00:00",
-      "detail": "[extract-model-call-failed] medical-conditions-vocab.pdf: claude-opus-5 request failed: {'type': 'error', 'error': {'details': None, 'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CeLD32iNGA6FBGbyHkZm3'} Nothing was written for this source."
-    }
-  }
+  "operations": {}
 }
