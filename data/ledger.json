@@ -65,7 +65,7 @@
         }
       ],
       "exports": {
-        "m7-native-teform-table": "2026-08-17"
+        "m7-native-teform-table": "2026-08-30"
       },
       "sources": [
         {
@@ -153,7 +153,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -247,7 +247,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -311,7 +311,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -391,7 +391,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -461,7 +461,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -526,7 +526,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -601,7 +601,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -665,7 +665,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -730,7 +730,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -807,7 +807,7 @@
       ],
       "exports": {
         "m7-mixed-tsumori": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -894,7 +894,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -963,7 +963,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -1027,7 +1027,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -1092,7 +1092,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -1181,7 +1181,7 @@
         }
       ],
       "exports": {
-        "m7-native-teform-table": "2026-08-17"
+        "m7-native-teform-table": "2026-08-30"
       },
       "sources": [
         {
@@ -1246,7 +1246,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -1314,7 +1314,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -1395,7 +1395,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -1460,7 +1460,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -1533,7 +1533,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -1598,7 +1598,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -1666,7 +1666,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -1733,7 +1733,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -1798,7 +1798,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -1863,7 +1863,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -1926,7 +1926,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -1990,7 +1990,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -2056,7 +2056,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -2155,7 +2155,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -2228,7 +2228,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -2302,7 +2302,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -2376,7 +2376,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -2465,7 +2465,7 @@
         }
       ],
       "exports": {
-        "m7-native-teform-table": "2026-08-17"
+        "m7-native-teform-table": "2026-08-30"
       },
       "sources": [
         {
@@ -2530,7 +2530,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -2595,7 +2595,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -2676,7 +2676,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -2765,7 +2765,7 @@
         }
       ],
       "exports": {
-        "m7-native-teform-table": "2026-08-17"
+        "m7-native-teform-table": "2026-08-30"
       },
       "sources": [
         {
@@ -2861,7 +2861,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -2929,7 +2929,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -2995,7 +2995,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -3059,7 +3059,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -3140,7 +3140,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -3220,7 +3220,7 @@
       ],
       "exports": {
         "yotsuba": {
-          "at": "2026-08-17",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -3289,7 +3289,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -3353,7 +3353,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -3419,7 +3419,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -3483,7 +3483,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -3571,7 +3571,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -3661,7 +3661,7 @@
       ],
       "exports": {
         "m7-mixed-tsumori": "2026-08-13",
-        "m7-native-teform-table": "2026-08-17"
+        "m7-native-teform-table": "2026-08-30"
       },
       "sources": [
         {
@@ -3745,7 +3745,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -3818,7 +3818,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -3906,7 +3906,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -3981,7 +3981,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -4046,7 +4046,7 @@
       ],
       "exports": {
         "104-week-8": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -4115,7 +4115,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -4181,7 +4181,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -4261,7 +4261,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -4334,7 +4334,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -4413,7 +4413,7 @@
         }
       ],
       "exports": {
-        "m7-native-teform-table": "2026-08-17"
+        "m7-native-teform-table": "2026-08-30"
       },
       "sources": [
         {
@@ -4479,7 +4479,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -4543,7 +4543,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -4609,7 +4609,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -4690,7 +4690,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -4757,7 +4757,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -4815,7 +4815,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -4880,7 +4880,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -4944,7 +4944,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -5007,7 +5007,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -5071,7 +5071,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -5134,7 +5134,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -5215,7 +5215,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -5279,7 +5279,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -5343,7 +5343,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -5409,7 +5409,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -5500,7 +5500,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -5574,7 +5574,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -5629,7 +5629,7 @@
       "enriched": [],
       "exports": {
         "104-week-11": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -5699,7 +5699,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -5789,7 +5789,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -5889,7 +5889,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -5955,7 +5955,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -6020,7 +6020,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -6094,7 +6094,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -6160,7 +6160,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -6224,7 +6224,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -6314,7 +6314,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -6380,7 +6380,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -6446,7 +6446,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -6511,7 +6511,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -6580,7 +6580,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -6645,7 +6645,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -6710,7 +6710,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -6776,7 +6776,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -6856,7 +6856,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -6921,7 +6921,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -6989,7 +6989,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -7071,7 +7071,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -7136,7 +7136,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -7202,7 +7202,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -7267,7 +7267,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -7349,7 +7349,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -7419,7 +7419,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -7484,7 +7484,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -7543,7 +7543,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -7617,7 +7617,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -7653,7 +7653,7 @@
       ],
       "exports": {
         "104-week-1-2": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "examples"
           ]
@@ -7739,7 +7739,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -7835,7 +7835,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -7902,7 +7902,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -7968,7 +7968,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -8035,7 +8035,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -8112,7 +8112,7 @@
       ],
       "exports": {
         "m7-mixed-tsumori": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -8182,7 +8182,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -8247,7 +8247,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -8312,7 +8312,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -8378,7 +8378,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -8461,7 +8461,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -8526,7 +8526,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -8591,7 +8591,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -8656,7 +8656,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -8721,7 +8721,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -8789,7 +8789,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -8854,7 +8854,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -8921,7 +8921,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -8995,7 +8995,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -9060,7 +9060,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -9125,7 +9125,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -9180,7 +9180,7 @@
       "enriched": [],
       "exports": {
         "kanji-practice-112-123": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -9248,7 +9248,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -9313,7 +9313,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -9392,7 +9392,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -9459,7 +9459,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -9533,7 +9533,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -9598,7 +9598,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -9657,7 +9657,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -9716,7 +9716,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -9781,7 +9781,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -9850,7 +9850,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -9917,7 +9917,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -9991,7 +9991,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -10065,7 +10065,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -10157,7 +10157,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -10237,7 +10237,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -10311,7 +10311,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -10380,7 +10380,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -10445,7 +10445,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -10537,7 +10537,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -10605,7 +10605,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -10669,7 +10669,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -10736,7 +10736,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -10801,7 +10801,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -10866,7 +10866,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -10941,7 +10941,7 @@
       ],
       "exports": {
         "m7-mixed-tsumori": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -11009,7 +11009,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -11078,7 +11078,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -11149,7 +11149,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -11219,7 +11219,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -11284,7 +11284,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -11350,7 +11350,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -11415,7 +11415,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -11503,7 +11503,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -11567,7 +11567,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -11632,7 +11632,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -11703,7 +11703,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -11767,7 +11767,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -11855,7 +11855,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -11924,7 +11924,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -11989,7 +11989,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -12054,7 +12054,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12118,7 +12118,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -12187,7 +12187,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -12256,7 +12256,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -12321,7 +12321,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12385,7 +12385,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -12450,7 +12450,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12515,7 +12515,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12581,7 +12581,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12645,7 +12645,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12711,7 +12711,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12775,7 +12775,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -12840,7 +12840,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12905,7 +12905,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -12970,7 +12970,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13035,7 +13035,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -13100,7 +13100,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13165,7 +13165,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13231,7 +13231,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13295,7 +13295,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13360,7 +13360,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -13424,7 +13424,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13488,7 +13488,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13553,7 +13553,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13618,7 +13618,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13683,7 +13683,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13748,7 +13748,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13840,7 +13840,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -13905,7 +13905,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -13969,7 +13969,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -14049,7 +14049,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -14114,7 +14114,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -14179,7 +14179,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -14247,7 +14247,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -14315,7 +14315,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -14381,7 +14381,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -14446,7 +14446,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -14510,7 +14510,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -14592,7 +14592,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -14665,7 +14665,7 @@
       ],
       "exports": {
         "yotsuba": {
-          "at": "2026-08-17",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -14734,7 +14734,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -14798,7 +14798,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -14863,7 +14863,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -14927,7 +14927,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -14994,7 +14994,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -15082,7 +15082,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -15147,7 +15147,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15212,7 +15212,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15276,7 +15276,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15341,7 +15341,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15406,7 +15406,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15470,7 +15470,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15535,7 +15535,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15600,7 +15600,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15665,7 +15665,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15730,7 +15730,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15795,7 +15795,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15861,7 +15861,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -15928,7 +15928,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -15994,7 +15994,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -16059,7 +16059,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -16124,7 +16124,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -16203,7 +16203,7 @@
         }
       ],
       "exports": {
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -16301,7 +16301,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -16368,7 +16368,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -16433,7 +16433,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -16513,7 +16513,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -16579,7 +16579,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -16658,7 +16658,7 @@
         }
       ],
       "exports": {
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -16751,7 +16751,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -16816,7 +16816,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -16881,7 +16881,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -16946,7 +16946,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -17004,7 +17004,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -17070,7 +17070,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -17150,7 +17150,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -17219,7 +17219,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -17284,7 +17284,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -17350,7 +17350,7 @@
         }
       ],
       "exports": {
-        "m7-mixed-tsumori": "2026-08-23"
+        "m7-mixed-tsumori": "2026-08-30"
       },
       "sources": [
         {
@@ -17420,7 +17420,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -17488,7 +17488,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -17553,7 +17553,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -17619,7 +17619,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -17684,7 +17684,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -17753,7 +17753,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -17845,7 +17845,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-17"
+        "yotsuba": "2026-08-30"
       },
       "sources": [
         {
@@ -17910,7 +17910,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -17976,7 +17976,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -18041,7 +18041,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -18106,7 +18106,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -18173,7 +18173,7 @@
         }
       ],
       "exports": {
-        "104-week-11": "2026-08-23"
+        "104-week-11": "2026-08-30"
       },
       "sources": [
         {
@@ -18238,7 +18238,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -18303,7 +18303,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -18358,7 +18358,7 @@
       "enriched": [],
       "exports": {
         "medical-conditions-vocab": {
-          "at": "2026-08-23",
+          "at": "2026-08-30",
           "missing": [
             "accent"
           ]
@@ -18427,7 +18427,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -18492,7 +18492,7 @@
         }
       ],
       "exports": {
-        "104-week-1-2": "2026-08-23"
+        "104-week-1-2": "2026-08-30"
       },
       "sources": [
         {
@@ -18571,7 +18571,7 @@
         }
       ],
       "exports": {
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -18642,7 +18642,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -18722,7 +18722,7 @@
       ],
       "exports": {
         "personal-vocabulary": "2026-08-10",
-        "verbs": "2026-08-17"
+        "verbs": "2026-08-30"
       },
       "sources": [
         {
@@ -18796,7 +18796,7 @@
         }
       ],
       "exports": {
-        "104-week-8": "2026-08-23"
+        "104-week-8": "2026-08-30"
       },
       "sources": [
         {
@@ -18861,7 +18861,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -18927,7 +18927,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -18992,7 +18992,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -19056,7 +19056,7 @@
         }
       ],
       "exports": {
-        "kanji-practice-112-123": "2026-08-23"
+        "kanji-practice-112-123": "2026-08-30"
       },
       "sources": [
         {
@@ -19121,7 +19121,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -19180,7 +19180,7 @@
         }
       ],
       "exports": {
-        "m7-camera-vertical-dialogue": "2026-08-23"
+        "m7-camera-vertical-dialogue": "2026-08-30"
       },
       "sources": [
         {
@@ -19244,7 +19244,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
@@ -19309,7 +19309,7 @@
         }
       ],
       "exports": {
-        "medical-conditions-vocab": "2026-08-23"
+        "medical-conditions-vocab": "2026-08-30"
       },
       "sources": [
         {
