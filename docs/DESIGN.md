@@ -81,7 +81,7 @@ owns:
   what a pitch card is for. A word with no usable pattern is still voiced, with
   the engine's own accent and a ledger mark saying so.
 - **OpenAI Realtime** — audio for example *sentences*, read naturally by
-  `gpt-realtime-1.5`. Cedar, ash, echo and verse form an equal-weight pool;
+  `gpt-realtime-1.5`. Cedar, ash, verse and marin form an equal-weight pool;
   a versioned framed SHA-256 of the stable record id picks one, so every
   example on a note keeps the same voice across rebuilds. The reviewed prompt
   asks for a clear learner pace around 75% of normal conversation while

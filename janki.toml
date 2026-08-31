@@ -53,7 +53,7 @@ voicevox_speaker = 53               # 麒ヶ島宗麟 — chosen for accent audi
                                     # of saying nothing.
 
 # Example sentences use the reviewed Realtime profile: gpt-realtime-1.5 at a
-# slower learner pace, with cedar/ash/echo/verse selected deterministically
+# slower learner pace, with cedar/ash/verse/marin selected deterministically
 # from the stable record id. All examples on one note therefore keep one voice
 # across rebuilds. Needs OPENAI_API_KEY in the environment — never in this file.
 sentence_provider = "openai-realtime"

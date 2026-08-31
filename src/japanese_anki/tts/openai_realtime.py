@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 MODEL = "gpt-realtime-1.5"
-VOICES = ("cedar", "ash", "echo", "verse")
+VOICES = ("cedar", "ash", "verse", "marin")
 SAMPLE_RATE = 24_000
 ENDPOINT = f"wss://api.openai.com/v1/realtime?model={MODEL}"
 INSTRUCTIONS = (

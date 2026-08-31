@@ -563,7 +563,7 @@ hand-waved, because the naive rule is wrong for the largest accent class:
 
 **OpenAI Realtime (sentence audio).** Example sentences use
 `gpt-realtime-1.5`, where a natural contextual reading matters more than
-forcing one isolated word's accent drop. Cedar, ash, echo and verse form an
+forcing one isolated word's accent drop. Cedar, ash, verse and marin form an
 equal-weight pool selected by a versioned framed SHA-256 of the stable record
 id; all examples on one record keep that voice across rebuilds. The reviewed
 instruction asks for standard Tokyo Japanese at about 75% of normal

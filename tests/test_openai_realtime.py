@@ -42,7 +42,7 @@ def _expected_voice(record_id: str) -> str:
     raw = record_id.encode("utf-8")
     framed = b"janki:realtime-voice\0v1\0" + len(raw).to_bytes(8, "big") + raw
     digest = hashlib.sha256(framed).digest()
-    return ("cedar", "ash", "echo", "verse")[
+    return ("cedar", "ash", "verse", "marin")[
         int.from_bytes(digest[:8], "big") % 4
     ]
 
@@ -141,7 +141,7 @@ def test_profile_and_prompt_are_the_reviewed_audition_contract() -> None:
     provider, _transport = _provider()
 
     assert MODEL == "gpt-realtime-1.5"
-    assert VOICES == ("cedar", "ash", "echo", "verse")
+    assert VOICES == ("cedar", "ash", "verse", "marin")
     assert SAMPLE_RATE == 24_000
     assert INSTRUCTIONS == EXPECTED_INSTRUCTIONS
     assert provider.name == "openai-realtime"

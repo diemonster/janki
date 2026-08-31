@@ -306,7 +306,7 @@ enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth follows
 
 [tts]
 voicevox_speaker = 53         # words, with the pitch accent forced
-sentence_provider = "openai-realtime"  # deterministic cedar/ash/echo/verse
+sentence_provider = "openai-realtime"  # deterministic cedar/ash/verse/marin
                                         # pool; unset keeps VOICEVOX throughout
 
 [anki]

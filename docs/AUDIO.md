@@ -143,7 +143,7 @@ Realtime audio is billed. The accepted production profile is intentionally one
 contract rather than a bag of knobs:
 
 - model `gpt-realtime-1.5`;
-- cedar, ash, echo and verse at equal weight;
+- cedar, ash, verse and marin at equal weight;
 - a versioned framed SHA-256 of `record.id` selects the voice, so every example
   on one note uses the same reader and a rebuild keeps it;
 - the exact reviewed instruction asks for standard Tokyo Japanese, one reading
@@ -151,11 +151,14 @@ contract rather than a bag of knobs:
   phrasing;
 - mono 16-bit PCM at 24 kHz, wrapped locally as a finite `.wav`.
 
-The four audition voices were all accepted as a useful cross-section, so there
-is no ranking or preferred fallback. `voicevox_speed` remains a word-engine
-setting and cannot re-bill the sentences. Leave `sentence_provider` unset to
-keep sentences on VOICEVOX; unless `voicevox_sentence_speaker` is set, one
-VOICEVOX voice then does everything.
+The owner selected three male-presenting voices and one female-presenting voice
+to keep a general male preference while varying speakers. Those descriptions
+are perceptual; OpenAI exposes named voices, not gender metadata. There is no
+ranking or preferred fallback.
+`voicevox_speed` remains a word-engine setting and cannot re-bill the
+sentences. Leave `sentence_provider` unset to keep sentences on VOICEVOX;
+unless `voicevox_sentence_speaker` is set, one VOICEVOX voice then does
+everything.
 
 If one reviewed sentence needs an explicit reading, add sparse, human-owned
 `spoken_japanese` to that example in `vocabulary.json`:
