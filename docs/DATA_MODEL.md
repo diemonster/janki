@@ -29,7 +29,7 @@ examples:
     romaji: "Mainichi, tsuma to Nihongo de hanashimasu."
     english: "I speak Japanese with my wife every day."
     register: "polite"          # a card has a slot for one of each
-    audio: "audio/janki-b3d1.mp3"
+    audio: "audio/janki-b3d1.wav"
     spoken_japanese: "まいにち、妻と日本語で話します。"  # optional exact TTS input
   - japanese: "毎日、妻と日本語で話すよ。"
     furigana: "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]すよ。"

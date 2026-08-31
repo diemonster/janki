@@ -19,6 +19,10 @@ dependencies = [
   # deleting a reviewer's own notes; ruamel round-trips them. Everything janki
   # *writes from scratch* still goes through PyYAML.
   "ruamel.yaml>=0.18,<1",
+  # Realtime sentence audio is one raw server-side WebSocket. The dependency
+  # is runtime because `janki audio --examples` uses it outside the AI extra;
+  # the provider imports it lazily so unrelated commands still start cleanly.
+  "websockets>=15,<16",
 ]
 
 [project.optional-dependencies]

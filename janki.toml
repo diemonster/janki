@@ -52,20 +52,11 @@ voicevox_speaker = 53               # 麒ヶ島宗麟 — chosen for accent audi
                                     # words" — 0 is a real style id, not a way
                                     # of saying nothing.
 
-# Example sentences read by OpenAI; words stay on VOICEVOX, which is the only
-# engine here that can force a pitch accent. Needs OPENAI_API_KEY in the
-# environment — never in this file.
-sentence_provider = "openai"
-openai_voice = "onyx"
-# janki leaves the API's optional speed at its 1.0 default; collection-wide
-# pace and delivery style are asked for in prose instead. A reviewed
-# sentence-specific reading belongs in sparse examples[].spoken_japanese; it
-# becomes the exact TTS input and is not appended to these instructions.
-openai_instructions = """\
-Read this as a native speaker of standard Tokyo Japanese, for someone learning \
-the language. Speak noticeably slower than conversational pace, clearly and \
-calmly, with natural pitch accent, and pause briefly at each comma. Do not \
-sound hurried."""
+# Example sentences use the reviewed Realtime profile: gpt-realtime-1.5 at a
+# slower learner pace, with cedar/ash/echo/verse selected deterministically
+# from the stable record id. All examples on one note therefore keep one voice
+# across rebuilds. Needs OPENAI_API_KEY in the environment — never in this file.
+sentence_provider = "openai-realtime"
 voicevox_speed = 0.7                # below 1 slows delivery without dropping
                                     # the pitch; janki accepts any finite >0
 

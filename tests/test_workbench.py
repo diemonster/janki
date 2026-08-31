@@ -537,11 +537,11 @@ def test_the_quick_start_tour_opens_on_the_first_dashboard_get_per_session(
         "jpdb · networked dictionary",
         "KANJIDIC/KanjiVG · networked reference sources",
         "VOICEVOX · local network engine",
-        "OpenAI · optional paid network audio",
+        "OpenAI Realtime · optional paid network audio",
         "Codex · optional network enrichment through its CLI",
     ):
         assert f"<dt>{provider}</dt>" in first
-    assert "also reads example sentences unless OpenAI is selected" in first
+    assert "also reads example sentences unless OpenAI Realtime is selected" in first
     assert "Anthropic is also the default provider" in first
     assert "bare-record <code>janki enrich --ai</code>" in first
     assert "alternative bare-record <code>janki enrich --ai</code> provider" in first

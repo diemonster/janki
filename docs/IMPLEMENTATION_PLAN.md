@@ -3578,6 +3578,14 @@ currency reporting, and identity-address safety landed; adversarial review was
 resolved through the final gate. `make gates` is green (2,247 tests plus the
 sample deck build). No paid call ran.*
 
+*Provider superseded 2026-08-30 after the owner's blind auditions. The
+single-voice `gpt-4o-mini-tts` `/v1/audio/speech` path below is history, not the
+current contract. Sentences now use `gpt-realtime-1.5` with cedar, ash, echo and
+verse selected deterministically from the stable record id, the reviewed slower
+prompt, finite PCM WAV output, and operation-journal capture before decoding.
+The old module, config keys, MP3 dispatch and tests were deleted in that change;
+`docs/DESIGN.md` and `docs/AUDIO.md` hold the current contract.*
+
 **Reversed 2026-08-15, after measuring.** This milestone previously moved word
 clips to OpenAI TTS too, on the owner's judgment that it speaks natural
 Japanese. Re-examined at the owner's request, the numbers argued the other way

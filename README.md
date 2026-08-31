@@ -99,7 +99,7 @@ The first-run guide in the workbench keeps this distinction visible:
 | jpdb | Supplies dictionary facts and witnesses readings | Networked account API, not a model call. `JPDB_API_KEY` is required. |
 | KANJIDIC / KanjiVG | Supplies kanji facts and stroke diagrams | Networked reference sources; no account or API key. |
 | VOICEVOX | Speaks words and, by default, examples | Local service on your computer; no API key or per-call bill. Voice terms still apply. |
-| OpenAI | Optionally speaks example sentences | Networked, paid API. `OPENAI_API_KEY` is required; ChatGPT billing is separate. |
+| OpenAI Realtime | Optionally speaks example sentences with a stable per-record voice | Networked, paid API. `OPENAI_API_KEY` is required; ChatGPT billing is separate. |
 | Codex | Alternative `enrich --ai` provider for bare-word cards | Networked; run `codex login` and select `enrich_provider = "codex"`. It is not used to read a PDF or photo. |
 
 Provider credentials are environment variables:
@@ -111,7 +111,7 @@ export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
                                  # reading check, jpdb ping,
                                  # and enrich --jpdb/--staging
 export OPENAI_API_KEY='...'      # billed example-sentence audio when
-                                 # sentence_provider = "openai"
+                                 # sentence_provider = "openai-realtime"
 ```
 
 They are read from the server process's environment only — never from
@@ -262,7 +262,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki build --receipt ID` | Resume the workbench's exact finish batch and build every complete owner deck it touches |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
-| `janki operations` | Paid model calls that block spending or need cleanup. `--show-reply ID` writes an exact still-bound reply to stdout without changing it; `--end ID` settles one that will never finish; `--forget ID` records the final decision, unblocks spending, and retires still-bound exact recovery names without adopting a replaced pending namespace |
+| `janki operations` | Paid calls that block spending or need cleanup. `--show-reply ID` writes a complete reply byte-for-byte or a frame-preserving JSON view of an incomplete stream; `--end ID` settles one that will never finish and adopts its sole valid crash-extension frame; an exact provider rerun may still seal already-durable terminal frames without redispatch. `--forget ID` records the final decision, unblocks spending, and retires still-bound exact recovery names without adopting a replaced pending namespace. Uncommitted replies or frames from a possibly sent call require `--force`. |
 | `janki refresh` | enrich → audio → build, in order. The jpdb-backed
 stage needs `JPDB_API_KEY`; without it that stage is skipped and the run exits
 non-zero rather than reporting a refresh that enriched nothing |
@@ -281,9 +281,11 @@ before treating the promotion as ready to finish. `validate`, `preview` and
 run when it applies. `janki operations` is the one you should not need: it
 exists for the day a paid call or its exact cleanup is interrupted, because
 janki refuses to start a second call until somebody accounts for the first and
-keeps incomplete cleanup visible until it finishes. A reply shown by
-`--show-reply` is streamed exactly and remains tracked; redirect stdout to
-export it before making a forget decision. Run `janki kanji` after words with
+keeps incomplete cleanup visible until it finishes. A complete reply shown by
+`--show-reply` passes through exactly; an incomplete streaming response is a
+JSON view preserving its exact committed frame payloads and boundaries. It
+remains tracked either way, so redirect stdout to export it before making a
+forget decision. Run `janki kanji` after words with
 new characters arrive:
 a character nobody looked up simply has no stroke-order block on the card.
 
@@ -304,7 +306,8 @@ enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth follows
 
 [tts]
 voicevox_speaker = 53         # words, with the pitch accent forced
-sentence_provider = "openai"  # or leave unset for VOICEVOX throughout
+sentence_provider = "openai-realtime"  # deterministic cedar/ash/echo/verse
+                                        # pool; unset keeps VOICEVOX throughout
 
 [anki]
 profile = "User 1"            # only needed with several Anki profiles

@@ -80,13 +80,16 @@ owns:
   to guess, an engine renders 橋 and 箸 identically, and telling those apart is
   what a pitch card is for. A word with no usable pattern is still voiced, with
   the engine's own accent and a ledger mark saying so.
-- **OpenAI TTS** — audio for example *sentences*, read naturally. A sentence
-  carries context that disambiguates, and no accent data janki has covers a
-  whole sentence. Collection-wide pace and delivery style are prose
-  instructions in config. If a provider misreads one reviewed sentence, a
-  human may add sparse `examples[].spoken_japanese`; janki sends that exact
-  nonblank text instead of the displayed `japanese`, and never derives it
-  automatically.
+- **OpenAI Realtime** — audio for example *sentences*, read naturally by
+  `gpt-realtime-1.5`. Cedar, ash, echo and verse form an equal-weight pool;
+  a versioned framed SHA-256 of the stable record id picks one, so every
+  example on a note keeps the same voice across rebuilds. The reviewed prompt
+  asks for a clear learner pace around 75% of normal conversation while
+  preserving connected Japanese phrasing. A sentence carries context that
+  disambiguates, and no accent data janki has covers a whole sentence. If the
+  model misreads one reviewed sentence, a human may add sparse
+  `examples[].spoken_japanese`; janki sends that exact nonblank text instead
+  of the displayed `japanese`, and never derives it automatically.
   The displayed sentence remains the card text and stable filename identity;
   the effective spoken input participates in the content/request fingerprint
   and audio write-ahead record, so changing it stales only that clip without
@@ -120,10 +123,14 @@ survives rebuilds; a human approving what enters the store (staging review);
 a reviewed reading checked against jpdb before it becomes an identity, where
 jpdb can resolve it — silence passes; a dictionary is a witness, not a gate;
 a billed call over a private source confirmed by the owner, never assumed;
-provenance from every record back to its source. Paid TTS output is staged and
-ledgered by exact request before a guarded record write; only after that write
-wins does janki publish canonical media and finalize its ordinary audio ledger
-entry, so the exact same interrupted request can resume without another bill.
+provenance from every record back to its source. A paid Realtime sentence call
+is journaled before dispatch; an operation-bound spool fsyncs every exact
+WebSocket text frame before JSON inspection, then a terminal stream becomes
+the captured envelope before PCM decoding. The operation becomes committed
+only while its decoded WAV is staged and ledgered by exact request. After that,
+the guarded record write must win before janki publishes canonical media and
+finalizes its ordinary audio ledger entry. Either recovery layer can therefore
+resume the exact interrupted request without another bill.
 Staging completion similarly holds the live review and selected archive locks
 through one byte-checked archive/prune transaction, so an exact interrupted
 retry cannot duplicate rows or delete a concurrently replaced review.
@@ -131,19 +138,30 @@ retry cannot duplicate rows or delete a concurrently replaced review.
 A paid model call follows the same write-ahead shape as that paid audio
 staging: journaled durably before dispatch, its exact response persisted as a
 pending artifact before parsing, so neither a crash nor a parse failure can
-lose an answer already paid for. `extract` and the separate
-`promote --accept-coverage` completeness check do this today. `enrich --ai`
-spends money and does **not** yet journal, which is a gap to close rather than
-a design choice — until it does, nothing below applies to it. The journal moves
+lose an answer already paid for. `extract`, the separate
+`promote --accept-coverage` completeness check, and OpenAI Realtime sentence
+audio do this today. `enrich --ai` spends money and does **not** yet journal,
+which is a gap to close rather than a design choice — until it does, nothing
+below applies to it. The journal moves
 `authorized → dispatching → running → result_captured → committed`, with
 `outcome_unknown`, `failed_before_send`, `canceled_before_send`, and `expired`
 as terminal or holding states. A dispatched call whose outcome is unknown is
 never retried automatically — a fresh charge requires fresh authority.
-`janki operations --show-reply ID` is the only advertised recovery reader: it
-streams the exact bytes revalidated through their public or private
-write-ahead binding, without publishing a private reply, adopting a same-name
-replacement, settling the call, or changing the journal. A recorded artifact
-name is historical metadata, not proof that reply bytes remain accessible.
+`janki operations --show-reply ID` is the only advertised recovery reader. A
+complete captured artifact passes through byte-for-byte. For an incomplete
+streaming response, it emits a deterministic JSON view preserving every exact
+committed UTF-8 frame payload and boundary. It revalidates the binding without
+publishing a private reply, adopting a same-name replacement or unjournalled
+crash extension, settling the call, or changing the journal. A recorded
+artifact name is historical metadata, not proof that reply bytes remain
+accessible. Before `operations --end` settles a nonterminal stream, it adopts
+the sole structurally valid frame that may have been fsynced just before its
+journal-head write was interrupted. An exact provider-specific rerun may then
+strengthen `outcome_unknown` to `result_captured` only by sealing terminal
+frames already on disk; it never redispatches. Nonempty response frames from a
+call that may have been sent require `operations --forget --force` when they
+did not become committed output; an ordinary forget cannot silently erase
+partial paid output.
 Normal capture keeps its terminal operation-bound marker until the
 `result_captured` journal write durably records the relative name, pending
 directory identity, five-field file snapshot (including ctime), and response

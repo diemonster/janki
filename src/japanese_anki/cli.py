@@ -3211,10 +3211,11 @@ def command_operations(args: argparse.Namespace) -> int:
     journal = operations.OperationJournal.load(config.operations_file)
 
     if args.show_reply:
-        payload = journal.read_reply(args.show_reply)
-        # The recovery artifact is exact provider wire data. Text decoding or
-        # an automatic newline would silently change what a redirected export
-        # contains, so write the bytes and nothing else.
+        payload = journal.read_inspectable_reply(args.show_reply)
+        # A complete recovery artifact passes through byte-for-byte. An
+        # incomplete stream is already a deterministic frame-preserving JSON
+        # envelope. Either way, decoding it or adding another newline here
+        # would change the redirected export.
         sys.stdout.flush()
         sys.stdout.buffer.write(payload)
         sys.stdout.buffer.flush()
@@ -3242,12 +3243,39 @@ def command_operations(args: argparse.Namespace) -> int:
             f"Ended {ended.operation_id}: recorded as {ended.state}, because "
             "janki cannot know whether that call was billed."
         )
+        frame_reply = operations.response_spool_observation(
+            config.operations_file, ended
+        )
         print(
-            "  It still counts as needing a person and blocks paid calls. "
-            "Once you have dealt with it, "
-            f"'janki operations --forget {ended.operation_id}' records that "
-            "decision; the next call can start once it is durable, while "
-            "interrupted cleanup stays listed for the same retry."
+            "  It still counts as needing a person and blocks paid calls."
+        )
+        if frame_reply.readable:
+            print("Exact provider response frames remain on disk.")
+            print(
+                "Rerun the exact matching provider command to recover them "
+                "without a new dispatch."
+            )
+            print(
+                "action: inspect them with "
+                f"'janki operations --show-reply {ended.operation_id}'"
+            )
+            print(
+                "action: explicitly discard them with "
+                f"'janki operations --forget {ended.operation_id} --force'"
+            )
+            return 0
+        if frame_reply.recorded:
+            print("Exact provider response frames are unavailable.")
+            print(
+                "action: explicitly discard their record with "
+                f"'janki operations --forget {ended.operation_id} --force'"
+            )
+            return 0
+        print(
+            f"  Once you have dealt with it, 'janki operations --forget "
+            f"{ended.operation_id}' records that decision; the next call can "
+            "start once it is durable, while interrupted cleanup stays listed "
+            "for the same retry."
         )
         return 0
 
@@ -4110,10 +4138,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--show-reply",
         metavar="ID",
         help=(
-            "Write the exact currently bound provider reply to stdout without "
-            "settling it. Redirect stdout to export it. Private write-ahead "
-            "evidence is read through its binding; replacement public names "
-            "are never adopted."
+            "Write the exact currently bound provider reply, or a JSON view "
+            "preserving exact frame boundaries for an incomplete streaming response, "
+            "to stdout without settling it. Redirect stdout to export it. "
+            "Private write-ahead evidence is read through its binding; "
+            "replacement public names are never adopted."
         ),
     )
     operations_parser.add_argument(

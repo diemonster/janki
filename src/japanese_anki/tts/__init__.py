@@ -16,16 +16,22 @@ without knowing which engine it is holding.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Protocol, TypeVar, runtime_checkable
 
 from japanese_anki.errors import JankiError
 
 __all__ = [
     "RenderProfile",
+    "JournaledSpeechProvider",
+    "SentenceProfileSelector",
     "SpeechProvider",
     "TtsError",
+    "sentence_profile_for",
     "validate_utterance",
 ]
+
+_Persisted = TypeVar("_Persisted")
 
 
 class TtsError(JankiError):
@@ -81,9 +87,9 @@ class SpeechProvider(RenderProfile, Protocol):
         """The file extension this engine's audio needs, including the dot.
 
         On the provider because the format is the engine's choice, not the
-        caller's: VOICEVOX returns WAV, and OpenAI is asked for mp3 because its
-        WAV carries placeholder chunk sizes. A hard-coded ``.wav`` downstream
-        would name an mp3 file ``.wav`` and hand Anki a lie about its contents.
+        caller's. VOICEVOX returns WAV; Realtime returns raw PCM that its
+        provider wraps as a finite WAV. A future encoded stream may choose a
+        different suffix without downstream code lying about its contents.
         """
 
     @property
@@ -99,16 +105,69 @@ class SpeechProvider(RenderProfile, Protocol):
         ...
 
     def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
-        """WAV bytes for one utterance.
+        """Audio bytes for one utterance.
 
         ``forced_accent`` says which of the two things the caller is holding: an
         AquesTalk kana string whose accent must be honoured exactly (a word), or
         ordinary Japanese to be read naturally (a sentence). It is a flag rather
         than two methods because it is one question — *may the engine decide the
-        accent?* — and a provider that cannot force one answers it by ignoring
-        the flag, not by lacking the method.
+        accent?* — and a provider that cannot force one refuses the flag.
         """
         ...
+
+
+@runtime_checkable
+class SentenceProfileSelector(RenderProfile, Protocol):
+    """Choose one concrete sentence renderer from a stable record identity."""
+
+    def profile_for(self, record_id: str) -> SpeechProvider:
+        """Return the exact profile every example on ``record_id`` will use."""
+        ...
+
+
+@runtime_checkable
+class JournaledSpeechProvider(SpeechProvider, Protocol):
+    """A paid stream whose exact reply must become durable before decoding."""
+
+    def synthesize_journaled(
+        self,
+        text_or_kana: str,
+        *,
+        forced_accent: bool,
+        source_file: str,
+        source_sha256: str,
+        persist: Callable[[bytes], _Persisted],
+    ) -> _Persisted:
+        """Capture, decode, and persist one reply under its operation entry."""
+        ...
+
+    def reconcile_journaled(
+        self,
+        text_or_kana: str,
+        *,
+        forced_accent: bool,
+        source_file: str,
+        source_sha256: str,
+        audio_sha256: str,
+    ) -> None:
+        """Settle a captured operation whose exact audio WAL already exists."""
+        ...
+
+
+def sentence_profile_for(
+    provider: SpeechProvider | SentenceProfileSelector,
+    record_id: str,
+) -> SpeechProvider:
+    """Resolve a selector once per record; fixed providers pass through."""
+    select = getattr(provider, "profile_for", None)
+    if not callable(select):
+        return provider
+    selected = select(record_id)
+    if not isinstance(selected, SpeechProvider):
+        raise TtsError(
+            f"Sentence profile selector returned no speech provider for {record_id!r}."
+        )
+    return selected
 
 
 def validate_utterance(provider: RenderProfile, text: str) -> None:

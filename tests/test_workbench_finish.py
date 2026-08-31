@@ -712,8 +712,7 @@ def test_paid_example_audio_button_names_its_exact_cost_bearing_call(
     config_path = tmp_path / "janki.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8")
-        + '\n[tts]\nsentence_provider = "openai"\n'
-        + 'openai_model = "gpt-w6-audio"\n',
+        + '\n[tts]\nsentence_provider = "openai-realtime"\n',
         encoding="utf-8",
     )
     session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
@@ -728,7 +727,7 @@ def test_paid_example_audio_button_names_its_exact_cost_bearing_call(
     assert status == 200
     assert (
         b"Create example sentence audio for table.pdf with OpenAI "
-        b"gpt-w6-audio \xe2\x80\x94 paid network call"
+        b"gpt-realtime-1.5 \xe2\x80\x94 paid network call"
         in page
     )
 
@@ -792,7 +791,7 @@ def test_finish_audio_posts_bind_the_scope_and_report_partial_transaction_truth(
                 ),
                 example_provider=replace(
                     plan.example_provider,
-                    name="openai",
+                    name="openai-realtime",
                     access="paid-network",
                 ),
             )

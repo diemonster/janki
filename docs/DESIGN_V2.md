@@ -86,7 +86,7 @@ judgment is generated — never the other way around.
 | Canonical structural derivations and conjugation tables | **Plain code** | Deterministic artifact shaping, not interpretation of Japanese. |
 | Meanings, completed polite/casual example slots, annotations, and usage notes | **Claude API or Codex** | One complete answer per bare vocabulary record. |
 | PDF/photo → complete candidate cards and source patterns | **Claude API (vision)** | One source-aware call preserves source context and avoids a second paid reading. |
-| Word/sentence audio | **VOICEVOX / OpenAI TTS** | VOICEVOX forces word accent; OpenAI reads examples naturally. |
+| Word/sentence audio | **VOICEVOX / OpenAI Realtime** | VOICEVOX forces word accent; Realtime reads examples with a stable per-record voice. |
 
 Romaji remains a separate stored field. Model-authored cards return it beside
 the Japanese and furigana; deterministic record-processing code may derive or
@@ -561,15 +561,18 @@ hand-waved, because the naive rule is wrong for the largest accent class:
   wrong (やり直す is a known case) — spot-check; the ledger makes
   regeneration targeted.
 
-**OpenAI (sentence audio).** Example sentences use OpenAI speech, where a
-natural reading matters more than forcing one isolated word's accent drop.
-`openai_instructions` is the collection-wide baseline: standard Tokyo
-Japanese, a clear learner-friendly pace, natural pitch accent, and brief pauses
-at commas. A sparse, human-written `ExampleSentence.spoken_japanese` value is
-the exact TTS input for one clip that needs an explicit reading; otherwise the
-provider receives `ExampleSentence.japanese`. janki never derives the override.
-Words remain on VOICEVOX because that is the provider that accepts janki's
-explicit accent shape.
+**OpenAI Realtime (sentence audio).** Example sentences use
+`gpt-realtime-1.5`, where a natural contextual reading matters more than
+forcing one isolated word's accent drop. Cedar, ash, echo and verse form an
+equal-weight pool selected by a versioned framed SHA-256 of the stable record
+id; all examples on one record keep that voice across rebuilds. The reviewed
+instruction asks for standard Tokyo Japanese at about 75% of normal
+conversation while preserving connected phrasing. A sparse, human-written
+`ExampleSentence.spoken_japanese` value is the exact input for one clip that
+needs an explicit reading; otherwise the provider receives
+`ExampleSentence.japanese`. janki never derives the override. Words remain on
+VOICEVOX because that is the provider that accepts janki's explicit accent
+shape.
 
 **Mechanics:**
 
@@ -732,10 +735,7 @@ enrich_reasoning_effort = "ultra"
 provider     = "voicevox"          # word clips
 voicevox_url = "http://localhost:50021"
 voicevox_speaker = 53              # int, everywhere (ledger included)
-sentence_provider = "openai"       # example clips; empty inherits provider
-openai_voice = "onyx"
-openai_model = "gpt-4o-mini-tts"
-openai_instructions = "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried."
+sentence_provider = "openai-realtime" # reviewed deterministic four-voice pool
 ```
 
 Secrets are environment-only: `ANTHROPIC_API_KEY`, `JPDB_API_KEY`,

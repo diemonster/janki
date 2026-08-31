@@ -966,6 +966,7 @@ def format_operations(
             )
             continue
         reply = operations.reply_observation(journal_path, op)
+        frame_reply = operations.response_spool_observation(journal_path, op)
         lines.append(f"    state: {op.state}, authorized {op.authorized_at}")
         if reply.readable:
             lines.append(
@@ -977,6 +978,18 @@ def format_operations(
                 "    the journal records a captured reply, but its exact "
                 "recovery bytes are unavailable"
             )
+        elif frame_reply.readable:
+            lines.append(
+                "    durable response frames remain; inspect the exact "
+                "frame-preserving view (the command revalidates their binding): "
+                f"'janki operations --show-reply {quoted_id}'"
+            )
+        elif frame_reply.recovery_pending:
+            lines.append(
+                "    an exact newly durable response frame awaits recovery"
+            )
+        elif frame_reply.recorded:
+            lines.append("    exact response frames are unavailable")
         elif reply.interrupted:
             lines.append(
                 "    answer capture was interrupted; operation-bound recovery "
@@ -993,7 +1006,12 @@ def format_operations(
             )
         if op.detail:
             lines.append(f"    {op.detail}")
-        if reply.readable:
+        if op.state == "committed":
+            lines.append(
+                "    action: retire this committed operation with "
+                f"'janki operations --forget {quoted_id}'"
+            )
+        elif reply.readable:
             lines.append(
                 "    after reading the saved reply, explicitly discard its "
                 "recovery copy: "
@@ -1003,6 +1021,45 @@ def format_operations(
             lines.append(
                 "    if you accept that unavailable recovery copy as lost, "
                 "explicitly discard its record: "
+                f"'janki operations --forget {quoted_id} --force'"
+            )
+        elif (
+            frame_reply.recorded
+            and op.state not in operations.IN_FLIGHT
+            and not op.money_may_have_been_spent
+        ):
+            lines.append(
+                "    action: retire this before-send operation with "
+                f"'janki operations --forget {quoted_id}'"
+            )
+        elif (
+            frame_reply.recovery_pending
+            and op.state not in operations.IN_FLIGHT
+        ):
+            lines.append(
+                "    rerun the exact matching provider command to recover the "
+                "newly durable frame; otherwise explicitly discard it"
+            )
+            lines.append(
+                "    action: explicitly discard it with "
+                f"'janki operations --forget {quoted_id} --force'"
+            )
+        elif frame_reply.readable and op.state not in operations.IN_FLIGHT:
+            lines.append(
+                "    rerun the exact matching provider command to recover any "
+                "terminal response already on disk; otherwise, after inspection, "
+                "explicitly discard the frames"
+            )
+            lines.append(
+                "    action: explicitly discard them with "
+                f"'janki operations --forget {quoted_id} --force'"
+            )
+        elif (
+            frame_reply.recorded
+            and op.state not in operations.IN_FLIGHT
+        ):
+            lines.append(
+                "    action: explicitly discard their record with "
                 f"'janki operations --forget {quoted_id} --force'"
             )
         elif op.state == "authorized":
@@ -1232,28 +1289,26 @@ class RebuildSummary:
     example_audio: int
     unprovable_audio: int
     unmatched_media: int
-    # Files sharing a fingerprint with the file a rebuilt entry claimed: a
-    # provider switch's leftover twin (janki-<fp>.mp3 beside janki-<fp>.wav).
+    # Files sharing a fingerprint with the file a rebuilt entry claimed: for
+    # example an encoded historical clip beside its current WAV replacement.
     ambiguous_media: int
     media_dir: Path
 
 
 # When several files claim one fingerprint and *the record names none of them*,
 # the rebuilt entry binds the first by this order. It is a last resort: janki
-# writes .wav for words and .mp3 for OpenAI sentences, so the extension alone
-# stopped being evidence the day a second engine arrived. When the record names
-# a file, that beats this outright — see `_claim_for`.
+# has used more than one audio format over its history, so the extension alone
+# is not evidence. When the record names a file, that beats this outright — see
+# `_claim_for`.
 _EXTENSION_PREFERENCE: tuple[str, ...] = (".wav", ".mp3", ".ogg", ".m4a")
 
 
 def _claim_for(candidates: list[Path], named: str) -> Path:
     """Which file a rebuilt entry should bind, preferring the one named.
 
-    The record is the better evidence: a switch from VOICEVOX to OpenAI leaves
-    ``janki-<fp>.wav`` beside the new ``janki-<fp>.mp3`` until a prune, and
-    ranking by extension binds the stale WAV — then reports the mp3 the record
-    actually plays as the ambiguous one, telling the user to delete the file
-    that is correct.
+    The record is the better evidence: a provider or format switch can leave
+    two suffixes until a prune, and ranking by extension may otherwise bind the
+    stale one while calling the file the card actually plays ambiguous.
     """
     if named:
         wanted = Path(named).name

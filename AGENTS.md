@@ -164,19 +164,31 @@ below is what is left, and it is the loop every other project already uses.*
 ## Data lifecycle
 
 1. `data/inbox/`: untouched source exports.
-1b. `data/operations.json` and `data/.pending/`: the paid-model-call journal and
-   the exact provider answers it captures, written **before** each call is
-   dispatched and **before** its reply is parsed. The journal is committed — it
+1b. `data/operations.json` and `data/.pending/`: the paid-provider-call journal
+   and the exact answers it captures, written **before** each call is dispatched
+   and **before** its reply is parsed or decoded. The journal is committed — it
    is the only durable record that a call was billed, and an entry in
    `outcome_unknown` or `result_captured` is money someone still has to make a
    decision about. A captured artifact is a *recovery buffer*, not an archive:
-   once its operation reaches `committed` the answer has become staging, and
-   `data/staging/done/` holds the durable copy, so the artifact is deleted with
-   the journal entry. Read an unfinished reply only through
-   `janki operations --show-reply ID`: it streams exact still-bound bytes
-   without publishing a private write-ahead reply, adopting a replacement,
-   or changing the operation. An entry carrying a `cleanup` intent is a durable,
-   retryable forget decision: rerun its ordinary `janki operations --forget`
+   once its operation reaches `committed` the answer has reached that operation
+   kind's durable destination. Extraction becomes staging; coverage becomes its
+   recorded verdict; Realtime audio becomes the exact `pending_audio` stage and
+   WAL row. A successful Realtime operation then forgets its captured envelope;
+   `data/staging/done/` holds extraction's eventual durable copy. Read an
+   unfinished reply only through `janki operations --show-reply ID`: a complete
+   captured artifact passes through byte-for-byte; an incomplete streaming
+   response becomes a deterministic JSON view that preserves every exact
+   committed UTF-8 frame payload and boundary. The reader does not publish a
+   private write-ahead reply, adopt a replacement or unjournalled crash
+   extension, settle the call, or change the operation. Ending the call adopts
+   the sole valid response frame that may have been fsynced just past its
+   journal head. An exact rerun may seal already-durable terminal frames and
+   strengthen `outcome_unknown` to `result_captured`, but never redispatches.
+   Nonempty frames from a call that may have been sent and never became
+   committed output require an explicit `operations --forget --force`
+   decision. An entry carrying a
+   `cleanup` intent is a durable, retryable forget decision: rerun its ordinary
+   `janki operations --forget`
    command until the entry disappears; it no longer blocks a new paid call but
    remains listed until cleanup succeeds. Cleanup retires only exact names in
    the still-bound pending-directory inode. A checkout that makes that namespace
@@ -258,7 +270,11 @@ below is what is left, and it is the loop every other project already uses.*
    profile, and byte hash, so never edit or remove it by hand.
 9. `data/media/`: generated audio, identity-addressed with content/profile
     currency in the ledger — **committed**, so a rebuild is free
-    (`docs/PROJECT_PLAN.md` design principle 6). While `pending_audio` exists,
+    (`docs/PROJECT_PLAN.md` design principle 6). OpenAI Realtime sentence calls
+    first fsync every exact WebSocket text frame to an operation-bound spool
+    before JSON parsing, then capture the terminal envelope through the
+    operation journal; only its decoded finite WAV may enter the audio WAL
+    below. While `pending_audio` exists,
     its paired paid bytes live under `data/media/audio/.pending/*.stage`; they
     are committed recovery data, protected from prune, and finalized by
     rerunning the exact matching `janki audio` command. Do not delete them.

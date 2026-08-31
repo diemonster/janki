@@ -47,13 +47,13 @@ class _WordVoice(FakeVoice):
 
 
 class _ExampleVoice(FakeVoice):
-    name = "openai"
-    suffix = ".mp3"
+    name = "openai-realtime"
+    suffix = ".wav"
     launch_hint = "use the fake OpenAI transport"
 
     def __init__(self) -> None:
-        super().__init__(audio=b"ID3 fake mp3", voice="onyx")  # type: ignore[arg-type]
-        self.settings = {"model": "gpt-4o-mini-tts", "instructions": ""}
+        super().__init__(audio=b"RIFF fake wav", voice="cedar")  # type: ignore[arg-type]
+        self.settings = {"model": "gpt-realtime-1.5", "instructions": "fixture"}
 
 
 def _launch_chrome(playwright: object):
@@ -226,7 +226,7 @@ def test_table_source_reaches_a_built_deck_in_real_chrome(
     config_path = tmp_path / "janki.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8")
-        + '\n[tts]\nsentence_provider = "openai"\n',
+            + '\n[tts]\nsentence_provider = "openai-realtime"\n',
         encoding="utf-8",
     )
     _write_deck(tmp_path)
@@ -485,7 +485,7 @@ def test_table_source_reaches_a_built_deck_in_real_chrome(
                     "button",
                     name=re.compile(
                         r"Create example sentence audio for lesson\.pdf with "
-                        r"OpenAI gpt-4o-mini-tts .* paid network call"
+                            r"OpenAI gpt-realtime-1\.5 .* paid network call"
                     ),
                 ).click()
                 page.get_by_role("link", name="Preview Lesson deck").click()

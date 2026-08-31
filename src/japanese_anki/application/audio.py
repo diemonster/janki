@@ -32,7 +32,14 @@ from japanese_anki.io import (
     save_records_json_locked,
 )
 from japanese_anki.models import VocabularyRecord
-from japanese_anki.tts import SpeechProvider, openai_tts, voicevox
+from japanese_anki.tts import (
+    SentenceProfileSelector,
+    SpeechProvider,
+    openai_realtime,
+    voicevox,
+)
+
+SentenceProvider = SpeechProvider | SentenceProfileSelector
 
 AudioAccess = Literal["local-network", "paid-network"]
 AudioPhase = Literal[
@@ -177,11 +184,11 @@ def resolve_word_provider(config: ProjectConfig, chosen: str | None) -> SpeechPr
             "ambiguous kanji correctly and needs no account (see M5.7 in "
             "docs/IMPLEMENTATION_PLAN.md). Words use VOICEVOX, which is the "
             "only engine here that can force a pitch accent; for sentences set "
-            '[tts] sentence_provider = "openai".'
+            '[tts] sentence_provider = "openai-realtime".'
         )
     raise AudioPlanError(
         f"Unknown TTS provider {name!r}. Words are voiced by voicevox. For "
-        "sentences, set [tts] sentence_provider to voicevox or openai."
+        "sentences, set [tts] sentence_provider to voicevox or openai-realtime."
     )
 
 
@@ -189,19 +196,18 @@ def resolve_sentence_provider(
     config: ProjectConfig,
     chosen: str | None,
     words: SpeechProvider,
-) -> SpeechProvider:
+) -> SentenceProvider:
     """Construct the example provider without contacting it."""
     name = (config.sentence_provider or "").strip().lower()
-    if name == "openai":
-        return openai_tts.OpenAiSpeechProvider(
-            voice=config.openai_voice,
-            model=config.openai_model,
-            instructions=config.openai_instructions,
+    if name == "openai-realtime":
+        return openai_realtime.OpenAiRealtimePool(
+            operations_path=config.operations_file,
         )
     if name not in {"", "voicevox"}:
         raise AudioPlanError(
-            f"Unknown [tts] sentence_provider {name!r}. Known: voicevox, openai, "
-            "or leave it empty to read sentences in the same voice as the words."
+            f"Unknown [tts] sentence_provider {name!r}. Known: voicevox, "
+            "openai-realtime, or leave it empty to read sentences in the same "
+            "voice as the words."
         )
     if _provider_name(config, chosen) == "voicevox":
         speaker = config.voicevox_sentence_speaker
@@ -214,10 +220,12 @@ def resolve_sentence_provider(
     return words
 
 
-def _provider_plan(provider: SpeechProvider) -> AudioProviderPlan:
-    access: AudioAccess = "paid-network" if provider.name == "openai" else "local-network"
-    if provider.name == "openai":
-        destination = openai_tts.API_URL
+def _provider_plan(provider: SentenceProvider) -> AudioProviderPlan:
+    access: AudioAccess = (
+        "paid-network" if provider.name == "openai-realtime" else "local-network"
+    )
+    if provider.name == "openai-realtime":
+        destination = openai_realtime.ENDPOINT
     else:
         destination = str(getattr(provider, "_base_url", provider.name))
     transport_value = getattr(provider, "_transport", None)
@@ -338,7 +346,7 @@ def _plan_records(
     force: bool,
     chosen_provider: str | None,
     word_provider: SpeechProvider | None,
-    sentence_provider: SpeechProvider | None,
+    sentence_provider: SentenceProvider | None,
     protected_records: Sequence[VocabularyRecord],
     ledger_book: ledger.Ledger | None = None,
 ) -> AudioPlan:
@@ -464,7 +472,7 @@ def plan_targeted_audio(
     force: bool = False,
     chosen_provider: str | None = None,
     word_provider: SpeechProvider | None = None,
-    sentence_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
 ) -> AudioPlan:
     """Plan one exact nonempty promoted-record scope."""
     records, revision = load_records_snapshot(config.normalized_file.resolve())
@@ -496,7 +504,7 @@ def plan_corpus_audio(
     force: bool = False,
     chosen_provider: str | None = None,
     word_provider: SpeechProvider | None = None,
-    sentence_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
 ) -> AudioPlan:
     """Plan the CLI's explicit whole-corpus maintenance operation."""
     records, revision = load_records_snapshot(config.normalized_file.resolve())
@@ -531,7 +539,7 @@ def plan_audio_records(
     force: bool = False,
     chosen_provider: str | None = None,
     word_provider: SpeechProvider | None = None,
-    sentence_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
     protected_records: Sequence[VocabularyRecord] = (),
     ledger_book: ledger.Ledger | None = None,
 ) -> AudioPlan:
@@ -640,11 +648,15 @@ def _cleanup_unclaimed_audio_stages(
         try:
             words = word_provider or resolve_word_provider(config, chosen)
             sentences = resolve_sentence_provider(config, chosen, words)
+            prepared = audio_cmd.prepare_example_audio_profiles(
+                records,
+                sentence_provider=sentences,
+            )
             current_keys = audio_cmd.current_pending_audio_keys(
                 records,
                 book=book,
                 word_provider=words,
-                sentence_provider=sentences,
+                prepared_examples=prepared,
             )
         except JankiError as exc:
             return [
@@ -681,7 +693,7 @@ def execute_targeted_audio(
     chosen_provider: str | None = None,
     progress: AudioProgress | None = None,
     word_provider: SpeechProvider | None = None,
-    sentence_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
 ) -> AudioExecutionOutcome:
     """Execute audio for one exact nonempty id set; it can never widen.
 
@@ -715,7 +727,7 @@ def execute_corpus_audio(
     chosen_provider: str | None = None,
     progress: AudioProgress | None = None,
     word_provider: SpeechProvider | None = None,
-    sentence_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
 ) -> AudioExecutionOutcome:
     """Execute the CLI's explicit whole-corpus audio maintenance operation."""
     return _execute_audio(
@@ -745,7 +757,7 @@ def _execute_audio(
     chosen_provider: str | None,
     progress: AudioProgress | None,
     word_provider: SpeechProvider | None,
-    sentence_provider: SpeechProvider | None,
+    sentence_provider: SentenceProvider | None,
 ) -> AudioExecutionOutcome:
     """Take the operation lock before any repository or ledger snapshot."""
     with exclusive_path_lock(config.root / ".janki-audio-operation"):
@@ -776,7 +788,7 @@ def _execute_audio_locked(
     chosen_provider: str | None,
     progress: AudioProgress | None,
     word_provider: SpeechProvider | None,
-    sentence_provider: SpeechProvider | None,
+    sentence_provider: SentenceProvider | None,
 ) -> AudioExecutionOutcome:
     """Lock every current record owner before taking its exact snapshot."""
     _emit_progress(progress, "Preparing audio")
@@ -833,7 +845,7 @@ def _execute_audio_owner_locked(
     chosen_provider: str | None,
     progress: AudioProgress | None,
     word_provider: SpeechProvider | None,
-    sentence_provider: SpeechProvider | None,
+    sentence_provider: SentenceProvider | None,
 ) -> AudioExecutionOutcome:
     """Run the provider/WAL/record/media/ledger transaction under owner locks."""
     output_path = config.normalized_file.resolve()
@@ -865,7 +877,7 @@ def _execute_audio_owner_locked(
     warnings: list[str] = []
     book: ledger.Ledger | None = None
     words_engine: SpeechProvider | None = None
-    sentences_engine: SpeechProvider | None = None
+    sentences_engine: SentenceProvider | None = None
     plan: AudioPlan | None = None
     if expected_fingerprint is not None:
         words_engine = word_provider or resolve_word_provider(config, chosen_provider)

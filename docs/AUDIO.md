@@ -7,10 +7,9 @@ whole reason it is here: 橋 and 箸 are the pair a card exists to tell apart, a
 an engine left to guess renders them identically — measured, not assumed.
 Nothing else in this project can force an accent, so nothing else voices a word.
 
-**Sentences are read naturally**, by VOICEVOX or by OpenAI. Nothing is forced
-there — janki has no accent data for a whole sentence and does not pretend to —
-so the choice is about which reads Japanese better, and you should listen rather
-than take a recommendation.
+**Sentences are read naturally**, by VOICEVOX or by the reviewed OpenAI
+Realtime profile. Nothing is forced there — janki has no accent data for a
+whole sentence and does not pretend to.
 
 ## Getting VOICEVOX running
 
@@ -136,25 +135,27 @@ voicevox_sentence_speaker = 52      # another VOICEVOX voice for sentences
 
 ```toml
 [tts]
-sentence_provider = "openai"        # OpenAI reads the sentences instead
-openai_voice = "onyx"               # alloy, ash, ballad, cedar, coral, echo,
-                                    # fable, marin, nova, onyx, sage, shimmer,
-                                    # verse. (Cove and the other ChatGPT app
-                                    # voices are a different set — not this API's.)
-openai_model = "gpt-4o-mini-tts"    # or a pinned snapshot like
-                                    # gpt-4o-mini-tts-2025-12-15
+sentence_provider = "openai-realtime"
 ```
 
 OpenAI needs `OPENAI_API_KEY` in the environment — never in `janki.toml` — and
-the default model bills for text-input and audio-output tokens. The speech API
-also accepts a numeric `speed`, but janki deliberately leaves it at the API's
-1.0 default: `voicevox_speed` belongs to the word engine, and letting that knob
-reach OpenAI would re-render and re-bill every sentence when only the word pace
-changed. Sentence pace and delivery style are asked for in prose through
-`openai_instructions`; the shipped default asks for a noticeably slower
-delivery and natural pitch accent. Leave `sentence_provider` unset to keep
-sentences on VOICEVOX; unless `voicevox_sentence_speaker` is set, one voice
-then does everything.
+Realtime audio is billed. The accepted production profile is intentionally one
+contract rather than a bag of knobs:
+
+- model `gpt-realtime-1.5`;
+- cedar, ash, echo and verse at equal weight;
+- a versioned framed SHA-256 of `record.id` selects the voice, so every example
+  on one note uses the same reader and a rebuild keeps it;
+- the exact reviewed instruction asks for standard Tokyo Japanese, one reading
+  only, about 75% of normal conversational speed, and natural connected
+  phrasing;
+- mono 16-bit PCM at 24 kHz, wrapped locally as a finite `.wav`.
+
+The four audition voices were all accepted as a useful cross-section, so there
+is no ranking or preferred fallback. `voicevox_speed` remains a word-engine
+setting and cannot re-bill the sentences. Leave `sentence_provider` unset to
+keep sentences on VOICEVOX; unless `voicevox_sentence_speaker` is set, one
+VOICEVOX voice then does everything.
 
 If one reviewed sentence needs an explicit reading, add sparse, human-owned
 `spoken_japanese` to that example in `vocabulary.json`:
@@ -175,29 +176,12 @@ fingerprint and the audio write-ahead record, so editing it makes only that
 clip stale and `janki audio --examples` rewrites the same filename in place.
 Empty overrides stay absent from the record and change nothing.
 
-The current `/v1/audio/speech` schema lists `tts-1`, `tts-1-hd`,
-`gpt-4o-mini-tts`, and its dated snapshot. The API does not apply
-`instructions` to `tts-1` or `tts-1-hd`, so janki refuses those models while
-instructions are configured rather than recording steering they ignored.
-Those two older models also support only `alloy`, `ash`, `coral`, `echo`,
-`fable`, `onyx`, `nova`, `sage`, and `shimmer`; the 13-name voice list above is
-for the shipped GPT-4o mini TTS model. A blank model is refused locally. Both
-the effective spoken input and the configured instructions must be valid UTF-8
-and have a 4,096-character API limit; janki checks the whole selected run
-before synthesis, so a deterministic request refusal cannot land earlier paid
-clips.
-
-Newer generative audio families are not drop-in `/v1/audio/speech` models.
-OpenAI positions `gpt-audio-1.5` as its best voice model through Chat
-Completions and `gpt-realtime-1.5` as its best realtime voice model; the newer
-`gpt-realtime-2.1` emphasizes reasoning, tools, noise, silence and interruption
-handling rather than read-aloud fidelity. Their response instructions are
-guidance, not a guarantee that the output repeats exact text. An earlier
-`gpt-audio` measurement answered 「日本語を話しますか。」 instead of reading
-it; see M5.7 of `IMPLEMENTATION_PLAN.md`. Before replacing the file-oriented
-speech provider, audition current TTS, `gpt-audio-1.5`, and
-`gpt-realtime-1.5` blindly on the same reviewed Japanese sentence set. The
-`spoken_japanese` contract remains useful whichever provider wins.
+The Realtime instructions are guidance rather than a mathematical guarantee
+that the model repeats exact text. That is why a reviewed misreading is fixed
+with the sparse `spoken_japanese` input above, not with code that tries to read
+Japanese or audit a transcript. The old `/v1/audio/speech` provider and its
+single `onyx`/MP3 path were removed when this profile was accepted; there is no
+legacy dispatch path that can silently keep using it.
 
 ## Changing a voice re-voices only what that voice said
 
@@ -227,14 +211,34 @@ examples changes neither address.
 > silently ignored on import — which matters most for a clip upgrading from a
 > guessed accent to a forced one, since the note text does not change either.
 > If a re-voiced clip sounds unchanged after an import, delete the file from
-> `collection.media` and import again. **Switching engines changes the file
-> extension** — VOICEVOX writes `.wav`, OpenAI `.mp3` — so the note's `[sound:]`
-> reference is repointed and the old clip is left behind unreferenced. Follow
-> that one with `janki audio --examples --prune`.
+> `collection.media` and import again. VOICEVOX and Realtime both write `.wav`,
+> so switching between them rewrites the identity-addressed name in place; the
+> ledger's provider/profile comparison is what makes it stale.
 
 ## Interrupted audio and recovery
 
-Each paid result follows a small write-ahead transaction:
+Realtime adds a provider-call journal in front of the existing paid-byte
+transaction. Before a WebSocket request can leave, `data/operations.json`
+records one-use authority. A terminal response is captured as its exact text
+frames under `data/.pending/`: each received frame is appended and fsynced to
+its operation-bound spool before janki even parses that frame as JSON. A valid
+terminal stream then becomes the finite captured envelope before any base64 PCM
+is decoded. The operation can become `committed` only inside the callback that
+writes the matching audio stage and `pending_audio` row. A captured response
+therefore resumes locally; a `dispatching`, `running`, or `outcome_unknown`
+call is never sent again, and a partial or malformed stream remains evidence
+until that operation is explicitly settled. `janki operations --show-reply ID`
+passes a complete envelope through byte-for-byte; for a nonterminal stream it
+prints a JSON view preserving each exact committed text-frame payload and
+boundary without settling the operation. Ending the call first adopts the one
+valid frame that may have been fsynced immediately before its journal-head
+write failed. An exact audio rerun may seal terminal frames already on disk and
+resume them locally even after `outcome_unknown`; it never opens a new
+transport. If response frames from a possibly sent call remain without
+committed audio, ordinary forget refuses them; discarding that paid evidence
+requires explicit `operations --forget --force`.
+
+The decoded paid result then follows the ordinary audio transaction:
 
 1. janki writes the bytes under `data/media/audio/.pending/` and records their
    exact request, provider profile, target filename, and SHA-256 in the sparse
@@ -254,10 +258,10 @@ stale audio, and a build refuses while one is unresolved: rerun the same
 `janki audio` selection first. If the record content, target, and complete
 render profile are still identical, that rerun verifies the staged SHA and
 adopts the paid bytes without another provider call. A relevant edit to the
-displayed sentence, effective spoken input, voice, configured instructions, or
-model is a different request and is never allowed to adopt them. A corrupt
-matching stage refuses before another provider call; `--force` is the explicit
-authorization to replace it.
+displayed sentence, effective spoken input, selected voice, prompt, model, or
+request schema is a different request and is never allowed to adopt them. A
+corrupt matching stage refuses before another provider call; `--force` is the
+explicit authorization to replace it.
 `--prune` protects both the pending target and its stage while recovery is
 possible, and records ledger removals before deleting unreferenced bytes. The
 audio transaction holds the normalized file, every deck definition, and every

@@ -9,7 +9,9 @@ one, and the one an expression-only check misses.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -33,6 +35,7 @@ from japanese_anki.models import (
     VocabularyRecord,
     mark_provisional,
 )
+from japanese_anki.tts.openai_realtime import OpenAiRealtimePool
 
 TODAY = date.today().isoformat()
 
@@ -283,7 +286,7 @@ def test_stale_audio_sees_each_durable_inline_spoken_request(
     filename = (
         "janki-"
         f"{example_audio_filename_fingerprint(base, ExampleSentence(japanese=sentence))}"
-        ".mp3"
+        ".wav"
     )
 
     def inline(spoken_japanese: str) -> dict[str, Any]:
@@ -308,23 +311,19 @@ def test_stale_audio_sees_each_durable_inline_spoken_request(
         },
     )
     (root / "janki.toml").write_text(
-        CONFIG
-        + '\n[tts]\nsentence_provider = "openai"\n'
-        + 'openai_instructions = "Global."\n',
+        CONFIG + '\n[tts]\nsentence_provider = "openai-realtime"\n',
         encoding="utf-8",
     )
+    profile = OpenAiRealtimePool().profile_for(record_id)
     book = ledger.load(root / "ledger.json")
     book.record_audio(
         record_id,
         file=filename,
         of="example",
-        provider="openai",
-        voice="onyx",
-        speed=1.0,
-        settings={
-            "model": "gpt-4o-mini-tts",
-            "instructions": "Global.",
-        },
+        provider=profile.name,
+        voice=profile.voice,
+        speed=profile.speed,
+        settings=profile.settings,
         content_fp=example_audio_content_fingerprint(
             ExampleSentence(japanese=sentence, spoken_japanese="まいにち話す。")
         ),
@@ -419,12 +418,12 @@ def test_status_reports_word_audio_from_the_previous_configured_voice_as_stale(
     assert "Stale audio: 1" in capsys.readouterr().out
 
 
-def test_word_voice_does_not_decide_whether_openai_examples_are_stale(
+def test_word_voice_does_not_decide_whether_realtime_examples_are_stale(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     example = ExampleSentence(
         japanese="毎日話す。",
-        audio="audio/janki-example.mp3",
+        audio="audio/janki-example.wav",
     )
     record = _record(
         "話す",
@@ -435,21 +434,22 @@ def test_word_voice_does_not_decide_whether_openai_examples_are_stale(
     (root / "janki.toml").write_text(
         CONFIG
         + "\n[tts]\nvoicevox_speaker = 53\n"
-        + 'sentence_provider = "openai"\nopenai_voice = "onyx"\n',
+        + 'sentence_provider = "openai-realtime"\n',
         encoding="utf-8",
     )
     config = ProjectConfig.load(root)
     words = audio_application.resolve_word_provider(config, None)
     sentences = audio_application.resolve_sentence_provider(config, None, words)
+    profile = sentences.profile_for(record.id)
     book = ledger.load(root / "ledger.json")
     book.record_audio(
         record.id,
-        file="janki-example.mp3",
+        file="janki-example.wav",
         of="example",
-        provider=sentences.name,
-        voice=sentences.voice,
-        speed=sentences.speed,
-        settings=sentences.settings,
+        provider=profile.name,
+        voice=profile.voice,
+        speed=profile.speed,
+        settings=profile.settings,
         content_fp=example_audio_content_fingerprint(example),
     )
     book.save()
@@ -464,7 +464,7 @@ def test_status_compares_each_examples_exact_spoken_japanese_request(
 ) -> None:
     example = ExampleSentence(
         japanese="毎日話す。",
-        audio="audio/janki-example.mp3",
+        audio="audio/janki-example.wav",
         spoken_japanese="まいにち話す。",
     )
     record = _record("話す", "はなす")
@@ -473,23 +473,22 @@ def test_status_compares_each_examples_exact_spoken_japanese_request(
     record.examples = [example]
     root = _project(tmp_path, [record.to_dict()])
     (root / "janki.toml").write_text(
-        CONFIG
-        + '\n[tts]\nsentence_provider = "openai"\n'
-        + 'openai_instructions = "Global."\n',
+        CONFIG + '\n[tts]\nsentence_provider = "openai-realtime"\n',
         encoding="utf-8",
     )
     config = ProjectConfig.load(root)
     words = audio_application.resolve_word_provider(config, None)
     sentences = audio_application.resolve_sentence_provider(config, None, words)
+    profile = sentences.profile_for(record.id)
     book = ledger.load(root / "ledger.json")
     book.record_audio(
         record.id,
-        file="janki-example.mp3",
+        file="janki-example.wav",
         of="example",
-        provider=sentences.name,
-        voice=sentences.voice,
-        speed=sentences.speed,
-        settings=sentences.settings,
+        provider=profile.name,
+        voice=profile.voice,
+        speed=profile.speed,
+        settings=profile.settings,
         content_fp=example_audio_content_fingerprint(example),
     )
     book.save()
@@ -504,44 +503,6 @@ def test_status_compares_each_examples_exact_spoken_japanese_request(
 
     assert _status(root) == 0
     assert "Stale audio: 1" in capsys.readouterr().out
-
-
-def test_status_warns_when_shadowed_spoken_japanese_exceeds_the_api_limit(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    record = _raw(
-        "話す",
-        "はなす",
-        examples=[
-            {
-                "japanese": "毎日話す。",
-                "spoken_japanese": "長" * 4097,
-            }
-        ],
-    )
-    inline = _raw(
-        "話す",
-        "はなす",
-        examples=[{"japanese": "毎日話す。"}],
-    )
-    root = _project(
-        tmp_path,
-        [record],
-        {"inline": {"deck": {"name": "Inline"}, "notes": [inline]}},
-    )
-    (root / "janki.toml").write_text(
-        CONFIG + '\n[tts]\nsentence_provider = "openai"\n',
-        encoding="utf-8",
-    )
-
-    assert _status(root) == 0
-
-    captured = capsys.readouterr()
-    assert "cannot accept 1 example-audio request" in captured.err
-    assert record["id"] in captured.err
-    assert "4096-character limit" in captured.err
-    assert "'janki audio --examples' will refuse before synthesis" in captured.err
 
 
 def test_pitch_accent_is_counted_now_that_the_schema_carries_it(
@@ -2197,6 +2158,394 @@ def test_the_detail_says_which_call_and_whether_a_retry_costs_again(
     assert f"'janki operations --forget {operation_id}'" in out
 
 
+def test_operation_listing_points_partial_realtime_frames_at_show_reply(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-partial-listing"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ#example:janki-example.wav",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    journal.append_response_frame(
+        operation_id,
+        '{"type":"session.created","session":{"model":"gpt-realtime-1.5"}}',
+    )
+    journal.end(operation_id, detail="connection ended")
+
+    assert _status(root, "--operations") == 0
+
+    listed = capsys.readouterr().out
+    assert "durable response frames" in listed
+    assert f"janki operations --show-reply {operation_id}" in listed
+    assert (
+        f"'janki operations --forget {operation_id} --force'" in listed
+    )
+    assert f"'janki operations --forget {operation_id}'" not in listed
+    assert "no answer came back" not in listed
+
+
+def test_before_send_realtime_handshake_lists_ordinary_forget(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-wrong-handshake-before-send"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ#example:janki-example.wav",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    journal.append_response_frame(
+        operation_id,
+        '{"type":"session.created","session":{"model":"wrong-model"}}',
+    )
+    journal.advance(
+        operation_id,
+        "failed_before_send",
+        detail="wrong Realtime session handshake before response.create",
+    )
+
+    assert _status(root, "--operations") == 0
+
+    listed = capsys.readouterr().out
+    action_lines = {
+        line.strip()
+        for line in listed.splitlines()
+        if line.strip().startswith("action:")
+    }
+    assert action_lines == {
+        "action: retire this before-send operation with "
+        f"'janki operations --forget {operation_id}'"
+    }
+    assert operation_id in listed
+    assert "state: failed_before_send" in listed
+    assert "paid output" not in listed.lower()
+    assert "risks a second charge" not in listed
+    assert "--force" not in listed
+
+    assert _operations(root, "--forget", operation_id) == 0
+    assert f"Forgot {operation_id}." in capsys.readouterr().out
+    assert operation_id not in operations.OperationJournal.load(path).operations
+
+
+def _leave_committed_realtime_before_forget(
+    root: Path,
+    operation_id: str,
+) -> tuple[Path, Path, Path]:
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ#example:janki-example.wav",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    frames = (
+        '{"type":"session.created","session":{"model":"gpt-realtime-1.5"}}',
+        '{"type":"response.output_audio.delta","delta":"AQI="}',
+        '{"type":"response.done","response":{"status":"completed"}}',
+    )
+    for frame in frames:
+        journal.append_response_frame(operation_id, frame)
+    envelope = json.dumps(
+        {
+            "version": 1,
+            "endpoint": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "request": {"type": "response.create"},
+            "frames": [
+                {"encoding": "utf-8", "payload": frame}
+                for frame in frames
+            ],
+        },
+        separators=(",", ":"),
+    ).encode()
+    captured = journal.capture_result(
+        operation_id,
+        lambda: operations.capture_artifact(
+            path, operation_id, envelope
+        ),
+    )
+    assert captured.artifact is not None
+    committed = journal.commit_result(operation_id, lambda: None)
+    assert committed.state == "committed"
+    assert committed.response_spool is not None
+    return (
+        path,
+        path.parent / captured.artifact.relative_name,
+        path.parent / committed.response_spool.relative_name,
+    )
+
+
+def test_committed_realtime_reply_lists_ordinary_forget_after_crash(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    operation_id = "op-committed-realtime-reply"
+    path, artifact, spool = _leave_committed_realtime_before_forget(
+        root, operation_id
+    )
+    assert artifact.exists()
+    assert spool.exists()
+
+    assert _status(root, "--operations") == 0
+
+    listed = capsys.readouterr().out
+    action_lines = {
+        line.strip()
+        for line in listed.splitlines()
+        if line.strip().startswith("action:")
+    }
+    assert action_lines == {
+        "action: retire this committed operation with "
+        f"'janki operations --forget {operation_id}'"
+    }
+    assert operation_id in listed
+    assert "state: committed" in listed
+    assert "the exact reply is recoverable" in listed
+    assert f"janki operations --show-reply {operation_id}" in listed
+    assert "--force" not in listed
+
+    assert _operations(root, "--forget", operation_id) == 0
+    assert f"Forgot {operation_id}." in capsys.readouterr().out
+    assert operation_id not in operations.OperationJournal.load(path).operations
+    assert not artifact.exists()
+    assert not spool.exists()
+
+
+def test_committed_realtime_missing_reply_lists_ordinary_forget_after_crash(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    operation_id = "op-committed-realtime-missing-reply"
+    path, artifact, spool = _leave_committed_realtime_before_forget(
+        root, operation_id
+    )
+    artifact.unlink()
+    assert spool.exists()
+
+    assert _status(root, "--operations") == 0
+
+    listed = capsys.readouterr().out
+    action_lines = {
+        line.strip()
+        for line in listed.splitlines()
+        if line.strip().startswith("action:")
+    }
+    assert action_lines == {
+        "action: retire this committed operation with "
+        f"'janki operations --forget {operation_id}'"
+    }
+    assert operation_id in listed
+    assert "state: committed" in listed
+    assert "records a captured reply" in listed
+    assert "exact recovery bytes are unavailable" in listed
+    assert f"--show-reply {operation_id}" not in listed
+    assert "--force" not in listed
+
+    assert _operations(root, "--forget", operation_id) == 0
+    assert f"Forgot {operation_id}." in capsys.readouterr().out
+    assert operation_id not in operations.OperationJournal.load(path).operations
+    assert not spool.exists()
+
+
+def test_committed_nonstreaming_reply_lists_ordinary_forget_after_crash(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-committed-extraction-reply"
+    journal.authorize(
+        operation_id,
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    captured = journal.capture_result(
+        operation_id,
+        lambda: operations.capture_artifact(
+            path,
+            operation_id,
+            b'{"content":[{"type":"text","text":"complete extraction"}]}',
+        ),
+    )
+    assert captured.artifact is not None
+    committed = journal.commit_result(operation_id, lambda: None)
+    assert committed.state == "committed"
+    assert committed.response_spool is None
+    artifact = path.parent / captured.artifact.relative_name
+    assert artifact.exists()
+
+    assert _status(root, "--operations") == 0
+
+    listed = capsys.readouterr().out
+    action_lines = {
+        line.strip()
+        for line in listed.splitlines()
+        if line.strip().startswith("action:")
+    }
+    assert action_lines == {
+        "action: retire this committed operation with "
+        f"'janki operations --forget {operation_id}'"
+    }
+    assert operation_id in listed
+    assert "state: committed" in listed
+    assert "the exact reply is recoverable" in listed
+    assert f"janki operations --show-reply {operation_id}" in listed
+    assert "--force" not in listed
+
+    assert _operations(root, "--forget", operation_id) == 0
+    assert f"Forgot {operation_id}." in capsys.readouterr().out
+    assert operation_id not in operations.OperationJournal.load(path).operations
+    assert not artifact.exists()
+
+
+def test_operation_listing_does_not_offer_show_reply_for_missing_recorded_frames(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-missing-recorded-frames"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ/example-0",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    journal.append_response_frame(operation_id, '{"type":"session.created"}')
+    journal.end(operation_id, detail="connection ended")
+    (path.parent / ".pending" / f"{operation_id}.frames").unlink()
+
+    assert _status(root, "--operations") == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    commands = {line.strip() for line in lines if line.strip().startswith("action:")}
+    assert "    exact response frames are unavailable" in lines
+    assert commands == {
+        "action: explicitly discard their record with "
+        f"'janki operations --forget {operation_id} --force'"
+    }
+
+
+def test_operation_listing_requires_force_for_a_torn_unrecorded_frame(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-torn-unrecorded-frame"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ/example-0",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    spool = path.parent / ".pending" / f"{operation_id}.frames"
+    with spool.open("ab") as handle:
+        handle.write(b"torn provider frame")
+        handle.flush()
+        os.fsync(handle.fileno())
+    journal.end(operation_id, detail="connection ended")
+
+    assert _status(root, "--operations") == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    commands = {line.strip() for line in lines if line.strip().startswith("action:")}
+    assert "    exact response frames are unavailable" in lines
+    assert commands == {
+        "action: explicitly discard their record with "
+        f"'janki operations --forget {operation_id} --force'"
+    }
+
+
+def test_operation_listing_identifies_a_valid_crash_extension_as_recoverable(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-valid-crash-extension"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ/example-0",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    journal.append_response_frame(operation_id, '{"type":"session.created"}')
+    spool = path.parent / ".pending" / f"{operation_id}.frames"
+    payload = b'{"type":"response.output_audio.delta","delta":"AQI="}'
+    header = len(payload).to_bytes(8, "big")
+    extension = header + payload + hashlib.sha256(header + payload).digest()
+    with spool.open("ab") as handle:
+        handle.write(extension)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    assert _status(root, "--operations") == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    assert "    an exact newly durable response frame awaits recovery" in lines
+    assert "    exact response frames are unavailable" not in lines
+    assert (
+        "    if nothing is actually running, that process is gone: "
+        f"'janki operations --end {operation_id}'"
+    ) in lines
+    force_action = (
+        "action: explicitly discard their record with "
+        f"'janki operations --forget {operation_id} --force'"
+    )
+    assert force_action not in {line.strip() for line in lines}
+
+
 def test_a_saved_reply_is_named_so_it_can_be_looked_at(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2626,6 +2975,136 @@ def test_show_reply_streams_exact_bytes_without_settling_the_operation(
     assert (target.stat().st_dev, target.stat().st_ino) == target_identity
 
 
+def test_show_reply_exposes_exact_nonterminal_realtime_frames_without_settling(
+    tmp_path: Path,
+    capfdbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-partial-realtime"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ/example-0",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    frames = (
+        '{"type":"session.created","session":{"model":"gpt-realtime-1.5"}}',
+        '{ "type": "response.output_audio.delta", "delta": "AQI=", "x": 1, "x": 2 }',
+    )
+    for frame in frames:
+        journal.append_response_frame(operation_id, frame)
+    journal.end(operation_id, detail="socket closed before a terminal frame")
+
+    spool = root / "data" / ".pending" / f"{operation_id}.frames"
+    journal_wire = path.read_bytes()
+    journal_identity = (path.stat().st_dev, path.stat().st_ino)
+    spool_wire = spool.read_bytes()
+    spool_identity = (spool.stat().st_dev, spool.stat().st_ino)
+
+    assert _operations(root, "--show-reply", operation_id) == 0
+
+    captured = capfdbinary.readouterr()
+    assert captured.err == b""
+    assert json.loads(captured.out) == {
+        "version": 1,
+        "kind": "janki-response-frame-spool",
+        "complete": False,
+        "frames": [
+            {"encoding": "utf-8", "payload": payload} for payload in frames
+        ],
+    }
+    assert operations.OperationJournal.load(path).operations[
+        operation_id
+    ].state == "outcome_unknown"
+    assert path.read_bytes() == journal_wire
+    assert (path.stat().st_dev, path.stat().st_ino) == journal_identity
+    assert spool.read_bytes() == spool_wire
+    assert (spool.stat().st_dev, spool.stat().st_ino) == spool_identity
+
+
+def test_show_reply_refuses_a_replaced_realtime_spool(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-replaced-realtime-spool"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ/example-0",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    journal.append_response_frame(operation_id, '{"type":"session.created"}')
+    journal.end(operation_id)
+    spool = root / "data" / ".pending" / f"{operation_id}.frames"
+    original = spool.with_name("detached-original.frames")
+    spool.rename(original)
+    replacement = b"replacement must survive"
+    spool.write_bytes(replacement)
+
+    assert _operations(root, "--show-reply", operation_id) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "exact response spool is unavailable" in captured.err
+    assert spool.read_bytes() == replacement
+    assert original.exists()
+
+
+def test_show_reply_does_not_adopt_an_unjournalled_crash_extension(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-crash-extension"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ/example-0",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    journal.append_response_frame(operation_id, '{"type":"session.created"}')
+    spool = root / "data" / ".pending" / f"{operation_id}.frames"
+    payload = b'{"type":"response.output_audio.delta","delta":"AQI="}'
+    header = len(payload).to_bytes(8, "big")
+    extension = header + payload + hashlib.sha256(header + payload).digest()
+    with spool.open("ab") as handle:
+        handle.write(extension)
+        handle.flush()
+        os.fsync(handle.fileno())
+    journal_wire = path.read_bytes()
+    spool_wire = spool.read_bytes()
+
+    assert _operations(root, "--show-reply", operation_id) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "recovery must finish" in captured.err
+    assert path.read_bytes() == journal_wire
+    assert spool.read_bytes() == spool_wire
+
+
 def test_recorded_reply_with_missing_bytes_is_not_advertised_as_readable(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -2700,6 +3179,43 @@ def test_ending_a_call_then_forgetting_it_unblocks_the_next(
     assert not operations.OperationJournal.load(
         _operations_path(root)
     ).operations
+
+
+def test_ending_a_call_with_partial_frames_points_to_exact_recovery_or_force(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-end-with-partial-frames"
+    journal.authorize(
+        operation_id,
+        kind="audio-realtime",
+        source_file="word:止む:やむ/example-0",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="gpt-realtime-1.5",
+    )
+    journal.begin_response_capture(operation_id)
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "running")
+    journal.append_response_frame(operation_id, '{"type":"session.created"}')
+
+    assert _operations(root, "--end", operation_id) == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    commands = {line.strip() for line in lines if line.strip().startswith("action:")}
+    assert "Exact provider response frames remain on disk." in lines
+    assert (
+        "Rerun the exact matching provider command to recover them without a new "
+        "dispatch."
+    ) in lines
+    assert commands == {
+        f"action: inspect them with 'janki operations --show-reply {operation_id}'",
+        "action: explicitly discard them with "
+        f"'janki operations --forget {operation_id} --force'",
+    }
 
 
 def test_forgetting_a_call_still_in_flight_is_refused(
@@ -2868,7 +3384,9 @@ def test_operations_help_explains_the_decision_and_cleanup_split(
     )
     assert "missing or replaced pending namespace is preserved" in help_text
     assert "explicitly confirm discarding a reply" in help_text
-    assert "write the exact currently bound provider reply to stdout" in help_text
+    assert "write the exact currently bound provider reply" in help_text
+    assert "json view preserving exact frame boundaries" in help_text
+    assert "incomplete streaming response" in help_text
     assert "redirect stdout to export it" in help_text
     assert "replacement public names are never adopted" in help_text
 

@@ -179,7 +179,7 @@ def test_no_terminal_state_can_be_reused(tmp_path: Path, terminal: str) -> None:
 # --- the transition nobody may make -----------------------------------------
 
 
-@pytest.mark.parametrize("target", ["dispatching", "running", "result_captured"])
+@pytest.mark.parametrize("target", ["dispatching", "running"])
 def test_an_unknown_outcome_never_returns_to_a_live_state(
     tmp_path: Path, target: str
 ) -> None:
@@ -193,6 +193,26 @@ def test_an_unknown_outcome_never_returns_to_a_live_state(
 
     with pytest.raises(OperationError, match="cannot move"):
         journal.advance("op-1", target)
+
+
+def test_an_unknown_outcome_accepts_only_an_exact_late_result_receipt(
+    tmp_path: Path,
+) -> None:
+    """Durable late evidence can strengthen what janki knows without making
+    the call live again or granting another dispatch."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    journal.advance("op-1", "outcome_unknown", detail="the socket died")
+
+    with pytest.raises(OperationError, match="capture_result"):
+        journal.advance("op-1", "result_captured")
+
+    captured = _capture_result(journal, b"late exact provider reply")
+
+    assert captured.state == "result_captured"
+    assert captured.artifact is not None
+    assert journal.read_reply("op-1") == b"late exact provider reply"
 
 
 def test_result_capture_requires_the_receipt_binding_route(tmp_path: Path) -> None:

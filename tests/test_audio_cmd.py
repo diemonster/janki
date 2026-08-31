@@ -2740,7 +2740,7 @@ def test_current_pending_audio_key_binds_the_exact_spoken_japanese(
         [item],
         book=book,
         word_provider=words,
-        sentence_provider=sentences,
+        prepared_examples={item.id: [sentences]},
     )
 
     assert keys == {
@@ -3501,125 +3501,31 @@ def test_the_command_persists_a_duplicate_reference_repair_without_a_write(
     assert provider.said == []
 
 
-def test_an_openai_model_that_cannot_honor_instructions_refuses_in_preflight() -> None:
-    from japanese_anki.tts import TtsError
-    from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
-
-    requests: list[object] = []
-
-    def transport(*args: object) -> tuple[int, bytes]:
-        requests.append(args)
-        return 200, b"ID3 fake"
-
-    words = FakeVoice(voice=13)
-    with pytest.raises(TtsError, match="does not support instructions"):
-        OpenAiSpeechProvider(
-            model="tts-1",
-            instructions="Read slowly.",
-            api_key="not-a-real-key",
-            transport=transport,
-        )
-
-    assert words.said == []
-    assert requests == []
-
-
-def test_an_over_limit_openai_sentence_refuses_the_whole_run_in_preflight(
-    tmp_path: Path,
-) -> None:
-    from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
-
-    requests: list[object] = []
-
-    def transport(*args: object) -> tuple[int, bytes]:
-        requests.append(args)
-        return 200, b"ID3 fake"
-
-    words = FakeVoice(voice=13)
-    sentences = OpenAiSpeechProvider(
-        instructions="Read slowly.",
-        api_key="not-a-real-key",
-        transport=transport,
-    )
-    item = record(
-        examples=[
-            ExampleSentence(japanese="一。"),
-            ExampleSentence(japanese="x" * 4097),
-        ]
-    )
-
-    with pytest.raises(AudioError, match="4096-character limit"):
-        generate_audio(
-            [item],
-            provider=words,
-            sentence_provider=sentences,
-            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
-            media_dir=tmp_path / "media",
-            words=True,
-            examples=True,
-        )
-
-    assert words.said == []
-    assert requests == []
-    assert not (tmp_path / "media").exists()
-
-
-def test_a_blank_openai_model_refuses_before_word_or_sentence_synthesis(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = project(
-        tmp_path,
-        [record(examples=[ExampleSentence(japanese="橋を渡る。")])],
-    )
-    (root / "janki.toml").write_text(
-        (root / "janki.toml").read_text(encoding="utf-8")
-        + '\n[tts]\nsentence_provider = "openai"\nopenai_model = "   "\n',
-        encoding="utf-8",
-    )
-    requests: list[object] = []
-    words = FakeVoice()
-    monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")
-    monkeypatch.setattr(audio_application, "resolve_word_provider", lambda config, chosen: words)
-    monkeypatch.setattr(
-        audio_application.openai_tts,
-        "urllib_transport",
-        lambda *args, **kwargs: (requests.append((args, kwargs)) or (200, b"ID3")),
-    )
-
-    assert cli.main(["--root", str(root), "audio", "--words", "--examples"]) == 1
-
-    assert words.said == []
-    assert requests == []
-    assert not (root / "media").exists()
-
-
 def test_invalid_utf8_spoken_japanese_refuses_the_whole_run_in_preflight(
     tmp_path: Path,
 ) -> None:
-    from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
+    from japanese_anki.tts.openai_realtime import OpenAiRealtimeProvider
 
     requests: list[object] = []
 
-    def encoding_transport(*args: object) -> tuple[int, bytes]:
-        json.dumps(args[2], ensure_ascii=False).encode("utf-8")
+    def encoding_transport(*args: object) -> list[dict[str, object]]:
         requests.append(args)
-        return 200, b"ID3"
+        return []
 
     words = FakeVoice()
-    sentences = OpenAiSpeechProvider(
-        instructions="Global.",
-        api_key="not-a-real-key",
-        transport=encoding_transport,
-    )
     item = record(
         examples=[
             ExampleSentence(japanese="一。"),
             ExampleSentence(japanese="二。", spoken_japanese="\ud800"),
         ]
     )
+    sentences = OpenAiRealtimeProvider(
+        record_id=item.id,
+        api_key="not-a-real-key",
+        transport=encoding_transport,
+    )
 
-    with pytest.raises(AudioError, match="speech input.*valid UTF-8"):
+    with pytest.raises(AudioError, match="Realtime input.*valid UTF-8"):
         generate_audio(
             [item],
             provider=words,
@@ -3683,21 +3589,24 @@ def test_editing_one_spoken_japanese_revoices_only_that_clip_in_place(
     )
 
 
-def test_the_word_rate_does_not_reach_the_openai_sentence_provider(tmp_path: Path) -> None:
+def test_the_word_rate_does_not_reach_the_realtime_sentence_provider(
+    tmp_path: Path,
+) -> None:
     """`voicevox_speed` is a VOICEVOX knob, not an OpenAI sentence setting.
 
-    OpenAI supports a separate speed field, but janki deliberately leaves it at
-    the API's 1.0 default. Passing the word setting through would tie every
-    sentence's staleness to an unrelated knob and re-bill the collection.
+    Realtime pace is fixed by the reviewed learner prompt. Passing the word
+    setting through would tie every sentence's staleness to an unrelated knob
+    and re-bill the collection.
     """
     (tmp_path / "janki.toml").write_text(
-        '[tts]\nsentence_provider = "openai"\nvoicevox_speed = 0.7\n', encoding="utf-8"
+        '[tts]\nsentence_provider = "openai-realtime"\nvoicevox_speed = 0.7\n',
+        encoding="utf-8",
     )
     config = ProjectConfig.load(tmp_path)
 
     sentences = audio_application.resolve_sentence_provider(config, None, object())
 
-    assert sentences.name == "openai"
+    assert sentences.name == "openai-realtime"
     assert sentences.speed == 1.0, "the word engine's rate stayed out of it"
 
 

@@ -538,11 +538,12 @@ def _dashboard_tour(*, open_by_default: bool) -> str:
         "supply kanji facts and stroke diagrams. They need no account or API "
         "key.</dd></div>"
         "<div><dt>VOICEVOX · local network engine</dt><dd>It creates word audio "
-        "and also reads example sentences unless OpenAI is selected for them. "
+        "and also reads example sentences unless OpenAI Realtime is selected. "
         "It needs the local engine running, but no account or paid API call.</dd></div>"
-        "<div><dt>OpenAI · optional paid network audio</dt><dd>It can read "
-        "example sentences naturally and uses <code>OPENAI_API_KEY</code>. The "
-        "button names the model before a paid call.</dd></div>"
+        "<div><dt>OpenAI Realtime · optional paid network audio</dt><dd>It "
+        "reads example sentences with a stable per-record voice and uses "
+        "<code>OPENAI_API_KEY</code>. The button names the model before a paid "
+        "call.</dd></div>"
         "<div><dt>Codex · optional network enrichment through its CLI</dt><dd>It is "
         "the alternative bare-record <code>janki enrich --ai</code> provider; set "
         "<code>enrich_provider</code> to <code>codex</code> to select it. It "
@@ -841,7 +842,7 @@ def render_finish(
             and provider.access == "paid-network"
         ):
             provider_name = {
-                "openai": "OpenAI",
+                "openai-realtime": "OpenAI",
                 "voicevox": "VOICEVOX",
             }.get(provider.name.lower(), provider.name)
             model = provider.settings.get("model", "").strip()

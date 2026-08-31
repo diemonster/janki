@@ -39,6 +39,7 @@ import os
 import stat
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
+from functools import partial
 from pathlib import Path
 from typing import Literal
 
@@ -50,8 +51,11 @@ from japanese_anki.models import (
     VocabularyRecord,
 )
 from japanese_anki.tts import (
+    JournaledSpeechProvider,
+    SentenceProfileSelector,
     SpeechProvider,
     TtsError,
+    sentence_profile_for,
     validate_utterance,
 )
 
@@ -555,30 +559,37 @@ def _pending_current_file(
     )
     if recovery is None:
         return None
-    if not recovery.adopt_required:
-        return recovery.key, recovery.expected
-    arguments = {
-        "of": of,
-        "target": expected,
-        "request_input": request_input,
-        "forced_accent": forced_accent,
-        "content_fp": content_fp,
-        "provider": provider.name,
-        "voice": provider.voice,
-        "speed": provider.speed,
-        "settings": provider.settings,
-    }
-    recorded = book.record_pending_audio(
-        record_id,
-        **arguments,
-        staged_file=recovery.staged_name,
-        staged_sha256=recovery.staged_sha256,
-        **(details or {}),
-    )
-    if recorded != recovery.key:  # pragma: no cover - ledger owns the identity formula
-        raise SynthesisError("Pending audio identity changed during stage recovery")
-    if persist_pending is not None:
-        persist_pending(book, recovery.key)
+    if recovery.adopt_required:
+        arguments = {
+            "of": of,
+            "target": expected,
+            "request_input": request_input,
+            "forced_accent": forced_accent,
+            "content_fp": content_fp,
+            "provider": provider.name,
+            "voice": provider.voice,
+            "speed": provider.speed,
+            "settings": provider.settings,
+        }
+        recorded = book.record_pending_audio(
+            record_id,
+            **arguments,
+            staged_file=recovery.staged_name,
+            staged_sha256=recovery.staged_sha256,
+            **(details or {}),
+        )
+        if recorded != recovery.key:  # pragma: no cover - ledger owns the identity formula
+            raise SynthesisError("Pending audio identity changed during stage recovery")
+        if persist_pending is not None:
+            persist_pending(book, recovery.key)
+    if isinstance(provider, JournaledSpeechProvider):
+        provider.reconcile_journaled(
+            request_input,
+            forced_accent=forced_accent,
+            source_file=_journal_source(record_id, of=of, target=expected),
+            source_sha256=content_fp,
+            audio_sha256=recovery.staged_sha256,
+        )
     return recovery.key, recovery.expected
 
 
@@ -644,6 +655,32 @@ def _write(path: Path, data: bytes) -> None:
         raise SynthesisError(
             f"Could not save synthesized audio to {path}: {exc}"
         ) from exc
+
+
+def _journal_source(record_id: str, *, of: str, target: str) -> str:
+    """The stable human-readable operation scope for one exact audio target."""
+    return f"{record_id}#{of}:{target}"
+
+
+def _synthesize_and_stage(
+    provider: SpeechProvider,
+    text: str,
+    *,
+    forced_accent: bool,
+    source_file: str,
+    source_sha256: str,
+    persist: Callable[[bytes], str],
+) -> str:
+    """Use a captured paid-reply transaction when the provider offers one."""
+    if isinstance(provider, JournaledSpeechProvider):
+        return provider.synthesize_journaled(
+            text,
+            forced_accent=forced_accent,
+            source_file=source_file,
+            source_sha256=source_sha256,
+            persist=persist,
+        )
+    return persist(provider.synthesize(text, forced_accent=forced_accent))
 
 
 def _word_request(record: VocabularyRecord) -> tuple[str, bool, str | None]:
@@ -725,32 +762,34 @@ def _word_audio(
         result.up_to_date += 1
         return record
 
-    if forced:
-        data = provider.synthesize(utterance, forced_accent=True)
-    else:
-        # The engine reads the kana and picks the accent. Marked, because a
-        # listener cannot tell this clip from a verified one and later work
-        # needs to.
-        data = provider.synthesize(utterance, forced_accent=False)
-
     if stage_only:
-        key = _stage_audio(
-            data,
-            book=book,
-            record_id=record.id,
-            of="word",
-            target=name,
-            request_input=utterance,
+        key = _synthesize_and_stage(
+            provider,
+            utterance,
             forced_accent=forced,
-            content_fp=content_fp,
-            provider=provider,
-            audio_dir=audio_dir,
-            details=details,
-            persist_pending=persist_pending,
+            source_file=_journal_source(record.id, of="word", target=name),
+            source_sha256=content_fp,
+            persist=partial(
+                _stage_audio,
+                book=book,
+                record_id=record.id,
+                of="word",
+                target=name,
+                request_input=utterance,
+                forced_accent=forced,
+                content_fp=content_fp,
+                provider=provider,
+                audio_dir=audio_dir,
+                details=details,
+                persist_pending=persist_pending,
+            ),
         )
         if key not in result.pending_keys:
             result.pending_keys.append(key)
     else:
+        # Without a dictionary pattern, the engine reads the kana and chooses
+        # the accent. The ledger detail above keeps that guess visible.
+        data = provider.synthesize(utterance, forced_accent=forced)
         _write(audio_dir / name, data)
         book.record_audio(
             record.id,
@@ -864,31 +903,40 @@ def _example_audio(
             continue
         content_fp = ledger_mod.example_audio_content_fingerprint(example)
         request_input = ledger_mod.example_audio_request(example)
+        name = (
+            f"janki-"
+            f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
+            f"{provider.suffix}"
+        )
 
         try:
-            data = provider.synthesize(request_input, forced_accent=False)
-            name = (
-                f"janki-"
-                f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
-                f"{provider.suffix}"
-            )
             if stage_only:
-                key = _stage_audio(
-                    data,
-                    book=book,
-                    record_id=record.id,
-                    of="example",
-                    target=name,
-                    request_input=request_input,
+                key = _synthesize_and_stage(
+                    provider,
+                    request_input,
                     forced_accent=False,
-                    content_fp=content_fp,
-                    provider=provider,
-                    audio_dir=audio_dir,
-                    persist_pending=persist_pending,
+                    source_file=_journal_source(
+                        record.id, of="example", target=name
+                    ),
+                    source_sha256=content_fp,
+                    persist=partial(
+                        _stage_audio,
+                        book=book,
+                        record_id=record.id,
+                        of="example",
+                        target=name,
+                        request_input=request_input,
+                        forced_accent=False,
+                        content_fp=content_fp,
+                        provider=provider,
+                        audio_dir=audio_dir,
+                        persist_pending=persist_pending,
+                    ),
                 )
                 if key not in result.pending_keys:
                     result.pending_keys.append(key)
             else:
+                data = provider.synthesize(request_input, forced_accent=False)
                 _write(audio_dir / name, data)
         except AudioError:
             raise
@@ -942,7 +990,7 @@ def generate_audio(
     provider: SpeechProvider,
     book: ledger_mod.Ledger,
     media_dir: Path,
-    sentence_provider: SpeechProvider | None = None,
+    sentence_provider: SpeechProvider | SentenceProfileSelector | None = None,
     words: bool = True,
     examples: bool = False,
     ids: Sequence[str] | None = None,
@@ -1058,7 +1106,7 @@ def generate_audio(
 def prepare_example_audio_profiles(
     records: Sequence[VocabularyRecord],
     *,
-    sentence_provider: SpeechProvider,
+    sentence_provider: SpeechProvider | SentenceProfileSelector,
 ) -> dict[str, list[SpeechProvider]]:
     """Resolve and validate every example profile without contacting a provider.
 
@@ -1068,6 +1116,7 @@ def prepare_example_audio_profiles(
     """
     prepared: dict[str, list[SpeechProvider]] = {}
     for record in records:
+        selected = sentence_profile_for(sentence_provider, record.id)
         seen: dict[str, str] = {}
         profiles: list[SpeechProvider] = []
         for example in record.examples:
@@ -1084,8 +1133,8 @@ def prepare_example_audio_profiles(
                 seen[example.japanese] = request_input
             try:
                 if example.japanese:
-                    validate_utterance(sentence_provider, request_input)
-                profiles.append(sentence_provider)
+                    validate_utterance(selected, request_input)
+                profiles.append(selected)
             except TtsError as exc:
                 raise AudioError(f"{record.id}: {exc}") from exc
         prepared[record.id] = profiles
@@ -1330,8 +1379,26 @@ def _preflight_provider_availability(
     )
     required: dict[int, SpeechProvider] = {}
     for requirement in requirements:
-        if requirement.state == "provider-required":
-            required[id(requirement.provider)] = requirement.provider
+        if requirement.state != "provider-required":
+            continue
+        available_for = getattr(requirement.provider, "available_for", None)
+        if callable(available_for):
+            if not available_for(
+                requirement.request_input,
+                forced_accent=requirement.forced_accent,
+                source_file=_journal_source(
+                    requirement.record_id,
+                    of=requirement.kind,
+                    target=requirement.target,
+                ),
+                source_sha256=requirement.content_fingerprint,
+            ):
+                raise AudioError(
+                    f"{requirement.provider.name}: "
+                    f"{requirement.provider.launch_hint}"
+                )
+            continue
+        required[id(requirement.provider)] = requirement.provider
     for engine in required.values():
         if not engine.available():
             raise AudioError(f"{engine.name}: {engine.launch_hint}")
@@ -1731,7 +1798,7 @@ def current_pending_audio_keys(
     *,
     book: ledger_mod.Ledger,
     word_provider: SpeechProvider,
-    sentence_provider: SpeechProvider,
+    prepared_examples: dict[str, list[SpeechProvider]],
 ) -> set[str]:
     """Exact request keys whose no-row stages still belong to current owners."""
     keys: set[str] = set()
@@ -1755,9 +1822,15 @@ def current_pending_audio_keys(
                     settings=word_provider.settings,
                 )
             )
-        for example in record.examples:
+        providers = prepared_examples.get(record.id)
+        if providers is None or len(providers) != len(record.examples):
+            raise AudioError(
+                f"No exact prepared sentence profiles for audio record {record.id!r}."
+            )
+        for position, example in enumerate(record.examples):
             if not example.japanese:
                 continue
+            sentence_provider = providers[position]
             keys.add(
                 book.pending_audio_key_for(
                     record.id,

@@ -4,13 +4,14 @@
 journaled durably **before dispatch**, and its exact response is persisted as a
 pending artifact **before parsing**. This module is that journal.
 
-The failure it exists for is specific. `extract` sends a private source to a
-paid provider and then parses what comes back. Interrupt it between those two
-points — a crash, a closed laptop, a killed terminal — and the money is spent
-while nothing on disk remembers it. The next run has no way to tell "this was
-never sent" from "this was sent and the answer is gone", and the only safe
-options are to pay again or to give up. Recording the attempt before making it,
-and the answer before trusting it, is what turns that into a resumable state.
+The failure it exists for is specific. A paid provider receives a request and
+janki then parses or decodes what comes back. Interrupt between those points —
+a crash, a closed laptop, a killed terminal — and the money is spent while
+nothing on disk remembers it. The next run has no way to tell "this was never
+sent" from "this was sent and the answer is gone", and the only safe options
+are to pay again or to give up. Recording the attempt before making it, and the
+answer before trusting it, is what turns extraction, coverage and Realtime
+sentence audio into resumable operations.
 
 **Why its own file rather than the ledger.** The shape here is the one
 `pending_audio` established — an exact-request key, a staged artifact, an
@@ -29,9 +30,11 @@ enforced by refusing the transition rather than documented as a convention.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import stat
+import struct
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -73,10 +76,13 @@ __all__ = [
     "OperationError",
     "OperationJournal",
     "ReplyObservation",
+    "ResponseSpoolObservation",
+    "ResponseSpoolReceipt",
     "advance_refusal",
     "capture_artifact",
     "prepare_artifact_store",
     "reply_observation",
+    "response_spool_observation",
     "response_answer_text",
     "serialize_response",
 ]
@@ -111,12 +117,12 @@ _TRANSITIONS: dict[str, frozenset[str]] = {
     # under the lock, so a state that must never be reachable has to be
     # unreachable *here* — a caller-side guard cannot close it.
     "result_captured": frozenset({"committed"}),
-    # Terminal. Nothing leaves these, and in particular nothing leaves
-    # `outcome_unknown` back into a live state: re-dispatching an operation
-    # whose provider outcome is unknown is how one authorization becomes two
-    # charges.
+    # Terminal for dispatch. `outcome_unknown` may only strengthen to an exact
+    # captured result through `capture_result`, whose operation-bound receipt
+    # proves the answer was already durable. It never returns to a live state,
+    # so one authorization can never become two charges.
     "committed": frozenset(),
-    "outcome_unknown": frozenset(),
+    "outcome_unknown": frozenset({"result_captured"}),
     "failed_before_send": frozenset(),
     "canceled_before_send": frozenset(),
     "expired": frozenset(),
@@ -131,8 +137,17 @@ LIVE_STATES: frozenset[str] = frozenset(
     {"authorized", "dispatching", "running", "result_captured"}
 )
 
+# Terminal means the provider must never be dispatched again. An unknown
+# outcome remains terminal in that sense even though exact evidence already on
+# disk may later strengthen it to `result_captured`.
 TERMINAL_STATES: frozenset[str] = frozenset(
-    state for state, moves in _TRANSITIONS.items() if not moves
+    {
+        "committed",
+        "outcome_unknown",
+        "failed_before_send",
+        "canceled_before_send",
+        "expired",
+    }
 )
 
 #: States that mean a paid call is in flight right now. `authorized` is not
@@ -317,7 +332,7 @@ class _TerminalMarkerReceipt:
 
 
 def _terminal_marker_owned_identity(
-    operation_id: str,
+    target_name: str,
     name: Any,
 ) -> tuple[int, int] | None:
     """Return the temp identity encoded by one exact validated marker name."""
@@ -327,7 +342,6 @@ def _terminal_marker_owned_identity(
         encoded = os.fsencode(name)
     except (TypeError, UnicodeError, ValueError):
         return None
-    target_name = f"{operation_id}.json"
     prefix = f".{target_name}."
     suffix = ".janki-cas.validated"
     if (
@@ -452,7 +466,7 @@ class ArtifactReceipt:
             marker_state = integers(terminal_marker_raw["entry_state"], 5)
             marker_digest = terminal_marker_raw["sha256"]
             marker_identity = _terminal_marker_owned_identity(
-                operation_id, marker_name
+                f"{operation_id}.json", marker_name
             )
             if (
                 marker_identity != (entry_state[0], entry_state[1])
@@ -494,6 +508,153 @@ class ArtifactReceipt:
 
 
 @dataclass(frozen=True, slots=True)
+class ResponseSpoolReceipt:
+    """Durable identity of one append-only provider response-frame spool.
+
+    The initial empty-file state is retained only to prove the write-once
+    preparation transaction and its marker.  Appends legitimately change the
+    mutable state, so every later operation binds the directory plus the
+    stable file identity and then proves the direct name still names it.
+    """
+
+    relative_name: str
+    directory_identity: tuple[int, int]
+    initial_state: _ArtifactState
+    initial_sha256: str
+    committed_size: int
+    committed_sha256: str
+    frame_count: int
+    terminal_marker: _TerminalMarkerReceipt
+
+    @property
+    def file_identity(self) -> tuple[int, int]:
+        return self.initial_state[:2]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "relative_name": self.relative_name,
+            "directory_identity": list(self.directory_identity),
+            "initial_state": list(self.initial_state),
+            "initial_sha256": self.initial_sha256,
+            "committed_size": self.committed_size,
+            "committed_sha256": self.committed_sha256,
+            "frame_count": self.frame_count,
+            "terminal_marker": self.terminal_marker.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        operation_id: str,
+        raw: Mapping[str, Any],
+    ) -> ResponseSpoolReceipt:
+        refusal = f"Operation {operation_id!r} holds an invalid response spool receipt"
+        if not isinstance(raw, Mapping) or set(raw) != {
+            "relative_name",
+            "directory_identity",
+            "initial_state",
+            "initial_sha256",
+            "committed_size",
+            "committed_sha256",
+            "frame_count",
+            "terminal_marker",
+        }:
+            raise OperationError(refusal)
+
+        def integers(value: Any, length: int) -> tuple[int, ...]:
+            if (
+                not isinstance(value, list)
+                or len(value) != length
+                or any(
+                    not isinstance(item, int) or isinstance(item, bool) or item < 0
+                    for item in value
+                )
+            ):
+                raise OperationError(refusal)
+            return tuple(value)
+
+        relative_name = raw["relative_name"]
+        expected_name = f"{PENDING_DIR}/{operation_id}.frames"
+        directory_identity = integers(raw["directory_identity"], 2)
+        initial_state = integers(raw["initial_state"], 5)
+        initial_sha256 = raw["initial_sha256"]
+        committed_size = raw["committed_size"]
+        committed_sha256 = raw["committed_sha256"]
+        frame_count = raw["frame_count"]
+        marker_raw = raw["terminal_marker"]
+        if (
+            not _valid_pending_operation_id(operation_id)
+            or relative_name != expected_name
+            or initial_state[0] != directory_identity[0]
+            or initial_state[2] != 0
+            or initial_sha256 != hashlib.sha256(b"").hexdigest()
+            or not isinstance(committed_size, int)
+            or isinstance(committed_size, bool)
+            or committed_size < 0
+            or not isinstance(frame_count, int)
+            or isinstance(frame_count, bool)
+            or frame_count < 0
+            or not isinstance(committed_sha256, str)
+            or len(committed_sha256) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in committed_sha256
+            )
+            or (committed_size == 0) != (frame_count == 0)
+            or (
+                committed_size == 0
+                and committed_sha256 != hashlib.sha256(b"").hexdigest()
+            )
+            or not isinstance(marker_raw, Mapping)
+            or set(marker_raw) != {"name", "entry_state", "sha256"}
+        ):
+            raise OperationError(refusal)
+        marker_name = marker_raw["name"]
+        marker_state = integers(marker_raw["entry_state"], 5)
+        marker_sha256 = marker_raw["sha256"]
+        if (
+            _terminal_marker_owned_identity(
+                f"{operation_id}.frames", marker_name
+            )
+            != initial_state[:2]
+            or marker_state[0] != directory_identity[0]
+            or not isinstance(marker_sha256, str)
+            or len(marker_sha256) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in marker_sha256
+            )
+        ):
+            raise OperationError(refusal)
+        return cls(
+            relative_name=relative_name,
+            directory_identity=(directory_identity[0], directory_identity[1]),
+            initial_state=(
+                initial_state[0],
+                initial_state[1],
+                initial_state[2],
+                initial_state[3],
+                initial_state[4],
+            ),
+            initial_sha256=initial_sha256,
+            committed_size=committed_size,
+            committed_sha256=committed_sha256,
+            frame_count=frame_count,
+            terminal_marker=_TerminalMarkerReceipt(
+                name=marker_name,
+                entry_state=(
+                    marker_state[0],
+                    marker_state[1],
+                    marker_state[2],
+                    marker_state[3],
+                    marker_state[4],
+                ),
+                content_sha256=marker_sha256,
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class _ArtifactBinding:
     path: Path
     directory_identity: tuple[int, int]
@@ -507,6 +668,8 @@ class _CleanupIntent:
 
     artifact: _ArtifactBinding | None
     write_ahead: _BoundWriteEvidence | None
+    response_spool: _ArtifactBinding | None
+    response_spool_write_ahead: _BoundWriteEvidence | None
     forced: bool
 
     def to_dict(self) -> dict[str, Any]:
@@ -524,6 +687,22 @@ class _CleanupIntent:
                 if self.write_ahead is not None
                 else None
             ),
+            "response_spool": (
+                {
+                    "directory_identity": list(
+                        self.response_spool.directory_identity
+                    ),
+                    "entry_state": list(self.response_spool.entry_state),
+                    "sha256": self.response_spool.content_sha256,
+                }
+                if self.response_spool is not None
+                else None
+            ),
+            "response_spool_write_ahead": (
+                self.response_spool_write_ahead.to_cleanup_dict()
+                if self.response_spool_write_ahead is not None
+                else None
+            ),
             "forced": self.forced,
         }
 
@@ -537,6 +716,8 @@ class _CleanupIntent:
         if not isinstance(raw, Mapping) or set(raw) != {
             "artifact",
             "write_ahead",
+            "response_spool",
+            "response_spool_write_ahead",
             "forced",
         }:
             raise OperationError(
@@ -623,12 +804,74 @@ class _CleanupIntent:
                     f"Operation {operation_id!r} holds an invalid write-ahead "
                     f"cleanup: {exc}"
                 ) from exc
+        response_spool_target = (
+            Path(journal_path).parent / PENDING_DIR / f"{operation_id}.frames"
+        ).absolute()
+        response_spool_raw = raw["response_spool"]
+        response_spool = None
+        if response_spool_raw is not None:
+            if not isinstance(response_spool_raw, Mapping) or set(
+                response_spool_raw
+            ) != {"directory_identity", "entry_state", "sha256"}:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid response "
+                    "spool cleanup"
+                )
+            spool_directory_identity = integers(
+                response_spool_raw["directory_identity"], 2
+            )
+            spool_entry_state = integers(
+                response_spool_raw["entry_state"], 5
+            )
+            if spool_entry_state[0] != spool_directory_identity[0]:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid response "
+                    "spool directory binding"
+                )
+            response_spool = _ArtifactBinding(
+                path=response_spool_target,
+                directory_identity=(
+                    spool_directory_identity[0],
+                    spool_directory_identity[1],
+                ),
+                entry_state=(
+                    spool_entry_state[0],
+                    spool_entry_state[1],
+                    spool_entry_state[2],
+                    spool_entry_state[3],
+                    spool_entry_state[4],
+                ),
+                content_sha256=digest(response_spool_raw["sha256"]),
+            )
+        response_spool_write_ahead_raw = raw[
+            "response_spool_write_ahead"
+        ]
+        response_spool_write_ahead = None
+        if response_spool_write_ahead_raw is not None:
+            try:
+                response_spool_write_ahead = (
+                    _BoundWriteEvidence.from_cleanup_dict(
+                        response_spool_target,
+                        response_spool_write_ahead_raw,
+                    )
+                )
+            except DataError as exc:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid response "
+                    f"spool write-ahead cleanup: {exc}"
+                ) from exc
         forced = raw["forced"]
         if not isinstance(forced, bool):
             raise OperationError(
                 f"Operation {operation_id!r} holds an invalid cleanup decision"
             )
-        return cls(artifact=artifact, write_ahead=write_ahead, forced=forced)
+        return cls(
+            artifact=artifact,
+            write_ahead=write_ahead,
+            response_spool=response_spool,
+            response_spool_write_ahead=response_spool_write_ahead,
+            forced=forced,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -666,6 +909,15 @@ class ReplyObservation:
     @property
     def readable(self) -> bool:
         return self.payload is not None
+
+
+@dataclass(frozen=True, slots=True)
+class ResponseSpoolObservation:
+    """Whether exact streaming frames are readable or only recorded now."""
+
+    readable: bool
+    recorded: bool
+    recovery_pending: bool
 
 
 def _valid_pending_operation_id(operation_id: str) -> bool:
@@ -849,6 +1101,361 @@ def _retire_write_ahead(expected: _BoundWriteEvidence) -> None:
         ) from exc
 
 
+_FRAME_LENGTH_SIZE = 8
+_FRAME_DIGEST_SIZE = hashlib.sha256().digest_size
+_EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+
+
+def _response_spool_target(journal_path: Path, operation_id: str) -> Path:
+    return (
+        Path(journal_path).parent / PENDING_DIR / f"{operation_id}.frames"
+    ).absolute()
+
+
+def _response_spool_bound_file(
+    journal_path: Path,
+    receipt: ResponseSpoolReceipt,
+) -> _BoundFileReceipt:
+    marker = receipt.terminal_marker
+    return _BoundFileReceipt(
+        target=(Path(journal_path).parent / receipt.relative_name).absolute(),
+        directory_identity=receipt.directory_identity,
+        entry_state=receipt.initial_state,
+        content_sha256=receipt.initial_sha256,
+        marker_name=marker.name,
+        marker_state=marker.entry_state,
+        marker_revision=marker.content_sha256,
+    )
+
+
+def _response_spool_receipt_from_capture(
+    operation_id: str,
+    captured: _BoundFileReceipt,
+) -> ResponseSpoolReceipt:
+    receipt = ResponseSpoolReceipt(
+        relative_name=f"{PENDING_DIR}/{operation_id}.frames",
+        directory_identity=captured.directory_identity,
+        initial_state=captured.entry_state,
+        initial_sha256=captured.content_sha256,
+        committed_size=0,
+        committed_sha256=_EMPTY_SHA256,
+        frame_count=0,
+        terminal_marker=_TerminalMarkerReceipt(
+            name=captured.marker_name,
+            entry_state=captured.marker_state,
+            content_sha256=captured.marker_revision,
+        ),
+    )
+    return ResponseSpoolReceipt.from_dict(operation_id, receipt.to_dict())
+
+
+def _response_spool_receipt_from_write_ahead(
+    operation_id: str,
+    evidence: _BoundWriteEvidence,
+) -> ResponseSpoolReceipt | None:
+    """Recover preparation that reached disk before its journal receipt."""
+    public = evidence.public_answer_snapshot
+    if (
+        public is None
+        or public[0][2] != 0
+        or public[1] != _EMPTY_SHA256
+        or evidence.generated_revision != _EMPTY_SHA256
+    ):
+        return None
+    receipt = ResponseSpoolReceipt(
+        relative_name=f"{PENDING_DIR}/{operation_id}.frames",
+        directory_identity=evidence.directory_identity,
+        initial_state=public[0],
+        initial_sha256=public[1],
+        committed_size=0,
+        committed_sha256=_EMPTY_SHA256,
+        frame_count=0,
+        terminal_marker=_TerminalMarkerReceipt(
+            name=evidence.marker_name,
+            entry_state=evidence.marker_state,
+            content_sha256=evidence.marker_revision,
+        ),
+    )
+    return ResponseSpoolReceipt.from_dict(operation_id, receipt.to_dict())
+
+
+def _read_descriptor(descriptor: int) -> bytes:
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    while chunk := os.read(descriptor, 1024 * 1024):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _read_response_spool_snapshot(
+    journal_path: Path,
+    receipt: ResponseSpoolReceipt,
+) -> tuple[_ArtifactBinding, bytes] | None:
+    """Read only the direct regular file bound by a durable spool receipt."""
+    target = (Path(journal_path).parent / receipt.relative_name).absolute()
+    try:
+        with _open_bound_directory(target.parent, create=False) as directory:
+            parent = os.fstat(directory.descriptor)
+            if (parent.st_dev, parent.st_ino) != receipt.directory_identity:
+                return None
+            descriptor = os.open(
+                target.name,
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0),
+                dir_fd=directory.descriptor,
+            )
+            try:
+                before = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(before.st_mode)
+                    or before.st_nlink != 1
+                    or (before.st_dev, before.st_ino) != receipt.file_identity
+                ):
+                    return None
+                payload = _read_descriptor(descriptor)
+                after = os.fstat(descriptor)
+                named = os.stat(
+                    target.name,
+                    dir_fd=directory.descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    not stat.S_ISREG(named.st_mode)
+                    or named.st_nlink != 1
+                    or _artifact_state(before) != _artifact_state(after)
+                    or _artifact_state(before) != _artifact_state(named)
+                ):
+                    return None
+                binding = _ArtifactBinding(
+                    path=target,
+                    directory_identity=receipt.directory_identity,
+                    entry_state=_artifact_state(before),
+                    content_sha256=hashlib.sha256(payload).hexdigest(),
+                )
+            finally:
+                os.close(descriptor)
+            _validate_bound_directory(directory)
+            return binding, payload
+    except (DataError, OSError):
+        return None
+
+
+def _decode_response_frames(payload: bytes) -> tuple[str, ...]:
+    """Validate structural framing without interpreting any frame as JSON."""
+    frames: list[str] = []
+    offset = 0
+    while offset < len(payload):
+        if len(payload) - offset < _FRAME_LENGTH_SIZE:
+            raise OperationError("Response spool holds a torn frame length")
+        header = payload[offset : offset + _FRAME_LENGTH_SIZE]
+        length = struct.unpack(">Q", header)[0]
+        offset += _FRAME_LENGTH_SIZE
+        remaining = len(payload) - offset
+        if remaining < length + _FRAME_DIGEST_SIZE:
+            raise OperationError("Response spool holds a torn frame record")
+        frame_bytes = payload[offset : offset + length]
+        offset += length
+        recorded_digest = payload[offset : offset + _FRAME_DIGEST_SIZE]
+        offset += _FRAME_DIGEST_SIZE
+        expected_digest = hashlib.sha256(header + frame_bytes).digest()
+        if not hmac.compare_digest(recorded_digest, expected_digest):
+            raise OperationError("Response spool frame checksum does not match")
+        try:
+            frames.append(frame_bytes.decode("utf-8", errors="strict"))
+        except UnicodeError as exc:
+            raise OperationError(
+                "Response spool frame is not valid UTF-8"
+            ) from exc
+    return tuple(frames)
+
+
+def _validated_response_frames(
+    receipt: ResponseSpoolReceipt,
+    payload: bytes,
+) -> tuple[str, ...]:
+    """Require the durable head, while allowing only a valid crash extension."""
+    frames = _decode_response_frames(payload)
+    if len(payload) < receipt.committed_size:
+        raise OperationError("Response spool rolled back behind its durable head")
+    committed_prefix = payload[: receipt.committed_size]
+    if not hmac.compare_digest(
+        hashlib.sha256(committed_prefix).hexdigest(),
+        receipt.committed_sha256,
+    ):
+        raise OperationError("Response spool changed before its durable head")
+    committed_frames = _decode_response_frames(committed_prefix)
+    if len(committed_frames) != receipt.frame_count:
+        raise OperationError(
+            "Response spool durable frame count does not match its head"
+        )
+    uncommitted = len(frames) - receipt.frame_count
+    if uncommitted > 1:
+        raise OperationError(
+            "Response spool holds more than one uncommitted frame"
+        )
+    return frames
+
+
+def _response_spool_receipt_at_head(
+    receipt: ResponseSpoolReceipt,
+    payload: bytes,
+    frames: tuple[str, ...],
+) -> ResponseSpoolReceipt:
+    return ResponseSpoolReceipt(
+        relative_name=receipt.relative_name,
+        directory_identity=receipt.directory_identity,
+        initial_state=receipt.initial_state,
+        initial_sha256=receipt.initial_sha256,
+        committed_size=len(payload),
+        committed_sha256=hashlib.sha256(payload).hexdigest(),
+        frame_count=len(frames),
+        terminal_marker=receipt.terminal_marker,
+    )
+
+
+def _confirm_response_spool_head(
+    journal_path: Path,
+    receipt: ResponseSpoolReceipt,
+    expected_payload: bytes,
+) -> None:
+    if len(expected_payload) != receipt.committed_size:
+        raise OperationError(
+            "The exact response spool extended after its head was journalled"
+        )
+    observed = _read_response_spool_snapshot(journal_path, receipt)
+    if observed is None or observed[1] != expected_payload:
+        raise OperationError(
+            "The exact response spool changed after its head was journalled"
+        )
+    _validated_response_frames(receipt, observed[1])
+
+
+def _encode_response_frame(payload: str) -> bytes:
+    if not isinstance(payload, str):
+        raise OperationError("Response spool frames must be text")
+    try:
+        encoded = payload.encode("utf-8", errors="strict")
+    except UnicodeError as exc:
+        raise OperationError("Response spool frame is not valid UTF-8") from exc
+    header = struct.pack(">Q", len(encoded))
+    return header + encoded + hashlib.sha256(header + encoded).digest()
+
+
+def _response_spool_inspection_bytes(frames: tuple[str, ...]) -> bytes:
+    """Render exact text-frame payloads without pretending they form a reply."""
+    return (
+        json.dumps(
+            {
+                "version": 1,
+                "kind": "janki-response-frame-spool",
+                "complete": False,
+                "frames": [
+                    {"encoding": "utf-8", "payload": payload}
+                    for payload in frames
+                ],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _append_response_spool(
+    journal_path: Path,
+    receipt: ResponseSpoolReceipt,
+    payload: str,
+) -> ResponseSpoolReceipt:
+    """Append and fsync one frame while proving the mutable file stayed bound."""
+    observed = _read_response_spool_snapshot(journal_path, receipt)
+    if observed is None:
+        raise OperationError("The exact response spool is unavailable")
+    binding, existing_payload = observed
+    existing_frames = _validated_response_frames(receipt, existing_payload)
+    if len(existing_payload) != receipt.committed_size:
+        raise OperationError(
+            "Response spool crash extension must be adopted before append"
+        )
+    record = _encode_response_frame(payload)
+    target = binding.path
+    try:
+        with _open_bound_directory(target.parent, create=False) as directory:
+            parent = os.fstat(directory.descriptor)
+            if (parent.st_dev, parent.st_ino) != receipt.directory_identity:
+                raise OperationError("The exact response spool is unavailable")
+            descriptor = os.open(
+                target.name,
+                os.O_RDWR
+                | os.O_APPEND
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0),
+                dir_fd=directory.descriptor,
+            )
+            try:
+                before = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(before.st_mode)
+                    or before.st_nlink != 1
+                    or _artifact_state(before) != binding.entry_state
+                    or hashlib.sha256(_read_descriptor(descriptor)).hexdigest()
+                    != binding.content_sha256
+                ):
+                    raise OperationError(
+                        "The exact response spool changed before append"
+                    )
+                written = 0
+                while written < len(record):
+                    count = os.write(descriptor, record[written:])
+                    if count <= 0:
+                        raise OSError("Could not append the complete response frame")
+                    written += count
+                # This is the durability boundary promised to the transport:
+                # it may release the frame only after fsync has returned.
+                os.fsync(descriptor)
+                after = os.fstat(descriptor)
+                named = os.stat(
+                    target.name,
+                    dir_fd=directory.descriptor,
+                    follow_symlinks=False,
+                )
+                complete_payload = _read_descriptor(descriptor)
+                confirmed = os.fstat(descriptor)
+                expected_frames = (*existing_frames, payload)
+                complete_frames = _decode_response_frames(complete_payload)
+                if (
+                    not stat.S_ISREG(named.st_mode)
+                    or named.st_nlink != 1
+                    or (after.st_dev, after.st_ino) != receipt.file_identity
+                    or _artifact_state(after) != _artifact_state(named)
+                    or _artifact_state(after) != _artifact_state(confirmed)
+                    or after.st_size != before.st_size + len(record)
+                    or complete_frames != expected_frames
+                ):
+                    raise OperationError(
+                        "The exact response spool changed during append"
+                    )
+            finally:
+                os.close(descriptor)
+            _validate_bound_directory(directory)
+            updated = _response_spool_receipt_at_head(
+                receipt,
+                complete_payload,
+                complete_frames,
+            )
+    except OperationError:
+        raise
+    except (DataError, OSError) as exc:
+        raise OperationError(f"Could not append response frame: {exc}") from exc
+    return updated
+
+
+def _retire_response_spool(expected: _ArtifactBinding) -> None:
+    """Retire an exact final spool binding only from durable forget cleanup."""
+    _retire_artifact(expected)
+
+
 def _observe_reply(
     journal_path: Path,
     operation: Operation,
@@ -896,6 +1503,47 @@ def reply_observation(
 ) -> ReplyObservation:
     """Observe readable reply bytes without making a lexical path into proof."""
     return _observe_reply(journal_path, operation)[0]
+
+
+def response_spool_observation(
+    journal_path: Path,
+    operation: Operation,
+) -> ResponseSpoolObservation:
+    """Classify response frames without adopting, settling, or decoding JSON."""
+    receipt = operation.response_spool
+    if receipt is None or operation.cleanup is not None:
+        return ResponseSpoolObservation(
+            readable=False,
+            recorded=False,
+            recovery_pending=False,
+        )
+    observed = _read_response_spool_snapshot(journal_path, receipt)
+    if observed is None:
+        return ResponseSpoolObservation(
+            readable=False,
+            recorded=receipt.frame_count > 0,
+            recovery_pending=False,
+        )
+    payload = observed[1]
+    recorded = bool(payload) or receipt.frame_count > 0
+    try:
+        frames = _validated_response_frames(receipt, payload)
+    except OperationError:
+        return ResponseSpoolObservation(
+            readable=False,
+            recorded=recorded,
+            recovery_pending=False,
+        )
+    # Inspection deliberately does not adopt a crash extension. Until `end`
+    # or the exact provider recovery records that head, those bytes are known
+    # evidence but are not yet an inspectable committed-frame view.
+    recovery_pending = len(payload) > receipt.committed_size
+    readable = not recovery_pending and bool(frames)
+    return ResponseSpoolObservation(
+        readable=readable,
+        recorded=recorded,
+        recovery_pending=recovery_pending,
+    )
 
 
 def prepare_artifact_store(journal_path: Path) -> Path:
@@ -970,6 +1618,8 @@ class Operation:
     updated_at: str
     #: Exact public-answer proof, once capture is journalled.
     artifact: ArtifactReceipt | None = None
+    #: Stable identity of a streaming response spool prepared before dispatch.
+    response_spool: ResponseSpoolReceipt | None = None
     #: Why it stopped, for a terminal state.
     detail: str = ""
     #: Durable exact deletion authority while ``forget`` retires recovery data.
@@ -1016,6 +1666,8 @@ class Operation:
         }
         if self.artifact is not None:
             value["artifact"] = self.artifact.to_dict()
+        if self.response_spool is not None:
+            value["response_spool"] = self.response_spool.to_dict()
         if self.detail:
             value["detail"] = self.detail
         if self.cleanup is not None:
@@ -1057,6 +1709,17 @@ class Operation:
                     f"Operation {operation_id!r} holds an invalid artifact receipt"
                 )
             artifact = ArtifactReceipt.from_dict(operation_id, artifact_raw)
+        response_spool = None
+        if "response_spool" in raw:
+            response_spool_raw = raw["response_spool"]
+            if response_spool_raw is None:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid response "
+                    "spool receipt"
+                )
+            response_spool = ResponseSpoolReceipt.from_dict(
+                operation_id, response_spool_raw
+            )
         receipt_states = {"result_captured", "committed"}
         if (state in receipt_states) != (artifact is not None):
             requirement = (
@@ -1078,6 +1741,7 @@ class Operation:
             authorized_at=str(raw.get("authorized_at", "")),
             updated_at=str(raw.get("updated_at", "")),
             artifact=artifact,
+            response_spool=response_spool,
             detail=str(raw.get("detail", "")),
             cleanup=cleanup,
         )
@@ -1232,6 +1896,263 @@ class OperationJournal:
                 current, operation_id, state, detail=detail
             )
 
+    def begin_response_capture(
+        self,
+        operation_id: str,
+    ) -> ResponseSpoolReceipt:
+        """Prepare and durably bind an empty frame spool before transport.
+
+        A preparation interrupted between file publication and the journal
+        write leaves an operation-bound marker.  The exact retry adopts that
+        marker; it never binds an unproven same-name file.
+        """
+        if not _valid_pending_operation_id(operation_id):
+            raise OperationError(
+                f"Invalid operation ID for response capture: {operation_id!r}"
+            )
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            held = current.operations.get(operation_id)
+            if held is None:
+                raise OperationError(
+                    f"No operation {operation_id!r} to prepare for response capture"
+                )
+            if held.cleanup is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} is being forgotten; rerun "
+                    f"'janki operations --forget {operation_id}' to finish cleanup"
+                )
+            if held.response_spool is not None:
+                observed = _read_response_spool_snapshot(
+                    self.path, held.response_spool
+                )
+                if observed is None:
+                    raise OperationError(
+                        f"Operation {operation_id!r} cannot find its exact "
+                        "response spool"
+                    )
+                _validated_response_frames(held.response_spool, observed[1])
+                try:
+                    _finalize_bound_capture(
+                        _response_spool_bound_file(
+                            self.path, held.response_spool
+                        )
+                    )
+                except DataError as exc:
+                    raise OperationError(
+                        f"Operation {operation_id!r} response spool is "
+                        f"journalled, but its preparation marker could not be "
+                        f"finalized safely: {exc}"
+                    ) from exc
+                self.operations = current.operations
+                return held.response_spool
+            if held.state != "authorized":
+                raise OperationError(
+                    f"Operation {operation_id!r} must prepare response capture "
+                    "before dispatch"
+                )
+
+            target = _response_spool_target(self.path, operation_id)
+            try:
+                write_ahead = _bound_write_evidence(target)
+                if write_ahead is None:
+                    captured = _capture_bytes_bound(target, b"")
+                    receipt = _response_spool_receipt_from_capture(
+                        operation_id, captured
+                    )
+                else:
+                    receipt = _response_spool_receipt_from_write_ahead(
+                        operation_id, write_ahead
+                    )
+                    if receipt is None:
+                        raise OperationError(
+                            f"Operation {operation_id!r} has interrupted or "
+                            "foreign response spool preparation"
+                        )
+            except OperationError:
+                raise
+            except (DataError, OSError) as exc:
+                raise OperationError(
+                    f"Could not prepare response capture for operation "
+                    f"{operation_id!r}: {exc}"
+                ) from exc
+
+            prepared = Operation(
+                operation_id=held.operation_id,
+                kind=held.kind,
+                state=held.state,
+                source_file=held.source_file,
+                source_sha256=held.source_sha256,
+                request_fp=held.request_fp,
+                model=held.model,
+                authorized_at=held.authorized_at,
+                updated_at=_now(),
+                artifact=held.artifact,
+                response_spool=receipt,
+                detail=held.detail,
+            )
+            current.operations[operation_id] = prepared
+            current.path = self.path
+            current._write()
+            self.operations = current.operations
+            try:
+                _finalize_bound_capture(
+                    _response_spool_bound_file(self.path, receipt)
+                )
+            except DataError as exc:
+                raise OperationError(
+                    f"Operation {operation_id!r} response spool is journalled, "
+                    f"but its preparation marker could not be finalized safely: {exc}"
+                ) from exc
+            return receipt
+
+    def _record_response_spool_head_under_lock(
+        self,
+        current: OperationJournal,
+        held: Operation,
+        receipt: ResponseSpoolReceipt,
+    ) -> Operation:
+        """Persist one fsynced spool head while the journal lock is held."""
+        updated = Operation(
+            operation_id=held.operation_id,
+            kind=held.kind,
+            state=held.state,
+            source_file=held.source_file,
+            source_sha256=held.source_sha256,
+            request_fp=held.request_fp,
+            model=held.model,
+            authorized_at=held.authorized_at,
+            updated_at=_now(),
+            artifact=held.artifact,
+            response_spool=receipt,
+            detail=held.detail,
+        )
+        current.operations[held.operation_id] = updated
+        current.path = self.path
+        current._write()
+        self.operations = current.operations
+        return updated
+
+    def _recover_response_spool_head_under_lock(
+        self,
+        current: OperationJournal,
+        held: Operation,
+        *,
+        unavailable_ok: bool = False,
+        invalid_ok: bool = False,
+    ) -> tuple[Operation, tuple[str, ...] | None]:
+        """Adopt the sole complete frame left past a durable spool head.
+
+        The provider callback fsyncs a frame before the journal records its new
+        head.  If the process dies in that seam, the next operation holding the
+        journal lock is allowed to adopt exactly that one validated extension.
+        Missing, replaced, or malformed evidence may be preserved for an
+        explicit discard path without preventing a person from ending a call.
+        """
+        receipt = held.response_spool
+        if receipt is None:
+            raise OperationError(
+                f"Operation {held.operation_id!r} has no response spool"
+            )
+        observed = _read_response_spool_snapshot(self.path, receipt)
+        if observed is None:
+            if unavailable_ok:
+                return held, None
+            raise OperationError("The exact response spool is unavailable")
+        try:
+            frames = _validated_response_frames(receipt, observed[1])
+        except OperationError:
+            if invalid_ok:
+                return held, None
+            raise
+        if len(observed[1]) > receipt.committed_size:
+            adopted_spool = _response_spool_receipt_at_head(
+                receipt,
+                observed[1],
+                frames,
+            )
+            held = self._record_response_spool_head_under_lock(
+                current, held, adopted_spool
+            )
+            _confirm_response_spool_head(
+                self.path, adopted_spool, observed[1]
+            )
+        return held, frames
+
+    def append_response_frame(self, operation_id: str, payload: str) -> None:
+        """Append one exact text frame and fsync it before returning."""
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            held = current.operations.get(operation_id)
+            if held is None:
+                raise OperationError(
+                    f"No operation {operation_id!r} to append a response frame"
+                )
+            if held.cleanup is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} is being forgotten; its "
+                    "response spool cannot be changed"
+                )
+            if held.response_spool is None:
+                raise OperationError(
+                    f"Operation {operation_id!r} has no response spool"
+                )
+            if held.state not in {"dispatching", "running"}:
+                raise OperationError(
+                    f"Operation {operation_id!r} in state {held.state!r} "
+                    "cannot append a provider response frame"
+                )
+            held, _ = self._recover_response_spool_head_under_lock(
+                current, held
+            )
+            updated_spool = _append_response_spool(
+                # ``held`` now carries the adopted exact head, if recovery was
+                # needed; the low-level writer refuses any extension itself.
+                self.path, held.response_spool, payload
+            )
+            updated = self._record_response_spool_head_under_lock(
+                current, held, updated_spool
+            )
+            updated_observation = _read_response_spool_snapshot(
+                self.path, updated_spool
+            )
+            if updated_observation is None:
+                raise OperationError(
+                    "The exact response spool is unavailable after append"
+                )
+            _confirm_response_spool_head(
+                self.path, updated_spool, updated_observation[1]
+            )
+            self.operations[operation_id] = updated
+
+    def read_response_frames(self, operation_id: str) -> tuple[str, ...]:
+        """Return complete exact frames, refusing torn or corrupt records."""
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            held = current.operations.get(operation_id)
+            if held is None:
+                raise OperationError(
+                    f"No operation {operation_id!r} to read response frames"
+                )
+            if held.cleanup is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} is being forgotten; its "
+                    "response spool is no longer available to read"
+                )
+            if held.response_spool is None:
+                raise OperationError(
+                    f"Operation {operation_id!r} has no response spool"
+                )
+            _, frames = self._recover_response_spool_head_under_lock(
+                current, held
+            )
+            if frames is None:  # unavailable/invalid are refused above
+                raise OperationError(
+                    "The exact response spool could not be validated"
+                )
+            self.operations = current.operations
+            return frames
+
     def _move_under_lock(
         self,
         current: OperationJournal,
@@ -1270,6 +2191,7 @@ class OperationJournal:
             authorized_at=held.authorized_at,
             updated_at=_now(),
             artifact=artifact if artifact is not None else held.artifact,
+            response_spool=held.response_spool,
             detail=detail or held.detail,
         )
         current.operations[operation_id] = moved
@@ -1427,6 +2349,60 @@ class OperationJournal:
                 f"Operation {operation_id!r} has no recoverable reply"
             )
 
+    def read_inspectable_reply(self, operation_id: str) -> bytes:
+        """Read a complete reply or a frame-preserving incomplete-stream view.
+
+        Complete artifact bytes pass through unchanged. A streaming operation
+        that has no complete artifact instead produces a deterministic JSON
+        envelope carrying every exact committed text-frame payload and its
+        boundary. This is an inspection surface only: it neither settles the
+        operation nor adopts a crash extension whose head is not yet journalled.
+        """
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            held = current.operations.get(operation_id)
+            if held is None:
+                raise OperationError(f"No operation {operation_id!r} to read")
+            if held.cleanup is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} is being forgotten; its "
+                    "recovery reply is no longer available to read"
+                )
+            observation = reply_observation(self.path, held)
+            if observation.payload is not None:
+                self.operations = current.operations
+                return observation.payload
+            if observation.recorded:
+                raise OperationError(
+                    f"Operation {operation_id!r} records a captured reply, but "
+                    "its exact recovery bytes are unavailable"
+                )
+            if held.response_spool is not None:
+                observed = _read_response_spool_snapshot(
+                    self.path, held.response_spool
+                )
+                if observed is None:
+                    raise OperationError("The exact response spool is unavailable")
+                frames = _validated_response_frames(
+                    held.response_spool, observed[1]
+                )
+                if len(observed[1]) != held.response_spool.committed_size:
+                    raise OperationError(
+                        "Response spool recovery must finish before its newly "
+                        "durable frame can be inspected"
+                    )
+                if frames:
+                    self.operations = current.operations
+                    return _response_spool_inspection_bytes(frames)
+            if observation.interrupted:
+                raise OperationError(
+                    f"Operation {operation_id!r} has an interrupted answer "
+                    "capture, not a complete reply"
+                )
+            raise OperationError(
+                f"Operation {operation_id!r} has no recoverable reply or response frames"
+            )
+
     def end(self, operation_id: str, *, detail: str = "") -> Operation:
         """Say a call that will never finish is over, without inventing what it
         bought.
@@ -1441,12 +2417,16 @@ class OperationJournal:
 
         * `authorized` — nothing was ever sent, so `canceled_before_send`.
           Calling this one an unknown outcome would invent a charge.
-        * `dispatching` / `running` — the request left and no answer came
-          back, so `outcome_unknown`. It never says the call failed and never
-          says it succeeded.
+        * `dispatching` / `running` — the request left and no complete answer
+          was sealed, so `outcome_unknown`. It never says the call failed and
+          never says it succeeded. Exact terminal frames already on disk may
+          later strengthen that state through `capture_result` without a new
+          dispatch.
 
-        A captured answer is refused: nothing about it is unknown. It is on
+        A captured artifact is refused: nothing about it is unknown. It is on
         disk, and the choice there is to read it or to discard it deliberately.
+        Partial streaming frames stay bound for inspection or exact local
+        provider recovery.
         """
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
@@ -1462,6 +2442,18 @@ class OperationJournal:
                 raise OperationError(
                     f"Operation {operation_id!r} is already {held.state!r} and "
                     "has nothing left to end"
+                )
+            if held.response_spool is not None:
+                # A frame reaches durable storage before its new spool head is
+                # journalled. Recover that one exact crash extension before
+                # the terminal transition makes provider recovery ineligible.
+                # Unreadable evidence is left bound for the explicit forced
+                # discard path; it does not make the money outcome knowable.
+                held, _ = self._recover_response_spool_head_under_lock(
+                    current,
+                    held,
+                    unavailable_ok=True,
+                    invalid_ok=True,
                 )
             # A path string is only history. Read through current bound
             # evidence so a private WAL answer remains recoverable without
@@ -1530,6 +2522,83 @@ class OperationJournal:
                     cleanup[operation_id] = held.cleanup
                     continue
                 observation, evidence = _observe_reply(self.path, held)
+                spool_binding: _ArtifactBinding | None = None
+                spool_write_ahead: _BoundWriteEvidence | None = None
+                spool_reply_readable = False
+                spool_reply_recorded = False
+                if held.response_spool is not None:
+                    spool_observation = _read_response_spool_snapshot(
+                        self.path, held.response_spool
+                    )
+                    if spool_observation is not None:
+                        spool_binding = spool_observation[0]
+                        spool_payload = spool_observation[1]
+                        # Raw nonempty bytes are evidence even if a torn frame
+                        # cannot be decoded. An ordinary forget must preserve
+                        # them; force may deliberately retire their exact
+                        # binding without pretending they were readable.
+                        spool_reply_recorded = bool(spool_payload)
+                        try:
+                            spool_frames = _validated_response_frames(
+                                held.response_spool, spool_payload
+                            )
+                        except OperationError:
+                            spool_frames = ()
+                        else:
+                            spool_reply_readable = bool(spool_frames)
+                            if (
+                                held.state != "committed"
+                                and len(spool_payload)
+                                > held.response_spool.committed_size
+                            ):
+                                adopted_spool = _response_spool_receipt_at_head(
+                                    held.response_spool,
+                                    spool_payload,
+                                    spool_frames,
+                                )
+                                held = self._record_response_spool_head_under_lock(
+                                    current, held, adopted_spool
+                                )
+                                _confirm_response_spool_head(
+                                    self.path, adopted_spool, spool_payload
+                                )
+                        spool_reply_recorded = (
+                            spool_reply_recorded
+                            or held.response_spool.frame_count > 0
+                        )
+                    else:
+                        spool_reply_recorded = (
+                            held.response_spool.frame_count > 0
+                        )
+                    spool_write_ahead = _bound_capture_evidence(
+                        _response_spool_bound_file(
+                            self.path, held.response_spool
+                        )
+                    )
+                elif _valid_pending_operation_id(operation_id):
+                    spool_target = _response_spool_target(
+                        self.path, operation_id
+                    )
+                    try:
+                        spool_write_ahead = _bound_write_evidence(spool_target)
+                    except DataError as exc:
+                        raise OperationError(
+                            f"Could not inspect response spool recovery "
+                            f"evidence for operation {operation_id!r}: {exc}"
+                        ) from exc
+                    if spool_write_ahead is not None:
+                        public_spool = (
+                            spool_write_ahead.public_answer_snapshot
+                        )
+                        if public_spool is not None:
+                            spool_binding = _ArtifactBinding(
+                                path=spool_target,
+                                directory_identity=(
+                                    spool_write_ahead.directory_identity
+                                ),
+                                entry_state=public_spool[0],
+                                content_sha256=public_spool[1],
+                            )
                 actual_reply = observation.readable
                 # `result_captured` too: its answer is on disk, so it is not
                 # "unfinished" in the sense `end` means, and refusing it here
@@ -1545,11 +2614,25 @@ class OperationJournal:
                             f"'janki operations --show-reply {operation_id}', "
                             "then pass --force to drop it."
                         )
+                    if spool_reply_readable:
+                        raise OperationError(
+                            f"Operation {operation_id!r} is still {held.state!r} "
+                            "and holds provider response frames. Even --force "
+                            "cannot prove its transport has stopped; first run "
+                            f"'janki operations --end {operation_id}'."
+                        )
                     if observation.recorded:
                         raise OperationError(
                             f"Operation {operation_id!r} records a captured reply, "
                             "but its exact recovery bytes are unavailable. Pass "
                             "--force only if you accept losing that reply record."
+                        )
+                    if spool_reply_recorded:
+                        raise OperationError(
+                            f"Operation {operation_id!r} is still {held.state!r} "
+                            "and records provider response frames. Even --force "
+                            "cannot prove its transport has stopped; first run "
+                            f"'janki operations --end {operation_id}'."
                         )
                     raise OperationError(
                         f"Operation {operation_id!r} is {held.state!r}, which "
@@ -1562,7 +2645,11 @@ class OperationJournal:
                 # decides whether a reply exists and is the only deletion
                 # authority retained after the journal entry is removed.
                 binding = evidence.artifact
-                if held.state != "committed" and not force:
+                if (
+                    held.money_may_have_been_spent
+                    and held.state != "committed"
+                    and not force
+                ):
                     if actual_reply:
                         raise OperationError(
                             f"Operation {operation_id!r} still holds a reply, "
@@ -1570,11 +2657,26 @@ class OperationJournal:
                             f"'janki operations --show-reply {operation_id}', "
                             "then pass --force to drop it."
                         )
+                    if spool_reply_readable:
+                        raise OperationError(
+                            f"Operation {operation_id!r} still holds provider "
+                            "response frames, which may contain paid output and "
+                            "never became committed audio. Read them with "
+                            f"'janki operations --show-reply {operation_id}', "
+                            "then pass --force to drop them."
+                        )
                     if observation.recorded:
                         raise OperationError(
                             f"Operation {operation_id!r} records a captured reply, "
                             "but its exact recovery bytes are unavailable. Pass "
                             "--force only if you accept losing that reply record."
+                        )
+                    if spool_reply_recorded:
+                        raise OperationError(
+                            f"Operation {operation_id!r} records provider "
+                            "response frames, but their exact readable bytes are "
+                            "unavailable. Pass --force only if you accept losing "
+                            "that response record."
                         )
                 # Persist the exact bindings before deleting anything.  This
                 # is the cleanup tombstone: a crash may leave the entry here,
@@ -1583,6 +2685,8 @@ class OperationJournal:
                 intent = _CleanupIntent(
                     artifact=binding,
                     write_ahead=evidence.write_ahead,
+                    response_spool=spool_binding,
+                    response_spool_write_ahead=spool_write_ahead,
                     forced=force,
                 )
                 cleanup[operation_id] = intent
@@ -1603,6 +2707,7 @@ class OperationJournal:
                         authorized_at=held.authorized_at,
                         updated_at=now,
                         artifact=held.artifact,
+                        response_spool=held.response_spool,
                         detail=held.detail,
                         cleanup=cleanup[operation_id],
                     )
@@ -1622,6 +2727,18 @@ class OperationJournal:
                 if intent.write_ahead is not None:
                     try:
                         _retire_write_ahead(intent.write_ahead)
+                    except OperationError as exc:
+                        errors.append(str(exc))
+                if intent.response_spool is not None:
+                    try:
+                        _retire_response_spool(intent.response_spool)
+                    except OperationError as exc:
+                        errors.append(str(exc))
+                if intent.response_spool_write_ahead is not None:
+                    try:
+                        _retire_write_ahead(
+                            intent.response_spool_write_ahead
+                        )
                     except OperationError as exc:
                         errors.append(str(exc))
                 if errors:
@@ -1684,11 +2801,14 @@ class OperationJournal:
         )
 
     def tracked(self) -> list[Operation]:
-        """Blocking calls and incomplete cleanup, oldest first.
+        """Blocking calls and unfinished recovery cleanup, oldest first.
 
         A durable cleanup intent means the money decision is settled, so it
         does not belong in :meth:`blocking`. It still needs one exact ordinary
         forget retry and must remain visible until that retirement succeeds.
+        A terminal streaming call can likewise leave a bound response spool if
+        the process dies just before its ordinary forget; it remains visible
+        even when its before-send or committed state blocks no new spending.
         Reply recovery is observed separately at render time. A journal path
         string is historical state, not proof that the bytes are accessible.
         """
@@ -1696,7 +2816,15 @@ class OperationJournal:
             (
                 op
                 for op in self.operations.values()
-                if op.blocks_spending or op.cleanup is not None
+                if op.blocks_spending
+                or op.cleanup is not None
+                or (
+                    (
+                        op.artifact is not None
+                        or op.response_spool is not None
+                    )
+                    and op.state in TERMINAL_STATES
+                )
             ),
             key=lambda op: (op.authorized_at, op.operation_id),
         )

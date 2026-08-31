@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from japanese_anki.errors import JankiError
-from japanese_anki.tts import openai_tts
 
 
 class ConfigError(JankiError):
@@ -56,9 +55,6 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "voicevox_sentence_speaker",
         "voicevox_speed",
         "sentence_provider",
-        "openai_voice",
-        "openai_model",
-        "openai_instructions",
     ),
 }
 
@@ -318,12 +314,9 @@ class ProjectConfig:
     voicevox_sentence_speaker: int | None
     voicevox_speed: float
     #: Which engine reads example sentences: '' (the word engine), 'voicevox',
-    #: or 'openai'. Words are never affected — only VOICEVOX can force an
-    #: accent, which is what a word clip is for.
+    #: or 'openai-realtime'. Words are never affected — only VOICEVOX can
+    #: force an accent, which is what a word clip is for.
     sentence_provider: str
-    openai_voice: str
-    openai_model: str
-    openai_instructions: str
 
     @classmethod
     def load(cls, root: Path | None = None) -> ProjectConfig:
@@ -418,9 +411,4 @@ class ProjectConfig:
             voicevox_sentence_speaker=_int_or_none(data, "tts", "voicevox_sentence_speaker"),
             voicevox_speed=_float(data, "tts", "voicevox_speed", 1.0),
             sentence_provider=_str(data, "tts", "sentence_provider", ""),
-            openai_voice=_str(data, "tts", "openai_voice", openai_tts.DEFAULT_VOICE),
-            openai_model=_str(data, "tts", "openai_model", openai_tts.DEFAULT_MODEL),
-            openai_instructions=_str(
-                data, "tts", "openai_instructions", openai_tts.DEFAULT_INSTRUCTIONS
-            ),
         )

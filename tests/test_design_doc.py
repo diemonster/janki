@@ -33,18 +33,21 @@ DESIGN = (REPO_ROOT / "docs" / "DESIGN.md").read_text(encoding="utf-8")
 def test_it_names_the_engine_that_actually_voices_a_word() -> None:
     """The claim that went stale, and the most expensive one to act on.
 
-    `openai_tts` refuses a word outright — "橋 and 箸 would come out identical"
+    Realtime refuses a word outright — it cannot honor janki's forced accent
     — so a design document naming it as the word engine sends the next reader
     to undo a decision the owner made after measuring.
     """
-    from japanese_anki.tts import openai_tts, voicevox
+    from japanese_anki.tts import TtsError, openai_realtime, voicevox
 
     assert "**VOICEVOX** — audio for words" in DESIGN
-    assert "OpenAI TTS** — audio for example *sentences*" in DESIGN
+    assert "OpenAI Realtime** — audio for example *sentences*" in DESIGN
     # And the code still refuses the pairing the doc now describes.
     assert hasattr(voicevox.VoicevoxProvider, "synthesize")
-    with pytest.raises(openai_tts.TtsError, match="cannot force a pitch accent"):
-        openai_tts.OpenAiSpeechProvider(api_key="x").synthesize("はし", forced_accent=True)
+    with pytest.raises(TtsError, match="cannot force a word accent"):
+        openai_realtime.OpenAiRealtimeProvider(
+            record_id="word:橋:はし",
+            api_key="x",
+        ).request_fingerprint("はし", forced_accent=True)
 
 
 def test_it_names_the_fields_jpdb_actually_fills() -> None:

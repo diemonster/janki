@@ -126,7 +126,7 @@ def test_targeted_audio_plan_binds_exact_ids_providers_and_distinct_clip_counts(
         words=True,
         examples=True,
         word_provider=Provider("voicevox", 7),
-        sentence_provider=Provider("openai", "onyx"),
+        sentence_provider=Provider("openai-realtime", "cedar"),
     )
 
     assert plan.record_ids == (selected.id,)
@@ -150,7 +150,7 @@ def test_targeted_audio_plan_binds_exact_ids_providers_and_distinct_clip_counts(
     )
     assert plan.example_provider is not None
     assert (plan.example_provider.name, plan.example_provider.access) == (
-        "openai",
+        "openai-realtime",
         "paid-network",
     )
     assert len(plan.fingerprint) == 64

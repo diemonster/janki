@@ -17,9 +17,11 @@ File shape (`data/ledger.json`)::
           "enriched": [{"at": "...", "kind": "jpdb", "model": "jpdb", "fields": [...]}],
           "audio": [{"file": "janki-<fp>.wav", "of": "word", "provider": "voicevox",
                      "voice": 46, "speed": 1.0, "content_fp": "<fp>", "at": "..."},
-                    {"file": "janki-<fp>.mp3", "of": "example", "provider": "openai",
-                     "voice": "onyx", "speed": 1.0, "content_fp": "<fp>", "at": "...",
-                     "settings": {"model": "...", "instructions": "..."}}],
+                    {"file": "janki-<fp>.wav", "of": "example",
+                     "provider": "openai-realtime", "voice": "cedar", "speed": 1.0,
+                     "content_fp": "<fp>", "at": "...",
+                     "settings": {"model": "...", "instructions": "...",
+                                  "audio_format": "pcm16-24000-mono"}}],
           "exports": {"personal-vocabulary": "2026-08-12",
                       "verbs": {"at": "2026-08-12", "missing": ["audio"]}}
         }
@@ -1673,7 +1675,7 @@ class Ledger:
             (record.id, index)
             for record in records
             for index, example in enumerate(record.examples)
-            # Basename: the record stores `audio/janki-<fp>.mp3` and the
+            # Basename: the record stores `audio/janki-<fp>.wav` and the
             # ledger stores the file, which is how every other lookup here
             # compares them.
             if example.japanese
@@ -1791,6 +1793,10 @@ class Ledger:
         """
         result: list[str] = []
         for record in records:
+            selected_example_profile = example_provider
+            select_example_profile = getattr(example_provider, "profile_for", None)
+            if callable(select_example_profile):
+                selected_example_profile = select_example_profile(record.id)
             entries = self._audio_entries(record.id)
             if not entries:
                 continue
@@ -1824,7 +1830,7 @@ class Ledger:
                     _audio_entry_is_current(
                         entry,
                         content_fp=example_audio_content_fingerprint(example),
-                        profile=example_provider,
+                        profile=selected_example_profile,
                     )
                     for entry in referenced
                 ):
