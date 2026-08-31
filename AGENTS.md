@@ -86,7 +86,9 @@ or second-guesses what came back.
 - Store Japanese, kana reading, furigana source, romaji, and English separately.
 - Use Anki furigana notation such as `日本語[にほんご]`.
 - Do not algorithmically guess furigana segmentation for mixed kanji/kana words.
-- Romaji is a temporary learning aid and must remain hidden behind a disclosure control.
+- Romaji is a temporary learning aid. Vocabulary cards do not render it; any
+  other learner-facing surface that does must keep it behind a disclosure
+  control.
 - Keep default examples appropriate for a beginner using Genki-style grammar.
 - Prefer natural English; include literal English only when it teaches a useful structure.
 - Identify verb group, transitivity, and common conjugations when known.

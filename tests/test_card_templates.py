@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 TEMPLATES = Path(__file__).parents[1] / "templates" / "japanese-study"
 #: The *word* card backs. A pattern card is a rule with no word on it, so it
 #: carries no dictionary lookup and is not held to that contract.
@@ -26,6 +28,15 @@ def test_there_are_three_word_card_backs() -> None:
         "reading-back.html",
         "recognition-back.html",
     ]
+
+
+@pytest.mark.parametrize("path", BACKS, ids=lambda path: path.name)
+def test_word_card_backs_do_not_render_romaji(path: Path) -> None:
+    """Romaji remains stored on the note, but is not a learner-facing block."""
+    template = path.read_text(encoding="utf-8")
+
+    assert "{{Romaji}}" not in template
+    assert "<summary>Romaji</summary>" not in template
 
 
 def test_every_lookup_back_takes_its_query_already_encoded() -> None:

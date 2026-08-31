@@ -112,16 +112,6 @@
   font-weight: 600;
 }
 
-.romaji {
-  margin: 20px auto 0;
-  max-width: 360px;
-  opacity: 0.72;
-}
-
-.romaji summary {
-  cursor: pointer;
-}
-
 /* Two lookups, wrapped rather than squeezed: Shirabe is a deep link into the
    iPhone app and does nothing on a desktop, jpdb is a web page and works
    everywhere, so neither is the "real" one to make primary. */

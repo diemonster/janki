@@ -45,8 +45,9 @@ is not enough to derive correct bracket placement for every word.
 
 ## Romaji
 
-Romaji is hidden inside a disclosure element. It should help with difficult
-readings without becoming the first cue the learner sees.
+Romaji remains separate in the canonical record and Anki note, but vocabulary
+cards do not render it. The Japanese reading and furigana provide the
+learner-facing pronunciation cue.
 
 ## Examples
 
