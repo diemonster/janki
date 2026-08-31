@@ -94,4 +94,68 @@ coverage:
   non_vocabulary_units: []
   unreadable_units: []
   coverage_block_fingerprint: 77b3d2608ede70c7cd28919a896b3aa6e2c8984f361b73208e2985b3db12a57c
+reviewed_pattern_set:
+  kind: pattern
+  title: Te-form Song / How to Conjugate Verbs into Te-form (NIHONGODEKITA)
+  reviewed: true
+  patterns:
+  - template: う・つ・る ⇨ って
+    gloss: For Godan (Group I) verbs, replace final う, つ, or る with って
+    examples:
+    - かう ⇨ かって
+    - まつ ⇨ まって
+    - とる ⇨ とって
+    where: p.1 Te-form Song; p.2 U-Verb (Godan/ Group I)
+  - template: む・ぶ・ぬ ⇨ んで
+    gloss: For Godan (Group I) verbs, replace final む, ぶ, or ぬ with んで
+    examples:
+    - すむ ⇨ すんで
+    - あそぶ ⇨ あそんで
+    - しぬ ⇨ しんで
+    where: p.1 Te-form Song
+  - template: く ⇨ いて
+    gloss: For Godan (Group I) verbs, replace final く with いて
+    examples:
+    - かく ⇨ かいて
+    where: p.1 Te-form Song
+  - template: ぐ ⇨ いで
+    gloss: For Godan (Group I) verbs, replace final ぐ with いで
+    examples:
+    - およぐ ⇨ およいで
+    where: p.1 Te-form Song
+  - template: す ⇨ して
+    gloss: For Godan (Group I) verbs, replace final す with して
+    examples:
+    - はなす ⇨ はなして
+    where: p.1 Te-form Song
+  - template: 'Ichidan (Group II): る ⇨ て'
+    gloss: For a verb already identified as Ichidan (Group II), replace final る with て. Not every verb ending in る is Ichidan; Godan る-verbs use って
+    examples:
+    - ex. たべる ⇨ たべて (to eat)
+    - おきる ⇨ おきて (to wake up)
+    where: p.2 Ru-Verb (Ichidan/ Group II)
+  - template: いく ⇨ いって
+    gloss: 'いく is an exception: although it ends in く, its て-form is いって, not いいて'
+    examples:
+    - いく ⇨ いって
+    where: p.1 Te-form Song; p.2 Exception
+  - template: くる ⇨ きて / する ⇨ して
+    gloss: 'The irregular verbs くる and する form きて and して. When one is the final verb of a compound or multiword expression, retain the preceding material: もってくる ⇨ もってきて; べんきょうする ⇨ べんきょうして'
+    examples:
+    - くる ⇨ きて (to come)
+    - する ⇨ して (to do)
+    where: p.1 Te-form Song; p.2 Irregular Verbs (Group III)
+  prompt_provenance:
+    source_sha256: f496a13284660c0fceaad3c48c382d1c0093f4bb86d3f8c11c59f35b818ba94e
+    mode: auto
+    provider: anthropic
+    model: claude-opus-5
+    response_schema_version: 3
+    response_schema_fingerprint: 5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8
+    system_prompt_fingerprint: ac6ae60bfa1b61964da8c19d0e929c042b67f0664e633566a6f3e45ba8636664
+    style_guide_fingerprint: 8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57
+    user_prompt_fingerprint: 05767e0ebba578b85e9b237054fc974f3c80bf225fd1f92c89029ecdb45dc3c0
+    request_fingerprint: ee021a46a7943bf71980da9c077af4a3380952bf9759f223e8d700d2e41dd927
+  review_run_id: 9aec32e5-eba0-4918-af0e-069caa2e0b52
+review_notes: Reviewed pattern-only extraction; no records were promoted.
 records: []

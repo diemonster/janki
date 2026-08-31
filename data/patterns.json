@@ -210,7 +210,7 @@
   "teform_song.pdf": {
     "kind": "pattern",
     "title": "Te-form Song / How to Conjugate Verbs into Te-form (NIHONGODEKITA)",
-    "reviewed": false,
+    "reviewed": true,
     "patterns": [
       {
         "template": "う・つ・る ⇨ って",
