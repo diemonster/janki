@@ -1,0 +1,319 @@
+source_file: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+extracted_at: '2026-08-31'
+model: claude-opus-5
+review_run_id: 01570a40-b1f8-4e6f-a4cd-d5d228d915eb
+prompt_provenance:
+  source_sha256: 4619b3b23dd0f0c61a322e23dd94e22fea1243912155fc8d9b4055dffdcd8cb5
+  mode: prose
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 5
+  response_schema_fingerprint: 3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382
+  system_prompt_fingerprint: 2e8af925c7ad8183df705b68e4647d1a93850b3685b321585a751ec2acc5459a
+  style_guide_fingerprint: 220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12
+  user_prompt_fingerprint: 89fa90d6ad75100ea7c46e75398e63709c675f0b34856d7dd49178b962199932
+  request_fingerprint: 65f1fa1480dcdf8fda2a002b554c4c7539adaaede90197858cf29ce36cdfb024
+pattern_set:
+  kind: lesson
+  title: 第13課 文法1 Potential Verbs／表現ノート1
+  reviewed: false
+  patterns:
+  - template: 'ru-verbs: Vる → Vられる ／ u-verbs: V-u → V-eru ／ irregular: くる → こられる、する → できる'
+    gloss: 'Making potential verbs ("can do / is able to do"): drop the final -ru of ru-verbs and add -rareru; drop the final -u of u-verbs and add -eru; the irregular verbs become こられる and できる.'
+    examples:
+    - 見る (mi-ru) → 見られる (mi-rare-ru)
+    - 行く (ik-u) → 行ける (ik-eru)
+    - 話す → 話せる
+    - 待つ → 待てる
+    - 死ぬ → 死ねる
+    - 読む → 読める
+    - 作る → 作れる
+    - 泳ぐ → 泳げる
+    - 遊ぶ → 遊べる
+    - 買う → 買える
+    - くる → こられる
+    - する → できる
+    where: p.26 (page 1), box "Potential verbs"
+  - template: 'u-verb rows: a-row +〜ない (う-ending verbs use わ) ／ i-row +〜ます ／ u-row = dictionary form ／ e-row +〜る (potential)'
+    gloss: 'The u-verb conjugation seen as a hiragana table: the syllable before the ending shifts along the row (with う changing to わ before ない), with the e-row plus る giving the potential form.'
+    examples:
+    - '行: 行かない (negative) / 行きます (stem +ます) / 行く (dictionary form) / 行ける (potential)'
+    - '話: 話さない (negative) / 話します (stem +ます) / 話す (dictionary form) / 話せる (potential)'
+    - '泳: 泳がない (negative) / 泳ぎます (stem +ます) / 泳ぐ (dictionary form) / 泳げる (potential)'
+    - '買: 買わない (negative) / 買います (stem +ます) / 買う (dictionary form) / 買える (potential)'
+    where: p.26 (page 1), hiragana conjugation table
+  - template: 'ru-verbs / くる: Vれる (ra-less potential) instead of Vられる'
+    gloss: Shorter, colloquial "ra-less" potential forms for ru-verbs and くる, using -reru in place of -rareru; once considered substandard but now widely used (not sanctioned by school grammar).
+    examples:
+    - 出る → 出られる → 出れる
+    - 見る → 見られる → 見れる
+    - くる → こられる → これる
+    where: p.27 (page 2), box "With and without ra"
+  - template: 'potential verb (書ける) conjugates as a regular ru-verb: 書ける／書けない／書けた／書けなかった／書けて／書けます／書けません／書けました／書けませんでした'
+    gloss: Potential verbs themselves take regular ru-verb endings in the short and long forms, present and past, plus the te-form.
+    examples:
+    - '[Present] 書ける / 書けない / 書けます / 書けません'
+    - '[Past] 書けた / 書けなかった / 書けました / 書けませんでした'
+    - '[Te-form] 書けて'
+    where: p.27 (page 2), box "Conjugation of potential verbs"
+  - template: 〜を V → 〜が V-potential (or 〜を V-potential)；〜をする → 〜ができる；other particles stay unchanged
+    gloss: 'Particles in potential sentences: verbs taking を may keep を or switch to が; できる takes が almost always; all particles other than を are unchanged.'
+    examples:
+    - 漢字を読む → 漢字が読める or 漢字を読める
+    - 仕事をする → 仕事ができる
+    - 山に登る → 山に登れる
+    where: p.27 (page 2), box "Particles in potential sentences"
+  - template: verb (dictionary form) + ことができる
+    gloss: A more complex way of saying "can do"; unlike the potential verb, an を-taking verb keeps its original particle を.
+    examples:
+    - メアリーさんはギターを弾くことができます。
+    - このアパートでは犬を飼うことができません。
+    where: p.28 (page 3)
+  - template: 'い-adjective: 〜い → 〜く + verb ／ な-adjective: 〜 + に + verb'
+    gloss: 'Both い-adjectives and な-adjectives can modify verbs adverbially: drop the final い and add く, or add に to a な-adjective.'
+    examples:
+    - 毎日日本語を楽しく勉強しています。
+    - ロバートさんは上手に料理ができます。
+    where: p.32 (page 4), 表現ノート「楽しく/上手に」
+  prompt_provenance:
+    source_sha256: 4619b3b23dd0f0c61a322e23dd94e22fea1243912155fc8d9b4055dffdcd8cb5
+    mode: prose
+    provider: anthropic
+    model: claude-opus-5
+    response_schema_version: 5
+    response_schema_fingerprint: 3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382
+    system_prompt_fingerprint: 2e8af925c7ad8183df705b68e4647d1a93850b3685b321585a751ec2acc5459a
+    style_guide_fingerprint: 220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12
+    user_prompt_fingerprint: 89fa90d6ad75100ea7c46e75398e63709c675f0b34856d7dd49178b962199932
+    request_fingerprint: 65f1fa1480dcdf8fda2a002b554c4c7539adaaede90197858cf29ce36cdfb024
+  review_run_id: 01570a40-b1f8-4e6f-a4cd-d5d228d915eb
+coverage:
+  version: 2
+  status: selection
+  blocking: false
+  source_fingerprint: 4619b3b23dd0f0c61a322e23dd94e22fea1243912155fc8d9b4055dffdcd8cb5
+  model_reported_unit_count: 0
+  observed_unit_count: 0
+  prose_candidate_count: 4
+  prose_coverage: unmeasured
+  source_units: []
+  duplicate_keys: []
+  candidate_units: []
+  duplicate_units: []
+  non_vocabulary_units: []
+  unreadable_units: []
+  parsed_candidate_count: 4
+  canonical_record_count: 4
+  unusable_candidate_count: 0
+  duplicate_candidate_count: 0
+  collision_group_count: 0
+  candidate_accounting_fingerprint: 841397b66a90a9c99ed27296bb78c20e2f4494cc5d1ce53fec97c00cf46f2768
+  coverage_block_fingerprint: 588584a8fde3557901734b2880ad0a32f2b4f66f9b4d5b2273c5b43f354abd1a
+candidate_accounting:
+  version: 1
+  parsed_candidate_count: 4
+  canonical_record_count: 4
+  unusable_candidate_count: 0
+  duplicate_candidate_count: 0
+  collision_group_count: 0
+  collision_groups: []
+  candidate_accounting_fingerprint: 841397b66a90a9c99ed27296bb78c20e2f4494cc5d1ce53fec97c00cf46f2768
+review_notes: Promoted 4 record(s) from this file.
+promotion_batches:
+- receipt_id: eacf86659cbc16a43c4d32a4dd60b0259d0f60a089efb719cd5c697c1d78e369
+  archive_file: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf.yaml
+  archive_run_fingerprint: d3c520996b162d48828099365ebd0ccdef85731663eaef03e36667f1baaf5285
+  archive_start_index: 0
+  source_file: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+  review_run_id: 01570a40-b1f8-4e6f-a4cd-d5d228d915eb
+  promoted_ids:
+  - word:弾く:ひく
+  - word:吹く:ふく
+  - word:たたく:たたく
+  - word:楽器:がっき
+  owner_stems:
+    word:弾く:ひく: brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+    word:吹く:ふく: brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+    word:たたく:たたく: brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+    word:楽器:がっき: brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+records:
+- id: word:弾く:ひく
+  expression: 弾く
+  reading: ひく
+  furigana: ''
+  romaji: hiku
+  meanings:
+  - to play (a stringed or keyboard instrument)
+  part_of_speech: verb (u-verb/godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: メアリーさんはギターを弾くことができます。
+    furigana: メアリーさんはギターを 弾[ひ]くことができます。
+    romaji: Mearii-san wa gitaa o hiku koto ga dekimasu.
+    english: Mary can play the guitar.
+    audio: ''
+    register: polite
+  - japanese: 週末はいつも家でギターを弾くよ。
+    furigana: 週末[しゅうまつ]はいつも 家[いえ]でギターを 弾[ひ]くよ。
+    romaji: Shuumatsu wa itsumo ie de gitaa o hiku yo.
+    english: On weekends I always play the guitar at home.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags:
+  - janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+  usage_notes: Used for stringed and keyboard instruments (ギターを弾く, ピアノを弾く). Wind instruments take 吹く and percussion takes たたく; the instrument is marked with を.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+    row: null
+    raw_fields:
+      extracted_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+      confidence: high
+      page: '3'
+      context: メアリーさんはギターを弾くことができます。
+      inclusion_reason: The Expression Notes on page 4 (textbook p.32) explicitly align ギターを弾く with "to play the guitar" and ピアノを弾く with "to play the piano", teaching 弾く as the verb used for stringed and keyboard instruments; the verbatim complete sentence used as context is the grammar example on page 3 (textbook p.28).
+      provisional_fields: meanings:2ed4abbb250b,part_of_speech:ae14ccccc313
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: a29808718c79,233d8714a548
+- id: word:吹く:ふく
+  expression: 吹く
+  reading: ふく
+  furigana: ''
+  romaji: fuku
+  meanings:
+  - to play (a wind instrument)
+  part_of_speech: verb (u-verb/godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 父はときどきサックスを吹きます。
+    furigana: 父[ちち]はときどきサックスを 吹[ふ]きます。
+    romaji: Chichi wa tokidoki sakkusu o fukimasu.
+    english: My father sometimes plays the saxophone.
+    audio: ''
+    register: polite
+  - japanese: サックスを吹くのは楽しいよ。
+    furigana: サックスを 吹[ふ]くのは 楽[たの]しいよ。
+    romaji: Sakkusu o fuku no wa tanoshii yo.
+    english: Playing the sax is fun.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags:
+  - janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+  usage_notes: Chosen specifically for wind instruments (saxophone, flute, trumpet); do not use 弾く for these. The instrument takes を.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+    row: null
+    raw_fields:
+      extracted_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+      confidence: high
+      page: '4'
+      context: サックスを吹く
+      inclusion_reason: The Expression Notes callout on page 4 (textbook p.32) directly pairs サックスを吹く with the gloss "to play the saxophone" under the heading "For wind instruments", explicitly teaching 吹く as the instrument verb; no complete Japanese sentence with 吹く appears in the source, so the verbatim taught line is used as context.
+      provisional_fields: meanings:f3cc497f54ee,part_of_speech:ae14ccccc313
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: b0df01259de7,ea12eb3a0d99
+- id: word:たたく:たたく
+  expression: たたく
+  reading: たたく
+  furigana: ''
+  romaji: tataku
+  meanings:
+  - to play (a percussion instrument)
+  part_of_speech: verb (u-verb/godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 弟はバンドでドラムをたたきます。
+    furigana: 弟[おとうと]はバンドでドラムをたたきます。
+    romaji: Otouto wa bando de doramu o tatakimasu.
+    english: My younger brother plays the drums in a band.
+    audio: ''
+    register: polite
+  - japanese: 週末はスタジオでドラムをたたくんだ。
+    furigana: 週末[しゅうまつ]はスタジオでドラムをたたくんだ。
+    romaji: Shuumatsu wa sutajio de doramu o tataku n da.
+    english: On weekends I play the drums at the studio.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags:
+  - janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+  usage_notes: Used for percussion instruments such as drums; the source writes it in hiragana. The instrument takes を.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+    row: null
+    raw_fields:
+      extracted_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+      confidence: high
+      page: '4'
+      context: ドラムをたたく
+      inclusion_reason: The Expression Notes callout on page 4 (textbook p.32) directly pairs ドラムをたたく with the gloss "to play the drum" under the heading "For percussion instruments", explicitly teaching たたく as the instrument verb; no complete Japanese sentence with たたく appears in the source, so the verbatim taught line is used as context.
+      provisional_fields: meanings:0d28a2d16f48,part_of_speech:ae14ccccc313
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 2143be5d1b09,72445d4ba82f
+- id: word:楽器:がっき
+  expression: 楽器
+  reading: がっき
+  furigana: ''
+  romaji: gakki
+  meanings:
+  - musical instrument
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 何か楽器ができますか。
+    furigana: 何[なに]か 楽器[がっき]ができますか。
+    romaji: Nanika gakki ga dekimasu ka.
+    english: Can you play any instruments?
+    audio: ''
+    register: polite
+  - japanese: 何か楽器できる？
+    furigana: 何[なに]か 楽器[がっき]できる？
+    romaji: Nanika gakki dekiru?
+    english: Can you play any instruments?
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags:
+  - janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+  usage_notes: 'When speaking of instruments in general, the source says やる and できる (potential) are normally used: 何か楽器をやりますか／何か楽器ができますか. For a specific instrument or instrument category, choose 弾く, 吹く, or たたく as appropriate.'
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+    row: null
+    raw_fields:
+      extracted_from: genki-ii-lesson-13-textbook-pp26-28-and-32.pdf
+      confidence: high
+      page: '4'
+      context: 何か楽器ができますか。
+      inclusion_reason: The Expression Notes on page 4 (textbook p.32) give the sentence 何か楽器ができますか。with the aligned translation "Can you play any instruments?" and the English explanation "When referring to musical instruments in general…", making 楽器 = "musical instrument" unambiguous.
+      provisional_fields: meanings:aa55a5d6fb47,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 6f319c4dc53d,32158bf3dff8

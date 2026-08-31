@@ -1,0 +1,14 @@
+deck:
+  kind: vocabulary
+  name: Brandon Japanese::Genki II::Lesson 13::Vocabulary
+  deck_id: 1666913693
+  description: Vocabulary and instrument-verb usage from Genki II Lesson 13 textbook pages 26–28 and 32.
+  output: brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439.apkg
+  cards:
+    recognition: true
+    production: true
+    reading: false
+  source: ../normalized/vocabulary.json
+  intake_tag: janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439
+  include_tags:
+  - janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439

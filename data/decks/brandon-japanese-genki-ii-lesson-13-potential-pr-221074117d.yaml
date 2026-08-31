@@ -1,0 +1,27 @@
+deck:
+  kind: conjugation
+  form: potential
+  name: "Brandon Japanese::Genki II::Lesson 13::Potential Practice"
+  deck_id: 1047286103
+  model_id: 1607392351
+  model_name: "Japanese Pattern"
+  description: "Potential-form practice for selected verbs taught or exemplified on Genki II Lesson 13 textbook pages 26–28 and 32."
+  output: "brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.apkg"
+  source: ../normalized/vocabulary.json
+  include_ids:
+    - word:話す:はなす
+    - word:まつ:まつ
+    - word:およぐ:およぐ
+    - word:行く:いく
+    - word:しぬ:しぬ
+    - word:読む:よむ
+    - word:あそぶ:あそぶ
+    - word:買う:かう
+    - word:見る:みる
+    - word:来る:くる
+    - word:する:する
+    - word:書く:かく
+    - word:飼う:かう
+    - word:弾く:ひく
+    - word:吹く:ふく
+    - word:たたく:たたく

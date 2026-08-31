@@ -96,6 +96,104 @@
       }
     ]
   },
+  "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf": {
+    "kind": "lesson",
+    "title": "第13課 文法1 Potential Verbs／表現ノート1",
+    "reviewed": true,
+    "patterns": [
+      {
+        "template": "ru-verbs: Vる → Vられる ／ u-verbs: V-u → V-eru ／ irregular: くる → こられる、する → できる",
+        "gloss": "Making potential verbs (\"can do / is able to do\"): drop the final -ru of ru-verbs and add -rareru; drop the final -u of u-verbs and add -eru; the irregular verbs become こられる and できる.",
+        "examples": [
+          "見る (mi-ru) → 見られる (mi-rare-ru)",
+          "行く (ik-u) → 行ける (ik-eru)",
+          "話す → 話せる",
+          "待つ → 待てる",
+          "死ぬ → 死ねる",
+          "読む → 読める",
+          "作る → 作れる",
+          "泳ぐ → 泳げる",
+          "遊ぶ → 遊べる",
+          "買う → 買える",
+          "くる → こられる",
+          "する → できる"
+        ],
+        "where": "p.26 (page 1), box \"Potential verbs\""
+      },
+      {
+        "template": "u-verb rows: a-row +〜ない (う-ending verbs use わ) ／ i-row +〜ます ／ u-row = dictionary form ／ e-row +〜る (potential)",
+        "gloss": "The u-verb conjugation seen as a hiragana table: the syllable before the ending shifts along the row (with う changing to わ before ない), with the e-row plus る giving the potential form.",
+        "examples": [
+          "行: 行かない (negative) / 行きます (stem +ます) / 行く (dictionary form) / 行ける (potential)",
+          "話: 話さない (negative) / 話します (stem +ます) / 話す (dictionary form) / 話せる (potential)",
+          "泳: 泳がない (negative) / 泳ぎます (stem +ます) / 泳ぐ (dictionary form) / 泳げる (potential)",
+          "買: 買わない (negative) / 買います (stem +ます) / 買う (dictionary form) / 買える (potential)"
+        ],
+        "where": "p.26 (page 1), hiragana conjugation table"
+      },
+      {
+        "template": "ru-verbs / くる: Vれる (ra-less potential) instead of Vられる",
+        "gloss": "Shorter, colloquial \"ra-less\" potential forms for ru-verbs and くる, using -reru in place of -rareru; once considered substandard but now widely used (not sanctioned by school grammar).",
+        "examples": [
+          "出る → 出られる → 出れる",
+          "見る → 見られる → 見れる",
+          "くる → こられる → これる"
+        ],
+        "where": "p.27 (page 2), box \"With and without ra\""
+      },
+      {
+        "template": "potential verb (書ける) conjugates as a regular ru-verb: 書ける／書けない／書けた／書けなかった／書けて／書けます／書けません／書けました／書けませんでした",
+        "gloss": "Potential verbs themselves take regular ru-verb endings in the short and long forms, present and past, plus the te-form.",
+        "examples": [
+          "[Present] 書ける / 書けない / 書けます / 書けません",
+          "[Past] 書けた / 書けなかった / 書けました / 書けませんでした",
+          "[Te-form] 書けて"
+        ],
+        "where": "p.27 (page 2), box \"Conjugation of potential verbs\""
+      },
+      {
+        "template": "〜を V → 〜が V-potential (or 〜を V-potential)；〜をする → 〜ができる；other particles stay unchanged",
+        "gloss": "Particles in potential sentences: verbs taking を may keep を or switch to が; できる takes が almost always; all particles other than を are unchanged.",
+        "examples": [
+          "漢字を読む → 漢字が読める or 漢字を読める",
+          "仕事をする → 仕事ができる",
+          "山に登る → 山に登れる"
+        ],
+        "where": "p.27 (page 2), box \"Particles in potential sentences\""
+      },
+      {
+        "template": "verb (dictionary form) + ことができる",
+        "gloss": "A more complex way of saying \"can do\"; unlike the potential verb, an を-taking verb keeps its original particle を.",
+        "examples": [
+          "メアリーさんはギターを弾くことができます。",
+          "このアパートでは犬を飼うことができません。"
+        ],
+        "where": "p.28 (page 3)"
+      },
+      {
+        "template": "い-adjective: 〜い → 〜く + verb ／ な-adjective: 〜 + に + verb",
+        "gloss": "Both い-adjectives and な-adjectives can modify verbs adverbially: drop the final い and add く, or add に to a な-adjective.",
+        "examples": [
+          "毎日日本語を楽しく勉強しています。",
+          "ロバートさんは上手に料理ができます。"
+        ],
+        "where": "p.32 (page 4), 表現ノート「楽しく/上手に」"
+      }
+    ],
+    "prompt_provenance": {
+      "source_sha256": "4619b3b23dd0f0c61a322e23dd94e22fea1243912155fc8d9b4055dffdcd8cb5",
+      "mode": "prose",
+      "provider": "anthropic",
+      "model": "claude-opus-5",
+      "response_schema_version": 5,
+      "response_schema_fingerprint": "3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382",
+      "system_prompt_fingerprint": "2e8af925c7ad8183df705b68e4647d1a93850b3685b321585a751ec2acc5459a",
+      "style_guide_fingerprint": "220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12",
+      "user_prompt_fingerprint": "89fa90d6ad75100ea7c46e75398e63709c675f0b34856d7dd49178b962199932",
+      "request_fingerprint": "65f1fa1480dcdf8fda2a002b554c4c7539adaaede90197858cf29ce36cdfb024"
+    },
+    "review_run_id": "01570a40-b1f8-4e6f-a4cd-d5d228d915eb"
+  },
   "m7-mixed-tsumori-pages-27-34.pdf": {
     "kind": "pattern",
     "title": "Pair Work: ~つもりです。/ Occasion に",

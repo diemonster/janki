@@ -11,7 +11,7 @@ deck:
   # `intake_tag` names this durable study destination for assignment. It reuses
   # the existing selector tag, so adding it changes no current membership.
   # Ordinary include/exclude selectors remain the build authority, and
-  # `tests/test_anki_builder_contract.py` asserts the partition over all ten
+  # `tests/test_anki_builder_contract.py` asserts the partition over all
   # word decks. Conjugation cards use namespaced GUIDs under another model and
   # are not part of that word-deck partition.
   intake_tag: 104-week-8-writing-homework

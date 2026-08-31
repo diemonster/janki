@@ -10,6 +10,6 @@ deck:
   source: ../normalized/vocabulary.json
   # The existing `import-anki` tag becomes this durable study destination's
   # assignment handle. Ordinary selectors remain the build authority, and the
-  # real-corpus contract keeps all ten word decks a disjoint partition.
+  # real-corpus contract keeps all word decks a disjoint partition.
   intake_tag: anki
   include_tags: [anki]

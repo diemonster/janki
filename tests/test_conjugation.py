@@ -483,7 +483,18 @@ def test_an_i_adjective_reaches_the_same_table_through_conjugate() -> None:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("verb_group", ["godan", "Godan", "  GODAN ", "u-verb", "五段", "group1"])
+@pytest.mark.parametrize(
+    "verb_group",
+    [
+        "godan",
+        "Godan",
+        "  GODAN ",
+        "u-verb",
+        "godan verb (u-verb)",
+        "五段",
+        "group1",
+    ],
+)
 def test_the_group_name_is_read_leniently(verb_group: str) -> None:
     assert conjugate("話す", "はなす", verb_group)["negative"] == "話さない"
 

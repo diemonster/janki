@@ -11,7 +11,8 @@ import pytest
 from japanese_anki import status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters import anki
+from japanese_anki.exporters import anki, pattern_cards
+from japanese_anki.io import load_records, load_structured
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -171,6 +172,7 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
         "data/decks/104-week-1-2.yaml",
         "data/decks/104-week-8.yaml",
         "data/decks/104-week-11.yaml",
+        "data/decks/brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439.yaml",
         "data/decks/kanji-practice-112-123.yaml",
         "data/decks/medical-conditions-vocab.yaml",
         "data/decks/m7-camera-vertical-dialogue.yaml",
@@ -204,6 +206,41 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
     everything = {record.id for record in load_records(config.normalized_file)}
     covered = set().union(*memberships.values())
     assert not (everything - covered), sorted(everything - covered)
+
+
+def test_genki_lesson_13_potential_drill_has_its_exact_study_scope() -> None:
+    config = ProjectConfig.load(PROJECT_ROOT)
+    deck_path = (
+        PROJECT_ROOT
+        / "data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml"
+    )
+    records = load_records(pattern_cards.collection_for(deck_path, config))
+    selected = {
+        "word:話す:はなす",
+        "word:まつ:まつ",
+        "word:およぐ:およぐ",
+        "word:行く:いく",
+        "word:しぬ:しぬ",
+        "word:読む:よむ",
+        "word:あそぶ:あそぶ",
+        "word:買う:かう",
+        "word:見る:みる",
+        "word:来る:くる",
+        "word:する:する",
+        "word:書く:かく",
+        "word:飼う:かう",
+        "word:弾く:ひく",
+        "word:吹く:ふく",
+        "word:たたく:たたく",
+    }
+    section = load_structured(deck_path)["deck"]
+
+    shipped = {
+        record.id for record in pattern_cards.shipping_records(deck_path, records)
+    }
+
+    assert set(section["include_ids"]) == selected
+    assert shipped == selected
 
 
 def _real_word_selections(config: ProjectConfig) -> dict[str, anki.DeckSelection]:

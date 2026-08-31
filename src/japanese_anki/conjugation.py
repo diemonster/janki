@@ -204,6 +204,7 @@ _NA_ADJECTIVE_SUFFIXES_ENDING_IN_I: tuple[str, ...] = (
 _VERB_GROUP_ALIASES: dict[str, str] = {
     GODAN: GODAN,
     "godanverb": GODAN,
+    "godanverb(uverb)": GODAN,
     "uverb": GODAN,
     "五段": GODAN,
     "五段動詞": GODAN,

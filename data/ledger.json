@@ -3234,6 +3234,73 @@
         }
       ]
     },
+    "word:たたく:たたく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "077e297eb6941805476ff68bea64edf422e86e081818322b9255cf7185a9b7b7",
+          "file": "janki-40546da17845.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "787cb5cc9fedabec1e180cd02847f5157c38c4d4ecbd76ffb35d6bf45e9eae3b",
+          "file": "janki-ea0c608e993d.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "1487962fd99229ff1d885f662cc7d4481f841f71b341446c4ca6c7e0dfb1b5c1",
+          "file": "janki-f8b68d83cce6.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-31",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
+      "exports": {
+        "brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439": "2026-08-31"
+      },
+      "sources": [
+        {
+          "ref": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+          "seen_at": "2026-08-31",
+          "type": "extract"
+        }
+      ]
+    },
     "word:だるい:だるい": {
       "added_at": "2026-08-23",
       "audio": [
@@ -8666,6 +8733,73 @@
         }
       ]
     },
+    "word:吹く:ふく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "413834bae5ba9f19f31b35e0e45f624fbd94dc96adae75966b9c1cc2c25c255f",
+          "file": "janki-9fcb72a96acf.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "8dbecf9239a03dfa256df9313426ff6e6e792468986a0ce274117f853039937c",
+          "file": "janki-b1cbd3758c36.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "2de95bb11e9838cad7cfbdfe631dfa0b99b0bbf38545352054dcfab91e765d99",
+          "file": "janki-ec718b43736e.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-31",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
+      "exports": {
+        "brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439": "2026-08-31"
+      },
+      "sources": [
+        {
+          "ref": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+          "seen_at": "2026-08-31",
+          "type": "extract"
+        }
+      ]
+    },
     "word:咳:せき": {
       "added_at": "2026-08-23",
       "audio": [
@@ -10164,6 +10298,74 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        }
+      ]
+    },
+    "word:弾く:ひく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "89b23a36af14454448051b151af4b8928958bef7cd3cd037d0b635d79850c1e9",
+          "file": "janki-298ed1af3978.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "2929fc95120d1fd3f1f5f3badb182228b7fe0032598fe555c60373a5c534c0df",
+          "file": "janki-a65e819a773b.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "421c3c4c06c990fe1b8768c02b90fd5243c7ce7a7f318117a69a523011c777b6",
+          "file": "janki-5ee408da5bdd.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-31",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
+      "exports": {
+        "brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439": "2026-08-31"
+      },
+      "sources": [
+        {
+          "ref": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+          "seen_at": "2026-08-31",
+          "type": "extract"
         }
       ]
     },
@@ -12060,6 +12262,71 @@
         {
           "ref": "medical-conditions-vocab.pdf",
           "seen_at": "2026-08-23",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:楽器:がっき": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "52adb335b2cc7fcb57499d73352b9fcd87bfcc4cef60403a0b15140c2dcd6df7",
+          "file": "janki-f95166b59041.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "8645ba79932b033af33769c4ad915c3959da766c6bfce9a8f3fbaf2cb433eb65",
+          "file": "janki-f57e8aaac84c.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "83b2cbeb6b73e4da53b44902a97f1251916eaca824299042f41ab02c72fb7f02",
+          "file": "janki-658365a02c94.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-31",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
+      "exports": {
+        "brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439": "2026-08-31"
+      },
+      "sources": [
+        {
+          "ref": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+          "seen_at": "2026-08-31",
           "type": "extract"
         }
       ]

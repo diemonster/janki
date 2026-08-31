@@ -2547,6 +2547,73 @@
     }
   },
   {
+    "id": "word:たたく:たたく",
+    "expression": "たたく",
+    "reading": "たたく",
+    "furigana": "",
+    "romaji": "tataku",
+    "meanings": [
+      "to play (a percussion instrument)"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "弟はバンドでドラムをたたきます。",
+        "furigana": "弟[おとうと]はバンドでドラムをたたきます。",
+        "romaji": "Otouto wa bando de doramu o tatakimasu.",
+        "english": "My younger brother plays the drums in a band.",
+        "audio": "audio/janki-ea0c608e993d.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "週末はスタジオでドラムをたたくんだ。",
+        "furigana": "週末[しゅうまつ]はスタジオでドラムをたたくんだ。",
+        "romaji": "Shuumatsu wa sutajio de doramu o tataku n da.",
+        "english": "On weekends I play the drums at the studio.",
+        "audio": "audio/janki-f8b68d83cce6.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "たたく",
+      "negative": "たたかない",
+      "past": "たたいた",
+      "past_negative": "たたかなかった",
+      "te_form": "たたいて",
+      "potential": "たたける",
+      "passive": "たたかれる"
+    },
+    "tags": [
+      "janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439"
+    ],
+    "usage_notes": "Used for percussion instruments such as drums; the source writes it in hiragana. The instrument takes を.",
+    "audio": "audio/janki-40546da17845.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 4300,
+    "source": {
+      "type": "extract",
+      "imported_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "ドラムをたたく",
+        "inclusion_reason": "The Expression Notes callout on page 4 (textbook p.32) directly pairs ドラムをたたく with the gloss \"to play the drum\" under the heading \"For percussion instruments\", explicitly teaching たたく as the instrument verb; no complete Japanese sentence with たたく appears in the source, so the verbatim taught line is used as context.",
+        "provisional_fields": "meanings:0d28a2d16f48",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "2143be5d1b09,72445d4ba82f",
+        "janki_pitch_accent_source": "jpdb:fa08f92601885e37ed354b66bfce9e1746f8f063d71f4131a5a54d9ee3517832"
+      }
+    }
+  },
+  {
     "id": "word:だるい:だるい",
     "expression": "だるい",
     "reading": "だるい",
@@ -7050,6 +7117,74 @@
     }
   },
   {
+    "id": "word:吹く:ふく",
+    "expression": "吹く",
+    "reading": "ふく",
+    "furigana": "吹[ふ]く",
+    "romaji": "fuku",
+    "meanings": [
+      "to play (a wind instrument)"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "父はときどきサックスを吹きます。",
+        "furigana": "父[ちち]はときどきサックスを 吹[ふ]きます。",
+        "romaji": "Chichi wa tokidoki sakkusu o fukimasu.",
+        "english": "My father sometimes plays the saxophone.",
+        "audio": "audio/janki-b1cbd3758c36.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "サックスを吹くのは楽しいよ。",
+        "furigana": "サックスを 吹[ふ]くのは 楽[たの]しいよ。",
+        "romaji": "Sakkusu o fuku no wa tanoshii yo.",
+        "english": "Playing the sax is fun.",
+        "audio": "audio/janki-ec718b43736e.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "吹く",
+      "negative": "吹かない",
+      "past": "吹いた",
+      "past_negative": "吹かなかった",
+      "te_form": "吹いて",
+      "potential": "吹ける",
+      "passive": "吹かれる"
+    },
+    "tags": [
+      "janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439"
+    ],
+    "usage_notes": "Chosen specifically for wind instruments (saxophone, flute, trumpet); do not use 弾く for these. The instrument takes を.",
+    "audio": "audio/janki-9fcb72a96acf.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL",
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2100,
+    "source": {
+      "type": "extract",
+      "imported_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "サックスを吹く",
+        "inclusion_reason": "The Expression Notes callout on page 4 (textbook p.32) directly pairs サックスを吹く with the gloss \"to play the saxophone\" under the heading \"For wind instruments\", explicitly teaching 吹く as the instrument verb; no complete Japanese sentence with 吹く appears in the source, so the verbatim taught line is used as context.",
+        "provisional_fields": "meanings:f3cc497f54ee",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "b0df01259de7,ea12eb3a0d99",
+        "janki_pitch_accent_source": "jpdb:02f261b4914621785df8048441b2552b63d764affa3654995348fdcedf952ef8"
+      }
+    }
+  },
+  {
     "id": "word:咳:せき",
     "expression": "咳",
     "reading": "せき",
@@ -8329,6 +8464,73 @@
         "anki_Front": "<div>引っ越す</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>ひっこす</div><div>To move (to a new residence)</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:弾く:ひく",
+    "expression": "弾く",
+    "reading": "ひく",
+    "furigana": "弾[ひ]く",
+    "romaji": "hiku",
+    "meanings": [
+      "to play (a stringed or keyboard instrument)"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "メアリーさんはギターを弾くことができます。",
+        "furigana": "メアリーさんはギターを 弾[ひ]くことができます。",
+        "romaji": "Mearii-san wa gitaa o hiku koto ga dekimasu.",
+        "english": "Mary can play the guitar.",
+        "audio": "audio/janki-a65e819a773b.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "週末はいつも家でギターを弾くよ。",
+        "furigana": "週末[しゅうまつ]はいつも 家[いえ]でギターを 弾[ひ]くよ。",
+        "romaji": "Shuumatsu wa itsumo ie de gitaa o hiku yo.",
+        "english": "On weekends I always play the guitar at home.",
+        "audio": "audio/janki-5ee408da5bdd.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "弾く",
+      "negative": "弾かない",
+      "past": "弾いた",
+      "past_negative": "弾かなかった",
+      "te_form": "弾いて",
+      "potential": "弾ける",
+      "passive": "弾かれる"
+    },
+    "tags": [
+      "janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439"
+    ],
+    "usage_notes": "Used for stringed and keyboard instruments (ギターを弾く, ピアノを弾く). Wind instruments take 吹く and percussion takes たたく; the instrument is marked with を.",
+    "audio": "audio/janki-298ed1af3978.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 3200,
+    "source": {
+      "type": "extract",
+      "imported_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "メアリーさんはギターを弾くことができます。",
+        "inclusion_reason": "The Expression Notes on page 4 (textbook p.32) explicitly align ギターを弾く with \"to play the guitar\" and ピアノを弾く with \"to play the piano\", teaching 弾く as the verb used for stringed and keyboard instruments; the verbatim complete sentence used as context is the grammar example on page 3 (textbook p.28).",
+        "provisional_fields": "meanings:2ed4abbb250b",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "a29808718c79,233d8714a548",
+        "janki_pitch_accent_source": "jpdb:456cb860a5327991b8cee9ca97d26fc883b47aa0e3016841e9fb91f61c470741"
       }
     }
   },
@@ -9877,6 +10079,65 @@
         "example_authority": "555f93fcaf43,e5fddc52144b",
         "janki_pitch_accent_source": "jpdb:0183ed431d585996e9ea5edd760182d9829ec1d189d1c3ba558592dc8da1e703",
         "provisional_fields": "meanings:d30f11169f5f"
+      }
+    }
+  },
+  {
+    "id": "word:楽器:がっき",
+    "expression": "楽器",
+    "reading": "がっき",
+    "furigana": "楽[がっ] 器[き]",
+    "romaji": "gakki",
+    "meanings": [
+      "musical instrument"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "何か楽器ができますか。",
+        "furigana": "何[なに]か 楽器[がっき]ができますか。",
+        "romaji": "Nanika gakki ga dekimasu ka.",
+        "english": "Can you play any instruments?",
+        "audio": "audio/janki-f57e8aaac84c.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "何か楽器できる？",
+        "furigana": "何[なに]か 楽器[がっき]できる？",
+        "romaji": "Nanika gakki dekiru?",
+        "english": "Can you play any instruments?",
+        "audio": "audio/janki-658365a02c94.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "janki:deck:brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439"
+    ],
+    "usage_notes": "When speaking of instruments in general, the source says やる and できる (potential) are normally used: 何か楽器をやりますか／何か楽器ができますか. For a specific instrument or instrument category, choose 弾く, 吹く, or たたく as appropriate.",
+    "audio": "audio/janki-f95166b59041.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 6900,
+    "source": {
+      "type": "extract",
+      "imported_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "genki-ii-lesson-13-textbook-pp26-28-and-32.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "何か楽器ができますか。",
+        "inclusion_reason": "The Expression Notes on page 4 (textbook p.32) give the sentence 何か楽器ができますか。with the aligned translation \"Can you play any instruments?\" and the English explanation \"When referring to musical instruments in general…\", making 楽器 = \"musical instrument\" unambiguous.",
+        "provisional_fields": "meanings:aa55a5d6fb47",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "6f319c4dc53d,32158bf3dff8",
+        "janki_pitch_accent_source": "jpdb:47e4fa8f354a250d729c880ca6b5c27b8525f3d776a7a36cb5e41f65f5682518"
       }
     }
   },
