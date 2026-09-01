@@ -13,11 +13,10 @@ authors = [{ name = "Brandon" }]
 dependencies = [
   "genanki>=0.13.1,<1",
   "PyYAML>=6,<7",
-  # Only for rewriting a staging file a human is part-way through reviewing
-  # (`staging.rewrite_staging`). PyYAML discards comments and any key outside
-  # the record schema on a load/dump round trip, which for that one file means
-  # deleting a reviewer's own notes; ruamel round-trips them. Everything janki
-  # *writes from scratch* still goes through PyYAML.
+  # For surgical edits to human-curated YAML: staging reviews and generated
+  # audio references in rich conjugation decks. PyYAML discards comments and
+  # quoting on a load/dump round trip; ruamel preserves them. Documents janki
+  # creates from scratch still go through PyYAML.
   "ruamel.yaml>=0.18,<1",
   # Realtime sentence audio is one raw server-side WebSocket. The dependency
   # is runtime because `janki audio --examples` uses it outside the AI extra;
@@ -39,6 +38,16 @@ ai = [
   # against the schema, so it is declared rather than leaned on transitively.
   "pydantic>=2",
 ]
+# The conversational workbench is optional. Its browser surface and protocol
+# server are useful only while `janki workbench` is running, and importing the
+# ordinary CLI/build pipeline must not require either SDK. ChatKit imports the
+# Agents package itself, while janki also names its types at the integration
+# boundary, so both direct dependencies are declared rather than relying on a
+# transitive install.
+assistant = [
+  "openai-chatkit>=1.6.5,<2",
+  "openai-agents>=0.22,<0.23",
+]
 # dev pulls in ai on purpose. The *runtime* promise is that non-AI commands
 # work without the extra, and the lazy imports keep that true; the *test suite*
 # is a different thing, and it has to exercise the AI plumbing rather than skip
@@ -56,6 +65,7 @@ dev = [
   # fallback does not hide a failed declared dependency install there.
   "playwright>=1.55,<2",
   "japanese-anki[ai]",
+  "japanese-anki[assistant]",
   # Anki itself, so `tests/test_rendered_cards.py` can ask *Anki* what the
   # templates draw instead of reading their HTML off disk. Nothing in janki
   # imports it at runtime — `collection.py` reads a collection through plain

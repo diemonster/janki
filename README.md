@@ -102,6 +102,24 @@ The first-run guide in the workbench keeps this distinction visible:
 | OpenAI Realtime | Optionally speaks example sentences with a stable per-record voice | Networked, paid API. `OPENAI_API_KEY` is required; ChatGPT billing is separate. |
 | Codex | Alternative `enrich --ai` provider for bare-word cards | Networked; run `codex login` and select `enrich_provider = "codex"`. It is not used to read a PDF or photo. |
 
+The **Ask janki** ChatKit surface is a deterministic controller over these
+repository operations; it does not buy a separate conversational-model turn.
+Its existing-card revision action has one shared consent, journal, recovery,
+staging and apply pipeline with a transport selected in `janki.toml`:
+
+```toml
+[ai]
+revise_provider = "claude-code"   # local Claude Code Pro/Max subscription login
+revise_model = "claude-opus-5"
+```
+
+Change only `revise_provider` to `"anthropic-api"` to use
+`ANTHROPIC_API_KEY` and Anthropic platform billing instead. The confirmation
+shows the selected billing path, authentication class or subscription tier,
+model, and exact request fingerprints; changing the setting invalidates an
+already-rendered confirmation. OpenAI Realtime audio remains a separate API
+operation regardless of this selection.
+
 Provider credentials are environment variables:
 
 ```bash

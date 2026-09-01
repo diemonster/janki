@@ -469,7 +469,8 @@ def execute_finish_build(
                     f"[finish-build-audio-pending] refusing to build while "
                     f"{len(book.pending_audio)} pending audio transaction(s) "
                     "still separate saved record references from canonical media; "
-                    "finish the indicated audio recovery first"
+                    "run 'janki status' and follow the exact recovery command "
+                    "it reports"
                 )
 
             results: list[BuildResult] = []

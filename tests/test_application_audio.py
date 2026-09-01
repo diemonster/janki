@@ -19,7 +19,7 @@ from japanese_anki.application.audio import (
     plan_targeted_audio,
 )
 from japanese_anki.config import ProjectConfig
-from japanese_anki.io import load_records_snapshot
+from japanese_anki.io import load_records_snapshot, load_structured
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.tts import TtsError
 
@@ -54,6 +54,19 @@ class Provider:
         raise AssertionError("planning must not dispatch audio")
 
 
+class RecordingProvider(Provider):
+    def __init__(self, name: str, voice: int | str) -> None:
+        super().__init__(name, voice)
+        self.said: list[tuple[str, bool]] = []
+
+    def available(self) -> bool:
+        return True
+
+    def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+        self.said.append((text_or_kana, forced_accent))
+        return f"audio:{text_or_kana}".encode()
+
+
 def _record(
     expression: str,
     reading: str,
@@ -73,6 +86,7 @@ def _project(tmp_path: Path, records: list[VocabularyRecord]) -> ProjectConfig:
         "[paths]\n"
         'normalized_file = "vocabulary.json"\n'
         'ledger_file = "ledger.json"\n'
+        'deck_dir = "decks"\n'
         'media_dir = "media"\n',
         encoding="utf-8",
     )
@@ -81,6 +95,41 @@ def _project(tmp_path: Path, records: list[VocabularyRecord]) -> ProjectConfig:
         encoding="utf-8",
     )
     return ProjectConfig.load(tmp_path)
+
+
+def _drill_project(tmp_path: Path) -> tuple[ProjectConfig, Path, VocabularyRecord]:
+    item = replace(
+        _record("話す", "はなす"),
+        part_of_speech="verb",
+        verb_group="godan",
+    )
+    config = _project(tmp_path, [item])
+    config.deck_dir.mkdir(parents=True)
+    deck = config.deck_dir / "potential.yaml"
+    deck.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  # This learner note must survive generated audio updates.\n"
+        '  name: "Potential"\n'
+        "  deck_id: 1047286103\n"
+        "  model_id: 1607392351\n"
+        "  source: ../vocabulary.json\n"
+        '  include_ids: ["word:話す:はなす"]\n'
+        "  drill_examples:\n"
+        '    "word:話す:はなす":\n'
+        "      - japanese: 日本語が話せます。\n"
+        "        furigana: 日本語[にほんご]が 話[はな]せます。\n"
+        "        english: I can speak Japanese.\n"
+        "        register: polite\n"
+        "      - japanese: 英語も話せる？\n"
+        "        furigana: 英語[えいご]も 話[はな]せる？\n"
+        "        english: Can you speak English too?\n"
+        "        spoken_japanese: 英語も、話せる？\n"
+        "        register: casual\n",
+        encoding="utf-8",
+    )
+    return config, deck, item
 
 
 def _word_identity(item: VocabularyRecord, provider: Provider) -> tuple[str, str, bool, str]:
@@ -825,3 +874,291 @@ def test_cli_routes_audio_through_the_shared_executor(
 
     assert cli.main(["--root", str(config.root), "audio", "--words"]) == 0
     assert calls == [(config.root, True)]
+
+
+def test_drill_audio_plan_uses_the_deck_revision_and_distinct_audio_owner(
+    tmp_path: Path,
+) -> None:
+    config, deck, _item = _drill_project(tmp_path)
+
+    plan = audio_application.plan_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=Provider("openai-realtime", "cedar"),
+    )
+
+    owner = "drill-audio:1047286103:potential:word:話す:はなす"
+    assert plan.canonical_path == deck.resolve()
+    assert plan.record_ids == (owner,)
+    assert plan.word_counts.total == 0
+    assert plan.example_counts == audio_application.AudioClipCounts(
+        total=2,
+        current=0,
+        recoverable=0,
+        provider_required=2,
+    )
+    assert [clip.request_input for clip in plan.clips] == [
+        "日本語が話せます。",
+        "英語も、話せる？",
+    ]
+
+
+def test_drill_audio_uses_the_shared_transaction_and_persists_both_references(
+    tmp_path: Path,
+) -> None:
+    config, deck, item = _drill_project(tmp_path)
+    words = RecordingProvider("voicevox", 7)
+    sentences = RecordingProvider("openai-realtime", "cedar")
+
+    first = audio_application.execute_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=words,
+        sentence_provider=sentences,
+    )
+
+    assert first.succeeded
+    assert sentences.said == [
+        ("日本語が話せます。", False),
+        ("英語も、話せる？", False),
+    ]
+    stored = load_structured(deck)["deck"]["drill_examples"][item.id]
+    assert [example["register"] for example in stored] == ["polite", "casual"]
+    assert all(example["audio"].startswith("audio/janki-") for example in stored)
+    assert all((config.media_dir / example["audio"]).is_file() for example in stored)
+    assert load_records_snapshot(config.normalized_file)[0][0].examples == []
+    rewritten = deck.read_text(encoding="utf-8")
+    assert "# This learner note must survive generated audio updates." in rewritten
+    assert 'name: "Potential"' in rewritten
+    assert '  include_ids: ["word:話す:はなす"]' in rewritten
+    assert '\n    "word:話す:はなす":\n      - japanese:' in rewritten
+
+    sentences.said.clear()
+    second = audio_application.execute_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=words,
+        sentence_provider=sentences,
+    )
+
+    assert second.succeeded
+    assert second.up_to_date == 2
+    assert sentences.said == [], "current drill clips use the same no-rebill path"
+    ledger = ledger_mod.load(config.ledger_file)
+    assert set(ledger.records) == {
+        "drill-audio:1047286103:potential:word:話す:はなす"
+    }
+
+
+def test_drill_audio_recovers_paid_stages_after_a_concurrent_deck_edit(
+    tmp_path: Path,
+) -> None:
+    config, deck, item = _drill_project(tmp_path)
+
+    class EditsDeckDuringSynthesis(RecordingProvider):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if not self.said:
+                current = deck.read_text(encoding="utf-8")
+                deck.write_text(
+                    current.replace(
+                        "english: I can speak Japanese.",
+                        "english: I am able to speak Japanese.",
+                    ),
+                    encoding="utf-8",
+                )
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    sentences = EditsDeckDuringSynthesis("openai-realtime", "cedar")
+    first = audio_application.execute_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=sentences,
+    )
+
+    assert first.state == "records-stale"
+    assert first.pending_recovery is True
+    assert len(sentences.said) == 2
+
+    second = audio_application.execute_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=sentences,
+    )
+
+    assert second.succeeded
+    assert len(sentences.said) == 2, "the exact staged clips were adopted"
+    stored = load_structured(deck)["deck"]["drill_examples"][item.id]
+    assert stored[0]["english"] == "I am able to speak Japanese."
+    assert all(example["audio"].startswith("audio/janki-") for example in stored)
+
+
+def test_drill_audio_executes_against_the_decks_declared_source(
+    tmp_path: Path,
+) -> None:
+    normalized = _record("本", "ほん")
+    source_record = replace(
+        _record("話す", "はなす"),
+        part_of_speech="verb",
+        verb_group="godan",
+    )
+    config = _project(tmp_path, [normalized])
+    source_path = tmp_path / "other.json"
+    source_path.write_text(
+        json.dumps([source_record.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    config.deck_dir.mkdir(parents=True)
+    deck = config.deck_dir / "potential.yaml"
+    deck.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: Potential\n"
+        "  deck_id: 1047286103\n"
+        "  model_id: 1607392351\n"
+        "  source: ../other.json\n"
+        '  include_ids: ["word:話す:はなす"]\n'
+        "  drill_examples:\n"
+        '    "word:話す:はなす":\n'
+        "      - japanese: 日本語が話せます。\n"
+        "        english: I can speak Japanese.\n"
+        "        register: polite\n"
+        "      - japanese: 英語も話せる？\n"
+        '        english: "Can you speak English too?"\n'
+        "        register: casual\n",
+        encoding="utf-8",
+    )
+    normalized_before = config.normalized_file.read_text(encoding="utf-8")
+    source_before = source_path.read_text(encoding="utf-8")
+    sentences = RecordingProvider("openai-realtime", "cedar")
+
+    outcome = audio_application.execute_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=sentences,
+    )
+
+    assert outcome.succeeded
+    assert [spoken for spoken, _forced in sentences.said] == [
+        "日本語が話せます。",
+        "英語も話せる？",
+    ]
+    assert config.normalized_file.read_text(encoding="utf-8") == normalized_before
+    assert source_path.read_text(encoding="utf-8") == source_before
+
+
+def test_duplicate_drill_audio_owners_refuse_before_synthesis(tmp_path: Path) -> None:
+    config, first, _item = _drill_project(tmp_path)
+    second = config.deck_dir / "another-potential.yaml"
+    second.write_text(
+        first.read_text(encoding="utf-8").replace(
+            "英語も話せる？", "明日も話せる？"
+        ),
+        encoding="utf-8",
+    )
+    sentences = RecordingProvider("openai-realtime", "cedar")
+
+    with pytest.raises(AudioPlanError, match="shared by.*distinct deck_id"):
+        audio_application.execute_deck_audio(
+            config,
+            first,
+            examples=True,
+            word_provider=RecordingProvider("voicevox", 7),
+            sentence_provider=sentences,
+        )
+
+    assert sentences.said == []
+    assert not config.ledger_file.exists()
+
+
+def test_a_vocabulary_record_cannot_alias_a_synthetic_drill_audio_owner(
+    tmp_path: Path,
+) -> None:
+    config, deck, item = _drill_project(tmp_path)
+    owner = "drill-audio:1047286103:potential:word:話す:はなす"
+    alias = replace(_record("別", "べつ"), id=owner)
+    config.normalized_file.write_text(
+        json.dumps([item.to_dict(), alias.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    sentences = RecordingProvider("openai-realtime", "cedar")
+
+    with pytest.raises(AudioPlanError, match="collides with a durable vocabulary"):
+        audio_application.execute_deck_audio(
+            config,
+            deck,
+            examples=True,
+            word_provider=RecordingProvider("voicevox", 7),
+            sentence_provider=sentences,
+        )
+
+    assert sentences.said == []
+    assert not config.ledger_file.exists()
+
+
+def test_corpus_prune_preserves_audio_owned_only_by_a_drill_deck(
+    tmp_path: Path,
+) -> None:
+    config, deck, item = _drill_project(tmp_path)
+    audio_application.execute_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=RecordingProvider("openai-realtime", "cedar"),
+    )
+    stored = load_structured(deck)["deck"]["drill_examples"][item.id]
+    paths = [config.media_dir / example["audio"] for example in stored]
+
+    outcome = audio_application.execute_corpus_audio(
+        config,
+        examples=True,
+        prune=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=RecordingProvider("openai-realtime", "cedar"),
+    )
+
+    assert outcome.succeeded
+    assert outcome.pruned_paths == ()
+    assert all(path.is_file() for path in paths)
+    owner = "drill-audio:1047286103:potential:word:話す:はなす"
+    assert owner in ledger_mod.load(config.ledger_file).records
+
+
+def test_corpus_prune_retires_audio_after_its_drill_owner_is_removed(
+    tmp_path: Path,
+) -> None:
+    config, deck, item = _drill_project(tmp_path)
+    audio_application.execute_deck_audio(
+        config,
+        deck,
+        examples=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=RecordingProvider("openai-realtime", "cedar"),
+    )
+    stored = load_structured(deck)["deck"]["drill_examples"][item.id]
+    paths = [config.media_dir / example["audio"] for example in stored]
+    deck.unlink()
+
+    outcome = audio_application.execute_corpus_audio(
+        config,
+        examples=True,
+        prune=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=RecordingProvider("openai-realtime", "cedar"),
+    )
+
+    assert outcome.succeeded
+    assert set(outcome.pruned_paths) == set(paths)
+    assert all(not path.exists() for path in paths)
+    owner = "drill-audio:1047286103:potential:word:話す:はなす"
+    assert ledger_mod.load(config.ledger_file).records[owner]["audio"] == []

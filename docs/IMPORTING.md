@@ -199,10 +199,22 @@ janki workbench
 ```
 
 The address printed in the terminal is restricted to this computer and carries
-a new key for that workbench session. The page loads no remote assets. Its
+a new key for that workbench session. The authority-bearing workbench page
+loads no remote assets. When `[assistant] enabled = true`, its **Ask janki**
+link opens a separately keyed loopback origin whose ChatKit UI is hosted by
+OpenAI; that origin never receives the workbench URL key or CSRF token. Its
 quick-start guide opens on the first dashboard view of that server session,
 collapses without changing any work, and remains available to reopen. Follow
 the source from top to bottom:
+
+Ask janki's existing-card revision action does not use a separate chat model.
+It renders one deterministic application plan, then dispatches the confirmed
+revision through `[ai].revise_provider`: `claude-code` uses the locally logged-in
+Claude Pro/Max subscription, while `anthropic-api` uses
+`ANTHROPIC_API_KEY`. Both transports use the same journal, recovery, staging,
+review and apply path. The confirmation names which billing path is active;
+changing the setting makes an open confirmation stale. This selector does not
+change OpenAI Realtime audio.
 
 1. **Add source material.** Choose a PDF, JPEG, PNG or HEIC file. This saves a
    durable copy on this computer and sends nothing to a provider.

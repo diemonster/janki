@@ -96,11 +96,15 @@ parses and writes; dictionaries report facts about words.
 
 ## The complete bare-word AI call
 
-There are two card-writing model shapes in janki. `extract` reads a source once
+There are three card-writing model shapes in janki. `extract` reads a source once
 and returns complete proposed cards plus what that source teaches. A CSV or
 dictionary import supplies only a bare vocabulary record, so `enrich --ai`
 uses `prompts/enrich-bare-word.md` and returns the same card content in one
-answer:
+answer. `revise` reads only explicitly selected existing card or deck content
+plus the owner's exact requested change and returns a separately reviewable,
+CAS-bound staging proposal; it never edits canonical content directly.
+
+The bare-word answer contains:
 
 - a compact, natural English gloss list;
 - complete values for the unoccupied polite/casual example slots, with

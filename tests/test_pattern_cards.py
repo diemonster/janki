@@ -9,6 +9,7 @@ with.
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -16,13 +17,15 @@ import pytest
 pytest.importorskip("genanki")
 
 from japanese_anki.config import ProjectConfig
+from japanese_anki.exporters import pattern_cards
 from japanese_anki.exporters.pattern_cards import (
     PatternDeckError,
     build_conjugation_deck,
     build_pattern_deck,
     cards_for,
 )
-from japanese_anki.io import DataError
+from japanese_anki.io import DataError, records_revision
+from japanese_anki.models import ExampleSentence
 from japanese_anki.patterns import Pattern, PatternSet
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -731,6 +734,12 @@ def rich_drill(
     furigana: str = "私[わたし]は 日本語[にほんご]が 話[はな]せます。",
     english: str = "I can speak Japanese.",
     register: str = "polite",
+    casual_japanese: str = "英語も話せる？",
+    casual_furigana: str = "英語[えいご]も 話[はな]せる？",
+    casual_english: str = "Can you speak English too?",
+    polite_audio: bytes | None = None,
+    casual_audio: bytes | None = None,
+    polite_audio_ref: str = "",
     usage_notes: str = "The person spoken with is marked by と.",
     name: str = "rich.apkg",
 ) -> Path:
@@ -753,13 +762,33 @@ def rich_drill(
         f"      - japanese: {json.dumps(japanese, ensure_ascii=False)}\n"
         f"        furigana: {json.dumps(furigana, ensure_ascii=False)}\n"
         f"        english: {json.dumps(english, ensure_ascii=False)}\n"
-        f"        register: {json.dumps(register, ensure_ascii=False)}\n",
+        f"        register: {json.dumps(register, ensure_ascii=False)}\n"
+        + (
+            f"        audio: {json.dumps(polite_audio_ref, ensure_ascii=False)}\n"
+            if polite_audio_ref
+            else "        audio: audio/polite.wav\n"
+            if polite_audio is not None
+            else ""
+        )
+        + f"      - japanese: {json.dumps(casual_japanese, ensure_ascii=False)}\n"
+        f"        furigana: {json.dumps(casual_furigana, ensure_ascii=False)}\n"
+        f"        english: {json.dumps(casual_english, ensure_ascii=False)}\n"
+        "        register: casual\n"
+        + ("        audio: audio/casual.wav\n" if casual_audio is not None else ""),
         encoding="utf-8",
     )
+    config = ProjectConfig.load(tmp_path)
+    if polite_audio is not None or casual_audio is not None:
+        audio_dir = config.media_dir / "audio"
+        audio_dir.mkdir(parents=True, exist_ok=True)
+        if polite_audio is not None:
+            (audio_dir / "polite.wav").write_bytes(polite_audio)
+        if casual_audio is not None:
+            (audio_dir / "casual.wav").write_bytes(casual_audio)
     target = tmp_path / name
     build_conjugation_deck(
         path,
-        ProjectConfig.load(tmp_path),
+        config,
         [
             verb(
                 "話す",
@@ -772,6 +801,303 @@ def rich_drill(
         target,
     )
     return target
+
+
+def revision_drill(tmp_path: Path) -> Path:
+    """A two-card document whose authored YAML surface must survive revision."""
+    project(tmp_path)
+    path = tmp_path / "decks" / "revision.yaml"
+    path.write_text(
+        "# document comment\n"
+        "metadata:\n"
+        "  owner: 'keep quoted'\n"
+        "deck:\n"
+        '  kind: "conjugation" # kind comment\n'
+        "  form: potential\n"
+        "  name: Revision drill\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        "  custom_key: 'keep me' # unknown deck key\n"
+        "  form_note: 'Old note.' # form-note comment\n"
+        "  include_ids:\n"
+        '    - "word:話す:はなす"\n'
+        "    - 'word:読む:よむ'\n"
+        "  drill_examples:\n"
+        '    "word:話す:はなす": # selected record comment\n'
+        '      - japanese: "日本語が話せます。" # polite sentence comment\n'
+        '        furigana: "日本語[にほんご]が 話[はな]せます。"\n'
+        '        english: "I can speak Japanese."\n'
+        "        register: polite\n"
+        "        audio: audio/polite.wav\n"
+        '        spoken_japanese: "日本語が話せます。"\n'
+        '      - japanese: "英語も話せる？" # casual sentence comment\n'
+        '        furigana: "英語[えいご]も 話[はな]せる？"\n'
+        '        english: "Can you speak English too?"\n'
+        "        register: casual\n"
+        "        audio: audio/casual.wav\n"
+        '        spoken_japanese: "英語も話せる？"\n'
+        "    'word:読む:よむ': # unselected record comment\n"
+        '      - japanese: "この本が読めます。"\n'
+        '        furigana: "この 本[ほん]が 読[よ]めます。"\n'
+        '        english: "I can read this book."\n'
+        "        register: polite\n"
+        '      - japanese: "これ、読める？"\n'
+        '        furigana: "これ、 読[よ]める？"\n'
+        '        english: "Can you read this?"\n'
+        "        register: casual\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def revised_speaking_examples() -> tuple[ExampleSentence, ExampleSentence]:
+    return (
+        ExampleSentence(
+            japanese="日本語が話せます。",
+            furigana="日本語[にほんご]が 話[はな]せます。",
+            english="I am able to speak Japanese.",
+            register="polite",
+            # Neither value is revision authority. The old values must win
+            # because the displayed Japanese did not change.
+            audio="audio/untrusted.wav",
+            spoken_japanese="untrusted override",
+        ),
+        ExampleSentence(
+            japanese="日本語、話せる？",
+            furigana="日本語[にほんご]、 話[はな]せる？",
+            english="Can you speak Japanese?",
+            register="casual",
+            audio="audio/untrusted-casual.wav",
+            spoken_japanese="untrusted casual override",
+        ),
+    )
+
+
+def test_drill_content_revision_changes_only_the_selected_content(
+    tmp_path: Path,
+) -> None:
+    import yaml
+
+    path = revision_drill(tmp_path)
+    before_text = path.read_text(encoding="utf-8")
+    before = yaml.safe_load(before_text)
+    snapshot = pattern_cards.read_drill_deck_content(path)
+
+    rendered = pattern_cards.render_drill_deck_content(
+        path,
+        expected=snapshot.revision,
+        form_note="Clearer potential-form note.",
+        drill_examples={
+            "word:話す:はなす": revised_speaking_examples(),
+        },
+    )
+
+    # Render is pure; apply is a separate authority boundary.
+    assert path.read_text(encoding="utf-8") == before_text
+    after = yaml.safe_load(rendered)
+    assert snapshot.record_ids == ("word:話す:はなす", "word:読む:よむ")
+    assert snapshot.form_note == "Old note."
+    assert after["deck"]["form_note"] == "Clearer potential-form note."
+    assert (
+        after["deck"]["drill_examples"]["word:読む:よむ"]
+        == before["deck"]["drill_examples"]["word:読む:よむ"]
+    )
+    before_outside = dict(before)
+    after_outside = dict(after)
+    before_deck = dict(before_outside["deck"])
+    after_deck = dict(after_outside["deck"])
+    for section in (before_deck, after_deck):
+        section.pop("form_note")
+        section.pop("drill_examples")
+    before_outside["deck"] = before_deck
+    after_outside["deck"] = after_deck
+    assert after_outside == before_outside
+
+    selected = after["deck"]["drill_examples"]["word:話す:はなす"]
+    polite, casual = selected
+    assert polite["english"] == "I am able to speak Japanese."
+    assert polite["audio"] == "audio/polite.wav"
+    assert polite["spoken_japanese"] == "日本語が話せます。"
+    assert "audio" not in casual
+    assert "spoken_japanese" not in casual
+    assert casual["japanese"] == "日本語、話せる？"
+
+    # Round-trip editing keeps the human-facing YAML surface, including target
+    # comments and scalar styles, instead of replacing the document with a dump.
+    for authored in (
+        "# document comment",
+        'owner: \'keep quoted\'',
+        'kind: "conjugation" # kind comment',
+        "custom_key: 'keep me' # unknown deck key",
+        "# form-note comment",
+        "# polite sentence comment",
+        "# casual sentence comment",
+        "# unselected record comment",
+    ):
+        assert authored in rendered
+    assert "form_note: 'Clearer potential-form note.'" in rendered
+
+
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        ({}, "select at least one record"),
+        (
+            {
+                "word:not-in-deck:x": revised_speaking_examples(),
+            },
+            "exact ordered subset.*unexpected word:not-in-deck:x",
+        ),
+        (
+            {
+                "word:読む:よむ": (
+                    ExampleSentence(
+                        japanese="この本が読めます。",
+                        english="I can read this book.",
+                        register="polite",
+                    ),
+                    ExampleSentence(
+                        japanese="これ、読める？",
+                        english="Can you read this?",
+                        register="casual",
+                    ),
+                ),
+                "word:話す:はなす": revised_speaking_examples(),
+            },
+            "not in deck.include_ids order",
+        ),
+    ],
+    ids=["empty", "outside-deck", "reordered"],
+)
+def test_drill_content_revision_refuses_an_inexact_selected_scope(
+    tmp_path: Path,
+    replacement: dict[str, tuple[ExampleSentence, ...]],
+    message: str,
+) -> None:
+    path = revision_drill(tmp_path)
+    snapshot = pattern_cards.read_drill_deck_content(path)
+
+    with pytest.raises(DataError, match=message):
+        pattern_cards.render_drill_deck_content(
+            path,
+            expected=snapshot.revision,
+            form_note=snapshot.form_note,
+            drill_examples=replacement,
+        )
+
+
+@pytest.mark.parametrize(
+    ("examples", "message"),
+    [
+        (
+            (revised_speaking_examples()[0],),
+            "exactly one polite and one casual ExampleSentence",
+        ),
+        (
+            (
+                revised_speaking_examples()[0],
+                replace(revised_speaking_examples()[1], register="polite"),
+            ),
+            "exactly one polite and one casual ExampleSentence",
+        ),
+        (
+            (
+                replace(revised_speaking_examples()[0], english=""),
+                revised_speaking_examples()[1],
+            ),
+            "needs japanese, english, and register",
+        ),
+        (
+            (
+                replace(revised_speaking_examples()[0], furigana="話[はな"),
+                revised_speaking_examples()[1],
+            ),
+            "furigana brackets are unbalanced",
+        ),
+    ],
+    ids=["missing-register", "duplicate-register", "incomplete", "bad-furigana"],
+)
+def test_drill_content_revision_refuses_malformed_replacement_examples(
+    tmp_path: Path,
+    examples: tuple[ExampleSentence, ...],
+    message: str,
+) -> None:
+    path = revision_drill(tmp_path)
+    snapshot = pattern_cards.read_drill_deck_content(path)
+
+    with pytest.raises(DataError, match=message):
+        pattern_cards.render_drill_deck_content(
+            path,
+            expected=snapshot.revision,
+            form_note=snapshot.form_note,
+            drill_examples={"word:話す:はなす": examples},
+        )
+
+
+def test_drill_content_revision_refuses_an_alias_that_would_change_an_unselected_card(
+    tmp_path: Path,
+) -> None:
+    path = revision_drill(tmp_path)
+    text = path.read_text(encoding="utf-8")
+    selected, _unselected = text.split("    'word:読む:よむ':", maxsplit=1)
+    selected = selected.replace(
+        '    "word:話す:はなす": # selected record comment',
+        '    "word:話す:はなす": &shared # selected record comment',
+    )
+    path.write_text(
+        selected + "    'word:読む:よむ': *shared # unselected alias\n",
+        encoding="utf-8",
+    )
+    snapshot = pattern_cards.read_drill_deck_content(path)
+
+    with pytest.raises(DataError, match="change an unselected card"):
+        pattern_cards.render_drill_deck_content(
+            path,
+            expected=snapshot.revision,
+            form_note=snapshot.form_note,
+            drill_examples={
+                "word:話す:はなす": revised_speaking_examples(),
+            },
+        )
+
+
+def test_drill_content_save_is_a_whole_deck_compare_and_swap(tmp_path: Path) -> None:
+    path = revision_drill(tmp_path)
+    snapshot = pattern_cards.read_drill_deck_content(path)
+    concurrent = snapshot.revision.text.replace("keep me", "changed elsewhere")
+    path.write_text(concurrent, encoding="utf-8")
+
+    with pytest.raises(DataError, match="Bound target changed content"):
+        pattern_cards.save_drill_deck_content(
+            path,
+            expected=snapshot.revision,
+            form_note="New note.",
+            drill_examples={
+                "word:話す:はなす": revised_speaking_examples(),
+            },
+        )
+
+    assert path.read_text(encoding="utf-8") == concurrent
+
+
+def test_drill_content_save_returns_the_exact_new_revision(tmp_path: Path) -> None:
+    path = revision_drill(tmp_path)
+    snapshot = pattern_cards.read_drill_deck_content(path)
+
+    landed = pattern_cards.save_drill_deck_content(
+        path,
+        expected=snapshot.revision,
+        form_note="New note.",
+        drill_examples={
+            "word:話す:はなす": revised_speaking_examples(),
+        },
+    )
+
+    assert landed.path == path.absolute()
+    assert landed.text == path.read_text(encoding="utf-8")
+    reread = pattern_cards.read_drill_deck_content(path)
+    assert reread.revision == landed
+    assert reread.form_note == "New note."
 
 
 def test_a_drill_can_ship_a_form_note_and_its_own_example(tmp_path: Path) -> None:
@@ -790,13 +1116,267 @@ def test_a_drill_can_ship_a_form_note_and_its_own_example(tmp_path: Path) -> Non
     assert "<ruby><rb>日本語</rb><rt>にほんご</rt></ruby>" in support
     assert "<ruby><rb>話</rb><rt>はな</rt></ruby>せます。" in support
     assert "I can speak Japanese." in support
+    assert '<div class="drill-example-label">Casual example</div>' in support
+    assert "Can you speak English too?" in support
+    assert support.count('<article class="drill-example">') == 2
     assert fields[4] == "form computed by janki; context supplied by deck and record"
 
 
-def test_a_casual_drill_example_is_labelled_casual(tmp_path: Path) -> None:
-    support = note_fields_in(rich_drill(tmp_path, register="casual"))[3]
+def test_a_rich_drill_packages_the_audio_for_both_examples(tmp_path: Path) -> None:
+    import json
+    from zipfile import ZipFile
 
-    assert '<div class="drill-example-label">Casual example</div>' in support
+    package = rich_drill(
+        tmp_path,
+        polite_audio=b"polite bytes",
+        casual_audio=b"casual bytes",
+    )
+    support = note_fields_in(package)[3]
+
+    assert "[sound:polite.wav]" in support
+    assert "[sound:casual.wav]" in support
+    with ZipFile(package) as archive:
+        manifest = json.loads(archive.read("media"))
+        stored = {name: archive.read(index) for index, name in manifest.items()}
+    assert stored == {
+        "polite.wav": b"polite bytes",
+        "casual.wav": b"casual bytes",
+    }
+
+
+def test_validate_refuses_a_missing_drill_audio_file(tmp_path: Path) -> None:
+    import json
+
+    rich_drill(
+        tmp_path,
+        polite_audio=b"polite bytes",
+        casual_audio=b"casual bytes",
+    )
+    record = verb("話す", "はなす", "godan", ["to speak"])
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([record.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+    (config.media_dir / "audio" / "polite.wav").unlink()
+    deck = tmp_path / "decks" / "drill.yaml"
+
+    problems = pattern_cards.deck_problems(
+        deck,
+        {},
+        config,
+    )
+
+    assert len(problems) == 1
+    assert "Polite drill example audio" in problems[0]
+    assert "does not exist" in problems[0]
+
+
+def test_drill_audio_save_refuses_a_result_mapped_to_the_wrong_sentence(
+    tmp_path: Path,
+) -> None:
+    rich_drill(tmp_path)
+    deck = tmp_path / "decks" / "drill.yaml"
+    config = ProjectConfig.load(tmp_path)
+    [record] = pattern_cards.drill_audio_records(
+        deck,
+        config,
+        [verb("話す", "はなす", "godan", ["to speak"])],
+    )
+    swapped = replace(record, examples=list(reversed(record.examples)))
+
+    with pytest.raises(DataError, match="changed the spoken identity"):
+        pattern_cards.save_drill_audio_records(
+            deck,
+            [swapped],
+            expected=records_revision(deck),
+        )
+
+
+def test_drill_audio_save_binds_the_spoken_override_not_only_display_text(
+    tmp_path: Path,
+) -> None:
+    rich_drill(tmp_path)
+    deck = tmp_path / "decks" / "drill.yaml"
+    config = ProjectConfig.load(tmp_path)
+    [record] = pattern_cards.drill_audio_records(
+        deck,
+        config,
+        [verb("話す", "はなす", "godan", ["to speak"])],
+    )
+    changed_spoken = replace(
+        record.examples[0], spoken_japanese="日本語が止めます。"
+    )
+    changed = replace(
+        record,
+        examples=[changed_spoken, *record.examples[1:]],
+    )
+
+    with pytest.raises(DataError, match="changed the spoken identity"):
+        pattern_cards.save_drill_audio_records(
+            deck,
+            [changed],
+            expected=records_revision(deck),
+        )
+
+
+def test_drill_audio_save_refuses_an_intervening_uncooperative_edit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rich_drill(tmp_path)
+    deck = tmp_path / "decks" / "drill.yaml"
+    config = ProjectConfig.load(tmp_path)
+    [record] = pattern_cards.drill_audio_records(
+        deck,
+        config,
+        [verb("話す", "はなす", "godan", ["to speak"])],
+    )
+    with_audio = replace(
+        record,
+        examples=[
+            replace(example, audio=f"example-{position}.wav")
+            for position, example in enumerate(record.examples, start=1)
+        ],
+    )
+    expected = records_revision(deck)
+    assert expected.text is not None
+    concurrent = expected.text + "# concurrent owner edit\n"
+    real_load = pattern_cards.yaml.load
+    loads = 0
+
+    def edit_after_rendered_parse(*args, **kwargs):
+        nonlocal loads
+        parsed = real_load(*args, **kwargs)
+        loads += 1
+        if loads == 2:
+            deck.write_text(concurrent, encoding="utf-8")
+        return parsed
+
+    monkeypatch.setattr(pattern_cards.yaml, "load", edit_after_rendered_parse)
+
+    with pytest.raises(DataError, match="changed"):
+        pattern_cards.save_drill_audio_records(
+            deck,
+            [with_audio],
+            expected=expected,
+        )
+
+    assert deck.read_text(encoding="utf-8") == concurrent
+
+
+def test_drill_audio_requires_a_conjugation_deck_before_rewrite_preflight(
+    tmp_path: Path,
+) -> None:
+    project(tmp_path)
+    deck = tmp_path / "decks" / "words.yaml"
+    deck.write_text(
+        "deck:\n  kind: vocabulary\n  name: Words\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match="require a conjugation deck, got vocabulary"):
+        pattern_cards.drill_audio_records(deck, ProjectConfig.load(tmp_path))
+
+
+def test_drill_audio_requires_rich_examples_before_rewrite_preflight(
+    tmp_path: Path,
+) -> None:
+    project(tmp_path)
+    deck = tmp_path / "decks" / "plain-drill.yaml"
+    deck.write_text(
+        "deck:\n  kind: conjugation\n  form: potential\n  name: Plain drill\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match="drill_examples is required"):
+        pattern_cards.drill_audio_records(deck, ProjectConfig.load(tmp_path))
+
+
+def test_a_drill_example_refuses_an_unpackaged_sound_tag(tmp_path: Path) -> None:
+    with pytest.raises(DataError, match="packaged media path.*verbatim sound tag"):
+        rich_drill(tmp_path, polite_audio_ref="[sound:already-in-anki.wav]")
+
+
+def test_an_interrupted_drill_package_keeps_the_prior_good_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = rich_drill(tmp_path)
+    before = package.read_bytes()
+
+    def interrupt(_package: object, output: str) -> None:
+        Path(output).write_bytes(b"partial zip")
+        raise OSError("interrupted package write")
+
+    monkeypatch.setattr(pattern_cards.genanki.Package, "write_to_file", interrupt)
+
+    with pytest.raises(OSError, match="interrupted package write"):
+        build_conjugation_deck(
+            tmp_path / "decks" / "drill.yaml",
+            ProjectConfig.load(tmp_path),
+            [
+                verb(
+                    "話す",
+                    "はなす",
+                    "godan",
+                    ["to speak"],
+                    usage_notes="The person spoken with is marked by と.",
+                )
+            ],
+            package,
+        )
+
+    assert package.read_bytes() == before
+    assert not package.with_name(f".{package.name}.partial").exists()
+
+
+@pytest.mark.parametrize(
+    ("examples", "polite", "casual"),
+    [
+        (
+            "      - {japanese: 話せます。, english: I can speak., register: polite}\n",
+            1,
+            0,
+        ),
+        (
+            "      - {japanese: 話せます。, english: I can speak., register: polite}\n"
+            "      - {japanese: また話せます。, english: I can speak again., register: polite}\n"
+            "      - {japanese: 話せる。, english: I can speak., register: casual}\n",
+            2,
+            1,
+        ),
+    ],
+    ids=["missing-casual", "duplicate-polite"],
+)
+def test_a_rich_drill_requires_exactly_one_example_in_each_register(
+    tmp_path: Path, examples: str, polite: int, casual: int
+) -> None:
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        '  include_ids: ["word:話す:はなす"]\n'
+        "  drill_examples:\n"
+        '    "word:話す:はなす":\n'
+        + examples,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        DataError,
+        match=rf"exactly one polite and one casual.*found {polite} polite and {casual} casual",
+    ):
+        build_conjugation_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            [verb("話す", "はなす", "godan", ["to speak"])],
+            tmp_path / "o.apkg",
+        )
 
 
 def test_drill_furigana_markup_is_escaped_without_joining_the_ruby_base(
@@ -1053,7 +1633,10 @@ def test_a_rich_drill_needs_an_example_for_every_card(tmp_path: Path) -> None:
         '    "word:話す:はなす":\n'
         "      - japanese: 日本語が話せます。\n"
         "        english: I can speak Japanese.\n"
-        "        register: polite\n",
+        "        register: polite\n"
+        "      - japanese: 日本語が話せる。\n"
+        "        english: I can speak Japanese.\n"
+        "        register: casual\n",
         encoding="utf-8",
     )
 
@@ -1296,8 +1879,10 @@ def test_a_scoped_rich_drill_names_an_included_record_that_cannot_ship(
         "  drill_examples:\n"
         "    word:話す:はなす:\n"
         "      - {japanese: 話せる。, english: I can speak., register: polite}\n"
+        "      - {japanese: 話せる。, english: I can speak., register: casual}\n"
         "    word:読む:よむ:\n"
-        "      - {japanese: 読める。, english: I can read., register: polite}\n",
+        "      - {japanese: 読めます。, english: I can read., register: polite}\n"
+        "      - {japanese: 読める。, english: I can read., register: casual}\n",
         encoding="utf-8",
     )
 
@@ -1884,7 +2469,8 @@ def test_refresh_builds_one_named_drill_deck(tmp_path: Path, capsys) -> None:
         (
             '  include_ids: ["word:話す:はなす"]\n  drill_examples:\n'
             '    "word:話す:はなす":\n'
-            "      - {japanese: 話せる。, english: I can speak., register: polite}",
+            "      - {japanese: 話せます。, english: I can speak., register: polite}\n"
+            "      - {japanese: 話せる。, english: I can speak., register: casual}",
             "included record(s) missing from the collection or cannot be conjugated",
         ),
         (
@@ -2018,7 +2604,8 @@ def test_validate_catches_a_deck_authored_field_separator(tmp_path: Path) -> Non
         f"  form_note: {form_note}\n"
         "  drill_examples:\n"
         '    "word:話す:はなす":\n'
-        "      - {japanese: 話せます。, english: I can speak., register: polite}\n",
+        "      - {japanese: 話せます。, english: I can speak., register: polite}\n"
+        "      - {japanese: 話せる。, english: I can speak., register: casual}\n",
         encoding="utf-8",
     )
 

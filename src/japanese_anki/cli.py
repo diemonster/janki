@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import shlex
 import sys
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -28,6 +29,7 @@ from japanese_anki import (
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import build as build_application
 from japanese_anki.application import coverage as coverage_application
+from japanese_anki.application import deck_build as deck_build_application
 from japanese_anki.application import enrichment as enrichment_application
 from japanese_anki.application import kanji_addition as kanji_application
 from japanese_anki.application import promotion as promotion_application
@@ -2083,12 +2085,31 @@ def command_audio(args: argparse.Namespace) -> int:
         prune=args.prune,
         chosen_provider=args.provider,
     )
-    outcome = (
-        audio_application.execute_targeted_audio(config, args.ids, **options)
-        if args.ids
-        else audio_application.execute_corpus_audio(config, **options)
-    )
-    return _print_audio_outcome(outcome, normalized_path=config.normalized_file.resolve())
+    owner_path = config.normalized_file.resolve()
+    if args.deck is not None:
+        if args.ids:
+            raise audio_application.AudioPlanError(
+                "--deck cannot be combined with record IDs; choose one audio scope."
+            )
+        if args.words or not args.examples:
+            raise audio_application.AudioPlanError(
+                "Deck-authored drill audio supports --examples only; pass "
+                "--examples without --words."
+            )
+        if args.prune:
+            raise audio_application.AudioPlanError(
+                "Corpus-wide --prune cannot be combined with --deck. Run "
+                "'janki audio --examples --prune' separately."
+            )
+        owner_path = resolve_deck_path(args.deck, config)
+        outcome = audio_application.execute_deck_audio(
+            config, owner_path, **options
+        )
+    elif args.ids:
+        outcome = audio_application.execute_targeted_audio(config, args.ids, **options)
+    else:
+        outcome = audio_application.execute_corpus_audio(config, **options)
+    return _print_audio_outcome(outcome, normalized_path=owner_path)
 
 
 def _print_audio_outcome(
@@ -2722,9 +2743,24 @@ def _build_one(
         # card could carry, and over records `exclude_ids` had held back.
         shipping = pattern_cards.shipping_records(deck_path, records)
         _refuse_invalid(shipping, deck_path)
-        target, count = pattern_cards.build_conjugation_deck(
-            deck_path, config, records, output
-        )
+        if output is not None:
+            # Explicit output overrides are an automation/export escape hatch,
+            # not a configured workbench consequence. Keep them on the
+            # exporter path; the ordinary build target uses the same
+            # fingerprinted application service as the workbench and ChatKit.
+            target, count = pattern_cards.build_conjugation_deck(
+                deck_path, config, records, output
+            )
+        else:
+            plan = deck_build_application.plan_conjugation_deck_build(
+                config, deck_path
+            )
+            result = (
+                deck_build_application.execute_conjugation_deck_build_locked(
+                    config, plan
+                )
+            )
+            target, count = result.output_path, result.card_count
         print(f"Built {target} — {count} drill card(s)")
         return False
     if kind == "pattern":
@@ -2882,8 +2918,8 @@ def _command_build_locked(args: argparse.Namespace, config: ProjectConfig) -> in
         raise AnkiBuildError(
             f"Refusing to build while {len(book.pending_audio)} pending audio "
             "transaction(s) still separate saved record references/media from "
-            "their canonical ledger state. Re-run 'janki audio --words', "
-            "'janki audio --examples', or both as indicated by 'janki status'; "
+            "their canonical ledger state. Run 'janki status' and follow the "
+            "exact recovery command it reports; "
             "the exact paid clips will be adopted without another provider call."
         )
     if args.all:
@@ -3128,7 +3164,7 @@ def command_patterns(args: argparse.Namespace) -> int:
 
 
 def command_workbench(args: argparse.Namespace) -> int:
-    """Open the read-only workbench dashboard over this repository."""
+    """Open the interactive workbench over this repository."""
     workbench.serve(_load_config(args), open_browser=not args.no_open)
     return 0
 
@@ -3303,12 +3339,34 @@ def command_status(args: argparse.Namespace) -> int:
     # refuses, and refuses here — before anything is written.
     book = ledger.load(config.ledger_file, repair=args.rebuild)
     universe = status.collect_records(config)
-    # Audio reads and writes only the normalized file. The broader status
-    # universe intentionally lets inline deck notes shadow normalized records
-    # for collection counts, but using that view here both hid refusals in the
-    # actual audio target and warned about inline-only notes audio never sees.
-    audio_records = (
-        load_records(config.normalized_file) if config.normalized_file.exists() else []
+    if args.rebuild and universe.ambiguous_drill_audio_owners:
+        for warning in universe.warnings:
+            if "ambiguous drill audio owner" in warning:
+                print(f"warning: {warning}", file=sys.stderr)
+        owners = ", ".join(sorted(universe.ambiguous_drill_audio_owners))
+        print(
+            "error: cannot rebuild audio while drill owners are ambiguous: "
+            f"{owners}",
+            file=sys.stderr,
+        )
+        return 1
+    # Quality counts below still use `universe.records`. The broader census is
+    # only for durable ownership/rebuild: it includes inline versions and the
+    # synthetic owners whose authored drill examples live in deck YAML. Actual
+    # sentence requests remain the two writable scopes — normalized records and
+    # unambiguous rich-drill owners — so a sourced deck does not validate the
+    # same normalized sentence once per deck.
+    normalized_audio_records = (
+        load_records(config.normalized_file)
+        if config.normalized_file.exists()
+        else []
+    )
+    durable_audio_records = universe.audio_records or universe.records
+    request_audio_records = list(normalized_audio_records)
+    request_audio_records.extend(
+        record
+        for record in durable_audio_records
+        if record.id in universe.drill_audio_decks
     )
     staged, staged_warnings = status.collect_staged(config)
     # Resolve the same two render profiles `janki audio` would use, without
@@ -3322,14 +3380,42 @@ def command_status(args: argparse.Namespace) -> int:
             for entry in book.pending_audio.values()
             if isinstance(entry, Mapping)
         ]
-        present_ids = {record.id for record in audio_records}
+        present_ids = {record.id for record in durable_audio_records}
         missing_entries = [
             entry
             for entry in pending_entries
             if str(entry.get("record_id") or "") not in present_ids
+            and str(entry.get("record_id") or "")
+            not in universe.ambiguous_drill_audio_owners
+            and str(entry.get("record_id") or "")
+            not in universe.blocked_drill_audio_decks
+            and str(entry.get("record_id") or "")
+            not in universe.inline_audio_decks
+        ]
+        ambiguous_entries = [
+            entry
+            for entry in pending_entries
+            if str(entry.get("record_id") or "")
+            in universe.ambiguous_drill_audio_owners
+        ]
+        blocked_drill_entries = [
+            entry
+            for entry in pending_entries
+            if str(entry.get("record_id") or "")
+            in universe.blocked_drill_audio_decks
+        ]
+        inline_entries = [
+            entry
+            for entry in pending_entries
+            if str(entry.get("record_id") or "") in universe.inline_audio_decks
         ]
         recoverable_entries = [
-            entry for entry in pending_entries if entry not in missing_entries
+            entry
+            for entry in pending_entries
+            if entry not in missing_entries
+            and entry not in ambiguous_entries
+            and entry not in blocked_drill_entries
+            and entry not in inline_entries
         ]
 
         def pending_flags(entries: Sequence[Mapping[str, Any]]) -> str:
@@ -3339,6 +3425,30 @@ def command_status(args: argparse.Namespace) -> int:
             if kinds == {"example"}:
                 return " --examples"
             return " --words --examples"
+
+        def pending_recovery_hint(entries: Sequence[Mapping[str, Any]]) -> str:
+            corpus_entries: list[Mapping[str, Any]] = []
+            by_deck: dict[Path, list[Mapping[str, Any]]] = {}
+            for entry in entries:
+                record_id = str(entry.get("record_id") or "")
+                deck_path = universe.drill_audio_decks.get(record_id)
+                if deck_path is None:
+                    corpus_entries.append(entry)
+                else:
+                    by_deck.setdefault(deck_path, []).append(entry)
+            commands = (
+                [f"janki audio{pending_flags(corpus_entries)}"]
+                if corpus_entries
+                else []
+            )
+            commands.extend(
+                f"janki audio --deck {shlex.quote(deck_path.stem)} --examples"
+                for deck_path in sorted(by_deck, key=lambda path: str(path))
+            )
+            rendered = [f"'{command}'" for command in commands]
+            if len(rendered) == 1:
+                return rendered[0]
+            return "each of " + ", ".join(rendered)
 
         if recoverable_entries:
             pending_ids = list(
@@ -3350,7 +3460,7 @@ def command_status(args: argparse.Namespace) -> int:
             profile_warnings.append(
                 f"{len(recoverable_entries)} pending paid audio transaction(s) "
                 "need recovery before a deck can be built. Re-run "
-                f"'janki audio{pending_flags(recoverable_entries)}' to adopt the "
+                f"{pending_recovery_hint(recoverable_entries)} to adopt the "
                 "exact staged clip(s) without another provider call: "
                 + ", ".join(record_id for record_id in pending_ids[:5] if record_id)
                 + (" ..." if len(pending_ids) > 5 else "")
@@ -3368,6 +3478,76 @@ def command_status(args: argparse.Namespace) -> int:
                 "the unreachable WAL safely: "
                 + ", ".join(record_id for record_id in missing_ids[:5] if record_id)
                 + (" ..." if len(missing_ids) > 5 else "")
+            )
+        blocked_by_deck: dict[Path, list[Mapping[str, Any]]] = {}
+        for entry in blocked_drill_entries:
+            record_id = str(entry.get("record_id") or "")
+            blocked_by_deck.setdefault(
+                universe.blocked_drill_audio_decks[record_id], []
+            ).append(entry)
+        for deck_path, entries in sorted(
+            blocked_by_deck.items(), key=lambda item: str(item[0])
+        ):
+            blocked_ids = list(
+                dict.fromkeys(str(entry.get("record_id") or "") for entry in entries)
+            )
+            shown_path = status.display_path(deck_path, config.root)
+            profile_warnings.append(
+                f"{len(entries)} pending paid audio transaction(s) belong to "
+                "a rich drill deck that cannot currently be projected. Fix "
+                f"{shown_path} first; after it validates, rerun "
+                f"'janki audio --deck {shlex.quote(deck_path.stem)} --examples' "
+                "to recover the preserved staged clip(s). Do not prune them: "
+                + ", ".join(record_id for record_id in blocked_ids[:5] if record_id)
+                + (" ..." if len(blocked_ids) > 5 else "")
+            )
+        if inline_entries:
+            inline_ids = list(
+                dict.fromkeys(
+                    str(entry.get("record_id") or "") for entry in inline_entries
+                )
+            )
+            inline_paths = sorted(
+                {
+                    path
+                    for record_id in inline_ids
+                    for path in universe.inline_audio_decks.get(record_id, ())
+                },
+                key=str,
+            )
+            migrations = [
+                "janki migrate-inline "
+                + shlex.quote(status.display_path(path, config.root))
+                for path in inline_paths
+            ]
+            migration_hint = (
+                f"Run '{migrations[0]}' first"
+                if len(migrations) == 1
+                else "Migrate the owner from these deck files first: "
+                + ", ".join(f"'{command}'" for command in migrations)
+            )
+            profile_warnings.append(
+                f"{len(inline_entries)} pending paid audio transaction(s) cannot "
+                "yet be recovered because no audio command writes inline notes. "
+                f"{migration_hint}, then rerun status for the exact recovery "
+                "command. The staged clip(s) remain preserved; do not prune them: "
+                + ", ".join(record_id for record_id in inline_ids[:5] if record_id)
+                + (" ..." if len(inline_ids) > 5 else "")
+            )
+        if ambiguous_entries:
+            ambiguous_ids = list(
+                dict.fromkeys(
+                    str(entry.get("record_id") or "")
+                    for entry in ambiguous_entries
+                )
+            )
+            profile_warnings.append(
+                f"{len(ambiguous_entries)} pending audio transaction(s) cannot "
+                "be recovered or pruned while more than one durable owner "
+                "claims the same drill-audio id. Give the decks distinct "
+                "deck_id values first: "
+                + ", ".join(ambiguous_ids[:5])
+                + (" ..." if len(ambiguous_ids) > 5 else "")
             )
     try:
         word_provider = audio_application.resolve_word_provider(config, None)
@@ -3394,7 +3574,7 @@ def command_status(args: argparse.Namespace) -> int:
         )
     if example_provider is not None:
         incompatible: list[tuple[str, int, TtsError]] = []
-        for record in audio_records:
+        for record in request_audio_records:
             for position, example in enumerate(record.examples, start=1):
                 if not example.japanese:
                     continue
@@ -3439,7 +3619,11 @@ def command_status(args: argparse.Namespace) -> int:
 
     if args.rebuild:
         summary = status.rebuild(
-            book, universe.records, config.media_dir, sources_by_id=universe.normalized_sources
+            book,
+            universe.records,
+            config.media_dir,
+            sources_by_id=universe.normalized_sources,
+            audio_records=durable_audio_records,
         )
         book.save()
         for record_id, parked in book.repaired.items():
@@ -3849,6 +4033,12 @@ def build_parser() -> argparse.ArgumentParser:
         "ids", nargs="*", metavar="ID", help="Record ids. Omit for every record."
     )
     audio_parser.add_argument(
+        "--deck",
+        type=_path,
+        metavar="STEM",
+        help="Voice the authored examples in one rich conjugation drill deck.",
+    )
+    audio_parser.add_argument(
         "--words",
         action="store_true",
         help=(
@@ -4035,7 +4225,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     workbench_parser = subparsers.add_parser(
         "workbench",
-        help="Open a localhost dashboard showing every source's state.",
+        help="Open the localhost review, revision, and build workbench.",
     )
     workbench_parser.add_argument(
         "--no-open",

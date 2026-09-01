@@ -159,11 +159,11 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     do not. Asking one of the latter for extra-high effort and then withholding
     thinking buys a fraction of what the budget was measured against, and does
     it without erroring."""
-    with_effort = claude_client._request_body(
+    with_effort = claude_client.request_body(
         NEW, [], "x", enrich.ai_schema(),
         claude_client.DEFAULT_MAX_TOKENS, claude_client.effort_for(NEW),
     )
-    without = claude_client._request_body(
+    without = claude_client.request_body(
         OLD, [], "x", enrich.ai_schema(),
         claude_client.DEFAULT_MAX_TOKENS, claude_client.effort_for(OLD),
     )
@@ -173,7 +173,7 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     # 4.6, which take thinking and not the xhigh level. Keying the pairing on
     # effort left exactly those two silently thinking-off.
     assert "thinking" not in without
-    pair = claude_client._request_body(
+    pair = claude_client.request_body(
         "claude-opus-4-6", [], "x", enrich.ai_schema(), claude_client.DEFAULT_MAX_TOKENS,
         claude_client.effort_for("claude-opus-4-6"),
     )
@@ -264,7 +264,7 @@ def test_the_request_body_asks_each_model_for_the_depth_it_accepts(
     is the same outage. `effort_for` returning `None` for such a model is
     already well pinned; what was not is which ids that covers.
     """
-    body = claude_client._request_body(
+    body = claude_client.request_body(
         model, [], "x", enrich.ai_schema(), 100, claude_client.effort_for(model)
     )
 

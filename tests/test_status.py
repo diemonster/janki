@@ -24,6 +24,7 @@ from japanese_anki import cli, extract, ledger, operations, patterns, staging
 from japanese_anki import status as status_module
 from japanese_anki.application import audio as audio_application
 from japanese_anki.config import ProjectConfig
+from japanese_anki.exporters import pattern_cards
 from japanese_anki.ledger import (
     example_audio_content_fingerprint,
     example_audio_filename_fingerprint,
@@ -85,6 +86,37 @@ def _project(
 def _sourced_deck(name: str = "Vocabulary") -> dict[str, Any]:
     """A deck built from the normalized file, the way a real one is."""
     return {"deck": {"name": name, "source": "../vocabulary.json"}, "notes": []}
+
+
+def _rich_drill_deck(
+    record_id: str, examples: list[dict[str, str]] | None = None
+) -> dict[str, Any]:
+    return {
+        "deck": {
+            "kind": "conjugation",
+            "form": "potential",
+            "name": "Potential",
+            "deck_id": 2077183471,
+            "model_id": 1607392351,
+            "source": "../vocabulary.json",
+            "include_ids": [record_id],
+            "drill_examples": {
+                record_id: examples
+                or [
+                    {
+                        "japanese": "私は日本語が話せます。",
+                        "english": "I can speak Japanese.",
+                        "register": "polite",
+                    },
+                    {
+                        "japanese": "英語も話せる？",
+                        "english": "Can you speak English too?",
+                        "register": "casual",
+                    },
+                ]
+            },
+        }
+    }
 
 
 def _status(root: Path, *flags: str) -> int:
@@ -149,6 +181,329 @@ def test_status_surfaces_pending_paid_audio_and_rebuild_preserves_it(
     assert "Pending audio recovery: 1" in captured.out
 
     assert _status(root, "--rebuild") == 0
+    after = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert after["pending_audio"] == before
+
+
+def test_rich_drill_audio_owners_do_not_enter_vocabulary_quality_counts(
+    tmp_path: Path,
+) -> None:
+    item = _record("話す", "はなす", verb_group="godan")
+    root = _project(
+        tmp_path,
+        [item.to_dict()],
+        {"potential": _rich_drill_deck(item.id)},
+    )
+    config = ProjectConfig.load(root)
+
+    universe = status_module.collect_records(config)
+
+    owner_id = pattern_cards.drill_audio_owner_id(
+        2077183471, "potential", item.id
+    )
+    assert [record.id for record in universe.records] == [item.id]
+    assert owner_id in {record.id for record in universe.audio_records}
+    assert universe.drill_audio_decks == {
+        owner_id: (root / "decks" / "potential.yaml").resolve()
+    }
+
+    report = status_module.build_report(
+        config,
+        universe,
+        ledger.load(root / "ledger.json"),
+        word_provider=None,
+        example_provider=None,
+    )
+    assert report.record_ids == [item.id]
+    assert report.total == 1
+    assert report.example_count == 0
+    assert report.unvoiced_examples == []
+
+
+def test_plain_mechanical_drill_adds_no_synthetic_audio_owner(
+    tmp_path: Path,
+) -> None:
+    item = _record("話す", "はなす", verb_group="godan")
+    root = _project(
+        tmp_path,
+        [item.to_dict()],
+        {
+            "potential": {
+                "deck": {
+                    "kind": "conjugation",
+                    "form": "potential",
+                    "name": "Potential",
+                    "deck_id": 2077183471,
+                    "model_id": 1607392351,
+                    "source": "../vocabulary.json",
+                    "include_ids": [item.id],
+                }
+            }
+        },
+    )
+
+    universe = status_module.collect_records(ProjectConfig.load(root))
+
+    assert universe.warnings == []
+    assert universe.drill_audio_decks == {}
+    assert not any(
+        record.id.startswith("drill-audio:") for record in universe.audio_records
+    )
+
+
+def test_status_validates_each_writable_sentence_scope_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = _raw(
+        "話す",
+        "はなす",
+        examples=[{"japanese": "日本語を話します。"}],
+    )
+    root = _project(
+        tmp_path,
+        [item],
+        {"first": _sourced_deck("First"), "second": _sourced_deck("Second")},
+    )
+    checked: list[str] = []
+    monkeypatch.setattr(
+        cli,
+        "validate_utterance",
+        lambda _provider, utterance: checked.append(utterance),
+    )
+
+    assert _status(root) == 0
+
+    assert checked == ["日本語を話します。"]
+
+
+def test_status_prescribes_the_deck_scope_for_pending_drill_audio(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = _record("話す", "はなす", verb_group="godan")
+    root = _project(
+        tmp_path,
+        [item.to_dict()],
+        {"potential": _rich_drill_deck(item.id)},
+    )
+    universe = status_module.collect_records(ProjectConfig.load(root))
+    owner = next(
+        record
+        for record in universe.audio_records
+        if record.id.startswith("drill-audio:")
+    )
+    example = owner.examples[0]
+    book = ledger.load(root / "ledger.json")
+    arguments = {
+        "of": "example",
+        "target": f"janki-{example_audio_filename_fingerprint(owner, example)}.wav",
+        "request_input": ledger.example_audio_request(example),
+        "forced_accent": False,
+        "content_fp": example_audio_content_fingerprint(example),
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+    }
+    key = book.pending_audio_key_for(owner.id, **arguments)
+    stage = root / "media" / "audio" / ".pending" / f"{key}-{'f' * 64}.stage"
+    stage.parent.mkdir(parents=True)
+    stage.write_bytes(b"paid")
+    book.record_pending_audio(
+        owner.id,
+        **arguments,
+        staged_file=f".pending/{key}-{'f' * 64}.stage",
+        staged_sha256="f" * 64,
+    )
+    book.save()
+    before = json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
+        "pending_audio"
+    ]
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "janki audio --deck potential --examples" in captured.err
+    assert "owner record was deleted" not in captured.err
+
+    deck = root / "decks" / "potential.yaml"
+    assert cli.main(["--root", str(root), "build", str(deck)]) == 1
+    refusal = capsys.readouterr().err
+    assert "Run 'janki status'" in refusal
+    assert "exact recovery command" in refusal
+
+    assert _status(root, "--rebuild") == 0
+    after = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert after["pending_audio"] == before
+
+
+@pytest.mark.parametrize("broken_declaration", ["include_ids", "drill_examples"])
+def test_pending_drill_audio_waits_for_its_broken_deck_instead_of_prune(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    broken_declaration: str,
+) -> None:
+    item = _record("話す", "はなす", verb_group="godan")
+    deck = _rich_drill_deck(item.id)
+    root = _project(tmp_path, [item.to_dict()], {"potential": deck})
+    universe = status_module.collect_records(ProjectConfig.load(root))
+    owner = next(
+        record
+        for record in universe.audio_records
+        if record.id.startswith("drill-audio:")
+    )
+    example = owner.examples[0]
+    book = ledger.load(root / "ledger.json")
+    arguments = {
+        "of": "example",
+        "target": f"janki-{example_audio_filename_fingerprint(owner, example)}.wav",
+        "request_input": ledger.example_audio_request(example),
+        "forced_accent": False,
+        "content_fp": example_audio_content_fingerprint(example),
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+    }
+    key = book.pending_audio_key_for(owner.id, **arguments)
+    stage = root / "media" / "audio" / ".pending" / f"{key}-{'f' * 64}.stage"
+    stage.parent.mkdir(parents=True)
+    stage.write_bytes(b"paid")
+    book.record_pending_audio(
+        owner.id,
+        **arguments,
+        staged_file=f".pending/{key}-{'f' * 64}.stage",
+        staged_sha256="f" * 64,
+    )
+    book.save()
+    before = json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
+        "pending_audio"
+    ]
+
+    # Either declaration can preserve the exact scope while the other is
+    # malformed. The union keeps already-paid bytes owned during either repair.
+    deck["deck"][broken_declaration] = []
+    (root / "decks" / "potential.yaml").write_text(
+        yaml.safe_dump(deck, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+    assert _status(root, "--rebuild") == 0
+
+    captured = capsys.readouterr()
+    assert "Fix decks/potential.yaml first" in captured.err
+    assert "after it validates" in captured.err
+    assert "janki audio --deck potential --examples" in captured.err
+    assert "'janki audio --examples'" not in captured.err
+    assert "need recovery before a deck can be built" not in captured.err
+    assert "owner record was deleted" not in captured.err
+    assert "--prune" not in captured.err
+    after = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert after["pending_audio"] == before
+
+
+def test_status_reports_duplicate_drill_audio_owners_instead_of_last_wins(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = _record("話す", "はなす", verb_group="godan")
+    first = _rich_drill_deck(item.id)
+    second = _rich_drill_deck(item.id)
+    second["deck"]["drill_examples"][item.id][1]["japanese"] = "明日も話せる？"
+    root = _project(
+        tmp_path,
+        [item.to_dict()],
+        {"first": first, "second": second},
+    )
+
+    universe = status_module.collect_records(ProjectConfig.load(root))
+    owner_id = pattern_cards.drill_audio_owner_id(
+        2077183471, "potential", item.id
+    )
+
+    assert universe.drill_audio_decks == {}
+    assert universe.ambiguous_drill_audio_owners == {owner_id}
+    assert owner_id not in {record.id for record in universe.audio_records}
+    assert any("ambiguous drill audio owner" in warning for warning in universe.warnings)
+    assert _status(root, "--rebuild") == 1
+    error = capsys.readouterr().err
+    assert "first.yaml" in error and "second.yaml" in error
+    assert "cannot rebuild audio while drill owners are ambiguous" in error
+
+
+def test_two_broken_drill_decks_still_have_an_ambiguous_structural_owner(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = _record("話す", "はなす", verb_group="godan")
+    first = _rich_drill_deck(item.id)
+    second = _rich_drill_deck(item.id)
+    first["deck"]["drill_examples"][item.id][0]["english"] = ""
+    second["deck"]["drill_examples"][item.id][0]["english"] = ""
+    root = _project(
+        tmp_path,
+        [item.to_dict()],
+        {"first": first, "second": second},
+    )
+
+    universe = status_module.collect_records(ProjectConfig.load(root))
+    owner_id = pattern_cards.drill_audio_owner_id(
+        2077183471, "potential", item.id
+    )
+
+    assert universe.drill_audio_decks == {}
+    assert universe.ambiguous_drill_audio_owners == {owner_id}
+    assert _status(root, "--rebuild") == 1
+    error = capsys.readouterr().err
+    assert "first.yaml" in error and "second.yaml" in error
+    assert "cannot rebuild audio while drill owners are ambiguous" in error
+
+
+def test_pending_inline_audio_requires_migration_instead_of_fake_recovery(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = _record("話す", "はなす", source={"type": "manual"})
+    root = _project(
+        tmp_path,
+        [],
+        {"verbs": {"deck": {"name": "Verbs"}, "notes": [item.to_dict()]}},
+    )
+    book = ledger.load(root / "ledger.json")
+    arguments = {
+        "of": "word",
+        "target": "janki-pending.wav",
+        "request_input": item.reading,
+        "forced_accent": False,
+        "content_fp": word_audio_content_fingerprint(item),
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+    }
+    key = book.pending_audio_key_for(item.id, **arguments)
+    stage = root / "media" / "audio" / ".pending" / f"{key}-{'f' * 64}.stage"
+    stage.parent.mkdir(parents=True)
+    stage.write_bytes(b"paid")
+    book.record_pending_audio(
+        item.id,
+        **arguments,
+        staged_file=f".pending/{key}-{'f' * 64}.stage",
+        staged_sha256="f" * 64,
+    )
+    book.save()
+    before = json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
+        "pending_audio"
+    ]
+
+    assert _status(root, "--rebuild") == 0
+
+    captured = capsys.readouterr()
+    assert "no audio command writes inline notes" in captured.err
+    assert "janki migrate-inline decks/verbs.yaml" in captured.err
+    assert "janki audio --words" not in captured.err
+    assert "owner record was deleted" not in captured.err
+    assert "--prune" not in captured.err
     after = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
     assert after["pending_audio"] == before
 
@@ -221,7 +576,8 @@ def test_build_refuses_while_paid_audio_transaction_is_pending(
 
     err = capsys.readouterr().err
     assert "pending audio" in err.lower()
-    assert "janki audio" in err
+    assert "Run 'janki status'" in err
+    assert "janki audio --examples" not in err
     assert not any(root.glob("dist/*.apkg"))
 
 
@@ -1446,6 +1802,39 @@ def test_duplicate_detection_sees_inline_deck_notes(
 
 
 # --- --rebuild --------------------------------------------------------------
+
+
+def test_rebuild_recovers_drill_audio_without_creating_vocabulary_provenance(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = _record("話す", "はなす", verb_group="godan")
+    deck = _rich_drill_deck(item.id)
+    root = _project(tmp_path, [item.to_dict()], {"potential": deck})
+    universe = status_module.collect_records(ProjectConfig.load(root))
+    owner = next(
+        record
+        for record in universe.audio_records
+        if record.id.startswith("drill-audio:")
+    )
+    for raw_example, example in zip(
+        deck["deck"]["drill_examples"][item.id], owner.examples, strict=True
+    ):
+        media = _media_file(root, example_audio_filename_fingerprint(owner, example))
+        raw_example["audio"] = f"audio/{media.name}"
+    (root / "decks" / "potential.yaml").write_text(
+        yaml.safe_dump(deck, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+    assert _status(root, "--rebuild") == 0
+
+    out = capsys.readouterr().out
+    assert "Records: 1" in out
+    assert "Missing example audio: 0 of 0 sentence(s)" in out
+    assert "0 word and 2 example audio file(s) matched" in out
+    rebuilt = ledger.load(root / "ledger.json").records[owner.id]
+    assert rebuilt["sources"] == []
+    assert [entry["of"] for entry in rebuilt["audio"]] == ["example", "example"]
 
 
 def _media_file(root: Path, fingerprint: str) -> Path:

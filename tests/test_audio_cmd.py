@@ -594,6 +594,111 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
     return tmp_path
 
 
+def _drill_deck(root: Path, stem: str = "potential") -> Path:
+    path = root / "data" / "decks" / f"{stem}.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text("deck:\n  kind: conjugation\n", encoding="utf-8")
+    return path
+
+
+def test_the_command_routes_a_named_deck_to_the_deck_audio_service(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [record()])
+    deck = _drill_deck(root)
+    calls: list[tuple[Path, dict[str, object]]] = []
+
+    def execute_deck(
+        config: ProjectConfig, deck_path: Path, **options: object
+    ) -> audio_application.AudioExecutionOutcome:
+        assert config.root == root.resolve()
+        calls.append((deck_path, options))
+        return audio_application.AudioExecutionOutcome(
+            state="no-records",
+            plan=None,
+            output_dir=root / "media" / "audio",
+            no_records=True,
+        )
+
+    monkeypatch.setattr(audio_application, "execute_deck_audio", execute_deck)
+    monkeypatch.setattr(
+        audio_application,
+        "execute_targeted_audio",
+        lambda *args, **kwargs: pytest.fail("record-id scope was used"),
+    )
+    monkeypatch.setattr(
+        audio_application,
+        "execute_corpus_audio",
+        lambda *args, **kwargs: pytest.fail("corpus scope was used"),
+    )
+
+    assert cli.main(
+        [
+            "--root",
+            str(root),
+            "audio",
+            "--deck",
+            "potential",
+            "--examples",
+            "--force",
+        ]
+    ) == 0
+
+    assert calls == [
+        (
+            deck.resolve(),
+            {
+                "words": False,
+                "examples": True,
+                "force": True,
+                "prune": False,
+                "chosen_provider": None,
+            },
+        )
+    ]
+    assert f"No records to voice in {deck.resolve()}." in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            ["word:橋:はし", "--deck", "potential", "--examples"],
+            "cannot be combined with record IDs",
+        ),
+        (
+            ["--deck", "potential", "--words", "--examples"],
+            "supports --examples only",
+        ),
+        (["--deck", "potential"], "supports --examples only"),
+        (
+            ["--deck", "potential", "--examples", "--prune"],
+            "cannot be combined with --deck",
+        ),
+    ],
+)
+def test_deck_audio_refuses_incompatible_scopes_before_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    arguments: list[str],
+    message: str,
+) -> None:
+    root = project(tmp_path, [record()])
+    _drill_deck(root)
+    monkeypatch.setattr(
+        audio_application,
+        "execute_deck_audio",
+        lambda *args, **kwargs: pytest.fail("an invalid scope reached dispatch"),
+    )
+
+    assert cli.main(["--root", str(root), "audio", *arguments]) == 1
+
+    assert message in capsys.readouterr().err
+
+
 def test_the_command_refuses_before_spending_when_the_engine_is_down(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

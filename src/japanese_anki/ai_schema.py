@@ -1,12 +1,14 @@
-"""Shared structured-output shapes for the two card-writing AI paths.
+"""Shared structured-output shapes for the three card-writing AI paths.
 
 ``extract`` reads source material and ``enrich --ai`` reads a bare vocabulary
-record.  The surrounding evidence differs, but the card values they return use
-one schema here: nonblank meanings, complete example items, and an explicit
-usage note that may be empty. Extraction returns a complete candidate card,
-including for an already-known identity, and therefore requires both card
-slots; enrichment may preserve a reviewed example and return only the
-unoccupied slot, so only its example-list cardinality is flexible.
+record. ``revise`` reads an explicitly selected existing card or deck and the
+owner's exact requested change. Extraction returns a complete
+candidate card, including for an already-known identity, and therefore requires
+both card slots; enrichment may preserve a reviewed example and return only the
+unoccupied slot, so only its example-list cardinality is flexible. Revision's
+conjugation-deck shape uses the drill artifact's narrower example fields and
+requires both slots for every selected record, but cannot express identity,
+deck, source, approval, audio, or romaji decisions.
 Keeping the model classes behind functions preserves the project's optional
 ``ai`` dependency — importing janki for a build must not import Pydantic.
 
@@ -22,6 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 __all__ = [
+    "conjugation_deck_revision_schema",
     "generated_example_schema",
     "adapt_rich_card",
     "extraction_rich_card_schema",
@@ -87,7 +90,7 @@ def adapt_rich_card(value: Any) -> RichCardContent:
 
 @functools.cache
 def generated_example_schema() -> Any:
-    """The example shape shared byte-for-byte by both card-writing paths."""
+    """The vocabulary example shape shared by extraction and enrichment."""
     from typing import Annotated
 
     from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -164,6 +167,64 @@ def extraction_rich_card_schema() -> Any:
             return self
 
     return RichCard
+
+
+@functools.cache
+def conjugation_deck_revision_schema() -> Any:
+    """Owner-requested rich examples for selected conjugation-drill cards.
+
+    The response contract exposes only the two content fields this pass may
+    propose: a deck-wide form note and the polite/casual examples for named
+    record IDs. The application layer compares those IDs with the exact
+    selection sent in the request; keeping paths, identities, approvals and
+    audio out of this schema makes it impossible for a model answer to decide
+    any of them.
+    """
+    from typing import Annotated
+
+    from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+
+    NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+    class RevisionExample(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        japanese: NonBlank = Field(description="Japanese sentence.")
+        speech_level: Literal["polite", "casual"] = Field(
+            description="Speech level."
+        )
+        furigana: NonBlank = Field(description="Sentence with Anki furigana.")
+        english: NonBlank = Field(description="Natural English translation.")
+
+    class RevisionCard(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        record_id: NonBlank = Field(description="Selected record identifier.")
+        examples: list[RevisionExample] = Field(min_length=2, max_length=2)
+
+        @model_validator(mode="after")
+        def has_one_example_for_each_card_slot(self) -> Any:
+            levels = [example.speech_level for example in self.examples]
+            if levels.count("polite") != 1 or levels.count("casual") != 1:
+                raise ValueError(
+                    "examples must contain exactly one polite and one casual value"
+                )
+            return self
+
+    class ConjugationDeckRevision(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        form_note: str = Field(description="Proposed deck-wide form note.")
+        cards: list[RevisionCard] = Field(min_length=1)
+
+        @model_validator(mode="after")
+        def has_unique_record_ids(self) -> Any:
+            identifiers = [card.record_id for card in self.cards]
+            if len(identifiers) != len(set(identifiers)):
+                raise ValueError("cards must contain each record_id exactly once")
+            return self
+
+    return ConjugationDeckRevision
 
 
 @functools.cache

@@ -40,9 +40,12 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-opus-5"
     assert config.enrich_reasoning_effort == "ultra"  # codex-only, inert here
+    assert config.revise_provider == "anthropic-api"
+    assert config.revise_model == "claude-opus-5"
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46
+    assert config.assistant_enabled is False
     assert capsys.readouterr().err == ""
 
 
@@ -63,11 +66,16 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
         enrich_provider = "anthropic"
         enrich_model = "claude-sonnet-5"
         enrich_reasoning_effort = "high"
+        revise_provider = "claude-code"
+        revise_model = "claude-opus-5-20260801"
 
         [tts]
         provider = "voicevox"
         voicevox_url = "http://voice.local:1234"
         voicevox_speaker = 8
+
+        [assistant]
+        enabled = true
         """,
     )
 
@@ -81,13 +89,31 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-sonnet-5"
     assert config.enrich_reasoning_effort == "high"
+    assert config.revise_provider == "claude-code"
+    assert config.revise_model == "claude-opus-5-20260801"
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://voice.local:1234"
     assert config.voicevox_speaker == 8
     # Falsifiable now that _int refuses to coerce: a float or bool would raise
     # above, and a future coercion regression would fail here.
     assert type(config.voicevox_speaker) is int
+    assert config.assistant_enabled is True
     assert capsys.readouterr().err == ""
+
+
+def test_assistant_enabled_refuses_a_string_that_only_looks_boolean(
+    tmp_path: Path,
+) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [assistant]
+        enabled = "true"
+        """,
+    )
+
+    with pytest.raises(ConfigError, match=r"\[assistant\] enabled must be true or false"):
+        ProjectConfig.load(tmp_path)
 
 
 @pytest.mark.parametrize("retired", ["azure_voice", "azure_region"])
@@ -217,6 +243,24 @@ def test_an_explicit_anthropic_provider_gets_an_anthropic_model_default(
     assert config.enrich_model == "claude-opus-5"
 
 
+def test_an_unknown_revision_provider_is_rejected(tmp_path: Path) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        revise_provider = "automatic"
+        """,
+    )
+
+    with pytest.raises(ConfigError) as caught:
+        ProjectConfig.load(tmp_path)
+
+    message = str(caught.value)
+    assert "revise_provider" in message
+    assert "claude-code" in message
+    assert "anthropic-api" in message
+
+
 def test_unknown_section_warns_with_the_nearest_valid_section(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -283,6 +327,7 @@ def test_the_repository_config_loads_without_warnings(
     assert config.name == "Brandon Japanese"
     assert config.deck_dir == PROJECT_ROOT / "data/decks"
     assert config.ledger_file == PROJECT_ROOT / "data/ledger.json"
+    assert config.revise_provider == "claude-code"
 
 
 @pytest.mark.parametrize(

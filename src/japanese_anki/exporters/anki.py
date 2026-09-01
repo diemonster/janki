@@ -939,6 +939,16 @@ def resolve_deck_output_path(
     return (project_config.dist_dir / filename).resolve()
 
 
+def _write_package_atomic(package: Any, output_path: Path) -> None:
+    """Publish a complete package without exposing an interrupted ZIP."""
+    scratch = output_path.with_name(f".{output_path.name}.partial")
+    try:
+        package.write_to_file(str(scratch))
+        os.replace(scratch, output_path)
+    finally:
+        scratch.unlink(missing_ok=True)
+
+
 def build_deck(
     deck_path: Path,
     project_config: ProjectConfig,
@@ -1077,12 +1087,7 @@ def build_deck(
     # look broken until Anki refuses it. `os.replace` is atomic within a
     # directory, so the previous package survives intact until the new one is
     # whole.
-    scratch = output_path.with_name(f".{output_path.name}.partial")
-    try:
-        package.write_to_file(str(scratch))
-        os.replace(scratch, output_path)
-    finally:
-        scratch.unlink(missing_ok=True)
+    _write_package_atomic(package, output_path)
     return BuildResult(
         output_path=output_path,
         deck_name=deck_name,

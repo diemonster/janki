@@ -6,8 +6,8 @@ Create a reproducible local pipeline that converts Japanese study material into
 Anki decks without making Anki's database the only copy of the learning content.
 
 > **Design v2 (2026-08):** the architecture below was extended with jpdb.io
-> and PDF data sources, a machine-written word ledger, two rich card-writing
-> model calls, and TTS pronunciation audio. The current one-page contract is
+> and PDF data sources, a machine-written word ledger, three explicit
+> card-writing model calls, and TTS pronunciation audio. The current one-page contract is
 > `docs/DESIGN.md`; `docs/DESIGN_V2.md` preserves the longer rationale.
 
 ## Architecture
@@ -138,11 +138,14 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
   add a PDF, review source-scoped meanings and exact Japanese examples beside
   the page, choose one home deck, add reviewed cards to the library, preview,
   and build the Anki file without terminal, JSON, or YAML work.
-- Workflow-first, not chat-first. Approving twelve exact sentences is a
+- Workflow-first, not chat-only. Approving twelve exact sentences is a
   decision with a durable consequence and a bill attached, so it gets a page
-  with the sentences on it and a button that names the action. An optional
-  read-only assistant may explain and navigate; it never holds authority and
-  never becomes a third Japanese card-writing path.
+  with the sentences on it and a button that names the action. The optional
+  conversational assistant may inspect, plan, and execute an existing
+  application operation after the owner confirms its exact one-use plan. It
+  cannot infer, broaden, reuse, or confirm that authority for the owner;
+  Japanese revision remains the separately journaled and staged third
+  card-writing path rather than an untracked chat edit.
 - The CLI and workbench call the same typed application services and preserve
   the same repository authority, paid consent, identity, review, provenance,
   locking, and recovery contracts.

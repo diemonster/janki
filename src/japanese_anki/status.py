@@ -42,13 +42,14 @@ from japanese_anki.collection import (
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
+from japanese_anki.exporters import pattern_cards
 from japanese_anki.exporters.anki import (
     deck_declared_ids,
     deck_declared_record_versions,
     resolve_deck_records,
 )
 from japanese_anki.identifiers import normalize_identity_part
-from japanese_anki.io import load_records
+from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.ledger import (
     Ledger,
     example_audio_content_fingerprint,
@@ -114,6 +115,19 @@ class RecordUniverse:
     # not collapse same-id inline overrides: two cards can durably demand two
     # render profiles while sharing one identity-addressed filename.
     audio_records: list[VocabularyRecord] = field(default_factory=list)
+    # Synthetic rich-drill owners live in deck YAML, not vocabulary.json.
+    # This map makes pending recovery name the exact deck scope that can write
+    # the reference back without treating those owners as vocabulary records.
+    drill_audio_decks: dict[str, Path] = field(default_factory=dict)
+    # Structurally exact rich-drill owners whose deck cannot currently project
+    # a writable record. Their paid WAL remains owned, but repair comes first.
+    blocked_drill_audio_decks: dict[str, Path] = field(default_factory=dict)
+    # A collision is never assigned to whichever deck happened to sort last:
+    # recovery and prune must stop until the owner namespace is unambiguous.
+    ambiguous_drill_audio_owners: set[str] = field(default_factory=set)
+    # Durable inline-only owners are real, but corpus audio cannot write their
+    # deck YAML and drill audio owns only synthetic `drill-audio:` identities.
+    inline_audio_decks: dict[str, tuple[Path, ...]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     # The normalized file's own source per id, kept even where a deck note
     # shadows the record: the deck-resolved copy is what a deck exports, but
@@ -154,6 +168,22 @@ def deck_files(config: ProjectConfig) -> list[Path]:
     return paths
 
 
+def _inline_record_ids(deck_path: Path) -> set[str]:
+    """Stable ids physically authored under one already-validated notes list."""
+    raw = load_structured(deck_path)
+    if not isinstance(raw, Mapping):
+        raise DataError(f"Deck file must contain a mapping: {deck_path}")
+    notes = raw.get("notes") or []
+    if not isinstance(notes, list):
+        raise DataError(f"The notes section must be a list: {deck_path}")
+    if not all(isinstance(item, dict) for item in notes):
+        raise DataError(f"Each note must be a mapping: {deck_path}")
+    return {
+        str(item.get("id", "")).strip() or VocabularyRecord.from_dict(item).id
+        for item in notes
+    }
+
+
 def collect_records(config: ProjectConfig) -> RecordUniverse:
     """Every record janki manages, from the normalized file and every deck.
 
@@ -168,6 +198,11 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
     normalized_ids: set[str] = set()
     normalized_sources: dict[str, SourceReference] = {}
     audio_records: list[VocabularyRecord] = []
+    drill_audio_decks: dict[str, Path] = {}
+    blocked_drill_audio_decks: dict[str, Path] = {}
+    drill_candidates: list[tuple[VocabularyRecord, Path]] = []
+    structural_drill_paths: dict[str, set[Path]] = {}
+    inline_audio_paths: dict[str, set[Path]] = {}
     if config.normalized_file.exists():
         for record in load_records(config.normalized_file):
             by_id[record.id] = record
@@ -177,9 +212,26 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
 
     decks: list[DeckView] = []
     for deck_path in deck_files(config):
+        resolved_path = deck_path.resolve()
         try:
-            _, records = resolve_deck_records(deck_path)
-            audio_records.extend(deck_declared_record_versions(deck_path))
+            structural_owners = pattern_cards.declared_drill_audio_owner_ids(
+                deck_path
+            )
+        except JankiError:
+            structural_owners = frozenset()
+        for owner_id in structural_owners:
+            structural_drill_paths.setdefault(owner_id, set()).add(resolved_path)
+        try:
+            deck_config, records = resolve_deck_records(deck_path)
+            declared_versions = deck_declared_record_versions(deck_path)
+            audio_records.extend(declared_versions)
+            for record_id in _inline_record_ids(deck_path) - normalized_ids:
+                inline_audio_paths.setdefault(record_id, set()).add(resolved_path)
+            kind = str(deck_config.get("kind") or "").strip().lower()
+            if kind == "conjugation" and deck_config.get("drill_examples") is not None:
+                drill_records = pattern_cards.drill_audio_records(deck_path, config)
+                for record in drill_records:
+                    drill_candidates.append((record, resolved_path))
         except JankiError as exc:
             warnings.append(f"skipping deck {deck_path}: {exc}")
             continue
@@ -191,12 +243,53 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
             DeckView(path=deck_path, stem=deck_path.stem, ids=[record.id for record in records])
         )
 
+    ordinary_audio_ids = {record.id for record in audio_records}
+    drill_paths = structural_drill_paths
+    for record, deck_path in drill_candidates:
+        drill_paths.setdefault(record.id, set()).add(deck_path)
+    ambiguous_drill_audio_owners = {
+        record_id
+        for record_id, paths in drill_paths.items()
+        if len(paths) > 1 or record_id in ordinary_audio_ids
+    }
+    projected = {
+        (record.id, deck_path): record for record, deck_path in drill_candidates
+    }
+    for record_id, paths in drill_paths.items():
+        if record_id in ambiguous_drill_audio_owners:
+            owners = ", ".join(str(path) for path in sorted(paths, key=str))
+            collision = (
+                " and a durable vocabulary record"
+                if record_id in ordinary_audio_ids
+                else ""
+            )
+            warnings.append(
+                f"ambiguous drill audio owner {record_id!r} is claimed by "
+                f"{owners}{collision}; give the decks distinct deck_id values "
+                "before generating, recovering, rebuilding, or pruning audio"
+            )
+        else:
+            deck_path = next(iter(paths))
+            record = projected.get((record_id, deck_path))
+            if record is None:
+                blocked_drill_audio_decks[record_id] = deck_path
+            else:
+                drill_audio_decks[record_id] = deck_path
+                audio_records.append(record)
+
     records = sorted(by_id.values(), key=lambda record: record.id)
     return RecordUniverse(
         records=records,
         decks=decks,
         normalized_count=sum(1 for record in records if record.id in normalized_ids),
         audio_records=audio_records,
+        drill_audio_decks=drill_audio_decks,
+        blocked_drill_audio_decks=blocked_drill_audio_decks,
+        ambiguous_drill_audio_owners=ambiguous_drill_audio_owners,
+        inline_audio_decks={
+            record_id: tuple(sorted(paths, key=str))
+            for record_id, paths in inline_audio_paths.items()
+        },
         warnings=warnings,
         normalized_sources=normalized_sources,
     )
@@ -1381,18 +1474,21 @@ def rebuild(
     records: Iterable[VocabularyRecord],
     media_dir: Path,
     sources_by_id: dict[str, SourceReference] | None = None,
+    audio_records: Iterable[VocabularyRecord] | None = None,
 ) -> RebuildSummary:
     """Reconstruct the ledger entries that records and media files still prove.
 
-    Sources come from each record's own ``source`` — except where
+    Sources come from each vocabulary record's own ``source`` — except where
     ``sources_by_id`` (the normalized file's own sources, see
     ``RecordUniverse.normalized_sources``) knows better: a deck note that
     shadows a normalized record carries a default-manual source that is not
-    the record's provenance, and the ledger is committed to git. Audio comes
-    from files whose names match the filename fingerprints. Neither carries a
-    date, so the dates written here are today's — a reconstruction, not
-    history. Export state is not reconstructible at all: nothing outside the
-    ledger records which build included which note. The caller must say so.
+    the record's provenance, and the ledger is committed to git. ``audio_records``
+    may additionally carry synthetic rich-drill owners: their files and ledger
+    rows are durable, but they are not vocabulary provenance. Audio comes from
+    files whose names match the filename fingerprints. Neither carries a date,
+    so the dates written here are today's — a reconstruction, not history.
+    Export state is not reconstructible at all: nothing outside the ledger
+    records which build included which note. The caller must say so.
 
     Existing entries are left alone: a real ``janki audio`` entry knows the
     provider and voice, and must not be replaced by a rebuilt one that does not.
@@ -1404,8 +1500,12 @@ def rebuild(
     # ambiguous nor unmatched, and so absent from the accounting entirely.
     claimed: set[Path] = set()
     sources = word_audio = example_audio = unprovable = 0
+    source_records = list(records)
+    durable_audio_records = (
+        list(audio_records) if audio_records is not None else source_records
+    )
 
-    for record in records:
+    for record in source_records:
         # Only a *default* source defers to the normalized file. A deck note
         # that states its own source said something deliberate, into a file that
         # is committed to git; the fallback exists for the note that said
@@ -1416,6 +1516,7 @@ def rebuild(
         if book.record_source_seen(record.id, source.type or "manual", source.imported_from):
             sources += 1
 
+    for record in durable_audio_records:
         word_file = _first(
             media.get(word_audio_filename_fingerprint(record)), record.audio
         )

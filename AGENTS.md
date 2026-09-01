@@ -33,11 +33,15 @@ or second-guesses what came back.
   the answer. A prompt needing a branch in its instruction prose is two prompts
   — that is why extraction's three modes are three complete files rather than
   one file plus three rule blocks.
-- **There are two card-writing model calls.** `extract` reads a source once and
+- **There are three card-writing model calls.** `extract` reads a source once and
   returns complete proposed cards plus the patterns the source teaches;
   `enrich --ai` receives a bare vocabulary record and returns the same meanings,
-  examples, and usage-note shape. Pattern discovery and meaning improvement are
-  parts of those rich answers, never follow-up paid passes. `janki patterns`
+  examples, and usage-note shape; `revise` receives an explicitly selected
+  existing card or deck plus the owner's requested change and writes a staging
+  proposal, never canonical content. ChatKit may dispatch `revise` after a
+  plan-bound owner confirmation, but it is a surface over that pass rather than
+  another writing path. Pattern discovery and meaning improvement are parts of
+  the first two rich answers, never automatic follow-up audits. `janki patterns`
   only lists and records human review of pattern sets already written by
   `extract`.
 - **janki's logic enriches the card; it never audits the model.** Review
@@ -49,6 +53,26 @@ or second-guesses what came back.
   say in the commit why not.
 
 ## Development rules
+
+### Content delivery is not platform work
+
+- A request to create, revise, voice, or build Japanese study content starts in
+  the **content-delivery lane**. Use the existing pipeline, validate its exact
+  artifacts, and deliver the requested deck before considering platform
+  improvements. Do not turn a useful enhancement, refactor, roadmap item, or
+  code audit into an unstated prerequisite for that artifact.
+- If existing machinery truly cannot produce the requested artifact safely,
+  state the missing capability and get the owner's explicit approval before
+  entering the **platform lane**. Keep that work separately scoped. A content
+  request alone does not authorize a codebase change merely because one would
+  make future content easier.
+- Code-review findings and Japanese-content findings never share a review. A
+  code review cannot block content-only delivery, and a content review cannot
+  expand into a code audit. Generated-media and ledger consistency are checked
+  mechanically.
+- A surfaced workbench content job keeps its own progress, recovery state and
+  deliverable. Assistant/UI work may improve that lane later; it cannot replace
+  the current job or leave the owner waiting in a coding interface.
 
 - **Pre-release: there are no legacy paths.** Nothing is released and nothing
   outside this repository depends on this code. When an approach is
@@ -132,6 +156,11 @@ below is what is left, and it is the loop every other project already uses.*
   must not infer, generate, grant, or widen one of these decisions. **It must
   not answer an approval prompt as the user** — which is why the extract gate
   refuses on a non-TTY rather than proceeding.
+- A direct owner confirmation inside ChatKit is still the owner's decision, not
+  the assistant answering for them. It is valid only when it consumes a one-use
+  capability bound to the exact plan the conversation rendered. The assistant
+  may never infer that confirmation from an earlier broad request, confirm its
+  own proposal, or reuse or widen the capability.
 - **Staging coverage acceptance is the exception, decided 2026-08-16.** It was
   on the list above until the owner measured what it cost: since M8.4 deleted
   oracles every extraction *carrying a table* lands `unmeasured` — a prose-only
@@ -227,14 +256,14 @@ below is what is left, and it is the loop every other project already uses.*
    source, request and staging state described before the click. A model
    coverage verdict records its model and prompt provenance. The workbench
    never manufactures a CLI approval flag or makes an automatic identity,
-   deck, coverage, review or promotion decision. Both
-   card-writing paths require a nonblank
-   meaning list, complete fields on every returned example, and an explicit
-   usage note that may be empty. Schema-v5 extraction additionally requires
-   exactly one polite and one casual example plus source-kind evidence before
-   the answer can be staged; enrich keeps example-list cardinality flexible so
-   it can complete only the unoccupied card slots. These are structural card
-   contracts, not Japanese audits. Schema-v4 and newer extraction also writes
+   deck, coverage, review or promotion decision. Extraction and enrichment
+   require a nonblank meaning list, complete fields on every returned example,
+   and an explicit usage note that may be empty. Schema-v5 extraction
+   additionally requires exactly one polite and one casual example plus
+   source-kind evidence before the answer can be staged; enrich keeps
+   example-list cardinality flexible so it can complete only the unoccupied
+   card slots. These are structural card contracts, not Japanese audits.
+   Schema-v4 and newer extraction also writes
    machine-owned
    `candidate_accounting`: coverage v2 binds its parsed/canonical/unusable/
    duplicate counts and fingerprint, and every stable-ID collision group keeps
@@ -248,6 +277,12 @@ below is what is left, and it is the loop every other project already uses.*
    value — not the proposed value, which a reviewer may improve. If any bound
    old value changes before promote, the whole staged replacement is stale and
    nothing lands.
+   A `revise` answer is a separate JSON proposal in this directory. It binds
+   the exact selected deck bytes, owner instruction, model request and old
+   editable values. Source promotion ignores it: the workbench shows its
+   old/new deck diff, and a separate owner action revalidates that binding
+   before writing the deck. Audio and build remain later, separately planned
+   actions.
 5. `data/staging/done/`: canonical promoted rows as they actually landed, with
    the staging metadata preserved and archival count/review text added —
    **committed**, the record of what each source yielded and what a reviewer
@@ -300,6 +335,15 @@ A new import must not erase manually curated examples, notes, conjugations, or f
 
 - `scripts/janki-review.sh` is the tracked implementation used by the
   post-commit advisory review and the pre-push review gate.
+- **Code review and Japanese-content review are separate.** The code reviewer
+  excludes `data/**` and `dist/**`; a content-only commit or push must not start
+  Claude at all, and a mixed range exposes only its non-content paths to the
+  code reviewer. It may inspect code that preserves or renders Japanese fields,
+  but it never judges whether repository Japanese, readings, furigana,
+  translations, examples, or usage notes are correct or natural. Content is
+  reviewed through the workbench and owner acceptance. This owner decision
+  supersedes older handoff instructions that said every commit, including a
+  content-only submission, needed the code-reviewer agent.
 - `scripts/bootstrap.sh` installs thin shims into Git's hooks directory. Run
   `scripts/install-review-hooks.sh` directly to refresh only those shims.
 - Never overwrite an unrelated local hook. The installer refuses a conflict so

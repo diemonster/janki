@@ -163,14 +163,21 @@ A lesson-specific conjugation deck may add a deck-wide `form_note` and a
 `drill_examples` mapping keyed by exact canonical record id. These are
 explicitly authored examples of the form being drilled; they are not rewritten
 from the record's ordinary vocabulary examples. Such a deck must pin a
-nonempty `include_ids` lesson scope. Every included record needs at least one
-complete Japanese/English example labelled `polite` or `casual`, and every
-included record must still exist and be conjugable into the requested form.
+nonempty `include_ids` lesson scope. Every included record needs exactly one
+complete Japanese/English example labelled `polite` and exactly one labelled
+`casual`. Every included record must still exist and be conjugable into the
+requested form.
 `form_note` never stands alone: when present, it requires that complete
 `drill_examples` mapping. Duplicate mapping keys anywhere in a pattern or
 conjugation deck are refused before the YAML loader can discard either authored
 value.
-Every authored example value is text (`furigana` may be empty or omitted).
+Every authored example value is text (`furigana`, `audio`, and
+`spoken_japanese` may be empty or omitted). `janki audio --deck NAME
+--examples` fills `audio` through the same reviewed sentence provider, voice
+selection, journal, recovery WAL, ledger, and media packaging used by
+vocabulary examples. A sparse human-authored `spoken_japanese` is the same
+exact-input override available on a vocabulary example; the displayed
+sentence is unchanged.
 The example's `furigana` value uses balanced Anki-style `word[reading]`
 notation. Any Unicode whitespace terminates a possible ruby base. One ASCII
 space immediately before an annotated run is Anki's boundary marker and is
@@ -184,7 +191,9 @@ non-conjugation deck.
 
 The rendered explanation, examples, verb group, and canonical `usage_notes`
 share the existing `Examples` field of the six-field `Japanese Pattern`
-notetype. The field order, model id, and `drill:<form>:<record-id>` GUID stay
+notetype. Each stored drill-example audio path is packaged and rendered beside
+its matching sentence. The field order, model id, and
+`drill:<form>:<record-id>` GUID stay
 unchanged, so a richer rebuild updates installed drill notes and preserves
 their scheduling. A rich card's `Source` says the form was computed by janki
 while its context came from the deck and record; a plain mechanical drill keeps

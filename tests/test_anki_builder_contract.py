@@ -241,6 +241,11 @@ def test_genki_lesson_13_potential_drill_has_its_exact_study_scope() -> None:
 
     assert set(section["include_ids"]) == selected
     assert set(section["drill_examples"]) == selected
+    assert sum(len(examples) for examples in section["drill_examples"].values()) == 32
+    for examples in section["drill_examples"].values():
+        assert [example["register"] for example in examples] == ["polite", "casual"]
+        assert all(example.get("audio", "").startswith("audio/janki-") for example in examples)
+        assert all((config.media_dir / example["audio"]).is_file() for example in examples)
     assert shipped == selected
     assert pattern_cards.deck_problems(deck_path, {}, config) == []
 

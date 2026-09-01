@@ -42,8 +42,22 @@ fi
 
 command -v claude >/dev/null 2>&1 || exit 0
 
-# Nothing to look at. Also covers empty commits and no-op pushes.
-if git diff --quiet "$RANGE" 2>/dev/null; then
+# Code review and repository-content review are separate operations. A source,
+# staged card, curated deck, generated media file, or operational ledger under
+# data/ is never sent to the code reviewer merely because it shares a commit or
+# push with implementation work. dist/ is generated output and equally outside
+# this review. The leading `.` makes the exclusions a positive pathspec rather
+# than relying on Git's implicit all-paths behaviour.
+CODE_REVIEW_PATHSPEC=(
+  "."
+  ":(exclude)data/**"
+  ":(exclude)dist/**"
+)
+
+# Nothing to look at in the code-review scope. This also covers empty commits,
+# no-op pushes, and content-only submissions without starting Claude.
+if git diff --quiet "$RANGE" -- "${CODE_REVIEW_PATHSPEC[@]}" 2>/dev/null; then
+  echo "janki code review: skipped ${RANGE} (repository-content-only change)"
   exit 0
 fi
 
@@ -54,17 +68,23 @@ mkdir -p "$REVIEW_DIR"
 read -r -d '' PROMPT <<PROMPT_EOF
 Review the changes in the git range \`${RANGE}\`.
 
-Use \`git diff ${RANGE}\` and \`git log --oneline ${RANGE}\` to see them. Read
-\`AGENTS.md\` and the docs relevant to the changed area before judging the
-diff; this repository has non-obvious invariants around durable source data,
-note identity, staging, the ledger, and generated media.
+Use \`git diff ${RANGE} -- . ':(exclude)data/**' ':(exclude)dist/**'\` to see
+the complete and only review scope. Do not run an unfiltered diff and do not
+open or review any path under \`data/\` or \`dist/\`, even if a changed code
+path refers to one. Repository content and generated artifacts have their own
+workflow and are never inputs to this code audit. Read \`AGENTS.md\` and the
+docs relevant to the changed code before judging it; this repository has
+non-obvious invariants around durable source data, note identity, staging, the
+ledger, and generated media.
 
 Prioritize concrete correctness defects, especially data loss or silently
 dropped input; unstable note IDs/GUIDs; schema, ledger, or staging round-trip
 breakage; content-addressed media mistakes; CLI/API contract mismatches;
-Japanese encoding, reading, and furigana errors; and tests that would pass
-against the pre-change code. Verify every finding against surrounding code and
-call sites. Do not report style or naming preferences.
+Unicode/encoding round-trip mistakes in implementation; and tests that would
+pass against the pre-change code. Whether authored Japanese, readings,
+furigana, translations, examples, or usage notes are linguistically correct or
+natural is explicitly outside this code review. Verify every finding against
+surrounding code and call sites. Do not report style or naming preferences.
 
 Output GitHub-flavored markdown:
 

@@ -49,8 +49,9 @@ not currently have. H3 onward is a real cloud service; see **Before starting H3*
 Workflow-first, not chat-first. Chat is good at "what does this step do?" and
 bad at "which exact twelve sentences did you approve?" The second one has
 durable consequences and a bill attached, so it gets a page with the sentences
-on it and a button that names the action. An assistant may explain and
-navigate (W7); it never holds authority.
+on it and a button that names the action. The assistant may carry that exact
+owner authority after a plan-bound confirmation (W7); it never invents,
+widens, reuses, or confirms authority for the owner.
 
 The ordinary path is one local browser tab:
 
@@ -546,6 +547,126 @@ re-identifies staged rows only; migrating a canonical identity has to move
 review history and rewrite what the ledger says shipped, and remains out of
 scope.
 
+### [ ] W2e Authorship, not origin — what the example gate is actually about
+
+The example-approval gate decides its subject with `record.source.type !=
+"extract"`, which records where a card *arrived* rather than who wrote the
+Japanese on it. `enrich --ai` writes model sentences onto records of every
+source type and marks nothing, so the gate is structurally unable to ask about
+them. In the committed corpus: 99 records have a ledger `enriched` entry whose
+`kind` is `ai` and whose `fields` include `examples`; 56 of those are
+non-`extract` — `anki` 36, `jpdb` 17, `manual` 3 — carrying **108 model-written
+sentences**, of which exactly one holds any authority mark. All 108 are
+auto-accepted by `models.example_accepted`, all 56 records are already exported
+to a deck, and paid OpenAI clips were bought for those sentences.
+`word:お前:おまえ` is the shape of it: `source.type: anki`, `raw_fields` holding
+only `anki_*` keys, its staging file staged `examples: []`, and one sentence —
+`お前、夏休みに京都へ行くつもり？` — that the ledger attributes to `gpt-5.6-sol`.
+The record carries no trace, so nothing can ask.
+
+In the other direction the workbench raises an approval it cannot accept.
+`journey._card_state` computes `EXAMPLES_NEED_REVIEW` from record-level
+`needs_example_review`, while `render_source(approvable=…)` and
+`ReviewPanel._validate_actions` gate the control on file-level
+`has_extraction_lineage` (`run_id` and a staged pattern set). An `enrich --ai`
+staged review therefore reports "Review the Japanese examples on 90 cards",
+prints "Not yet approved" ninety times, offers no checkbox, never renders the
+explanation it holds, and refuses the request if one arrives. The stated reason
+— "the approval would bind to nothing" — is false on the code's own terms: the
+write is content fingerprints of the sentences and touches neither `run_id` nor
+the pattern set, and the CLI records exactly this approval through the
+documented `example_authority: staging-review` sentinel. **The workbench is
+strictly weaker than the CLI here**, the inverse of the Surfaces rule, and it is
+why W6's completion gate — "CLI and workbench produce identical durable
+artifacts, authority marks, provenance…" — is unsatisfiable for this source
+shape. W6 does not go `[x]` before this lands.
+
+The discriminator is **authorship, marked by the writer at write time**, in the
+same shape as the existing `provisional_fields`: the path that writes the
+Japanese records that it wrote it, and the mark travels with the sentence into
+the store. Origin never answers the question — `source.type` names an import,
+and `enrich --ai` changes the Japanese without changing it. Per-record emptiness
+of `examples` stays load-bearing and unchanged: no sentence, no subject. This is
+provenance — identifiers and fingerprints — which `docs/DESIGN.md` puts in
+janki's business; nothing here reads Japanese or asks a model whether the
+Japanese is any good.
+
+**Task 0 — the DESIGN.md amendment, which blocks every task below.** Into
+`## The pipeline` §2, after "The editable `records` list remains the human
+keep/correct/re-identify list.": a model's sentence is a proposal until a person
+approves the exact Japanese, and which sentences need that approval is settled
+by who wrote them, recorded when they were written — never by where the record
+came from. Into `## Mechanisms the pipeline rests on`, that a staging-review
+approval binds to the exact sentence text and to nothing else — not a run id, a
+pattern answer, or a provenance block — so any surface that can show the
+sentences can record it. Into `## Surfaces`, that a surface may neither weaken
+an authority gate the CLI enforces **nor raise one it cannot accept**.
+
+**Task 1 — failing tests first**, one per defect: an `enrich --ai` staged review
+approved through the panel, and a model-written sentence on an `anki`-typed
+record refused acceptance. **Task 2 —** drop `has_extraction_lineage` from the
+example branch only, keeping it on the grammar checkbox; delete
+`render_source(approvable=…)`, `check_cards(approvable=…)` and its hold branch,
+and the two tests that pinned the old refusal. **Task 3 —** add
+`MACHINE_EXAMPLES_KEY = "machine_examples"` beside the existing keys, reusing
+`flag_entries`/`example_flags`/`_write_flags` so there is one wire form; `extract`
+and `enrich --ai` mark every example they write, `io._merge_one` carries the key,
+and every `source.type != "extract"` clause in `models`, `application/authority`,
+`promote`, `io` and `ledger` is deleted. **Task 4 —** a one-off committed script
+under `scripts/` writes the mark onto the 99 records from the ledger's own
+`enriched` entries and applies the owner's chosen disposition to the 108
+sentences; a plain data edit, never a command. **Task 5 —** render the
+`pattern_warning` the panel already computes and never shows.
+
+Twelve tests, each proved by breaking production in the single way it names —
+restoring the lineage guard, restoring the `source.type` short-circuit,
+inverting the mark's polarity, dropping the mark from `extract` and from
+`enrich`, omitting it from the merge annotations, reinstating the deleted
+minting block, removing `pattern_reviewable`, dropping `pattern_warning`,
+reinstating a lineage check in `promote._accept_examples`, deleting the
+`missing_enrichment` guard, and removing one record's mark from the migrated
+corpus. Note the failure-mode polarity flip this accepts: deleting
+`example_authority` by hand today leaves a sentence *unaccepted*, while deleting
+`machine_examples` would leave it *accepted*. `models.provisional_entries`
+already takes that trade for the same reason, and both files are committed so a
+deletion shows in `git diff`.
+
+**Open — the owner's, not an agent's:**
+
+1. **The 108 shipped sentences.** Mark them machine-written *and approved*,
+   recording that you accept what you shipped; or machine-written and
+   unapproved — but no surface, CLI or browser, approves examples on a record
+   already in `vocabulary.json`, since the only approval writers are `promote`
+   over a staging sentinel and the workbench panel over a staging file, so this
+   strands all 108 unless this milestone also grows a stored-record approval
+   path; or mark only the 43 `extract`-typed records, which leaves exactly the
+   hole this milestone exists to close. Accepted-risk approval, and
+   redistribution-adjacent.
+2. **The mark's wire name.** `machine_examples`, or `example_authorship`, or a
+   `name:fingerprint` shape matching `provisional_fields`. Three writers and one
+   parser; changing it later is a second migration.
+3. **`Ledger.missing_enrichment`.** Deleting its `source.type == "extract"`
+   clause outright would newly select imported records with accepted-but-
+   incomplete examples for `enrich --ai` — a widening on a paid path. The task
+   list keeps a guard and pins it with a test; say if you want it widened
+   deliberately instead.
+4. **Placement.** W2e reopens a shipped stage, and the change reaches
+   `promote.py`, `io.py`, `enrich.py` and `ledger.py` well beyond `workbench/`.
+   W8 is the alternative. A naming call, not a scoping one.
+
+- **Depends on:** W2b, W2c. **Files:** `docs/DESIGN.md`, `models.py`,
+  `extract.py`, `enrich.py`, `io.py`, `promote.py`, `ledger.py`, `staging.py`,
+  `application/authority.py`, `application/card_check.py`,
+  `application/journey.py`, `workbench/review.py`, `workbench/render.py`,
+  `workbench/server.py`, `scripts/`, `docs/DATA_MODEL.md`,
+  `docs/IMPORTING.md`, `docs/DESIGN_V2.md`, `README.md`.
+- **Ships when:** an `enrich --ai` staged review is approved end to end in the
+  browser and lands the same fingerprints the CLI sentinel would;
+  `example_accepted` names no source type anywhere in the tree; every record
+  whose ledger says a paid AI pass wrote its examples carries `machine_examples`
+  in the committed corpus, asserted by a real-corpus test; `docs/DESIGN.md`
+  carries the amendment; and `make gates` is green.
+
 ### [x] W3 — Intake and the extraction job
 
 *Done 2026-08-26. **Intake** ships — drag or pick a PDF or browser-displayable
@@ -831,6 +952,13 @@ artifact parity; and complete the full manual every-control keyboard/name,
 Japanese-font and accessibility pass. The automated table fixture is evidence
 for the browser mechanics, not a substitute for those owner gates.*
 
+*Blocked by **W2e**: this stage's "CLI and workbench produce identical …
+authority marks" clause cannot hold for an `enrich --ai`-shaped source while the
+workbench raises an example approval it refuses to accept and the CLI records
+that same approval through its staging sentinel. The owner journeys above are
+worth running before W2e lands — they exercise extraction-shaped sources, which
+are unaffected — but this stage does not go `[x]` until W2e does.*
+
 Replace the README's PDF happy path with a short illustrated workbench guide,
 keeping a CLI reference for automation and recovery. Explain "meaning in this
 lesson", polite/casual examples, reading holds, grammar review, coverage and
@@ -877,42 +1005,96 @@ future work):
 - **Depends on:** W5. **Files:** `README.md`, `docs/IMPORTING.md`,
   `docs/QUALITY.md`, `workbench/`, browser test.
 
-### [ ] W7 Optional "Ask janki" assistant
+### [~] W7 Conversational workbench
 
-Only after W6 passes. The workbench must be fully useful with this disabled,
-and its off state makes no request and leaves no broken space in the UI.
+*Owner correction 2026-08-31. The earlier read-only design reproduced the
+problem this surface was meant to solve: ordinary iteration still had to be
+submitted to an agent in a coding interface. The owner may delegate supported
+actions to the chatbot. What remains forbidden is invented or widened
+authority, not owner authority carried through conversation.*
 
-Read-only tools only: show a source or card's deterministic state and deck
-membership; explain a validation code without judging the Japanese; show
-non-sensitive provider/model/time/hash metadata for a past call and link to a
-details panel that renders sent content *outside* chat; navigate to the screen
-where the learner can act.
+*Progress 2026-09-01. The first vertical slice now ships in code: the isolated
+ChatKit surface plans an exact full-deck conjugation revision, consumes one-use
+owner confirmation, dispatches through the configured Claude subscription or
+Anthropic API adapter, captures before decoding, stages for editable owner
+review, and separately plans/confirms apply, Realtime audio and package build.
+Provider/model/billing/authentication/CLI-version/request-byte identity are
+visible and bound, and changing the configured transport stales an open
+confirmation. The two transports share one application transaction and
+recovery format. Code-review hooks now exclude repository content so a deck
+submission cannot launch a machinery audit. What remains is owner acceptance
+of one real browser journey through confirmation, proposal review/apply, audio
+and build; implementation and tests made no model call.*
 
-There is no assistant tool for editing card or pattern content, paid consent,
-`--force`, example approval, pattern review, identity resolution, deck
-ownership, coverage acceptance, promotion, audio purchase or deletion. The
-PDF, page images and staged card text are not sent to the assistant provider
-merely because the drawer is open, or because the source was sent to the
-extraction provider. Switching sources carries no context forward. Threads are
-convenience context, never provenance or workflow state.
+Surface ChatKit in the ordinary workbench using its custom-server integration
+and janki's own server-side agent; do not build new work on the retiring Agent
+Builder path. The workbench remains useful with ChatKit disabled, and its off
+state sends nothing and leaves no broken overlay. This stays ChatKit's
+self-hosted/custom-backend shape: janki owns the agent, application services
+and durable workflow rather than delegating them to a provider-hosted agent.
+
+The assistant has three classes of tools:
+
+1. Read and explain deterministic repository state and navigate without a
+   confirmation.
+2. Prepare a local or paid action and render its exact target, input scope,
+   provider/model, cost-bearing purpose, consequences, fresh fingerprints and
+   refusal state without executing it.
+3. Execute that one rendered plan only after the owner explicitly confirms it
+   in ChatKit. The confirmation consumes a one-use capability; execution
+   re-plans and compares every binding under the same locks as the CLI and
+   ordinary workbench controller.
+
+This includes content edits, explicit replacement, example and pattern review,
+identity and deck decisions, coverage decisions, promotion, audio, build and
+deletion when their underlying application service supports them. The assistant
+does not gain a parallel implementation and cannot confirm on the owner's
+behalf. A request to write new Japanese routes through the journaled `revise`
+pass: selected current content plus the owner's instruction go to the model,
+and the exact answer becomes a staging proposal that the owner can edit or
+reject before anything canonical changes. Applying that proposal, buying its
+audio and building are separately rendered actions.
+
+There is one revision pipeline, not an implementation per billing route:
+plan, exact owner consent, operation journal, captured-response recovery,
+staging, owner review and guarded apply are shared. `[ai].revise_provider`
+selects only the transport. `claude-code` uses the locally logged-in Claude Pro
+or Max subscription allowance; `anthropic-api` uses the Anthropic API account.
+The rendered plan and its inspectable request detail show and bind the provider,
+billing path, authentication class or subscription tier, model, Claude CLI
+version when applicable, and exact request-byte fingerprint; the controlled
+request bytes are bound behind it. Switching transport or changing any of
+those values produces a different plan and invalidates the
+prior confirmation. Provider adapters may prepare, dispatch, capture and decode
+their own wire envelope; they do not fork consent, recovery, staging, review or
+apply.
+
+The PDF, page images and card text are not sent merely because the surface is
+open. Each message names what text and repository context it will send; adding
+source or card context is opt-in and source switches do not carry it forward.
+Every paid assistant or revision turn uses the operation journal and preserves
+its exact response before parsing. Threads are convenience context, never the
+authority or provenance record.
 
 Keys stay server-side. OpenAI API billing is described separately from
-ChatGPT, and Anthropic API billing separately from Claude Max.
+ChatGPT, and Anthropic API billing separately from Claude Pro or Max. The
+revision selector does not affect audio: OpenAI Realtime remains its own
+API-backed, separately planned and confirmed operation. Stream long work as
+named progress states and preserve the deliverable even if the chat drawer
+disconnects.
 
-For an OpenAI-backed build, use a small Responses API drawer or ChatKit's
-custom-server integration; do not build on the retiring Agent Builder path.
-Widgets are fine for status and navigation; authoritative controls stay
-workbench actions handled by janki
-(`https://developers.openai.com/api/docs/guides/chatkit`,
-`https://developers.openai.com/api/docs/guides/custom-chatkit`).
+The staged Japanese proposal is approved as content in the workbench. Codebase
+review remains a separate development-session activity: it neither judges nor
+blocks Japanese-content approval, and submitting content does not launch a code
+audit.
 
-A general Japanese tutor, if ever offered, is a visibly separate conversation
-with no repository tools and no source context. Card improvements still come
-from a human edit or from janki's two existing card-writing calls. Adding a
-chat UI must not create a third Japanese card-writing path.
+Ship the first vertical slice against the owner's real lesson workflow: from a
+conversation, select the Potential Practice deck, request polite/casual
+examples, review and apply the staged proposal, authorize its existing Realtime
+audio plan, and build the `.apkg` without VS Code, YAML or a terminal.
 
-- **Depends on:** W6. **Files:** `workbench/`, `config.py`, new assistant
-  module, `docs/QUALITY.md`.
+- **Depends on:** W5. **Files:** `workbench/`, `application/`, `operations.py`,
+  `config.py`, a revision prompt and schema, `docs/QUALITY.md`.
 
 ### Adversarial coverage for milestone W
 
@@ -927,7 +1109,13 @@ a new deck created with explicit direction choices; an edit made while an older
 page is open; interruption before dispatch, after dispatch with unknown
 outcome, after capture before staging, after archive creation, and during paid
 audio finalization; assistant disabled, network-failed, and carrying malicious
-text, plus proof that authority-bearing assistant tools do not exist.
+text, plus proof that no assistant action exists without an exact one-use
+owner capability and the underlying application service's ordinary gates.
+Exercise both revision transports with fakes, prove they produce the same
+proposal/recovery/apply semantics, and prove a provider, billing tier, model,
+CLI-version or request-byte change invalidates a rendered confirmation. Audio
+tests prove the revision selector cannot reroute Realtime away from its API
+transport.
 
 Security: malicious filenames and every displayed model or source string;
 Host/Origin/CSRF failures; oversized, duplicate and unknown actions; path

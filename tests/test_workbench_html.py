@@ -200,7 +200,14 @@ def test_the_dashboard_is_structurally_sound(tmp_path: Path) -> None:
 
 def test_an_empty_dashboard_is_structurally_sound(tmp_path: Path) -> None:
     _project(tmp_path)
-    _check(render_dashboard([], root=tmp_path, token="tok"))
+    _check(
+        render_dashboard(
+            [],
+            root=tmp_path,
+            token="tok",
+            assistant_url="http://127.0.0.1:54321/assistant-key/",
+        )
+    )
 
 
 @pytest.mark.parametrize(

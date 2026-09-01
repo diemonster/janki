@@ -47,6 +47,8 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "enrich_provider",
         "enrich_model",
         "enrich_reasoning_effort",
+        "revise_provider",
+        "revise_model",
     ),
     "tts": (
         "provider",
@@ -56,6 +58,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "voicevox_speed",
         "sentence_provider",
     ),
+    "assistant": ("enabled",),
 }
 
 
@@ -304,6 +307,13 @@ class ProjectConfig:
     enrich_provider: str
     enrich_model: str
     enrich_reasoning_effort: str
+    #: How the revision pass reaches Claude. The API remains the portable
+    #: default; a project may instead opt into its local Claude Code login.
+    revise_provider: str
+    #: The model used by the separately journaled existing-card revision pass.
+    #: Independent from extraction so changing how PDFs are read cannot silently
+    #: change what an owner-confirmed deck edit costs or which model authors it.
+    revise_model: str
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
@@ -317,6 +327,11 @@ class ProjectConfig:
     #: or 'openai-realtime'. Words are never affected — only VOICEVOX can
     #: force an accent, which is what a word clip is for.
     sentence_provider: str
+    #: Whether `janki workbench` starts the isolated ChatKit sidecar. The
+    #: default is deliberately off so a base install neither imports the
+    #: optional SDK nor loads OpenAI-hosted UI code merely by opening a local
+    #: repository page.
+    assistant_enabled: bool = False
 
     @classmethod
     def load(cls, root: Path | None = None) -> ProjectConfig:
@@ -357,6 +372,13 @@ class ProjectConfig:
             "ai",
             "enrich_model",
             "claude-opus-5" if enrich_provider == "anthropic" else "gpt-5.6-sol",
+        )
+        revise_provider = _choice(
+            data,
+            "ai",
+            "revise_provider",
+            "anthropic-api",
+            ("claude-code", "anthropic-api"),
         )
 
         return cls(
@@ -405,10 +427,13 @@ class ProjectConfig:
             enrich_reasoning_effort=_str(
                 data, "ai", "enrich_reasoning_effort", "ultra"
             ),
+            revise_provider=revise_provider,
+            revise_model=_str(data, "ai", "revise_model", "claude-opus-5"),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
             voicevox_sentence_speaker=_int_or_none(data, "tts", "voicevox_sentence_speaker"),
             voicevox_speed=_float(data, "tts", "voicevox_speed", 1.0),
             sentence_provider=_str(data, "tts", "sentence_provider", ""),
+            assistant_enabled=_bool(data, "assistant", "enabled", False),
         )

@@ -25,15 +25,21 @@ AnkiWeb sync, which a new field on the existing notetype would.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import html
+import io
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections import Counter
+from collections.abc import Mapping, MutableMapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import yaml
+from ruamel.yaml import YAML, YAMLError
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString, ScalarString
 from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 from yaml.resolver import BaseResolver
@@ -49,9 +55,18 @@ from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import (
     _deck_string_set,
     _refuse_conjugation_only_content,
+    _resolve_media,
+    _write_package_atomic,
 )
 from japanese_anki.identifiers import normalize_identity_part
-from japanese_anki.io import DataError, load_records, load_structured
+from japanese_anki.io import (
+    DataError,
+    RecordsRevision,
+    atomic_write_text_bound,
+    load_records,
+    load_structured,
+    records_revision,
+)
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.patterns import (
     CHECKABLE_KINDS,
@@ -77,6 +92,14 @@ __all__ = [
     "shipping_records",
     "deck_problems",
     "drill_cards",
+    "declared_drill_audio_owner_ids",
+    "drill_audio_owner_id",
+    "drill_audio_records",
+    "DrillDeckContent",
+    "read_drill_deck_content",
+    "render_drill_deck_content",
+    "save_drill_deck_content",
+    "save_drill_audio_records",
 ]
 
 
@@ -99,11 +122,20 @@ _SEPARATOR_CLASS = f"[{re.escape(_SEPARATOR_CHARS)}]"
 #: a ``furigana:`` filter recursively to HTML stored inside another field.
 _FURIGANA = re.compile(r" ?([^>\s\[\]]+?)\[([^\[\]\r\n]+?)\]")
 
-#: A conjugation deck's hand-authored examples are deliberately smaller than a
-#: vocabulary record. Audio has its own paid-operation/WAL lifecycle and romaji
-#: is not rendered; accepting either here would store content the card silently
-#: ignores.
-_DRILL_EXAMPLE_FIELDS = frozenset({"japanese", "furigana", "english", "register"})
+#: A conjugation deck's authored examples use the same sentence/audio shape as
+#: vocabulary examples, except for romaji (which no card renders here). Audio is
+#: filled by the shared paid-operation/WAL transaction; ``spoken_japanese`` is
+#: the same sparse human escape hatch used after listening to a vocabulary clip.
+_DRILL_EXAMPLE_FIELDS = frozenset({
+    "japanese",
+    "furigana",
+    "english",
+    "register",
+    "audio",
+    "spoken_japanese",
+})
+
+_DRILL_YAML_WIDTH = 1 << 30
 
 
 class _UniqueDeckKeyLoader(yaml.SafeLoader):
@@ -148,6 +180,30 @@ _UniqueDeckKeyLoader.add_constructor(
     BaseResolver.DEFAULT_MAPPING_TAG,
     _unique_deck_mapping,
 )
+
+
+def _editable_drill_document(text: str, deck_path: Path) -> tuple[YAML, MutableMapping[str, Any]]:
+    """Parse one curated deck for a comment/quote-preserving edit."""
+    parser = YAML()
+    parser.preserve_quotes = True
+    parser.allow_unicode = True
+    parser.indent(mapping=2, sequence=4, offset=2)
+    parser.width = _DRILL_YAML_WIDTH
+    try:
+        document = parser.load(io.StringIO(text))
+    except YAMLError as exc:
+        raise DataError(f"Could not read {deck_path} for rewriting: {exc}") from exc
+    if not isinstance(document, MutableMapping):
+        raise DataError(f"Deck file must contain a mapping: {deck_path}")
+    section = document.get("deck")
+    if not isinstance(section, MutableMapping):
+        raise DataError(f"Deck file must contain a deck mapping: {deck_path}")
+    examples = section.get("drill_examples")
+    if not isinstance(examples, MutableMapping):
+        raise DataError(
+            f"deck.drill_examples must be a mapping keyed by record id: {deck_path}"
+        )
+    return parser, document
 
 
 def _drill_furigana_malformed(value: str) -> bool:
@@ -708,6 +764,11 @@ def _drill_examples(
                         f"must be text, got {type(value).__name__}: {deck_path}"
                     )
             example = ExampleSentence.from_dict(raw_example, position=index)
+            if example.audio.startswith("[sound:"):
+                raise DataError(
+                    f"deck.drill_examples[{record_id!r}][{index}] audio must be "
+                    f"a packaged media path, not a verbatim sound tag: {deck_path}"
+                )
             if _drill_furigana_malformed(example.furigana):
                 raise DataError(
                     f"deck.drill_examples[{record_id!r}][{index}] furigana "
@@ -723,6 +784,15 @@ def _drill_examples(
                     f"japanese, english, and register polite/casual: {deck_path}"
                 )
             examples.append(example)
+        registers = Counter(example.register for example in examples)
+        polite = registers["polite"]
+        casual = registers["casual"]
+        if len(examples) != 2 or polite != 1 or casual != 1:
+            raise DataError(
+                f"deck.drill_examples[{record_id!r}] needs exactly one polite "
+                f"and one casual example; found {polite} polite and {casual} "
+                f"casual: {deck_path}"
+            )
         parsed[record_id] = tuple(examples)
     missing = sorted(include_ids - set(parsed))
     if missing:
@@ -740,6 +810,634 @@ def _drill_examples(
             f"{deck_path}"
         )
     return parsed
+
+
+@dataclass(frozen=True, slots=True)
+class DrillDeckContent:
+    """The exact editable content and whole-file revision of one drill deck."""
+
+    revision: RecordsRevision
+    form: str
+    record_ids: tuple[str, ...]
+    form_note: str
+    drill_examples: Mapping[str, tuple[ExampleSentence, ...]]
+
+
+def _revision_target(deck_path: Path, expected: RecordsRevision) -> Path:
+    """Bind a content snapshot to the lexical deck path it was read from."""
+    target = deck_path.absolute()
+    if expected.path.absolute() != target:
+        raise DataError(
+            f"Drill revision for {expected.path} cannot guard a write to {target}."
+        )
+    if expected.text is None:
+        raise DataError(f"Drill deck {target} no longer exists.")
+    return target
+
+
+def _strict_drill_document(
+    text: str,
+    deck_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read the exact snapshot through the deck's duplicate-key contract."""
+    try:
+        document = yaml.load(text, Loader=_UniqueDeckKeyLoader)
+    except yaml.YAMLError as exc:
+        raise DataError(f"Could not read drill deck {deck_path}: {exc}") from exc
+    if not isinstance(document, dict):
+        raise DataError(f"Deck file must contain a mapping: {deck_path}")
+    section = document.get("deck")
+    if not isinstance(section, dict):
+        raise DataError(f"Deck file must contain a deck mapping: {deck_path}")
+    _refuse_conjugation_only_content(section, deck_path)
+    if str(section.get("kind") or "").strip().lower() != "conjugation":
+        raise DataError(f"Drill revision requires a conjugation deck: {deck_path}")
+    return document, section
+
+
+def _ordered_drill_scope(
+    deck_config: Mapping[str, Any],
+    deck_path: Path,
+) -> tuple[str, ...]:
+    """The explicit, ordered IDs a rich drill revision is allowed to replace."""
+    value = deck_config.get("include_ids")
+    if not isinstance(value, list):
+        raise DataError(
+            f"deck.include_ids must be a nonempty list of record ids: {deck_path}"
+        )
+    identifiers: list[str] = []
+    for position, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise DataError(
+                f"deck.include_ids[{position}] must be a nonblank record id: "
+                f"{deck_path}"
+            )
+        identifiers.append(item)
+    if not identifiers:
+        raise DataError(
+            f"deck.include_ids must be a nonempty list of record ids: {deck_path}"
+        )
+    if len(identifiers) != len(set(identifiers)):
+        raise DataError(f"deck.include_ids must not repeat record ids: {deck_path}")
+    return tuple(identifiers)
+
+
+def _drill_content_from_revision(
+    deck_path: Path,
+    expected: RecordsRevision,
+) -> DrillDeckContent:
+    """Validate rich content from one already-captured whole-file snapshot."""
+    target = _revision_target(deck_path, expected)
+    assert expected.text is not None  # established by `_revision_target`
+    _editable_drill_document(expected.text, target)
+    _document, section = _strict_drill_document(expected.text, target)
+    form = str(section.get("form") or "te_form").strip()
+    if form not in CONJUGATION_FORMS:
+        raise DataError(
+            f"{target}: form must be one of {', '.join(CONJUGATION_FORMS)}, "
+            f"got {form!r}"
+        )
+    record_ids = _ordered_drill_scope(section, target)
+    # `_drill_examples` needs only the shipping identities for its scope check.
+    # Canonical vocabulary facts and conjugation belong to the application plan,
+    # while this primitive owns only the exact deck artifact it will rewrite.
+    scoped_records = [
+        VocabularyRecord(id=record_id, expression=record_id)
+        for record_id in record_ids
+    ]
+    note = _drill_form_note(section, target)
+    examples = _drill_examples(section, scoped_records, target, form)
+    if not examples:
+        raise DataError(
+            f"{target}: deck.drill_examples is required for a drill revision"
+        )
+    return DrillDeckContent(
+        revision=expected,
+        form=form,
+        record_ids=record_ids,
+        form_note=note,
+        drill_examples={record_id: examples[record_id] for record_id in record_ids},
+    )
+
+
+def read_drill_deck_content(
+    deck_path: Path,
+) -> DrillDeckContent:
+    """Read one exact, full-scope rich-drill snapshot for a later CAS."""
+    target = deck_path.absolute()
+    return _drill_content_from_revision(
+        target,
+        records_revision(target),
+    )
+
+
+def _replacement_examples(
+    drill_examples: Mapping[str, Sequence[ExampleSentence]],
+    record_ids: tuple[str, ...],
+    deck_path: Path,
+) -> dict[str, dict[str, ExampleSentence]]:
+    """Index one ordered, nonempty subset by record and card register."""
+    if not isinstance(drill_examples, Mapping):
+        raise DataError(f"Drill revision examples must be a mapping: {deck_path}")
+    selected = tuple(drill_examples)
+    if not selected:
+        raise DataError(
+            f"Drill revision examples must select at least one record: {deck_path}"
+        )
+    if any(not isinstance(record_id, str) or not record_id.strip() for record_id in selected):
+        raise DataError(
+            f"Drill revision record ids must be nonblank text: {deck_path}"
+        )
+    current_ids = set(record_ids)
+    extra = [record_id for record_id in selected if record_id not in current_ids]
+    ordered_subset = tuple(
+        record_id for record_id in record_ids if record_id in set(selected)
+    )
+    if extra or selected != ordered_subset:
+        detail = (
+            f"unexpected {', '.join(extra)}"
+            if extra
+            else "selected ids are not in deck.include_ids order"
+        )
+        raise DataError(
+            "Drill revision examples must be an exact ordered subset of "
+            f"deck.include_ids ({detail}): {deck_path}"
+        )
+    indexed: dict[str, dict[str, ExampleSentence]] = {}
+    for record_id in selected:
+        values = drill_examples[record_id]
+        if isinstance(values, str) or not isinstance(values, Sequence):
+            raise DataError(
+                f"Drill revision examples for {record_id!r} must be a sequence: "
+                f"{deck_path}"
+            )
+        examples = list(values)
+        if any(not isinstance(example, ExampleSentence) for example in examples):
+            raise DataError(
+                f"Drill revision examples for {record_id!r} must contain "
+                f"ExampleSentence values: {deck_path}"
+            )
+        registers = Counter(example.register for example in examples)
+        if len(examples) != 2 or registers["polite"] != 1 or registers["casual"] != 1:
+            raise DataError(
+                f"Drill revision examples for {record_id!r} need exactly one "
+                f"polite and one casual ExampleSentence: {deck_path}"
+            )
+        indexed[record_id] = {example.register: example for example in examples}
+    return indexed
+
+
+_DRILL_REVISION_FIELDS = ("japanese", "furigana", "english", "register")
+
+
+def _styled_replacement(current: Any, value: str) -> str:
+    """Keep an authored scalar's quote/block style when replacing its value."""
+    if current == value:
+        return current
+    if isinstance(current, ScalarString):
+        return type(current)(value)
+    # A new plain scalar such as ``yes`` is a string to ruamel's YAML 1.2
+    # reader but a boolean to the project's YAML 1.1 strict loader. Quoting all
+    # changed plain values makes the semantic verification below stable.
+    return DoubleQuotedScalarString(value)
+
+
+def _set_revision_scalar(
+    mapping: MutableMapping[str, Any],
+    field: str,
+    value: str,
+) -> None:
+    """Set one target scalar without manufacturing an absent empty field."""
+    if field not in mapping and value == "":
+        return
+    current = mapping.get(field)
+    if current != value:
+        mapping[field] = _styled_replacement(current, value)
+
+
+def _semantic_without_drill_content(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Copy every semantic value this primitive has no authority to change."""
+    outside = copy.deepcopy(dict(document))
+    section = outside.get("deck")
+    if isinstance(section, dict):
+        section.pop("form_note", None)
+        section.pop("drill_examples", None)
+    return outside
+
+
+def _unselected_drill_content(
+    document: Mapping[str, Any],
+    selected: set[str],
+) -> dict[Any, Any]:
+    """Copy the rich examples a partial proposal has no authority to touch."""
+    section = document.get("deck")
+    if not isinstance(section, Mapping):
+        return {}
+    examples = section.get("drill_examples")
+    if not isinstance(examples, Mapping):
+        return {}
+    return copy.deepcopy({
+        record_id: value
+        for record_id, value in examples.items()
+        if record_id not in selected
+    })
+
+
+def render_drill_deck_content(
+    deck_path: Path,
+    *,
+    expected: RecordsRevision,
+    form_note: str,
+    drill_examples: Mapping[str, Sequence[ExampleSentence]],
+) -> str:
+    """Render only ``form_note`` and ``drill_examples`` from an exact snapshot.
+
+    Provider output has no authority over media. Existing ``audio`` and the
+    human ``spoken_japanese`` override remain byte-for-byte only while that
+    register's displayed Japanese is byte-identical; changing the sentence
+    clears both so the ordinary audio transaction can plan a fresh clip.
+    """
+    target = _revision_target(deck_path, expected)
+    current = _drill_content_from_revision(
+        target,
+        expected,
+    )
+    replacements = _replacement_examples(
+        drill_examples,
+        current.record_ids,
+        target,
+    )
+    if not isinstance(form_note, str):
+        raise DataError(
+            f"Drill revision form_note must be text, got "
+            f"{type(form_note).__name__}: {target}"
+        )
+    assert expected.text is not None  # established by `_revision_target`
+    raw, raw_section = _strict_drill_document(expected.text, target)
+    intended = copy.deepcopy(raw)
+    intended_section = intended["deck"]
+    raw_examples = raw_section["drill_examples"]
+    intended_examples = intended_section["drill_examples"]
+    if "form_note" in intended_section or form_note:
+        intended_section["form_note"] = form_note
+
+    for record_id in replacements:
+        authored = raw_examples[record_id]
+        intended_authored = intended_examples[record_id]
+        for position, raw_example in enumerate(authored):
+            authored_example = ExampleSentence.from_dict(
+                raw_example,
+                position=position,
+            )
+            incoming = replacements[record_id][authored_example.register]
+            intended_example = intended_authored[position]
+            japanese_unchanged = (
+                isinstance(incoming.japanese, str)
+                and raw_example["japanese"].encode("utf-8")
+                == incoming.japanese.encode("utf-8")
+            )
+            for field in _DRILL_REVISION_FIELDS:
+                value = getattr(incoming, field)
+                if field not in intended_example and value == "":
+                    continue
+                intended_example[field] = value
+            if not japanese_unchanged:
+                intended_example.pop("audio", None)
+                intended_example.pop("spoken_japanese", None)
+
+    # Use the same semantic readers as build/audio before touching the
+    # round-trip tree. This validates field types, furigana brackets, exact
+    # polite/casual cardinality, and the complete include-id scope.
+    scoped_records = [
+        VocabularyRecord(id=record_id, expression=record_id)
+        for record_id in current.record_ids
+    ]
+    _drill_form_note(intended_section, target)
+    _drill_examples(intended_section, scoped_records, target, current.form)
+
+    parser, editable = _editable_drill_document(expected.text, target)
+    editable_section = editable["deck"]
+    if "form_note" in editable_section or form_note:
+        _set_revision_scalar(editable_section, "form_note", form_note)
+    editable_examples = editable_section["drill_examples"]
+    for record_id in replacements:
+        authored = raw_examples[record_id]
+        editable_authored = editable_examples[record_id]
+        for position, raw_example in enumerate(authored):
+            authored_example = ExampleSentence.from_dict(
+                raw_example,
+                position=position,
+            )
+            incoming = replacements[record_id][authored_example.register]
+            editable_example = editable_authored[position]
+            japanese_unchanged = (
+                raw_example["japanese"].encode("utf-8")
+                == incoming.japanese.encode("utf-8")
+            )
+            for field in _DRILL_REVISION_FIELDS:
+                _set_revision_scalar(
+                    editable_example,
+                    field,
+                    getattr(incoming, field),
+                )
+            if not japanese_unchanged:
+                editable_example.pop("audio", None)
+                editable_example.pop("spoken_japanese", None)
+
+    buffer = io.StringIO()
+    parser.dump(editable, buffer)
+    rendered = buffer.getvalue()
+    try:
+        reparsed = yaml.load(rendered, Loader=_UniqueDeckKeyLoader)
+    except yaml.YAMLError as exc:
+        raise DataError(
+            f"Could not verify the drill content rendered for {target}: {exc}"
+        ) from exc
+    if _semantic_without_drill_content(reparsed) != _semantic_without_drill_content(raw):
+        raise DataError(
+            f"Refused a drill revision that would change other deck content: {target}"
+        )
+    selected = set(replacements)
+    if _unselected_drill_content(reparsed, selected) != _unselected_drill_content(
+        raw, selected
+    ):
+        raise DataError(
+            f"Refused a drill revision that would change an unselected card: {target}"
+        )
+    if reparsed != intended:
+        raise DataError(
+            f"Refused a drill revision whose rendered content changed shape: {target}"
+        )
+    return rendered
+
+
+def save_drill_deck_content(
+    deck_path: Path,
+    *,
+    expected: RecordsRevision,
+    form_note: str,
+    drill_examples: Mapping[str, Sequence[ExampleSentence]],
+) -> RecordsRevision:
+    """CAS one rendered rich-drill revision over its exact whole-file base."""
+    target = _revision_target(deck_path, expected)
+    rendered = render_drill_deck_content(
+        target,
+        expected=expected,
+        form_note=form_note,
+        drill_examples=drill_examples,
+    )
+    assert expected.text is not None  # established by `_revision_target`
+    atomic_write_text_bound(
+        target,
+        rendered,
+        expected_revision=hashlib.sha256(expected.text.encode("utf-8")).hexdigest(),
+    )
+    return RecordsRevision(target, rendered)
+
+
+def drill_audio_owner_id(deck_id: int, form: str, record_id: str) -> str:
+    """The ledger/WAL owner for one drill card's sentence clips.
+
+    It is deliberately distinct from both the vocabulary record id and the
+    Anki note GUID. Two decks may teach the same form with different authored
+    sentences; their audio transactions must not retire each other's ledger
+    rows, while the existing note identity remains stable for Anki review
+    history.
+    """
+    return f"drill-audio:{deck_id}:{form}:{record_id}"
+
+
+def declared_drill_audio_owner_ids(deck_path: Path) -> frozenset[str]:
+    """Synthetic owners a rich drill deck claims before content projection.
+
+    Pending paid bytes must survive a temporarily invalid example or missing
+    source record.  The owner identity itself is structural: the pinned deck
+    id, form, and authored record scope.  Take the conservative union of the
+    two scope declarations so a mismatch between them cannot make an existing
+    WAL row look deleted.  This does not inspect or judge Japanese content.
+    """
+    deck_config = _deck_section(deck_path)
+    kind = str(deck_config.get("kind") or "").strip().lower()
+    raw_examples = deck_config.get("drill_examples")
+    if kind != "conjugation" or raw_examples is None:
+        return frozenset()
+
+    deck_id = _identifier(deck_config, "deck_id", deck_path)
+    form = str(deck_config.get("form") or "te_form").strip()
+    if form not in CONJUGATION_FORMS:
+        return frozenset()
+
+    record_ids: set[str] = set()
+    raw_include_ids = deck_config.get("include_ids")
+    if isinstance(raw_include_ids, list | tuple):
+        record_ids.update(
+            record_id
+            for value in raw_include_ids
+            if (record_id := str(value))
+        )
+    if isinstance(raw_examples, Mapping):
+        record_ids.update(
+            record_id
+            for value in raw_examples
+            if isinstance(value, str) and (record_id := value)
+        )
+    return frozenset(
+        drill_audio_owner_id(deck_id, form, record_id)
+        for record_id in record_ids
+    )
+
+
+def drill_audio_records(
+    deck_path: Path,
+    project_config: ProjectConfig,
+    records: Sequence[VocabularyRecord] | None = None,
+) -> list[VocabularyRecord]:
+    """Project a rich drill deck onto the ordinary sentence-audio contract.
+
+    These are operational audio owners, not vocabulary records and not a new
+    synthesis path. The existing audio service sees the same
+    :class:`ExampleSentence` values it already journals, stages, recovers and
+    ledgers for vocabulary cards.
+    """
+    deck_config = _deck_section(deck_path)
+    kind = str(deck_config.get("kind") or "").strip().lower()
+    if kind != "conjugation":
+        raise DataError(
+            f"Deck audio examples require a conjugation deck, got {kind or 'vocabulary'}: "
+            f"{deck_path}"
+        )
+    if deck_config.get("drill_examples") is None:
+        raise DataError(
+            f"{deck_path}: deck.drill_examples is required for deck example audio"
+        )
+    revision = records_revision(deck_path)
+    if revision.text is None:
+        raise DataError(f"Deck file no longer exists: {deck_path}")
+    # A static rewrite failure is knowable before a paid sentence call. The
+    # writer uses this same round-trip parser so comments, quoting and anchors
+    # survive when only generated audio scalars are inserted.
+    _editable_drill_document(revision.text, deck_path)
+    form = str(deck_config.get("form") or "te_form").strip()
+    if form not in CONJUGATION_FORMS:
+        raise DataError(
+            f"{deck_path}: form must be one of {', '.join(CONJUGATION_FORMS)}, "
+            f"got {form!r}"
+        )
+    source_records = (
+        list(records)
+        if records is not None
+        else load_records(collection_for(deck_path, project_config))
+    )
+    shipping = shipping_records(deck_path, source_records, form)
+    examples_by_id = _drill_examples(deck_config, shipping, deck_path, form)
+    if not examples_by_id:
+        raise DataError(
+            f"{deck_path}: deck.drill_examples is required for deck example audio"
+        )
+    deck_id = _identifier(deck_config, "deck_id", deck_path)
+    projected: list[VocabularyRecord] = []
+    for record in shipping:
+        examples = examples_by_id.get(record.id)
+        if examples is None:
+            continue
+        projected.append(
+            replace(
+                record,
+                id=drill_audio_owner_id(deck_id, form, record.id),
+                audio="",
+                image="",
+                examples=list(examples),
+            )
+        )
+    return projected
+
+
+def save_drill_audio_records(
+    deck_path: Path,
+    records: Sequence[VocabularyRecord],
+    *,
+    expected: RecordsRevision,
+) -> None:
+    """Write only generated audio references back to a locked drill YAML.
+
+    The caller holds the deck owner lock across synthesis, this compare, media
+    publication and ledger commit. The round-trip editor changes only the
+    generated audio scalars, preserving comments, quoting, anchors and unknown
+    keys. A semantic reparse proves the rendered document differs in no other
+    value, and the duplicate-key loader prevents silently choosing one of two
+    authored entries.
+    """
+    target = deck_path.resolve()
+    if expected.path.resolve() != target:
+        raise DataError(
+            f"Drill revision for {expected.path} cannot guard a write to {target}."
+        )
+    current = records_revision(target)
+    if current.text != expected.text:
+        raise DataError(
+            f"Drill deck {target} changed on disk since it was read; saving now "
+            "would discard those changes. Re-run the audio command."
+        )
+    if expected.text is None:
+        raise DataError(f"Drill deck {target} no longer exists.")
+    raw = yaml.load(expected.text, Loader=_UniqueDeckKeyLoader)
+    if not isinstance(raw, dict) or not isinstance(raw.get("deck"), dict):
+        raise DataError(f"Deck file must contain a deck mapping: {target}")
+    parser, document = _editable_drill_document(expected.text, target)
+    section = raw["deck"]
+    editable_section = document["deck"]
+    form = str(section.get("form") or "te_form").strip()
+    deck_id = _identifier(section, "deck_id", target)
+    raw_examples = section.get("drill_examples")
+    editable_examples = editable_section.get("drill_examples")
+    if not isinstance(raw_examples, dict):
+        raise DataError(
+            f"deck.drill_examples must be a mapping keyed by record id: {target}"
+        )
+    if not isinstance(editable_examples, MutableMapping):
+        raise DataError(
+            f"deck.drill_examples must be a mapping keyed by record id: {target}"
+        )
+    by_owner = {record.id: record for record in records}
+    expected_owners = {
+        drill_audio_owner_id(deck_id, form, str(record_id))
+        for record_id in raw_examples
+    }
+    if (
+        len(records) != len(by_owner)
+        or len(by_owner) != len(expected_owners)
+        or set(by_owner) != expected_owners
+    ):
+        raise DataError(
+            f"Drill audio result no longer matches every authored card in {target}."
+        )
+    for record_id, authored in raw_examples.items():
+        if not isinstance(authored, list):
+            raise DataError(
+                f"deck.drill_examples[{record_id!r}] must be a list: {target}"
+            )
+        owner = drill_audio_owner_id(deck_id, form, str(record_id))
+        updated = by_owner[owner]
+        editable_authored = editable_examples.get(record_id)
+        if not isinstance(editable_authored, list):
+            raise DataError(
+                f"deck.drill_examples[{record_id!r}] must be a list: {target}"
+            )
+        if len(authored) != len(updated.examples):
+            raise DataError(
+                f"Drill audio result changed the example count for {record_id!r}: "
+                f"{target}"
+            )
+        if len(editable_authored) != len(updated.examples):
+            raise DataError(
+                f"Drill audio result changed the example count for {record_id!r}: "
+                f"{target}"
+            )
+        for position, (raw_example, editable_example, example) in enumerate(
+            zip(authored, editable_authored, updated.examples, strict=True)
+        ):
+            if not isinstance(raw_example, dict) or not isinstance(
+                editable_example, MutableMapping
+            ):
+                raise DataError(
+                    f"deck.drill_examples[{record_id!r}] must contain mappings: "
+                    f"{target}"
+                )
+            authored_example = ExampleSentence.from_dict(
+                raw_example, position=position
+            )
+            if (
+                example.japanese != authored_example.japanese
+                or example.spoken_japanese != authored_example.spoken_japanese
+            ):
+                raise DataError(
+                    f"Drill audio result changed the spoken identity of "
+                    f"{record_id!r} example {position + 1}: {target}"
+                )
+            if example.audio:
+                raw_example["audio"] = example.audio
+                editable_example["audio"] = example.audio
+            else:
+                raw_example.pop("audio", None)
+                editable_example.pop("audio", None)
+    buffer = io.StringIO()
+    parser.dump(document, buffer)
+    rendered = buffer.getvalue()
+    try:
+        reparsed = yaml.load(rendered, Loader=_UniqueDeckKeyLoader)
+    except yaml.YAMLError as exc:
+        raise DataError(
+            f"Could not verify the audio update rendered for {target}: {exc}"
+        ) from exc
+    if reparsed != raw:
+        raise DataError(
+            f"Refused an audio update that would change other deck content: {target}"
+        )
+    atomic_write_text_bound(
+        target,
+        rendered,
+        expected_revision=hashlib.sha256(expected.text.encode("utf-8")).hexdigest(),
+    )
 
 
 def _furigana_html(value: str) -> str:
@@ -778,6 +1476,7 @@ def _drill_support_html(
     card: PatternCard,
     form_note: str,
     examples: Sequence[ExampleSentence],
+    audio_fields: Sequence[str] = (),
 ) -> str:
     """The rich answer context stored inside the existing Examples field."""
     parts = ['<section class="drill-support">']
@@ -793,7 +1492,10 @@ def _drill_support_html(
             '<div class="drill-meta"><span class="drill-pill">'
             f"{html.escape(', '.join(card.examples))}</span></div>"
         )
-    for example in examples:
+    if audio_fields and len(audio_fields) != len(examples):
+        raise PatternDeckError("Drill example audio fields no longer match the examples")
+    rendered_audio = tuple(audio_fields) if audio_fields else ("",) * len(examples)
+    for example, audio_field in zip(examples, rendered_audio, strict=True):
         register = "Polite" if example.register == "polite" else "Casual"
         japanese = (
             _furigana_html(example.furigana)
@@ -805,6 +1507,11 @@ def _drill_support_html(
             f'<div class="drill-example-label">{register} example</div>',
             f'<div class="drill-example-japanese" lang="ja">{japanese}</div>',
             f'<div class="drill-example-english">{_escaped_lines(example.english)}</div>',
+            *(
+                [f'<div class="example-audio">{audio_field}</div>']
+                if audio_field
+                else []
+            ),
             "</article>",
         ])
     if record.usage_notes:
@@ -825,11 +1532,12 @@ def _drill_note_values(
     examples: Sequence[ExampleSentence],
     label: str,
     deck_path: Path,
+    audio_fields: Sequence[str] = (),
 ) -> list[str]:
     """Render and structurally guard one drill note's positional fields."""
     rich = bool(form_note or examples)
     support = (
-        _drill_support_html(record, card, form_note, examples)
+        _drill_support_html(record, card, form_note, examples, audio_fields)
         if rich
         else html.escape(", ".join(card.examples))
     )
@@ -857,6 +1565,38 @@ def _drill_note_values(
             f"later field out of place: {deck_path}"
         )
     return values
+
+
+def _resolve_drill_audio_fields(
+    examples: Sequence[ExampleSentence],
+    *,
+    project_config: ProjectConfig,
+    deck_path: Path,
+    record_id: str,
+    media_files: list[str],
+    claimed_media: dict[str, tuple[str, str]],
+) -> list[str]:
+    """Resolve and claim every authored clip exactly as the package will."""
+    audio_fields: list[str] = []
+    warnings: list[str] = []
+    for example in examples:
+        if not example.audio:
+            audio_fields.append("")
+            continue
+        found = _resolve_media(
+            example.audio,
+            media_dir=project_config.media_dir,
+            deck_dir=deck_path.parent,
+            record_id=record_id,
+            label=f"{example.register.capitalize()} drill example audio",
+            media_files=media_files,
+            warnings=warnings,
+            claimed=claimed_media,
+        )
+        audio_fields.append(f"[sound:{found.name}]" if found is not None else "")
+    if warnings:
+        raise PatternDeckError("; ".join(warnings))
+    return audio_fields
 
 
 def _identifier(deck_config: dict[str, Any], key: str, deck_path: Path) -> int:
@@ -981,7 +1721,11 @@ def deck_problems(
                 # `verb_group`, so `validate` passed a deck the very next
                 # `build` refused: the one drift this function exists to close.
                 if filters_valid:
-                    problems.extend(_drill_set_problems(deck_path, path, form))
+                    problems.extend(
+                        _drill_set_problems(
+                            deck_path, path, form, project_config
+                        )
+                    )
         return problems
 
     document = str(deck_config.get("document") or "").strip()
@@ -1010,7 +1754,12 @@ def deck_problems(
     return problems
 
 
-def _drill_set_problems(deck_path: Path, collection: Path, form: str) -> list[str]:
+def _drill_set_problems(
+    deck_path: Path,
+    collection: Path,
+    form: str,
+    project_config: ProjectConfig,
+) -> list[str]:
     """The build's own emptiness refusal, asked of the same inputs.
 
     A collection this deck names and janki cannot read *is* this deck's problem.
@@ -1037,14 +1786,26 @@ def _drill_set_problems(deck_path: Path, collection: Path, form: str) -> list[st
         cards = drill_cards(shipping, form)
         record_by_id = {record.id: record for record in shipping}
         label = form.replace("_", " ")
+        media_files: list[str] = []
+        claimed_media: dict[str, tuple[str, str]] = {}
         for card, record_id in cards:
+            examples = examples_by_id.get(record_id, ())
+            audio_fields = _resolve_drill_audio_fields(
+                examples,
+                project_config=project_config,
+                deck_path=deck_path,
+                record_id=record_id,
+                media_files=media_files,
+                claimed_media=claimed_media,
+            )
             _drill_note_values(
                 record_by_id[record_id],
                 card,
                 form_note,
-                examples_by_id.get(record_id, ()),
+                examples,
                 label,
                 deck_path,
+                audio_fields,
             )
     except JankiError as exc:
         return [str(exc)]
@@ -1262,14 +2023,26 @@ def build_conjugation_deck(
     deck = genanki.Deck(deck_id, str(deck_config.get("name") or deck_path.stem))
     label = form.replace("_", " ")
     record_by_id = {record.id: record for record in shipping}
+    media_files: list[str] = []
+    claimed_media: dict[str, tuple[str, str]] = {}
     for card, record_id in cards:
+        examples = examples_by_id.get(record_id, ())
+        audio_fields = _resolve_drill_audio_fields(
+            examples,
+            project_config=project_config,
+            deck_path=deck_path,
+            record_id=record_id,
+            media_files=media_files,
+            claimed_media=claimed_media,
+        )
         values = _drill_note_values(
             record_by_id[record_id],
             card,
             form_note,
-            examples_by_id.get(record_id, ()),
+            examples,
             label,
             deck_path,
+            audio_fields,
         )
         deck.add_note(
             genanki.Note(
@@ -1285,5 +2058,7 @@ def build_conjugation_deck(
     filename = str(deck_config.get("output", f"{deck_path.stem}.apkg"))
     target = output_path or (project_config.dist_dir / filename)
     target.parent.mkdir(parents=True, exist_ok=True)
-    genanki.Package(deck).write_to_file(str(target))
+    package = genanki.Package(deck)
+    package.media_files = sorted(set(media_files))
+    _write_package_atomic(package, target.resolve())
     return target, len(cards)

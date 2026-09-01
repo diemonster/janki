@@ -18,6 +18,7 @@ of why the asking changed.
 | `extract-table.md` | `janki extract --mode table` | system |
 | `extract-prose.md` | `janki extract --mode prose` | system |
 | `enrich-bare-word.md` | `janki enrich --ai` | system |
+| `revise-conjugation-deck.md` | confirmed conjugation-deck `revise` | system |
 | `approve-coverage.md` | `janki promote --accept-coverage` | system |
 
 The coverage check is the one pass that does not lead with the style guide.
@@ -63,7 +64,9 @@ or wrong, the fix is here, in the asking.
 provenance with both its candidates and its proposed source patterns. AI
 enrichment fingerprints the provider, exact style guide, rich task template,
 labelled record turn, provider-normalized transport prompt, and actual wire
-schema. The coverage approval records its model and template fingerprint too,
+schema. Revision fingerprints the exact selected deck bytes, owner instruction,
+style/task prompts, labelled turn, model, provider, and response schema before
+it can dispatch. The coverage approval records its model and template fingerprint too,
 so every accepted model proposal can be traced to the asking that produced it
 via `git log prompts/`.
 
@@ -74,7 +77,8 @@ that removing it should break something, `tests/test_prompts.py` is where that
 assertion goes — it reads these files, so a retired clause is a failing test
 rather than a silent weakening.
 
-Today that holds for `enrich-bare-word.md`, the three `extract-*.md` files,
-and `approve-coverage.md`. Assertions living in tests read the files too: they
-once read Python constants holding byte-identical copies, which meant deleting
-a clause from the live template changed nothing anyone would notice.
+Today that holds for `enrich-bare-word.md`, `revise-conjugation-deck.md`, the
+three `extract-*.md` files, and `approve-coverage.md`. Assertions living in
+tests read the files too: they once read Python constants holding byte-identical
+copies, which meant deleting a clause from the live template changed nothing
+anyone would notice.

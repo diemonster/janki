@@ -1,9 +1,10 @@
-"""The M7.6P boundary: two model-call paths, each returning a complete card.
+"""The card-writing boundary: three model-call paths with explicit products.
 
 These tests lead the implementation deliberately.  A source is read once by
 ``extract`` and a bare record is written once by ``enrich --ai``; meaning
 polish and grammar-pattern discovery are parts of those answers, not later
-paid passes.
+paid passes. A selected conjugation deck is revised through its own narrow,
+staged third path rather than an implicit follow-up audit.
 """
 
 from __future__ import annotations
@@ -507,12 +508,13 @@ def test_python_user_turns_are_labelled_data_not_hidden_instructions() -> None:
     assert pattern_data.startswith("Reviewed lesson patterns:")
 
 
-def test_only_the_two_consolidated_model_call_paths_remain() -> None:
+def test_only_the_three_explicit_card_writing_paths_remain() -> None:
     on_disk = {path.stem for path in (REPO_ROOT / "prompts").glob("*.md")}
 
     assert "polish-meanings" not in on_disk
     assert "patterns" not in on_disk
     assert "enrich-bare-word" in on_disk
+    assert "revise-conjugation-deck" in on_disk
 
     parser = cli.build_parser()
     with pytest.raises(SystemExit):

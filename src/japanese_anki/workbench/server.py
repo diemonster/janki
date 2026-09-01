@@ -77,6 +77,8 @@ from japanese_anki.application import (
 )
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import build as build_application
+from japanese_anki.application import deck_build as deck_build_application
+from japanese_anki.application import revision_apply as revision_apply_application
 from japanese_anki.application.assignment import (
     AssignmentError,
     DeckAssignmentAttempt,
@@ -168,6 +170,8 @@ from japanese_anki.workbench.render import (
     render_failure,
     render_finish,
     render_reidentify,
+    render_revision,
+    render_revision_finish,
     render_source,
 )
 
@@ -177,6 +181,8 @@ _SOURCE_PREFIX = "/source/"
 _EXTRACT_PREFIX = "/extract/"
 _FINISH_PREFIX = "/finish/"
 _DECK_CREATOR_ROUTE = "/decks/new"
+_REVISION_PREFIX = "/revisions/"
+_DECK_PREFIX = "/decks/"
 
 #: An uploaded source is orders of magnitude larger than a form. It is
 #: still bounded: this is a localhost tool reading a scan or a lesson PDF,
@@ -225,6 +231,94 @@ class _StudyDeckSubmission:
     production: bool
     reading: bool
     plan_fingerprint: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _RevisionApplySubmission:
+    """The exact apply control rendered on one revision review page."""
+
+    csrf: str
+    plan_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class _RevisionFinishSubmission:
+    """One of the two separately authorized post-revision actions."""
+
+    action: str
+    csrf: str
+    plan_fingerprint: str
+
+
+def _parse_revision_apply_form(body: bytes) -> _RevisionApplySubmission:
+    """Accept only the one bounded form shape the review page emits."""
+    try:
+        pairs = parse_qsl(
+            body.decode("utf-8", errors="strict"),
+            keep_blank_values=True,
+            strict_parsing=True,
+            encoding="utf-8",
+            errors="strict",
+            max_num_fields=4,
+        )
+    except (UnicodeError, ValueError) as exc:
+        raise revision_apply_application.RevisionApplyError(
+            "That revision form could not be read."
+        ) from exc
+    names = [name for name, _value in pairs]
+    if len(names) != len(set(names)):
+        raise revision_apply_application.RevisionApplyError(
+            "That revision form repeats a field."
+        )
+    fields = dict(pairs)
+    if set(fields) != {"action", "csrf", "plan_fingerprint"}:
+        raise revision_apply_application.RevisionApplyError(
+            "That revision form is not one this page offered."
+        )
+    if fields["action"] != "apply-revision":
+        raise revision_apply_application.RevisionApplyError(
+            "That revision form names no available action."
+        )
+    fingerprint = fields["plan_fingerprint"]
+    if not _is_lower_sha256(fingerprint):
+        raise revision_apply_application.RevisionApplyError(
+            "That revision plan fingerprint is malformed."
+        )
+    return _RevisionApplySubmission(
+        csrf=fields["csrf"], plan_fingerprint=fingerprint
+    )
+
+
+def _parse_revision_finish_form(body: bytes) -> _RevisionFinishSubmission:
+    """Strictly parse an audio or build form from the deck finish page."""
+    try:
+        pairs = parse_qsl(
+            body.decode("utf-8", errors="strict"),
+            keep_blank_values=True,
+            strict_parsing=True,
+            encoding="utf-8",
+            errors="strict",
+            max_num_fields=4,
+        )
+    except (UnicodeError, ValueError) as exc:
+        raise JankiError("That deck finish form could not be read.") from exc
+    names = [name for name, _value in pairs]
+    if len(names) != len(set(names)):
+        raise JankiError("That deck finish form repeats a field.")
+    fields = dict(pairs)
+    if set(fields) != {"action", "csrf", "plan_fingerprint"}:
+        raise JankiError("That deck finish form is not one this page offered.")
+    action = fields["action"]
+    if action not in {"deck-audio", "deck-build"}:
+        raise JankiError("That deck finish form names no available action.")
+    fingerprint = fields["plan_fingerprint"]
+    if not _is_lower_sha256(fingerprint):
+        raise JankiError("That deck finish plan fingerprint is malformed.")
+    return _RevisionFinishSubmission(
+        action=action,
+        csrf=fields["csrf"],
+        plan_fingerprint=fingerprint,
+    )
 
 
 class _ErrorTruth(Enum):
@@ -514,6 +608,10 @@ class WorkbenchSession:
     #: was tricked into submitting. Unlike the one-shot panel's, this one
     #: survives the request — a dashboard approves many sources in a row.
     csrf_token: str
+    #: The separately keyed ChatKit origin, when this run enabled it. It is a
+    #: link only: the authority-bearing workbench never embeds that origin or
+    #: discloses either of its own secrets to it.
+    assistant_url: str = ""
     #: Paid consent is narrower than session CSRF: each value is bound to one
     #: rendered call and consumed once. It is ephemeral authority, never a
     #: second record of whether the operation happened.
@@ -544,15 +642,80 @@ class WorkbenchSession:
     )
 
     @classmethod
-    def open(cls, config: ProjectConfig) -> WorkbenchSession:
+    def open(
+        cls, config: ProjectConfig, *, assistant_url: str = ""
+    ) -> WorkbenchSession:
         return cls(
             config=config,
             token=secrets.token_urlsafe(32),
             csrf_token=secrets.token_urlsafe(32),
+            assistant_url=assistant_url,
         )
 
     def journeys(self) -> tuple[list[SourceJourney], list[str]]:
         return source_journeys(self.config)
+
+    def _revision_candidate_paths(self) -> tuple[list[Path], list[str]]:
+        """Direct regular revision artifacts; never a path supplied by HTTP."""
+        try:
+            entries = sorted(self.config.staging_dir.iterdir(), key=lambda path: path.name)
+        except FileNotFoundError:
+            return [], []
+        except OSError as exc:
+            return [], [f"Could not inspect deck revision proposals: {exc}"]
+        candidates: list[Path] = []
+        warnings: list[str] = []
+        for entry in entries:
+            if not entry.name.startswith("revise-") or entry.suffix != ".json":
+                continue
+            try:
+                details = os.lstat(entry)
+            except OSError as exc:
+                warnings.append(f"Could not inspect revision {entry.name}: {exc}")
+                continue
+            if not stat.S_ISREG(details.st_mode):
+                warnings.append(
+                    f"Revision {entry.name} is not a direct regular file and was refused."
+                )
+                continue
+            candidates.append(entry)
+        return candidates, warnings
+
+    def revision_proposals(
+        self,
+    ) -> tuple[list[revision_apply_application.RevisionApplyPlan], list[str]]:
+        """Fresh, service-validated plans plus visible refusals for bad artifacts."""
+        candidates, warnings = self._revision_candidate_paths()
+        plans: list[revision_apply_application.RevisionApplyPlan] = []
+        for candidate in candidates:
+            try:
+                plans.append(
+                    revision_apply_application.plan_revision_apply(
+                        self.config, candidate
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 - one bad proposal cannot break the dashboard
+                warnings.append(f"Could not open revision {candidate.name}: {exc}")
+        return plans, warnings
+
+    def revision_proposal(
+        self, name: str
+    ) -> revision_apply_application.RevisionApplyPlan | None:
+        """Plan a named candidate found by directory walk, never path joining."""
+        candidates, _warnings = self._revision_candidate_paths()
+        path = next((candidate for candidate in candidates if candidate.name == name), None)
+        if path is None:
+            return None
+        return revision_apply_application.plan_revision_apply(self.config, path)
+
+    def configured_deck(self, name: str) -> Path | None:
+        """Resolve one exact configured filename without joining request text."""
+        matches = [
+            path.resolve()
+            for path in status_module.deck_files(self.config)
+            if path.name == name
+        ]
+        return matches[0] if len(matches) == 1 else None
 
     def take_dashboard_tour_open(self) -> bool:
         """Open the guide once per server session, independent of corpus state."""
@@ -1129,6 +1292,63 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return None
         return fields["source"], promoted, held
 
+    def _revision_finish_banner(self) -> str:
+        """Display-only result of one deck finish POST."""
+        query = self.path.split("?", 1)
+        if len(query) != 2:
+            return ""
+        fields = dict(parse_qsl(query[1]))
+        if fields.get("audio") == "complete":
+            return "Example audio finished. Build remains a separate action below."
+        if fields.get("build") == "complete":
+            return "Built the Anki package from the exact plan shown."
+        return ""
+
+    def _revision_finish_page(self, name: str) -> None:
+        """Render independent current audio and build plans for a known deck."""
+        session = self.server.session
+        try:
+            deck = session.configured_deck(name)
+        except Exception as exc:  # noqa: BLE001 - configured-deck errors are refusals
+            self._error(409, _exception_text(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
+            return
+        if deck is None:
+            self._error(404, "No such configured deck.")
+            return
+        audio_plan = None
+        audio_error = ""
+        build_plan = None
+        build_error = ""
+        try:
+            audio_plan = audio_application.plan_deck_audio(
+                session.config,
+                deck,
+                words=False,
+                examples=True,
+                force=False,
+            )
+        except Exception as exc:  # noqa: BLE001 - keep the independent build visible
+            audio_error = _exception_text(exc)
+        try:
+            build_plan = deck_build_application.plan_conjugation_deck_build(
+                session.config, deck
+            )
+        except Exception as exc:  # noqa: BLE001 - keep the independent audio visible
+            build_error = _exception_text(exc)
+        self._send(
+            200,
+            render_revision_finish(
+                deck,
+                token=session.token,
+                csrf=session.csrf_token,
+                audio_plan=audio_plan,
+                build_plan=build_plan,
+                audio_error=audio_error,
+                build_error=build_error,
+                banner=self._revision_finish_banner(),
+            ),
+        )
+
     def _finish_banner(self) -> str:
         """Display-only result of the immediately preceding finish POST."""
         query = self.path.split("?", 1)
@@ -1193,6 +1413,9 @@ class _WorkbenchHandler(LocalOnlyHandler):
         if route == "/":
             journeys, warnings = self.server.session.journeys()
             recovery = self.server.session.operation_recovery()
+            revisions, revision_warnings = (
+                self.server.session.revision_proposals()
+            )
             tour_open = self.server.session.take_dashboard_tour_open()
             self._send(
                 200,
@@ -1206,6 +1429,9 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     csrf=self.server.session.csrf_token,
                     added=self._added_banner(),
                     promoted=self._promoted_banner(),
+                    assistant_url=self.server.session.assistant_url,
+                    revisions=revisions,
+                    revision_warnings=revision_warnings,
                 ),
             )
             return
@@ -1216,6 +1442,44 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._send(
                 200,
                 render_deck_creator(
+                    token=self.server.session.token,
+                    csrf=self.server.session.csrf_token,
+                ),
+            )
+            return
+        if route.startswith(_DECK_PREFIX) and route.endswith("/finish"):
+            encoded_name = route[len(_DECK_PREFIX) : -len("/finish")]
+            if not encoded_name or "/" in encoded_name:
+                self._error(404, "No such deck finish page.")
+                return
+            self._revision_finish_page(unquote(encoded_name))
+            return
+        if route.startswith(_REVISION_PREFIX):
+            encoded_name = route[len(_REVISION_PREFIX) :]
+            if not encoded_name or "/" in encoded_name:
+                self._error(404, "No such deck revision proposal.")
+                return
+            name = unquote(encoded_name)
+            try:
+                plan = self.server.session.revision_proposal(name)
+            except Exception as exc:  # noqa: BLE001 - revision errors stay a refusal page
+                self._error(
+                    409,
+                    _exception_text(exc),
+                    truth=_ErrorTruth.LOCAL_NO_WRITE,
+                    next_step=(
+                        "Return to the dashboard, inspect the revision notice, "
+                        "and reload after resolving its recorded state."
+                    ),
+                )
+                return
+            if plan is None:
+                self._error(404, "No such deck revision proposal.")
+                return
+            self._send(
+                200,
+                render_revision(
+                    plan,
                     token=self.server.session.token,
                     csrf=self.server.session.csrf_token,
                 ),
@@ -1636,6 +1900,8 @@ class _WorkbenchHandler(LocalOnlyHandler):
             and not route.startswith(_SOURCE_PREFIX)
             and not route.startswith(_EXTRACT_PREFIX)
             and not route.startswith(_FINISH_PREFIX)
+            and not route.startswith(_REVISION_PREFIX)
+            and not route.startswith(_DECK_PREFIX)
         ):
             self._error(404, "No such workbench action.")
             return
@@ -1650,6 +1916,27 @@ class _WorkbenchHandler(LocalOnlyHandler):
             if body is None:
                 return
             self._study_deck(body)
+            return
+        if route.startswith(_DECK_PREFIX) and route.endswith("/finish"):
+            encoded_name = route[len(_DECK_PREFIX) : -len("/finish")]
+            if not encoded_name or "/" in encoded_name:
+                self._error(404, "No such deck finish action.")
+                return
+            body = self._read_body()
+            if body is None:
+                return
+            self._revision_finish(unquote(encoded_name), body)
+            return
+        if route.startswith(_REVISION_PREFIX):
+            rest = route[len(_REVISION_PREFIX) :]
+            encoded_name, separator, action = rest.rpartition("/")
+            if separator != "/" or action != "apply" or not encoded_name:
+                self._error(404, "No such deck revision action.")
+                return
+            body = self._read_body()
+            if body is None:
+                return
+            self._apply_revision(unquote(encoded_name), body)
             return
         if route.startswith(_FINISH_PREFIX):
             receipt_id = unquote(route[len(_FINISH_PREFIX) :])
@@ -1700,6 +1987,261 @@ class _WorkbenchHandler(LocalOnlyHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.close_connection = True
+
+    def _apply_revision(self, name: str, body: bytes) -> None:
+        """Re-plan and apply only the exact revision the owner just reviewed."""
+        session = self.server.session
+        try:
+            submission = _parse_revision_apply_form(body)
+        except revision_apply_application.RevisionApplyError as exc:
+            self._error(400, str(exc))
+            return
+        if not secrets.compare_digest(submission.csrf, session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        try:
+            fresh = session.revision_proposal(name)
+        except Exception as exc:  # noqa: BLE001 - read failures are local refusals
+            self._error(
+                409,
+                _exception_text(exc),
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST, then reload the proposal and review its current plan."
+                ),
+            )
+            return
+        if fresh is None:
+            self._error(404, "No such deck revision action.")
+            return
+        if not secrets.compare_digest(
+            submission.plan_fingerprint, fresh.plan_fingerprint
+        ):
+            self._error(
+                409,
+                "This revision changed after the page was rendered.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST, then reload and review the current proposal."
+                ),
+            )
+            return
+        try:
+            result = revision_apply_application.execute_revision_apply(
+                session.config, fresh
+            )
+        except Exception as exc:  # noqa: BLE001 - never turn a recoverable apply into 500
+            self._error(
+                409,
+                _exception_text(exc),
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST. Return to the dashboard and inspect the revision's "
+                    "current recovery state before trying again."
+                ),
+            )
+            return
+        self._redirect(
+            f"/{session.token}/decks/{quote(result.deck_path.name, safe='')}/finish"
+        )
+
+    def _revision_finish(self, name: str, body: bytes) -> None:
+        """Dispatch one separately bound deck-audio or deck-build action."""
+        session = self.server.session
+        try:
+            submission = _parse_revision_finish_form(body)
+        except JankiError as exc:
+            self._error(400, str(exc))
+            return
+        if not secrets.compare_digest(submission.csrf, session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        try:
+            deck = session.configured_deck(name)
+        except Exception as exc:  # noqa: BLE001 - configured-deck errors are refusals
+            self._error(409, _exception_text(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
+            return
+        if deck is None:
+            self._error(404, "No such configured deck.")
+            return
+        if submission.action == "deck-audio":
+            self._revision_finish_audio(deck, submission)
+        else:
+            self._revision_finish_build(deck, submission)
+
+    def _revision_finish_audio(
+        self,
+        deck: Path,
+        submission: _RevisionFinishSubmission,
+    ) -> None:
+        """Re-plan then run the exact examples-only, non-forced audio plan."""
+        session = self.server.session
+        try:
+            fresh = audio_application.plan_deck_audio(
+                session.config,
+                deck,
+                words=False,
+                examples=True,
+                force=False,
+            )
+        except Exception as exc:  # noqa: BLE001 - planning proves no dispatch/write
+            self._error(
+                409,
+                _exception_text(exc),
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST, then reload the deck finish page."
+                ),
+            )
+            return
+        if not secrets.compare_digest(
+            submission.plan_fingerprint, fresh.fingerprint
+        ):
+            self._error(
+                409,
+                "This example-audio plan changed after the page was rendered.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST, then reload and review the fresh audio counts."
+                ),
+            )
+            return
+        provider = fresh.example_provider
+        paid_call_possible = bool(
+            provider is not None
+            and provider.access == "paid-network"
+            and fresh.example_counts.provider_required > 0
+        )
+        try:
+            execution = audio_application.execute_deck_audio(
+                session.config,
+                deck,
+                words=False,
+                examples=True,
+                expected_fingerprint=fresh.fingerprint,
+                force=False,
+                prune=False,
+            )
+        except Exception as exc:  # noqa: BLE001 - provider/write truth is unknown
+            self._failure(
+                409,
+                FailureView(
+                    happened=f"Could not finish this example audio: {_exception_text(exc)}",
+                    changed=(
+                        "This failure cannot prove whether deck audio references, "
+                        "canonical media, or the audio ledger changed."
+                    ),
+                    money=(
+                        "A paid provider call may have been billed."
+                        if paid_call_possible
+                        else "This exact plan required no paid provider call."
+                    ),
+                    next_step=(
+                        "Use your browser's Back button rather than reloading this "
+                        "POST. Return to the deck finish page and inspect its fresh "
+                        "current and recoverable counts before retrying."
+                    ),
+                ),
+            )
+            return
+        if not execution.succeeded:
+            changed = " ".join(
+                (
+                    "This action wrote deck audio references."
+                    if execution.record_references_written
+                    else "This action did not write deck audio references.",
+                    "This action published canonical media."
+                    if execution.media_published
+                    else "This action did not publish canonical media.",
+                    "This action committed its canonical audio ledger changes."
+                    if execution.ledger_committed
+                    else "This action did not commit canonical audio ledger changes.",
+                )
+            )
+            technical = " ".join(
+                value
+                for value in (
+                    execution.stopped_by,
+                    execution.prune_error,
+                    execution.ledger_error,
+                )
+                if value
+            )
+            self._failure(
+                409,
+                FailureView(
+                    happened="Example audio did not finish.",
+                    changed=changed,
+                    money=(
+                        "A paid provider call may have been billed."
+                        if paid_call_possible
+                        else "This exact plan required no paid provider call."
+                    ),
+                    next_step=(
+                        "Exact recovery is durable. Reload this deck finish page "
+                        "and repeat the matching action to adopt it without rebilling."
+                        if execution.pending_recovery
+                        else "Reload this deck finish page and review the fresh "
+                        "audio plan before trying again."
+                    ),
+                    technical_detail=technical,
+                ),
+            )
+            return
+        self._redirect(
+            f"/{session.token}/decks/{quote(deck.name, safe='')}/finish?audio=complete"
+        )
+
+    def _revision_finish_build(
+        self,
+        deck: Path,
+        submission: _RevisionFinishSubmission,
+    ) -> None:
+        """Re-plan then publish only the exact local package shown."""
+        session = self.server.session
+        try:
+            fresh = deck_build_application.plan_conjugation_deck_build(
+                session.config, deck
+            )
+        except Exception as exc:  # noqa: BLE001 - planning proves no write
+            self._error(409, _exception_text(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
+            return
+        if not secrets.compare_digest(
+            submission.plan_fingerprint, fresh.fingerprint
+        ):
+            self._error(
+                409,
+                "This deck-build plan changed after the page was rendered.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST, then reload and review the fresh build plan."
+                ),
+            )
+            return
+        try:
+            deck_build_application.execute_conjugation_deck_build(
+                session.config, fresh
+            )
+        except Exception as exc:  # noqa: BLE001 - a local package may have landed
+            self._error(
+                409,
+                _exception_text(exc),
+                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
+                next_step=(
+                    "Use your browser's Back button rather than reloading this "
+                    "POST, then reload the finish page and inspect the package path."
+                ),
+            )
+            return
+        self._redirect(
+            f"/{session.token}/decks/{quote(deck.name, safe='')}/finish?build=complete"
+        )
 
     def _finish(self, receipt_id: str, body: bytes) -> None:
         """Plan or consume one exact finish-page dictionary/kanji action."""
@@ -3602,30 +4144,66 @@ def make_server(session: WorkbenchSession) -> _WorkbenchServer:
     return server
 
 
+def _start_assistant_for(config: ProjectConfig):
+    """Start the optional isolated origin without importing ChatKit when off."""
+
+    if not config.assistant_enabled:
+        return None
+    from japanese_anki.workbench.assistant_adapter import discover_revision_adapter
+
+    adapter, warnings = discover_revision_adapter(config)
+    for warning in warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if adapter is None:
+        return None
+    try:
+        from japanese_anki.workbench.assistant_http import start_assistant_sidecar
+
+        return start_assistant_sidecar(adapter, deck_scope=adapter.deck_scope)
+    except (ImportError, JankiError, OSError, RuntimeError) as exc:
+        print(
+            "warning: the isolated assistant could not start; the main workbench "
+            f"will continue without it: {exc}",
+            file=sys.stderr,
+        )
+        return None
+
+
 def serve(config: ProjectConfig, *, open_browser: bool = True) -> str:
     """Run the workbench until interrupted, and return the URL it served.
 
     Unlike the review panel there is no terminal request: the page is a view,
     so the only thing that ends it is the person who started it.
     """
-    session = WorkbenchSession.open(config)
-    server = make_server(session)
-    url = f"http://{server.expected_host}/{session.token}/"
-    print(f"Workbench: {url}", flush=True)
-    print(
-        "That address carries this session's key — it stops working when you "
-        "stop the workbench. Ctrl-C to stop.",
-        flush=True,
-    )
-    if open_browser and not webbrowser.open(url):
-        print(
-            "warning: could not open a browser; copy the URL above",
-            file=sys.stderr,
-        )
+    assistant = _start_assistant_for(config)
+    server = None
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nWorkbench stopped.")
+        session = WorkbenchSession.open(
+            config,
+            assistant_url=assistant.url if assistant is not None else "",
+        )
+        server = make_server(session)
+        url = f"http://{server.expected_host}/{session.token}/"
+        print(f"Workbench: {url}", flush=True)
+        if assistant is not None:
+            print(f"Assistant: {assistant.url}", flush=True)
+        print(
+            "That address carries this session's key — it stops working when you "
+            "stop the workbench. Ctrl-C to stop.",
+            flush=True,
+        )
+        if open_browser and not webbrowser.open(url):
+            print(
+                "warning: could not open a browser; copy the URL above",
+                file=sys.stderr,
+            )
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nWorkbench stopped.")
     finally:
-        server.server_close()
+        if server is not None:
+            server.server_close()
+        if assistant is not None:
+            assistant.close()
     return url

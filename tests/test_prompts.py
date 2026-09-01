@@ -27,18 +27,21 @@ SHIPPED = (
     "extract-table",
     "extract-prose",
     "enrich-bare-word",
+    "revise-conjugation-deck",
     "approve-coverage",
 )
 
-#: The complete card-writing contract has exactly these four input shapes.
-#: The style guide is shared context and approve-coverage counts source units;
-#: neither is a rich-card task template.
+#: The complete vocabulary-card contract has exactly these four input shapes.
+#: Revision writes an existing conjugation drill's narrower card shape, while
+#: the style guide is shared context and approve-coverage counts source units.
 RICH_TEMPLATES = (
     "extract-auto",
     "extract-table",
     "extract-prose",
     "enrich-bare-word",
 )
+
+CARD_WRITING_TEMPLATES = (*RICH_TEMPLATES, "revise-conjugation-deck")
 
 
 # --- the loader ---------------------------------------------------------------
@@ -201,10 +204,12 @@ def test_the_directory_holds_no_file_nothing_sends() -> None:
     assert on_disk == {*SHIPPED, "README"}
 
 
-def test_card_writing_has_exactly_four_rich_task_templates() -> None:
-    """Three source shapes and one bare-record shape, with no extra pass."""
-    assert set(SHIPPED) - {"style-guide", "approve-coverage"} == set(RICH_TEMPLATES)
-    assert len(RICH_TEMPLATES) == 4
+def test_card_writing_has_exactly_five_task_templates() -> None:
+    """Three source shapes, bare-record enrichment, and deck revision."""
+    assert set(SHIPPED) - {"style-guide", "approve-coverage"} == set(
+        CARD_WRITING_TEMPLATES
+    )
+    assert len(CARD_WRITING_TEMPLATES) == 5
 
 
 def test_the_three_extraction_modes_are_three_complete_files() -> None:
@@ -856,6 +861,21 @@ def test_each_rich_input_shape_has_a_complete_distinct_template() -> None:
         assert "usage note" in lowered, name
 
 
+def test_conjugation_revision_is_a_complete_narrow_content_prompt() -> None:
+    """The third writing path is selected-card revision, never chat authority."""
+    text = " ".join(
+        prompts.load(REPO_ROOT, "revise-conjugation-deck").split()
+    )
+
+    assert "current deck content for only the selected cards" in text
+    assert "every selected record ID exactly once, in the same order" in text
+    assert "exactly two complete examples for each: one polite and one casual" in text
+    assert "Both examples must actually demonstrate the deck's named" in text
+    assert "preserve a current example exactly" in text
+    assert "Do not preserve an audio field" in text
+    assert "romaji" not in text.casefold()
+
+
 # --- the wiring: which file each command actually sends -------------------------
 #
 # The hole a verification review found in the first attempt at this section. The
@@ -955,7 +975,7 @@ def test_enrichment_sends_the_bare_word_rich_template(
     expected = "enrich-bare-word"
     wanted = prompts.load(REPO_ROOT, expected)
     assert any(wanted in text for text in seen), f"{expected}.md was not sent"
-    for other in set(RICH_TEMPLATES) - {expected}:
+    for other in set(CARD_WRITING_TEMPLATES) - {expected}:
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), (
             f"{other}.md was sent instead"
         )
@@ -1005,7 +1025,7 @@ def test_the_batch_builder_sends_the_same_bare_word_rich_template(
     )
     expected = "enrich-bare-word"
     assert prompts.load(REPO_ROOT, expected) in system, f"{expected}.md was not sent"
-    for other in set(RICH_TEMPLATES) - {expected}:
+    for other in set(CARD_WRITING_TEMPLATES) - {expected}:
         assert prompts.load(REPO_ROOT, other) not in system, (
             f"{other}.md was sent instead"
         )
@@ -1037,7 +1057,7 @@ def test_every_extraction_mode_sends_its_own_file(
     assert seen
     wanted = extract.prompt_name(mode)
     assert any(prompts.load(REPO_ROOT, wanted) in t for t in seen), wanted
-    for other in set(RICH_TEMPLATES) - {wanted}:
+    for other in set(CARD_WRITING_TEMPLATES) - {wanted}:
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), other
     # The style guide too, and it matters more here than anywhere: the same
     # variable feeds `prompt_provenance`, which writes

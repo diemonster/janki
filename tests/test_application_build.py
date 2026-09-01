@@ -351,6 +351,10 @@ def test_stale_or_pending_dispatch_refuses_before_any_package_write(
         refusal = str(raised.value)
         assert "page" not in refusal.lower()
         assert "retry from the durable finish receipt" in refusal
+    else:
+        refusal = str(raised.value)
+        assert "run 'janki status'" in refusal
+        assert "exact recovery command" in refusal
 
 
 def test_ledger_save_failure_reports_packages_as_landed(

@@ -69,7 +69,7 @@ supported browser executable is installed and fails when an installed browser
 cannot launch. An HTTP client is not a substitute. Keep this one journey end to
 end instead of duplicating every handler test in a browser.
 
-The automated network claim has exact edges. The test removes provider keys,
+The automated network claim has exact edges. The main workbench test removes provider keys,
 replaces every application provider, rejects non-loopback socket connections
 and name resolution attempted by the Python server process, and fails if a
 request issued by the tested workbench page leaves loopback or its local
@@ -77,6 +77,12 @@ request issued by the tested workbench page leaves loopback or its local
 janki. It does not instrument Chrome's own background processes and makes no
 broader Chrome-egress claim; Playwright is configured to use an already
 installed executable rather than downloading one during gates.
+
+The optional assistant is tested as a different origin. Its protocol and
+authority tests replace the provider and ChatKit client, while its shell test
+intercepts the one documented OpenAI-hosted UI asset. This preserves the
+stronger no-remote-code claim for the workbench origin instead of weakening it
+to make room for ChatKit.
 
 That one table journey checks one keyboard-reachable action and its visible
 outline, a computed dark palette whose background is darker than its text, the

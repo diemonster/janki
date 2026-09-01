@@ -116,6 +116,30 @@ def test_the_dashboard_requires_the_session_token(tmp_path: Path) -> None:
         server.server_close()
 
 
+def test_dashboard_links_the_isolated_assistant_origin_without_sharing_secrets(
+    tmp_path: Path,
+) -> None:
+    _project(tmp_path)
+    assistant = "http://127.0.0.1:54321/assistant-key/"
+    session = WorkbenchSession.open(
+        ProjectConfig.load(tmp_path), assistant_url=assistant
+    )
+    server, _thread = _running(session)
+    try:
+        status, _headers, body = _request(server, "GET", f"/{session.token}/")
+
+        assert status == 200
+        page = body.decode("utf-8")
+        assert f'href="{assistant}"' in page
+        assistant_section = page[page.index('<section class="assistant-entry"') :]
+        assistant_section = assistant_section[: assistant_section.index("</section>")]
+        assert session.token not in assistant_section
+        assert session.csrf_token not in assistant_section
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_a_wrong_token_is_indistinguishable_from_no_such_page(
     tmp_path: Path,
 ) -> None:
@@ -400,6 +424,24 @@ def test_it_says_saved_on_this_computer_never_backed_up(tmp_path: Path) -> None:
     assert "Saved on this computer" in html
     assert "Backed up" not in html
     assert "backed up" not in html.lower()
+
+
+def test_assistant_link_is_separate_opt_in_origin_and_carries_no_workbench_key() -> None:
+    assistant = "http://127.0.0.1:54321/assistant-key/"
+
+    disabled = _render([], token="workbench-key")
+    enabled = _render(
+        [], token="workbench-key", assistant_url=assistant
+    )
+
+    assert "Open the assistant" not in disabled
+    assert f'href="{assistant}"' in enabled
+    assert "target=_blank" in enabled
+    assert "rel=noreferrer" in enabled
+    assert "referrerpolicy=no-referrer" in enabled
+    assistant_section = enabled[enabled.index('<section class="assistant-entry"') :]
+    assistant_section = assistant_section[: assistant_section.index("</section>")]
+    assert "workbench-key" not in assistant_section
 
 
 def test_it_renders_each_source_state_and_next_action(tmp_path: Path) -> None:

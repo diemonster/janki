@@ -33,9 +33,22 @@ reading = false
 extract_model = "claude-opus-5"
 enrich_provider = "anthropic"
 enrich_model = "claude-opus-5"
+# Existing-card revisions use this machine's Claude Pro/Max login. Switch to
+# "anthropic-api" to use ANTHROPIC_API_KEY through the same revision pipeline.
+revise_provider = "claude-code"
+revise_model = "claude-opus-5"
 # Codex only; ignored while enrich_provider is "anthropic", whose depth comes
 # from claude_client.effort_for(model) rather than from a config key.
 enrich_reasoning_effort = "ultra"
+
+[assistant]
+# Opens a second, separately keyed loopback origin for ChatKit. The main
+# workbench never loads third-party JavaScript or shares its session/CSRF
+# secrets with the assistant origin. The ChatKit UI itself is hosted by OpenAI,
+# so text entered there is handled by that UI. Merely opening it supplies no PDF
+# or card content; the selected deck is sent through the configured revision
+# provider only after an exact revision plan is confirmed.
+enabled = true
 
 [tts]
 provider = "voicevox"              # words only; the one engine that forces accent

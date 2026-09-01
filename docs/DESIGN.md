@@ -21,16 +21,24 @@ with provenance. Nothing ever edits a source.
 bare-record enrichment).** One rich template per input shape asks
 for the complete card: Japanese, natural English glosses, examples, furigana
 giving each kanji's *contextual* reading in that sentence, romaji, usage, and
-register. There are two paid card-writing paths. `extract` reads a preserved source
+register. There are three paid card-writing paths. `extract` reads a preserved source
 once and returns candidates, coverage facts, complete card proposals, and the
 grammar patterns that source teaches in the same answer; its auto, table, and
 prose modes remain three complete source templates. `enrich --ai` reads a bare
-record once and returns glosses, examples, and usage together. Pattern listing
-and human review remain local operations over extraction output. Prompts are
-template files, readable without opening Python, and they are the quality
-mechanism: **when the output is wrong or thin, expand the template.** A bare
-word list has no source sentences, so its template writes them; everything
-else about the card contract is shared.
+record once and returns glosses, examples, and usage together. `revise` reads
+only explicitly selected existing cards or deck content plus the owner's
+requested change and returns a fingerprinted staging proposal; it never writes
+canonical content directly. ChatKit may plan and, after an exact owner
+confirmation, dispatch that same revision operation, but conversation is a
+surface rather than a fourth writing path. Revision has one shared
+plan/consent/journal/recovery/staging/review/apply pipeline; configuration
+selects only its transport: `claude-code` consumes the logged-in Claude Pro or
+Max subscription allowance, while `anthropic-api` uses Anthropic API billing.
+Pattern listing and human review remain local operations over extraction
+output. Prompts are template files, readable without opening Python, and they
+are the quality mechanism: **when the output is wrong or thin, expand the
+template.** A bare word list has no source sentences, so its template writes
+them; everything else about the card contract is shared.
 
 Extraction's structural accounting is separate from judging the Japanese. One
 deterministic staging row represents each stable word ID; if the parsed answer
@@ -93,7 +101,11 @@ owns:
   The displayed sentence remains the card text and stable filename identity;
   the effective spoken input participates in the content/request fingerprint
   and audio write-ahead record, so changing it stales only that clip without
-  renaming it.
+  renaming it. Lesson-specific conjugation drills use this same reviewed
+  sentence profile and transaction for their authored polite/casual examples.
+  A deck-scoped synthetic owner keeps their ledger and filenames distinct from
+  the source vocabulary note, and their audio paths live in that deck's
+  `drill_examples` entries.
 - **Derivation** — mechanics janki owns: romaji transliterated from the
   model's furigana (for a bare word, from its reading), and the conjugation
   tables that fill the Conjugations field and build the drill decks.
@@ -128,9 +140,9 @@ is journaled before dispatch; an operation-bound spool fsyncs every exact
 WebSocket text frame before JSON inspection, then a terminal stream becomes
 the captured envelope before PCM decoding. The operation becomes committed
 only while its decoded WAV is staged and ledgered by exact request. After that,
-the guarded record write must win before janki publishes canonical media and
-finalizes its ordinary audio ledger entry. Either recovery layer can therefore
-resume the exact interrupted request without another bill.
+the guarded owning-record or drill-deck write must win before janki publishes
+canonical media and finalizes its ordinary audio ledger entry. Either recovery
+layer can therefore resume the exact interrupted request without another bill.
 Staging completion similarly holds the live review and selected archive locks
 through one byte-checked archive/prune transaction, so an exact interrupted
 retry cannot duplicate rows or delete a concurrently replaced review.
@@ -138,7 +150,7 @@ retry cannot duplicate rows or delete a concurrently replaced review.
 A paid model call follows the same write-ahead shape as that paid audio
 staging: journaled durably before dispatch, its exact response persisted as a
 pending artifact before parsing, so neither a crash nor a parse failure can
-lose an answer already paid for. `extract`, the separate
+lose an answer already paid for. `extract`, `revise`, the separate
 `promote --accept-coverage` completeness check, and OpenAI Realtime sentence
 audio do this today. `enrich --ai` spends money and does **not** yet journal,
 which is a gap to close rather than a design choice — until it does, nothing
@@ -206,6 +218,29 @@ controllers over the same repository files and the same operations. The
 workbench is not a second database of what happened — the repository already
 is — and it may not weaken an authority gate the CLI enforces: a consent,
 review, or approval demanded at the prompt is demanded identically in the tab.
+
+ChatKit uses its self-hosted/custom-backend integration as a conversational
+controller inside that workbench, not a separate authority or provider-owned
+workflow. It may inspect, plan, propose, and execute any operation janki
+supports when the repository owner explicitly authorizes the exact rendered
+plan in the conversation. The owner-visible plan and request detail name the
+transport provider, billing path, authentication class or subscription tier,
+model, CLI version when applicable, and exact request-byte fingerprint. The
+controlled request bytes are bound behind that fingerprint. Confirmation is a
+one-use capability bound to all of them as well as the target, current
+repository fingerprints, cost-bearing purpose and consequences; changing the
+transport invalidates it. Execution re-plans under the same locks and refuses
+drift; the assistant cannot confirm for the owner, widen the plan, reuse the
+capability, or bypass a review, journal or identity gate. A content revision
+lands as a proposal for the owner to review. OpenAI Realtime audio remains a
+separate, API-backed operation with its own plan and confirmation; the revision
+transport setting never switches it. A natural-language request can therefore
+control the tool without becoming unbounded permission to edit the repository
+or spend money.
+
+Code review and Japanese-content approval are separate gates. A machinery
+review neither judges nor approves Japanese, and content approval neither
+starts nor substitutes for a codebase review.
 
 ## What janki's own logic is for
 

@@ -56,6 +56,7 @@ container is OOM-killed. That only bites when auditioning many voices at once �
 
 ```bash
 janki audio --words --examples
+janki audio --deck genki-lesson-potential --examples
 ```
 
 Both kinds are off unless asked for. Every word gets a clip: when janki has
@@ -102,6 +103,14 @@ replace the clip.
 `--prune` removes clips no record or pending audio transaction still owns,
 taking their canonical ledger entries with them. It never deletes a staged
 paid render waiting to be recovered.
+
+The deck-scoped form voices the explicitly authored polite/casual examples in
+one rich conjugation drill deck. It accepts `--examples` only: the source
+vocabulary records continue to own word audio. These sentences use the same
+Realtime model, learner pacing prompt, deterministic voice pool, paid-call
+journal, staged recovery, and ledger as ordinary vocabulary examples. Their
+stable audio owner includes the deck id and conjugation form so another deck—or
+the source vocabulary note—cannot overwrite or retire them.
 
 ## Choosing a voice
 
@@ -246,8 +255,9 @@ The decoded paid result then follows the ordinary audio transaction:
 1. janki writes the bytes under `data/media/audio/.pending/` and records their
    exact request, provider profile, target filename, and SHA-256 in the sparse
    top-level `pending_audio` block of `data/ledger.json`.
-2. It compare-and-swap saves `vocabulary.json`, refusing to overwrite a human
-   or another command that changed the records during synthesis.
+2. It compare-and-swap saves the owning file—`vocabulary.json` for vocabulary
+   examples or the conjugation deck YAML for authored drill examples—refusing
+   to overwrite a human or another command that changed it during synthesis.
 3. Only after that record write wins does it atomically publish the staged
    bytes at the canonical `janki-*` filename, install the ordinary per-record
    audio ledger entry, clear the pending row, and remove the stage.

@@ -60,6 +60,7 @@ __all__ = [
     "parse_call",
     "prepare_paid_client",
     "read_style_guide",
+    "request_body",
     "submit_batch",
     "system_blocks",
     "wire_schema",
@@ -362,7 +363,7 @@ def system_blocks(
     return blocks
 
 
-def _request_body(
+def request_body(
     model: str,
     system_blocks: Sequence[dict[str, Any]],
     user_content: str | Iterable[dict[str, Any]],
@@ -497,7 +498,7 @@ def parse_call(
         # try because the request is sent by the first and consumed by the
         # second, and either can fail.
         with api.messages.stream(
-            **_request_body(
+            **request_body(
                 model, system_blocks, user_content, schema, max_tokens, effort
             )
         ) as stream:
@@ -573,7 +574,7 @@ def batch_request(
     """
     return {
         "custom_id": custom_id,
-        "params": _request_body(
+        "params": request_body(
             model, system_blocks, user_content, schema, max_tokens, effort
         ),
     }
