@@ -114,10 +114,10 @@ def field_separator_fault(names: Sequence[str], values: Sequence[str]) -> str | 
 
     For the values that never pass through a record and so are never seen by
     :func:`validate_record` — a word deck's kanji block, rendered from
-    `data/kanji.json`, and a rule card's fields, which come from
-    `data/patterns.json` and the deck file. ``html.escape`` leaves control
-    characters alone. A drill deck asks nothing here: every one of its values
-    derives from a record its builder has already validated.
+    `data/kanji.json`; a rule card's fields, which come from
+    `data/patterns.json` and the deck file; and a drill card's rich support,
+    which combines a validated record with deck-authored form notes and
+    examples. ``html.escape`` leaves control characters alone.
 
     Only U+001F, where :func:`validate_record` refuses a wider class. This one
     corrupts the note; the rest merely look wrong, and refusing a build over a

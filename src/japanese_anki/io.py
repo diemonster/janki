@@ -3942,19 +3942,28 @@ def atomic_write_text_bound(
         raise DataError(f"Could not write {target}: {exc.strerror or exc}") from exc
 
 
-def _parse_structured_text(path: Path, text: str) -> Any:
+def _parse_structured_text(
+    path: Path,
+    text: str,
+    *,
+    yaml_loader: type[yaml.SafeLoader] = yaml.SafeLoader,
+) -> Any:
     suffix = path.suffix.lower()
     try:
         if suffix == ".json":
             return json.loads(text)
         if suffix in {".yaml", ".yml"}:
-            return yaml.safe_load(text)
+            return yaml.load(text, Loader=yaml_loader)
     except (json.JSONDecodeError, yaml.YAMLError) as exc:
         raise DataError(f"Could not parse {path}: {exc}") from exc
     raise DataError(f"Unsupported file type for {path}; expected JSON or YAML")
 
 
-def load_structured(path: Path) -> Any:
+def load_structured(
+    path: Path,
+    *,
+    yaml_loader: type[yaml.SafeLoader] = yaml.SafeLoader,
+) -> Any:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
@@ -3963,7 +3972,7 @@ def load_structured(path: Path) -> Any:
         raise DataError(f"Could not read {path}: {exc.strerror or exc}") from exc
     except UnicodeDecodeError as exc:
         raise DataError(f"Could not parse {path}: {exc}") from exc
-    return _parse_structured_text(path, text)
+    return _parse_structured_text(path, text, yaml_loader=yaml_loader)
 
 
 def _records_from_text(path: Path, text: str) -> list[VocabularyRecord]:

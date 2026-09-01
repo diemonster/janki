@@ -240,7 +240,9 @@ def test_genki_lesson_13_potential_drill_has_its_exact_study_scope() -> None:
     }
 
     assert set(section["include_ids"]) == selected
+    assert set(section["drill_examples"]) == selected
     assert shipped == selected
+    assert pattern_cards.deck_problems(deck_path, {}, config) == []
 
 
 def _real_word_selections(config: ProjectConfig) -> dict[str, anki.DeckSelection]:

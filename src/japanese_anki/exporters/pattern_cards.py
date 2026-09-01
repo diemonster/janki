@@ -14,12 +14,13 @@ each worked example against janki's own conjugation tables before letting it
 ship, because janki's logic enriches the card and never audits the model
 (DESIGN.md). A chart a person has reviewed is trusted.
 
-**Its own notetype, not new fields on the vocabulary one.** A pattern card has
-no reading, no pitch, no audio; it shares nothing with a word card but the deck
-it may sit beside. Measured against `anki` 26.8.1: adding a notetype leaves the
-collection's ``scm`` mark alone, while appending a field bumps it — so this
-costs no forced one-directional AnkiWeb sync, which a new field on the existing
-notetype would.
+**Its own notetype, not new fields on the vocabulary one.** A rule card has no
+word reading, pitch, or audio; a lesson-specific drill may embed an explicitly
+authored furigana example and the source record's usage note in the existing
+``Examples`` field. Neither shares the vocabulary notetype. Measured against
+`anki` 26.8.1: adding a notetype leaves the collection's ``scm`` mark alone,
+while appending a field bumps it — so this costs no forced one-directional
+AnkiWeb sync, which a new field on the existing notetype would.
 """
 
 from __future__ import annotations
@@ -32,6 +33,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+from yaml.constructor import ConstructorError
+from yaml.nodes import MappingNode
+from yaml.resolver import BaseResolver
+
 try:  # pragma: no cover - exercised by the import guard in `build_pattern_deck`
     import genanki
 except ImportError:  # pragma: no cover
@@ -40,10 +46,13 @@ except ImportError:  # pragma: no cover
 from japanese_anki.config import ProjectConfig
 from japanese_anki.conjugation import CONJUGATION_FORMS
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters.anki import _deck_string_set
+from japanese_anki.exporters.anki import (
+    _deck_string_set,
+    _refuse_conjugation_only_content,
+)
 from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.io import DataError, load_records, load_structured
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.patterns import (
     CHECKABLE_KINDS,
     LIST_SEPARATORS,
@@ -83,6 +92,94 @@ _ARROW = re.compile(r"\s*(?:⇨|→|->|=>)\s*")
 #: is decided per template — see `_split_rules`.
 _SEPARATOR_CHARS = "".join(sorted(LIST_SEPARATORS))
 _SEPARATOR_CLASS = f"[{re.escape(_SEPARATOR_CHARS)}]"
+
+#: Explicit Anki furigana notation in deck-authored drill examples. This reads
+#: markup, not Japanese: the author has already named both the displayed run
+#: and its reading. Rendering it here is necessary because Anki does not apply
+#: a ``furigana:`` filter recursively to HTML stored inside another field.
+_FURIGANA = re.compile(r" ?([^>\s\[\]]+?)\[([^\[\]\r\n]+?)\]")
+
+#: A conjugation deck's hand-authored examples are deliberately smaller than a
+#: vocabulary record. Audio has its own paid-operation/WAL lifecycle and romaji
+#: is not rendered; accepting either here would store content the card silently
+#: ignores.
+_DRILL_EXAMPLE_FIELDS = frozenset({"japanese", "furigana", "english", "register"})
+
+
+class _UniqueDeckKeyLoader(yaml.SafeLoader):
+    """SafeLoader that cannot silently replace earlier deck-file content."""
+
+
+def _unique_deck_mapping(
+    loader: _UniqueDeckKeyLoader, node: MappingNode, deep: bool = False
+) -> dict[Any, Any]:
+    if not isinstance(node, MappingNode):
+        raise ConstructorError(
+            None,
+            None,
+            f"expected a mapping node, but found {node.id}",
+            node.start_mark,
+        )
+    loader.flatten_mapping(node)
+    result: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in result
+        except TypeError as exc:
+            raise ConstructorError(
+                "while constructing a deck mapping",
+                node.start_mark,
+                "found an unhashable mapping key",
+                key_node.start_mark,
+            ) from exc
+        if duplicate:
+            raise ConstructorError(
+                "while constructing a deck mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        result[key] = loader.construct_object(value_node, deep=deep)
+    return result
+
+
+_UniqueDeckKeyLoader.add_constructor(
+    BaseResolver.DEFAULT_MAPPING_TAG,
+    _unique_deck_mapping,
+)
+
+
+def _drill_furigana_malformed(value: str) -> bool:
+    """Whether authored drill furigana has malformed bracket structure.
+
+    This is only a structural artifact check. It does not decide which text is
+    Japanese or whether a displayed run has the right reading.
+    """
+    inside_reading = False
+    has_base = False
+    has_reading = False
+    for character in value:
+        if character == "[":
+            if inside_reading or not has_base:
+                return True
+            inside_reading = True
+            has_reading = False
+        elif character == "]":
+            if not inside_reading or not has_reading:
+                return True
+            inside_reading = False
+            has_base = False
+        elif inside_reading:
+            if character in "\r\n":
+                return True
+            if not character.isspace():
+                has_reading = True
+        elif character == ">" or character.isspace():
+            has_base = False
+        else:
+            has_base = True
+    return inside_reading
 
 #: Field order. Appended-only, like the vocabulary notetype's, for the same
 #: reason: a note's values are positional.
@@ -497,13 +594,269 @@ def _notetype(model_id: int, model_name: str, template_dir: Path) -> Any:
 
 
 def _deck_section(deck_path: Path) -> dict[str, Any]:
-    raw = load_structured(deck_path)
+    raw = load_structured(deck_path, yaml_loader=_UniqueDeckKeyLoader)
     if not isinstance(raw, dict):
         raise DataError(f"Deck file must contain a mapping: {deck_path}")
     section = raw.get("deck") or {}
     if not isinstance(section, dict):
         raise DataError(f"The deck section must be a mapping: {deck_path}")
+    _refuse_conjugation_only_content(section, deck_path)
     return section
+
+
+def _drill_form_note(deck_config: dict[str, Any], deck_path: Path) -> str:
+    """The deck-wide explanation shown beneath each computed answer."""
+    value = deck_config.get("form_note")
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise DataError(
+            f"deck.form_note must be text, got {type(value).__name__}: {deck_path}"
+        )
+    note = value.strip()
+    if note and not _deck_string_set(deck_config, "include_ids", deck_path):
+        raise DataError(
+            "deck.form_note needs a nonempty deck.include_ids list so its "
+            f"lesson explanation cannot grow to new records: {deck_path}"
+        )
+    if note and deck_config.get("drill_examples") is None:
+        raise DataError(
+            "deck.form_note requires deck.drill_examples so every lesson card "
+            f"carries an example of the form it teaches: {deck_path}"
+        )
+    return note
+
+
+def _drill_examples(
+    deck_config: dict[str, Any],
+    records: Sequence[VocabularyRecord],
+    deck_path: Path,
+    form: str,
+) -> dict[str, tuple[ExampleSentence, ...]]:
+    """Read explicitly authored, form-specific examples from a drill deck.
+
+    These cannot come from ``record.examples``: those sentences teach the base
+    word and mechanically replacing their verb would be Japanese-writing logic.
+    Keeping the examples beside the drill deck also leaves the vocabulary
+    cards' reviewed polite/casual pair untouched.
+    """
+    raw = deck_config.get("drill_examples")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise DataError(
+            f"deck.drill_examples must be a mapping keyed by record id: {deck_path}"
+        )
+
+    include_ids = _deck_string_set(deck_config, "include_ids", deck_path)
+    if not include_ids:
+        raise DataError(
+            "deck.drill_examples needs a nonempty deck.include_ids list so its "
+            f"reviewed lesson scope cannot grow when the collection grows: {deck_path}"
+        )
+    exclude_ids = _deck_string_set(deck_config, "exclude_ids", deck_path)
+    overlap = sorted(include_ids & exclude_ids)
+    if overlap:
+        raise DataError(
+            "deck.drill_examples has record(s) listed in both deck.include_ids "
+            f"and deck.exclude_ids: {', '.join(overlap)}. Remove each id from "
+            f"one list: {deck_path}"
+        )
+    shipping_ids = {record.id for record in records}
+    parsed: dict[str, tuple[ExampleSentence, ...]] = {}
+    for raw_id, raw_examples in raw.items():
+        if not isinstance(raw_id, str):
+            raise DataError(
+                f"deck.drill_examples keys must be record ids, got "
+                f"{type(raw_id).__name__}: {deck_path}"
+            )
+        record_id = raw_id
+        if record_id not in include_ids:
+            raise DataError(
+                f"deck.drill_examples key {record_id!r} is not listed in "
+                f"deck.include_ids: {deck_path}"
+            )
+        if not isinstance(raw_examples, list):
+            raise DataError(
+                f"deck.drill_examples[{record_id!r}] must be a list: {deck_path}"
+            )
+        if not raw_examples:
+            raise DataError(
+                f"deck.drill_examples[{record_id!r}] needs at least one example: "
+                f"{deck_path}"
+            )
+
+        examples: list[ExampleSentence] = []
+        for index, raw_example in enumerate(raw_examples):
+            if not isinstance(raw_example, dict):
+                raise DataError(
+                    f"deck.drill_examples[{record_id!r}][{index}] must be a "
+                    f"mapping: {deck_path}"
+                )
+            unknown = sorted(
+                str(key) for key in raw_example if key not in _DRILL_EXAMPLE_FIELDS
+            )
+            if unknown:
+                raise DataError(
+                    f"deck.drill_examples[{record_id!r}][{index}] has unknown "
+                    f"field(s): {', '.join(str(key) for key in unknown)}: {deck_path}"
+                )
+            for field, value in raw_example.items():
+                if not isinstance(value, str):
+                    raise DataError(
+                        f"deck.drill_examples[{record_id!r}][{index}] {field} "
+                        f"must be text, got {type(value).__name__}: {deck_path}"
+                    )
+            example = ExampleSentence.from_dict(raw_example, position=index)
+            if _drill_furigana_malformed(example.furigana):
+                raise DataError(
+                    f"deck.drill_examples[{record_id!r}][{index}] furigana "
+                    f"brackets are unbalanced: {deck_path}"
+                )
+            if (
+                not example.japanese
+                or not example.english
+                or example.register not in {"polite", "casual"}
+            ):
+                raise DataError(
+                    f"deck.drill_examples[{record_id!r}][{index}] needs "
+                    f"japanese, english, and register polite/casual: {deck_path}"
+                )
+            examples.append(example)
+        parsed[record_id] = tuple(examples)
+    missing = sorted(include_ids - set(parsed))
+    if missing:
+        raise DataError(
+            "deck.drill_examples opts into rich examples and needs an entry "
+            f"for every included record; missing: {', '.join(missing)}: {deck_path}"
+        )
+    unavailable = sorted(include_ids - shipping_ids)
+    if unavailable:
+        raise DataError(
+            "deck.drill_examples has included record(s) missing from the "
+            f"collection or cannot be conjugated into {form}: "
+            f"{', '.join(unavailable)}. Restore their verb_group/part_of_speech, "
+            "or remove each id from both deck.include_ids and deck.drill_examples: "
+            f"{deck_path}"
+        )
+    return parsed
+
+
+def _furigana_html(value: str) -> str:
+    """Render explicit ``word[reading]`` notation as safe ruby HTML.
+
+    Spaces immediately before an annotated run are Anki's boundary markers,
+    not Japanese spaces, so they are consumed the same way the field filter
+    consumes them. Everything outside those structural brackets is escaped.
+    """
+    parts: list[str] = []
+    cursor = 0
+    for match in _FURIGANA.finditer(value):
+        parts.append(_escaped_lines(value[cursor:match.start()]))
+        parts.append(
+            "<ruby><rb>"
+            f"{html.escape(match.group(1))}</rb><rt>"
+            f"{html.escape(match.group(2))}</rt></ruby>"
+        )
+        cursor = match.end()
+    parts.append(_escaped_lines(value[cursor:]))
+    return "".join(parts)
+
+
+def _escaped_lines(value: str) -> str:
+    """Escape authored prose while preserving its explicit line breaks."""
+    escaped = html.escape(value)
+    return (
+        escaped.replace("\r\n", "<br>")
+        .replace("\r", "<br>")
+        .replace("\n", "<br>")
+    )
+
+
+def _drill_support_html(
+    record: VocabularyRecord,
+    card: PatternCard,
+    form_note: str,
+    examples: Sequence[ExampleSentence],
+) -> str:
+    """The rich answer context stored inside the existing Examples field."""
+    parts = ['<section class="drill-support">']
+    if form_note:
+        parts.extend([
+            '<section class="drill-form-note">',
+            '<div class="drill-section-label">Using this form</div>',
+            f"<div>{_escaped_lines(form_note)}</div>",
+            "</section>",
+        ])
+    if card.examples:
+        parts.append(
+            '<div class="drill-meta"><span class="drill-pill">'
+            f"{html.escape(', '.join(card.examples))}</span></div>"
+        )
+    for example in examples:
+        register = "Polite" if example.register == "polite" else "Casual"
+        japanese = (
+            _furigana_html(example.furigana)
+            if example.furigana
+            else _escaped_lines(example.japanese)
+        )
+        parts.extend([
+            '<article class="drill-example">',
+            f'<div class="drill-example-label">{register} example</div>',
+            f'<div class="drill-example-japanese" lang="ja">{japanese}</div>',
+            f'<div class="drill-example-english">{_escaped_lines(example.english)}</div>',
+            "</article>",
+        ])
+    if record.usage_notes:
+        parts.extend([
+            '<details class="drill-usage">',
+            "<summary>About this word</summary>",
+            f"<div>{_escaped_lines(record.usage_notes)}</div>",
+            "</details>",
+        ])
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def _drill_note_values(
+    record: VocabularyRecord,
+    card: PatternCard,
+    form_note: str,
+    examples: Sequence[ExampleSentence],
+    label: str,
+    deck_path: Path,
+) -> list[str]:
+    """Render and structurally guard one drill note's positional fields."""
+    rich = bool(form_note or examples)
+    support = (
+        _drill_support_html(record, card, form_note, examples)
+        if rich
+        else html.escape(", ".join(card.examples))
+    )
+    source = (
+        "form computed by janki; context supplied by deck and record"
+        if rich
+        else "computed by janki"
+    )
+    values = [
+        html.escape(card.trigger),
+        html.escape(card.result),
+        html.escape(card.gloss),
+        support,
+        html.escape(source),
+        html.escape(label),
+    ]
+    # Rich support carries deck-authored text, which record validation cannot
+    # see. A separator there would shift every later positional field in the
+    # installed note, so both validate and build refuse the same rendered row.
+    fault = field_separator_fault(FIELDS, values)
+    if fault is not None:
+        raise PatternDeckError(
+            f"{record.id}: the {fault} field contains U+001F, the separator "
+            "Anki joins a note's fields with. Writing it would shift every "
+            f"later field out of place: {deck_path}"
+        )
+    return values
 
 
 def _identifier(deck_config: dict[str, Any], key: str, deck_path: Path) -> int:
@@ -609,10 +962,12 @@ def deck_problems(
         # The refusals the build gained. Without these `janki validate` passed a
         # deck `janki build` then rejected, which is the one thing this function
         # exists to prevent.
+        filters_valid = True
         for key in ("include_ids", "exclude_ids"):
             try:
                 _deck_string_set(deck_config, key, deck_path)
             except DataError as exc:
+                filters_valid = False
                 problems.append(str(exc))
         if project_config is not None:
             try:
@@ -625,7 +980,8 @@ def deck_problems(
                 # and before `janki enrich --jpdb` no record carries a
                 # `verb_group`, so `validate` passed a deck the very next
                 # `build` refused: the one drift this function exists to close.
-                problems.extend(_drill_set_problems(deck_path, path, form))
+                if filters_valid:
+                    problems.extend(_drill_set_problems(deck_path, path, form))
         return problems
 
     document = str(deck_config.get("document") or "").strip()
@@ -663,8 +1019,9 @@ def _drill_set_problems(deck_path: Path, collection: Path, form: str) -> list[st
     command whose job is catching a broken deck first saying "0 error(s)" over a
     file the next build refuses.
 
-    A filter error is swallowed, because the `include_ids`/`exclude_ids` loop
-    above has already reported it and saying it twice helps nobody.
+    ``deck_problems`` calls this only after parsing the filters itself. That
+    structurally prevents duplicate filter messages without guessing which
+    error occurred from words that may also appear in a rich-drill refusal.
     """
     if form not in CONJUGATION_FORMS:
         return []
@@ -673,9 +1030,24 @@ def _drill_set_problems(deck_path: Path, collection: Path, form: str) -> list[st
     except JankiError as exc:
         return [str(exc)]
     try:
-        cards = drill_cards(shipping_records(deck_path, records, form), form)
-    except JankiError:
-        return []
+        shipping = shipping_records(deck_path, records, form)
+        deck_config = _deck_section(deck_path)
+        form_note = _drill_form_note(deck_config, deck_path)
+        examples_by_id = _drill_examples(deck_config, shipping, deck_path, form)
+        cards = drill_cards(shipping, form)
+        record_by_id = {record.id: record for record in shipping}
+        label = form.replace("_", " ")
+        for card, record_id in cards:
+            _drill_note_values(
+                record_by_id[record_id],
+                card,
+                form_note,
+                examples_by_id.get(record_id, ()),
+                label,
+                deck_path,
+            )
+    except JankiError as exc:
+        return [str(exc)]
     if not cards:
         return [
             f"no record janki can conjugate into a {form}. A verb needs a "
@@ -871,6 +1243,8 @@ def build_conjugation_deck(
     issues = validate_records(list(shipping), deck_path)
     if has_errors(issues):
         raise PatternDeckError(refusal_text(deck_path.name, issues))
+    form_note = _drill_form_note(deck_config, deck_path)
+    examples_by_id = _drill_examples(deck_config, shipping, deck_path, form)
     cards = drill_cards(shipping, form)
     if not cards:
         raise PatternDeckError(
@@ -887,21 +1261,16 @@ def build_conjugation_deck(
     )
     deck = genanki.Deck(deck_id, str(deck_config.get("name") or deck_path.stem))
     label = form.replace("_", " ")
+    record_by_id = {record.id: record for record in shipping}
     for card, record_id in cards:
-        values = [
-            html.escape(card.trigger),
-            html.escape(card.result),
-            html.escape(card.gloss),
-            html.escape(", ".join(card.examples)),
-            html.escape("computed by janki"),
-            html.escape(label),
-        ]
-        # No separator check here, unlike the rule deck above: every one of
-        # these six values derives from a record this function already put
-        # through `validate_records`, or from `form`, which is checked against
-        # `CONJUGATION_FORMS`. A guard would be unreachable, and an unreachable
-        # guard is one no test can hold. Add one here if a field ever takes its
-        # value from somewhere else.
+        values = _drill_note_values(
+            record_by_id[record_id],
+            card,
+            form_note,
+            examples_by_id.get(record_id, ()),
+            label,
+            deck_path,
+        )
         deck.add_note(
             genanki.Note(
                 model=model,

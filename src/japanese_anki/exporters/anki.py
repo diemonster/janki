@@ -501,6 +501,20 @@ def _deck_string_set(deck_config: dict[str, Any], key: str, deck_path: Path) -> 
     return {str(item) for item in value}
 
 
+def _refuse_conjugation_only_content(
+    deck_config: dict[str, Any], deck_path: Path
+) -> None:
+    """Refuse rich drill content anywhere no conjugation builder can use it."""
+    kind = str(deck_config.get("kind") or "").strip().lower()
+    if kind == "conjugation":
+        return
+    for key in ("form_note", "drill_examples"):
+        if key in deck_config:
+            raise DataError(
+                f"deck.{key} is only valid on a conjugation deck: {deck_path}"
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class DeckSelection:
     """Which records a deck file claims, as a value you can ask about a record.
@@ -685,6 +699,7 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
     deck_config = raw.get("deck") or {}
     if not isinstance(deck_config, dict):
         raise DataError(f"The deck section must be a mapping: {deck_path}")
+    _refuse_conjugation_only_content(deck_config, deck_path)
     # Checked here rather than in `resolve_card_types`, which only `build`
     # reaches: every path into a deck file comes through this function, so this
     # is where a deck's shape is refused once for all three commands.

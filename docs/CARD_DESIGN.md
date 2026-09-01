@@ -157,6 +157,45 @@ set, so changing `cards:` mints a *different* notetype and orphans scheduling.
 A deck can pin `deck.model_id` / `deck.model_name` to prevent that; pinning is
 the sanctioned way to change the card set with review history intact.
 
+## Conjugation drill context
+
+A lesson-specific conjugation deck may add a deck-wide `form_note` and a
+`drill_examples` mapping keyed by exact canonical record id. These are
+explicitly authored examples of the form being drilled; they are not rewritten
+from the record's ordinary vocabulary examples. Such a deck must pin a
+nonempty `include_ids` lesson scope. Every included record needs at least one
+complete Japanese/English example labelled `polite` or `casual`, and every
+included record must still exist and be conjugable into the requested form.
+`form_note` never stands alone: when present, it requires that complete
+`drill_examples` mapping. Duplicate mapping keys anywhere in a pattern or
+conjugation deck are refused before the YAML loader can discard either authored
+value.
+Every authored example value is text (`furigana` may be empty or omitted).
+The example's `furigana` value uses balanced Anki-style `word[reading]`
+notation. Any Unicode whitespace terminates a possible ruby base. One ASCII
+space immediately before an annotated run is Anki's boundary marker and is
+consumed; other whitespace, including a U+3000 full-width space, remains
+outside the ruby. Line breaks outside `[reading]` are preserved in the rendered
+card; a line break inside the reading is malformed. `form_note` and `english`
+are plain text, not furigana markup. Unknown example fields, structured values,
+malformed notation, and examples outside that explicit scope are refused
+rather than ignored. The rich keys themselves are refused on every
+non-conjugation deck.
+
+The rendered explanation, examples, verb group, and canonical `usage_notes`
+share the existing `Examples` field of the six-field `Japanese Pattern`
+notetype. The field order, model id, and `drill:<form>:<record-id>` GUID stay
+unchanged, so a richer rebuild updates installed drill notes and preserves
+their scheduling. A rich card's `Source` says the form was computed by janki
+while its context came from the deck and record; a plain mechanical drill keeps
+the shorter `computed by janki` label. Ordinary rule cards using the same
+notetype are unchanged.
+
+This is the standard for new lesson-specific drill decks. A general mechanical
+drill may still omit both keys and show only its computed transformation and
+verb group. Janki never manufactures a form-specific Japanese sentence by
+substituting into a vocabulary example.
+
 ## Inline notes and `source`
 
 A deck's inline `notes:` are merged over the normalized record field by field,

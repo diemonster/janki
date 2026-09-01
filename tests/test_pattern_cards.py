@@ -282,6 +282,80 @@ def test_a_pattern_deck_needs_a_document(tmp_path: Path) -> None:
         build_pattern_deck(path, ProjectConfig.load(tmp_path), {}, tmp_path / "o.apkg")
 
 
+@pytest.mark.parametrize(
+    ("line", "key"),
+    [
+        ('  form_note: "Ability."\n', "form_note"),
+        ("  drill_examples: {}\n", "drill_examples"),
+    ],
+    ids=["form-note", "drill-examples"],
+)
+def test_rule_decks_refuse_conjugation_only_content(
+    tmp_path: Path, line: str, key: str
+) -> None:
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    path = deck_file(tmp_path)
+    path.write_text(path.read_text(encoding="utf-8") + line, encoding="utf-8")
+    store = {"teform.pdf": chart(Pattern("う・つ・る → って"))}
+    message = f"deck.{key} is only valid on a conjugation deck"
+
+    assert sum(message in problem for problem in deck_problems(
+        path, store, ProjectConfig.load(tmp_path)
+    )) == 1
+    with pytest.raises(DataError, match=message):
+        build_pattern_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            store,
+            tmp_path / "o.apkg",
+        )
+
+
+@pytest.mark.parametrize(
+    ("line", "key"),
+    [
+        ('  form_note: "Ability."\n', "form_note"),
+        ("  drill_examples: {}\n", "drill_examples"),
+    ],
+    ids=["form-note", "drill-examples"],
+)
+@pytest.mark.parametrize(
+    "kind_line",
+    ["", "  kind: vocabulary\n"],
+    ids=["default-kind", "explicit-vocabulary"],
+)
+def test_vocabulary_decks_refuse_conjugation_only_content(
+    tmp_path: Path, line: str, key: str, kind_line: str
+) -> None:
+    from japanese_anki.application.validation import validate_path
+    from japanese_anki.exporters.anki import build_deck
+
+    project(tmp_path)
+    path = tmp_path / "decks" / "words.yaml"
+    path.write_text(
+        "deck:\n"
+        + kind_line
+        + "  name: Words\n"
+        + "  source: ../vocabulary.json\n"
+        + line,
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+    message = f"deck.{key} is only valid on a conjugation deck"
+
+    issues, count = validate_path(path, config=config)
+
+    assert count == 0
+    assert len(issues) == 1
+    assert message in issues[0].message
+    assert str(path) in issues[0].message
+    with pytest.raises(DataError, match=message) as raised:
+        build_deck(path, config, tmp_path / "o.apkg")
+    assert str(path) in str(raised.value)
+
+
 @pytest.mark.parametrize("key", ["deck_id", "model_id"], ids=["deck-id", "model-id"])
 def test_an_identifier_that_is_not_an_integer_is_refused(tmp_path: Path, key: str) -> None:
     """YAML 1.1 again: `deck_id: yes` is `True`, and `int(True)` is 1 — a deck
@@ -529,6 +603,7 @@ def verb(
     meanings: list[str] | None = None,
     record_id: str = "",
     part_of_speech: str = "",
+    usage_notes: str = "",
 ):
     from japanese_anki.models import VocabularyRecord
 
@@ -539,6 +614,7 @@ def verb(
         meanings=meanings or ["to do something"],
         verb_group=group,
         part_of_speech=part_of_speech,
+        usage_notes=usage_notes,
     )
 
 
@@ -627,6 +703,633 @@ def guids_in(package: Path) -> list[str]:
     return guids
 
 
+def note_fields_in(package: Path) -> list[str]:
+    """The first built note's positional values."""
+    import sqlite3
+    import tempfile
+    from zipfile import ZipFile
+
+    with ZipFile(package) as archive:
+        name = (
+            "collection.anki21"
+            if "collection.anki21" in archive.namelist()
+            else "collection.anki2"
+        )
+        db = Path(tempfile.mkdtemp()) / "c.db"
+        db.write_bytes(archive.read(name))
+    con = sqlite3.connect(db)
+    fields = con.execute("select flds from notes order by id limit 1").fetchone()[0]
+    con.close()
+    return fields.split("\x1f")
+
+
+def rich_drill(
+    tmp_path: Path,
+    *,
+    form_note: str = 'Ability & possibility: "can do".',
+    japanese: str = "私は日本語が話せます。",
+    furigana: str = "私[わたし]は 日本語[にほんご]が 話[はな]せます。",
+    english: str = "I can speak Japanese.",
+    register: str = "polite",
+    usage_notes: str = "The person spoken with is marked by と.",
+    name: str = "rich.apkg",
+) -> Path:
+    import json
+
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        f"  form_note: {json.dumps(form_note, ensure_ascii=False)}\n"
+        "  include_ids:\n"
+        '    - "word:話す:はなす"\n'
+        "  drill_examples:\n"
+        '    "word:話す:はなす":\n'
+        f"      - japanese: {json.dumps(japanese, ensure_ascii=False)}\n"
+        f"        furigana: {json.dumps(furigana, ensure_ascii=False)}\n"
+        f"        english: {json.dumps(english, ensure_ascii=False)}\n"
+        f"        register: {json.dumps(register, ensure_ascii=False)}\n",
+        encoding="utf-8",
+    )
+    target = tmp_path / name
+    build_conjugation_deck(
+        path,
+        ProjectConfig.load(tmp_path),
+        [
+            verb(
+                "話す",
+                "はなす",
+                "godan",
+                ["to speak"],
+                usage_notes=usage_notes,
+            )
+        ],
+        target,
+    )
+    return target
+
+
+def test_a_drill_can_ship_a_form_note_and_its_own_example(tmp_path: Path) -> None:
+    """A potential sentence is deck content, not a rewritten vocabulary example.
+
+    It rides in the existing Examples field so the shared six-field notetype
+    and the learner's installed note history stay intact.
+    """
+    fields = note_fields_in(rich_drill(tmp_path))
+
+    assert len(fields) == 6
+    support = fields[3]
+    assert "Ability &amp; possibility: &quot;can do&quot;." in support
+    assert '<div class="drill-example-label">Polite example</div>' in support
+    assert "<ruby><rb>私</rb><rt>わたし</rt></ruby>は" in support
+    assert "<ruby><rb>日本語</rb><rt>にほんご</rt></ruby>" in support
+    assert "<ruby><rb>話</rb><rt>はな</rt></ruby>せます。" in support
+    assert "I can speak Japanese." in support
+    assert fields[4] == "form computed by janki; context supplied by deck and record"
+
+
+def test_a_casual_drill_example_is_labelled_casual(tmp_path: Path) -> None:
+    support = note_fields_in(rich_drill(tmp_path, register="casual"))[3]
+
+    assert '<div class="drill-example-label">Casual example</div>' in support
+
+
+def test_drill_furigana_markup_is_escaped_without_joining_the_ruby_base(
+    tmp_path: Path,
+) -> None:
+    support = note_fields_in(rich_drill(
+        tmp_path,
+        japanese="私は話せます。",
+        furigana="<b>私[わたし]</b>は 話[はな]せます。",
+    ))[3]
+
+    assert "&lt;b&gt;<ruby><rb>私</rb><rt>わたし</rt></ruby>&lt;/b&gt;は" in support
+    assert "<rb>&lt;b&gt;私</rb>" not in support
+    assert "<b>" not in support
+
+
+def test_a_full_width_space_stays_outside_the_next_ruby_base(tmp_path: Path) -> None:
+    support = note_fields_in(rich_drill(
+        tmp_path,
+        japanese="前　話せます。",
+        furigana="前　話[はな]せます。",
+    ))[3]
+
+    assert "前　<ruby><rb>話</rb><rt>はな</rt></ruby>せます。" in support
+    assert "<rb>前　話</rb>" not in support
+
+
+def test_an_ascii_furigana_boundary_consumes_only_one_space(tmp_path: Path) -> None:
+    support = note_fields_in(rich_drill(
+        tmp_path,
+        japanese="A  話せます。",
+        furigana="A  話[はな]せます。",
+    ))[3]
+
+    assert "A <ruby><rb>話</rb><rt>はな</rt></ruby>せます。" in support
+    assert "A<ruby><rb>話</rb>" not in support
+
+
+def test_authored_drill_prose_preserves_line_breaks(tmp_path: Path) -> None:
+    support = note_fields_in(rich_drill(
+        tmp_path,
+        form_note="First form note line.\nSecond form note line.",
+        english="First English line.\nSecond English line.",
+    ))[3]
+
+    assert "First form note line.<br>Second form note line." in support
+    assert "First English line.<br>Second English line." in support
+
+
+@pytest.mark.parametrize(
+    ("japanese", "furigana", "expected"),
+    [
+        (
+            "話せます。\r\nまた話せます。",
+            "",
+            "話せます。<br>また話せます。",
+        ),
+        (
+            "私は話せます。\nまた話せます。",
+            "私[わたし]は 話[はな]せます。\nまた 話[はな]せます。",
+            "</ruby>せます。<br>また<ruby><rb>話</rb><rt>はな</rt></ruby>",
+        ),
+    ],
+    ids=["plain", "furigana"],
+)
+def test_authored_japanese_preserves_line_breaks(
+    tmp_path: Path, japanese: str, furigana: str, expected: str
+) -> None:
+    support = note_fields_in(rich_drill(
+        tmp_path,
+        japanese=japanese,
+        furigana=furigana,
+    ))[3]
+
+    assert expected in support
+
+
+def test_a_rich_drill_shows_the_record_usage_note_without_trusting_its_html(
+    tmp_path: Path,
+) -> None:
+    fields = note_fields_in(rich_drill(
+        tmp_path,
+        usage_notes='Use と, not <script>alert("wrong")</script>.',
+    ))
+
+    support = fields[3]
+    assert "About this word" in support
+    assert "&lt;script&gt;alert(&quot;wrong&quot;)&lt;/script&gt;" in support
+    assert "<script>" not in support
+
+
+def test_changing_drill_help_does_not_move_the_note(tmp_path: Path) -> None:
+    before_package = rich_drill(tmp_path, name="before.apkg")
+    before = guids_in(before_package)
+    # The helper creates a project, so use a sibling directory for a second
+    # complete build with the same record identity and different study prose.
+    after_root = tmp_path / "after"
+    after_root.mkdir()
+    after_package = rich_drill(
+        after_root,
+        form_note="A clearer explanation after study.",
+        japanese="英語が話せます。",
+        furigana="英語[えいご]が 話[はな]せます。",
+        english="I can speak English.",
+        name="after.apkg",
+    )
+    after = guids_in(after_package)
+
+    assert "Ability &amp; possibility" in note_fields_in(before_package)[3]
+    assert "A clearer explanation after study." in note_fields_in(after_package)[3]
+    assert before == after
+
+
+@pytest.mark.parametrize(
+    ("examples", "message"),
+    [
+        ("[]", "needs at least one example"),
+        ("not-a-list", "must be a list"),
+        ('["話せる。"]', "must be a mapping"),
+        (
+            "[{japanese: [話せる。], english: I can speak., register: polite}]",
+            "japanese must be text, got list",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: {bad: value}, "
+            "english: I can speak., register: polite}]",
+            "furigana must be text, got dict",
+        ),
+        (
+            "[{japanese: 話せる。, english: {bad: value}, register: polite}]",
+            "english must be text, got dict",
+        ),
+        (
+            "[{japanese: 話せる。, english: I can speak., register: [polite]}]",
+            "register must be text, got list",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: \"話[はなせる。\", "
+            "english: I can speak., register: polite}]",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: \"話]はな[\", "
+            "english: I can speak., register: polite}]",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: \"話[[はな]]\", "
+            "english: I can speak., register: polite}]",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: \"話[]\", "
+            "english: I can speak., register: polite}]",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: \"[はな]\", "
+            "english: I can speak., register: polite}]",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: \"話[　]\", "
+            "english: I can speak., register: polite}]",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            "[{japanese: 話せる。, furigana: \"前　[はな]\", "
+            "english: I can speak., register: polite}]",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            "[{japanese: 話せる。, register: polite}]",
+            "needs japanese, english, and register",
+        ),
+        (
+            "[{english: I can speak., register: polite}]",
+            "needs japanese, english, and register",
+        ),
+        (
+            "[{japanese: 話せる。, english: I can speak., register: formal}]",
+            "needs japanese, english, and register",
+        ),
+        (
+            "[{japanese: 話せる。, english: I can speak., register: polite, typo: x}]",
+            "unknown field.*typo",
+        ),
+    ],
+    ids=[
+        "empty",
+        "not-a-list",
+        "example-not-a-mapping",
+        "japanese-not-text",
+        "furigana-not-text",
+        "english-not-text",
+        "register-not-text",
+        "unbalanced-furigana",
+        "reversed-furigana-brackets",
+        "nested-furigana-brackets",
+        "empty-furigana-reading",
+        "furigana-without-base",
+        "whitespace-only-furigana-reading",
+        "whitespace-only-furigana-base",
+        "missing-english",
+        "missing-japanese",
+        "invalid-register",
+        "unknown-field",
+    ],
+)
+def test_malformed_drill_examples_are_refused(
+    tmp_path: Path, examples: str, message: str
+) -> None:
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        "  include_ids:\n"
+        '    - "word:話す:はなす"\n'
+        "  drill_examples:\n"
+        f'    "word:話す:はなす": {examples}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match=message) as raised:
+        build_conjugation_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            [verb("話す", "はなす", "godan", ["to speak"])],
+            tmp_path / "o.apkg",
+        )
+
+    assert str(path) in str(raised.value)
+
+
+def test_a_rich_drill_needs_an_example_for_every_card(tmp_path: Path) -> None:
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        "  include_ids:\n"
+        '    - "word:話す:はなす"\n'
+        '    - "word:読む:よむ"\n'
+        "  drill_examples:\n"
+        '    "word:話す:はなす":\n'
+        "      - japanese: 日本語が話せます。\n"
+        "        english: I can speak Japanese.\n"
+        "        register: polite\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        DataError, match="every included record; missing: word:読む:よむ"
+    ) as raised:
+        build_conjugation_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            [
+                verb("話す", "はなす", "godan", ["to speak"]),
+                verb("読む", "よむ", "godan", ["to read"]),
+            ],
+            tmp_path / "o.apkg",
+        )
+
+    assert str(path) in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("prefix", "example_block", "duplicate"),
+    [
+        (
+            "",
+            "    word:話す:はなす:\n"
+            "      - {japanese: 話せます。, english: I can speak., register: polite}\n"
+            '    "word:話す:はなす":\n'
+            "      - {japanese: 話せない。, english: I cannot speak., register: casual}\n",
+            "word:話す:はなす",
+        ),
+        (
+            "first_examples: &first_examples\n"
+            "  word:話す:はなす:\n"
+            "    - {japanese: 話せます。, english: I can speak., register: polite}\n",
+            "    <<: *first_examples\n"
+            '    "word:話す:はなす":\n'
+            "      - {japanese: 話せない。, english: I cannot speak., register: casual}\n",
+            "word:話す:はなす",
+        ),
+        (
+            "",
+            "    word:話す:はなす:\n"
+            "      - japanese: 話せます。\n"
+            "        english: I can speak.\n"
+            "        english: I am able to speak.\n"
+            "        register: polite\n",
+            "english",
+        ),
+    ],
+    ids=["direct-id", "anchored-merge-id", "nested-example-field"],
+)
+def test_duplicate_rich_drill_keys_are_refused_before_one_is_lost(
+    tmp_path: Path, prefix: str, example_block: str, duplicate: str
+) -> None:
+    import json
+
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    record = verb("話す", "はなす", "godan", ["to speak"])
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([record.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        prefix
+        + "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        "  include_ids: [word:話す:はなす]\n"
+        "  drill_examples:\n"
+        + example_block,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match=f"duplicate key.*{duplicate}") as raised:
+        build_conjugation_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            [record],
+            tmp_path / "o.apkg",
+        )
+
+    assert str(path) in str(raised.value)
+    assert deck_problems(path, {}, ProjectConfig.load(tmp_path)) == [
+        str(raised.value)
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    ['!!map "not a mapping"', "!!map [not, a, mapping]"],
+    ids=["tagged-scalar", "tagged-sequence"],
+)
+def test_a_tagged_nonmapping_is_still_a_named_deck_error(
+    tmp_path: Path, value: str
+) -> None:
+    import json
+
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    record = verb("話す", "はなす", "godan", ["to speak"])
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([record.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        "  include_ids: [word:話す:はなす]\n"
+        f"  drill_examples: {value}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError) as raised:
+        build_conjugation_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            [record],
+            tmp_path / "o.apkg",
+        )
+
+    assert "expected a mapping node" in str(raised.value)
+    assert str(path) in str(raised.value)
+    assert deck_problems(path, {}, ProjectConfig.load(tmp_path)) == [
+        str(raised.value)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        (
+            "  drill_examples:\n"
+            '    "word:話す:はなす":\n'
+            "      - {japanese: 話せる。, english: I can speak., register: polite}\n",
+            "needs a nonempty deck.include_ids",
+        ),
+        (
+            "  form_note: Ability and possibility.\n",
+            "deck.form_note needs a nonempty deck.include_ids",
+        ),
+        (
+            "  include_ids: [word:話す:はなす]\n"
+            "  form_note: Ability and possibility.\n",
+            "deck.form_note requires deck.drill_examples",
+        ),
+        (
+            "  include_ids: [word:話す:はなす]\n"
+            "  exclude_ids: [word:話す:はなす]\n"
+            "  drill_examples:\n"
+            "    word:話す:はなす:\n"
+            "      - {japanese: 話せる。, english: I can speak., register: polite}\n",
+            "listed in both deck.include_ids and deck.exclude_ids",
+        ),
+        (
+            "  include_ids: [word:話す:はなす]\n"
+            "  drill_examples:\n"
+            "    123:\n"
+            "      - {japanese: 話せる。, english: I can speak., register: polite}\n",
+            "keys must be record ids, got int",
+        ),
+        (
+            "  include_ids: [word:話す:はなす]\n"
+            "  drill_examples:\n"
+            '    "word:読む:よむ":\n'
+            "      - {japanese: 読める。, english: I can read., register: polite}\n",
+            "is not listed in deck.include_ids",
+        ),
+        (
+            "  include_ids: [word:話す:はなす]\n"
+            "  drill_examples:\n"
+            '    "word:話す:はなす ":\n'
+            "      - {japanese: 話せる。, english: I can speak., register: polite}\n",
+            "is not listed in deck.include_ids",
+        ),
+        ("  form_note: [not, text]\n", "deck.form_note must be text"),
+    ],
+    ids=[
+        "no-explicit-scope",
+        "form-note-without-scope",
+        "scoped-form-note-without-examples",
+        "overlapping-rich-drill-filters",
+        "non-string-id",
+        "id-outside-scope",
+        "id-with-trailing-space",
+        "form-note-list",
+    ],
+)
+def test_other_malformed_rich_drill_shapes_are_refused(
+    tmp_path: Path, body: str, message: str
+) -> None:
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        + body,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match=message) as raised:
+        build_conjugation_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            [verb("話す", "はなす", "godan", ["to speak"])],
+            tmp_path / "o.apkg",
+        )
+
+    assert str(path) in str(raised.value)
+
+
+def test_a_scoped_rich_drill_names_an_included_record_that_cannot_ship(
+    tmp_path: Path,
+) -> None:
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        "  include_ids: [word:話す:はなす, word:読む:よむ]\n"
+        "  drill_examples:\n"
+        "    word:話す:はなす:\n"
+        "      - {japanese: 話せる。, english: I can speak., register: polite}\n"
+        "    word:読む:よむ:\n"
+        "      - {japanese: 読める。, english: I can read., register: polite}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        DataError,
+        match=(
+            "included record.*missing from the collection or cannot be "
+            "conjugated.*word:読む:よむ"
+        ),
+    ) as raised:
+        build_conjugation_deck(
+            path,
+            ProjectConfig.load(tmp_path),
+            [
+                verb("話す", "はなす", "godan", ["to speak"]),
+                verb("読む", "よむ", "", ["to read"]),
+            ],
+            tmp_path / "o.apkg",
+        )
+
+    assert str(path) in str(raised.value)
+
+
+def test_deck_authored_drill_text_cannot_shift_the_note_fields(tmp_path: Path) -> None:
+    with pytest.raises(
+        PatternDeckError, match="Examples field contains U\\+001F"
+    ) as raised:
+        rich_drill(tmp_path, form_note="ability\x1fpossibility")
+
+    assert str(tmp_path / "decks" / "drill.yaml") in str(raised.value)
+
+
 def build_drill(tmp_path: Path, records: list, name: str) -> Path:
     if not (tmp_path / "janki.toml").exists():
         project(tmp_path)
@@ -638,6 +1341,23 @@ def build_drill(tmp_path: Path, records: list, name: str) -> Path:
     target = tmp_path / name
     build_conjugation_deck(path, ProjectConfig.load(tmp_path), records, target)
     return target
+
+
+def test_a_general_drill_keeps_its_plain_six_field_support(tmp_path: Path) -> None:
+    fields = note_fields_in(build_drill(
+        tmp_path,
+        [verb("買う", "かう", "godan", ["to buy"])],
+        "general.apkg",
+    ))
+
+    assert fields == [
+        "買う（かう）",
+        "買って",
+        "to buy",
+        "godan",
+        "computed by janki",
+        "te form",
+    ]
 
 
 def test_a_pattern_build_does_not_read_the_collection(tmp_path: Path) -> None:
@@ -1150,8 +1870,67 @@ def test_refresh_builds_one_named_drill_deck(tmp_path: Path, capsys) -> None:
     [
         ('  exclude_ids: "word:買う:かう"', "deck.exclude_ids must be a list"),
         ('  source: "../nope.json"', "no collection at"),
+        (
+            '  drill_examples:\n    "word:話す:はなす":\n'
+            "      - {japanese: 話せる。, english: I can speak., register: polite}",
+            "needs a nonempty deck.include_ids",
+        ),
+        (
+            '  include_ids: ["word:話す:はなす"]\n  drill_examples:\n'
+            '    "word:読む:よむ":\n'
+            "      - {japanese: 読める。, english: I can read., register: polite}",
+            "is not listed in deck.include_ids",
+        ),
+        (
+            '  include_ids: ["word:話す:はなす"]\n  drill_examples:\n'
+            '    "word:話す:はなす":\n'
+            "      - {japanese: 話せる。, english: I can speak., register: polite}",
+            "included record(s) missing from the collection or cannot be conjugated",
+        ),
+        (
+            "  form_note: Ability and possibility.",
+            "deck.form_note needs a nonempty deck.include_ids",
+        ),
+        (
+            '  include_ids: ["word:話す:はなす"]\n'
+            "  form_note: Ability and possibility.",
+            "deck.form_note requires deck.drill_examples",
+        ),
+        (
+            '  include_ids: ["word:話す:はなす"]\n'
+            '  exclude_ids: ["word:話す:はなす"]\n'
+            "  drill_examples:\n"
+            '    "word:話す:はなす":\n'
+            "      - {japanese: 話せる。, english: I can speak., register: polite}",
+            "listed in both deck.include_ids and deck.exclude_ids",
+        ),
+        (
+            '  include_ids: ["word:話す:はなす"]\n  drill_examples:\n'
+            '    "word:話す:はなす":\n'
+            "      - {japanese: 話せる。, furigana: \"話[はなせる。\", "
+            "english: I can speak., register: polite}",
+            "furigana brackets are unbalanced",
+        ),
+        (
+            '  include_ids: ["word:話す:はなす"]\n  drill_examples:\n'
+            '    "word:話す:はなす":\n'
+            "      - {japanese: 話せる。, furigana: \"話]はな[\", "
+            "english: I can speak., register: polite}",
+            "furigana brackets are unbalanced",
+        ),
     ],
-    ids=["a-bare-string-filter", "a-missing-collection"],
+    ids=[
+        "a-bare-string-filter",
+        "a-missing-collection",
+        "rich-examples-without-scope",
+        "example-outside-scope",
+        "included-record-cannot-ship",
+        "form-note-without-scope",
+        "scoped-form-note-without-examples",
+        "overlapping-rich-drill-filters",
+        "unbalanced-drill-furigana",
+        "reversed-drill-furigana",
+    ],
 )
 def test_validate_catches_what_the_build_would_refuse(
     tmp_path: Path, line: str, expected: str
@@ -1170,7 +1949,87 @@ def test_validate_catches_what_the_build_would_refuse(
 
     problems = deck_problems(deck, {}, ProjectConfig.load(tmp_path))
 
-    assert any(expected in problem for problem in problems), problems
+    assert sum(expected in problem for problem in problems) == 1, problems
+
+
+def test_validate_and_build_both_refuse_nonmapping_drill_examples(
+    tmp_path: Path,
+) -> None:
+    import json
+
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    record = verb("話す", "はなす", "godan", ["to speak"])
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([record.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "drill.yaml"
+    deck.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        '  include_ids: ["word:話す:はなす"]\n'
+        "  drill_examples: []\n",
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    with pytest.raises(
+        DataError, match="deck.drill_examples must be a mapping"
+    ) as raised:
+        build_conjugation_deck(
+            deck,
+            config,
+            [record],
+            tmp_path / "o.apkg",
+        )
+
+    assert deck_problems(deck, {}, config) == [str(raised.value)]
+
+
+def test_validate_catches_a_deck_authored_field_separator(tmp_path: Path) -> None:
+    import json
+
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("話す", "はなす", "godan", ["to speak"]).to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "drill.yaml"
+    form_note = json.dumps("ability" + chr(31) + "possibility")
+    deck.write_text(
+        "deck:\n"
+        "  kind: conjugation\n"
+        "  form: potential\n"
+        "  name: D\n"
+        "  deck_id: 1\n"
+        "  model_id: 2\n"
+        '  include_ids: ["word:話す:はなす"]\n'
+        f"  form_note: {form_note}\n"
+        "  drill_examples:\n"
+        '    "word:話す:はなす":\n'
+        "      - {japanese: 話せます。, english: I can speak., register: polite}\n",
+        encoding="utf-8",
+    )
+
+    problems = deck_problems(deck, {}, ProjectConfig.load(tmp_path))
+
+    matching = [
+        problem for problem in problems
+        if "Examples field contains U+001F" in problem
+    ]
+    assert len(matching) == 1
+    assert str(deck) in matching[0]
 
 
 def test_validate_reports_a_pattern_deck_without_swallowing_the_records(

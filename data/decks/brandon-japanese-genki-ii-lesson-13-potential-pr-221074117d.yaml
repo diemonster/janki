@@ -8,6 +8,11 @@ deck:
   description: "Potential-form practice for selected verbs taught or exemplified on Genki II Lesson 13 textbook pages 26–28 and 32."
   output: "brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.apkg"
   source: ../normalized/vocabulary.json
+  form_note: >-
+    Potential expresses ability or possibility (“can / be able to”). Potential
+    verbs conjugate like ichidan (る) verbs, so the example may change tense,
+    polarity, or politeness. With most を-verbs, either が or を is possible;
+    できる takes が almost all the time. Other particles stay unchanged.
   include_ids:
     - word:話す:はなす
     - word:まつ:まつ
@@ -25,3 +30,84 @@ deck:
     - word:弾く:ひく
     - word:吹く:ふく
     - word:たたく:たたく
+  drill_examples:
+    "word:話す:はなす":
+      - japanese: 私は日本語が話せます。
+        furigana: 私[わたし]は 日本語[にほんご]が 話[はな]せます。
+        english: I can speak Japanese.
+        register: polite
+    "word:まつ:まつ":
+      - japanese: もう少しここでまてる？
+        furigana: もう 少[すこ]しここでまてる？
+        english: Can you wait here a little longer?
+        register: casual
+    "word:およぐ:およぐ":
+      - japanese: 私はおよげないんです。
+        furigana: 私[わたし]はおよげないんです。
+        english: The truth is, I can't swim.
+        register: polite
+    "word:行く:いく":
+      - japanese: 雨が降ったので、海に行けませんでした。
+        furigana: 雨[あめ]が 降[ふ]ったので、 海[うみ]に 行[い]けませんでした。
+        english: We couldn't go to the beach because it rained.
+        register: polite
+    "word:しぬ:しぬ":
+      - japanese: これで安心してしねる。
+        furigana: これで 安心[あんしん]してしねる。
+        english: Now I can die in peace.
+        register: casual
+    "word:読む:よむ":
+      - japanese: この漢字が読めますか。
+        furigana: この 漢字[かんじ]が 読[よ]めますか。
+        english: Can you read this kanji?
+        register: polite
+    "word:あそぶ:あそぶ":
+      - japanese: 明日は公園であそべるよ。
+        furigana: 明日[あした]は 公園[こうえん]であそべるよ。
+        english: I can play at the park tomorrow.
+        register: casual
+    "word:買う:かう":
+      - japanese: この店で切符が買えます。
+        furigana: この 店[みせ]で 切符[きっぷ]が 買[か]えます。
+        english: You can buy tickets at this store.
+        register: polite
+    "word:見る:みる":
+      - japanese: この映画は家でも見られるよ。
+        furigana: この 映画[えいが]は 家[いえ]でも 見[み]られるよ。
+        english: You can watch this movie at home too.
+        register: casual
+    "word:来る:くる":
+      - japanese: 明日のパーティーに来られる？
+        furigana: 明日[あした]のパーティーに 来[こ]られる？
+        english: Can you come to tomorrow's party?
+        register: casual
+    "word:する:する":
+      - japanese: 何か楽器ができますか。
+        furigana: 何[なに]か 楽器[がっき]ができますか。
+        english: Can you play any instruments?
+        register: polite
+    "word:書く:かく":
+      - japanese: ひらがなで名前が書けますか。
+        furigana: ひらがなで 名前[なまえ]が 書[か]けますか。
+        english: Can you write your name in hiragana?
+        register: polite
+    "word:飼う:かう":
+      - japanese: このアパートでは犬が飼えません。
+        furigana: このアパートでは 犬[いぬ]が 飼[か]えません。
+        english: You can't keep a dog in this apartment.
+        register: polite
+    "word:弾く:ひく":
+      - japanese: ギターが弾けます。
+        furigana: ギターが 弾[ひ]けます。
+        english: I can play the guitar.
+        register: polite
+    "word:吹く:ふく":
+      - japanese: サックスが吹ける？
+        furigana: サックスが 吹[ふ]ける？
+        english: Can you play the saxophone?
+        register: casual
+    "word:たたく:たたく":
+      - japanese: ドラムがたたける？
+        furigana: ドラムがたたける？
+        english: Can you play the drums?
+        register: casual
