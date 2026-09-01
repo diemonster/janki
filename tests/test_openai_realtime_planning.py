@@ -8,11 +8,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from japanese_anki.tts.openai_realtime import OpenAiRealtimePool, voice_for_record
-
 from japanese_anki import audio_cmd
 from japanese_anki import ledger as ledger_mod
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+from japanese_anki.tts.openai_realtime import OpenAiRealtimePool, voice_for_record
 
 
 class WordVoice:

@@ -29,6 +29,7 @@ from japanese_anki.workbench.assistant import (
 from japanese_anki.workbench.assistant_http import create_assistant_sidecar
 
 SESSION_TOKEN = "assistant-session-token-000000000000"
+REQUEST_FINGERPRINT = "0123456789abcdef" * 4
 
 
 @dataclass
@@ -47,7 +48,7 @@ class _FakeRevisions:
     def prepare_revision(self, *, deck_scope: str, instruction: str) -> RevisionPlan:
         self.prepared.append((deck_scope, instruction))
         return RevisionPlan(
-            request_fingerprint="request-fingerprint-123",
+            request_fingerprint=REQUEST_FINGERPRINT,
             target="Potential Practice",
             effects=(
                 "propose one polite and one casual example per selected card",
@@ -264,6 +265,19 @@ def _prepare_action(widget: dict[str, Any]) -> dict[str, Any]:
     return button["onClickAction"]
 
 
+def _component_with_id(component: dict[str, Any], component_id: str) -> dict[str, Any]:
+    if component.get("id") == component_id:
+        return component
+    children = component.get("children", [])
+    if isinstance(children, dict):
+        children = [children]
+    for child in children:
+        found = _component_with_id(child, component_id)
+        if found:
+            return found
+    return {}
+
+
 def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> None:
     sidecar = create_assistant_sidecar(
         _FakeRevisions(),
@@ -382,7 +396,43 @@ def test_one_message_renders_the_exact_plan_without_executing_it() -> None:
         wire = json.dumps(widget, ensure_ascii=False)
         assert "Potential Practice" in wire
         assert "Add polite and casual examples" in wire
-        assert "request-fingerprint-123" in wire
+        assert REQUEST_FINGERPRINT in wire
+        root = widget["widget"]
+        assert root["size"] == "full"
+        assert len(root["children"]) == 1
+        body = root["children"][0]
+        assert body["type"] == "Col"
+        assert body["width"] == "100%"
+        assert body["minWidth"] == 0
+
+        effects = _component_with_id(root, "confirmation-effects")
+        assert effects["type"] == "Col"
+        assert effects["gap"] == 3
+        assert [
+            row["children"][1]["children"][0]["value"]
+            for row in effects["children"]
+        ] == [
+            "propose one polite and one casual example per selected card",
+            "stage the proposal without changing the deck",
+        ]
+        assert all(row["type"] == "Row" for row in effects["children"])
+        assert all(row["gap"] == 2 for row in effects["children"])
+        assert all(
+            row["children"][1]["flex"] == 1
+            and row["children"][1]["minWidth"] == 0
+            for row in effects["children"]
+        )
+
+        disclosures = _component_with_id(root, "confirmation-disclosures")
+        assert disclosures["type"] == "Col"
+        assert disclosures["gap"] == 2
+        assert [child["value"] for child in disclosures["children"]] == [
+            "The confirmed revision is a paid OpenAI API call."
+        ]
+        fingerprint = _component_with_id(root, "confirmation-fingerprint")
+        fingerprint_lines = [child["value"] for child in fingerprint["children"]]
+        assert "".join(fingerprint_lines) == REQUEST_FINGERPRINT
+        assert all(0 < len(line) <= 32 for line in fingerprint_lines)
         action = widget["widget"]["confirm"]["action"]
         assert action["type"] == "janki.revision.confirm"
         assert action["handler"] == "server"
@@ -418,7 +468,7 @@ def test_confirm_consumes_one_exact_plan_and_streams_named_progress() -> None:
         confirmation = revisions.executed[0]
         assert confirmation.deck_scope == "potential-practice"
         assert confirmation.instruction == "Add polite and casual examples"
-        assert confirmation.expected_fingerprint == "request-fingerprint-123"
+        assert confirmation.expected_fingerprint == REQUEST_FINGERPRINT
         assert b"Refresh the workbench dashboard to review it" in body
         assert b"http://127.0.0.1:" not in body
 
@@ -452,7 +502,7 @@ def test_tampered_fingerprint_consumes_the_capability_without_execution() -> Non
 
         request["params"]["action"]["payload"][
             "request_fingerprint"
-        ] = "request-fingerprint-123"
+        ] = REQUEST_FINGERPRINT
         second = _events(_post(sidecar, request)[2])
         assert revisions.executed == []
         assert any(
@@ -493,6 +543,7 @@ def test_apply_audio_and_build_each_need_a_fresh_owner_confirmation() -> None:
             _post(sidecar, _confirmation_request(thread_id, revision_widget))[2]
         )
         next_widget = _widget_items(revision_events)[0]
+        assert next_widget["widget"]["size"] == "full"
         assert "has not been planned or authorized" in json.dumps(next_widget)
 
         expected_progress = {
@@ -537,6 +588,20 @@ def test_apply_audio_and_build_each_need_a_fresh_owner_confirmation() -> None:
             assert revisions.followup_contexts[-1] == expected_context
             plan_widget = _widget_items(prepare_events)[0]
             plan_wire = json.dumps(plan_widget, ensure_ascii=False)
+            plan_root = plan_widget["widget"]
+            assert plan_root["size"] == "full"
+            assert len(plan_root["children"]) == 1
+            assert plan_root["children"][0]["type"] == "Col"
+            effects = _component_with_id(plan_root, "confirmation-effects")
+            assert effects["type"] == "Col"
+            assert effects["gap"] == 3
+            assert all(row["type"] == "Row" for row in effects["children"])
+            assert all(row["gap"] == 2 for row in effects["children"])
+            disclosure_group = _component_with_id(
+                plan_root, "confirmation-disclosures"
+            )
+            assert disclosure_group["type"] == "Col"
+            assert disclosure_group["gap"] == 2
             assert f"{kind}-fingerprint-123" in plan_wire
             if kind == "audio":
                 assert "26 provider required" in plan_wire

@@ -48,6 +48,7 @@ _FOLLOWUP_CONFIRM_ACTIONS = {
     "audio": "janki.revision.audio.confirm",
     "build": "janki.revision.build.confirm",
 }
+_FINGERPRINT_DISPLAY_CHARS = 32
 _PROGRESS_LABELS = frozenset(
     {
         "Preparing revision",
@@ -556,6 +557,206 @@ def _validate_owner_execution(
     return result
 
 
+def _confirmation_body(
+    *,
+    title: str,
+    target: str,
+    effects: tuple[str, ...],
+    disclosures: tuple[str, ...],
+    fingerprint_label: str,
+    fingerprint: str,
+    one_use_note: str,
+    instruction: str | None = None,
+) -> dict[str, Any]:
+    """Build one readable, full-width confirmation body without changing its facts."""
+
+    sections: list[dict[str, Any]] = [
+        {"type": "Title", "value": title},
+        {
+            "type": "Col",
+            "gap": 1,
+            "width": "100%",
+            "minWidth": 0,
+            "children": [
+                {
+                    "type": "Text",
+                    "value": "Target",
+                    "size": "sm",
+                    "color": "secondary",
+                    "weight": "semibold",
+                },
+                {
+                    "type": "Text",
+                    "value": target,
+                    "weight": "semibold",
+                    "width": "100%",
+                },
+            ],
+        },
+    ]
+    if instruction is not None:
+        sections.append(
+            {
+                "type": "Col",
+                "gap": 1,
+                "width": "100%",
+                "minWidth": 0,
+                "children": [
+                    {
+                        "type": "Text",
+                        "value": "Your instruction",
+                        "size": "sm",
+                        "color": "secondary",
+                        "weight": "semibold",
+                    },
+                    {"type": "Text", "value": instruction, "width": "100%"},
+                ],
+            }
+        )
+    effect_rows = [
+        {
+            "type": "Row",
+            "gap": 2,
+            "align": "start",
+            "width": "100%",
+            "children": [
+                {
+                    "type": "Text",
+                    "value": "•",
+                    "width": "1rem",
+                    "color": "secondary",
+                    "weight": "semibold",
+                },
+                {
+                    "type": "Col",
+                    "flex": 1,
+                    "minWidth": 0,
+                    "children": [
+                        {"type": "Text", "value": effect, "width": "100%"}
+                    ],
+                },
+            ],
+        }
+        for effect in effects
+    ]
+    sections.extend(
+        [
+            {"type": "Divider", "spacing": 2},
+            {
+                "type": "Col",
+                "gap": 2,
+                "width": "100%",
+                "minWidth": 0,
+                "children": [
+                    {
+                        "type": "Text",
+                        "value": "What confirming does",
+                        "weight": "semibold",
+                    },
+                    {
+                        "type": "Col",
+                        "id": "confirmation-effects",
+                        "gap": 3,
+                        "width": "100%",
+                        "minWidth": 0,
+                        "children": effect_rows,
+                    },
+                ],
+            },
+        ]
+    )
+    if disclosures:
+        sections.extend(
+            [
+                {"type": "Divider", "spacing": 2},
+                {
+                    "type": "Col",
+                    "gap": 2,
+                    "width": "100%",
+                    "minWidth": 0,
+                    "children": [
+                        {
+                            "type": "Text",
+                            "value": "Before you confirm",
+                            "weight": "semibold",
+                        },
+                        {
+                            "type": "Col",
+                            "id": "confirmation-disclosures",
+                            "gap": 2,
+                            "width": "100%",
+                            "minWidth": 0,
+                            "children": [
+                                {
+                                    "type": "Text",
+                                    "value": disclosure,
+                                    "color": "secondary",
+                                    "width": "100%",
+                                }
+                                for disclosure in disclosures
+                            ],
+                        },
+                    ],
+                },
+            ]
+        )
+    sections.extend(
+        [
+            {"type": "Divider", "spacing": 2},
+            {
+                "type": "Col",
+                "gap": 1,
+                "width": "100%",
+                "minWidth": 0,
+                "children": [
+                    {
+                        "type": "Text",
+                        "value": fingerprint_label,
+                        "size": "xs",
+                        "color": "tertiary",
+                        "weight": "semibold",
+                    },
+                    {
+                        "type": "Col",
+                        "id": "confirmation-fingerprint",
+                        "gap": 0,
+                        "width": "100%",
+                        "minWidth": 0,
+                        "children": [
+                            {
+                                "type": "Text",
+                                "value": fingerprint[offset : offset + _FINGERPRINT_DISPLAY_CHARS],
+                                "size": "xs",
+                                "color": "tertiary",
+                                "width": "100%",
+                            }
+                            for offset in range(
+                                0,
+                                len(fingerprint),
+                                _FINGERPRINT_DISPLAY_CHARS,
+                            )
+                        ],
+                    },
+                    {
+                        "type": "Text",
+                        "value": one_use_note,
+                        "size": "xs",
+                        "color": "tertiary",
+                        "width": "100%",
+                    },
+                ],
+            },
+        ]
+    )
+    return {
+        "type": "Col",
+        "gap": 4,
+        "width": "100%",
+        "minWidth": 0,
+        "children": sections,
+    }
+
+
 async def _call_callback(function: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
     if inspect.iscoroutinefunction(function):
         return await function(*args, **kwargs)
@@ -638,45 +839,25 @@ def create_assistant_core(
             instruction: str,
             capability: str,
         ) -> Any:
-            children: list[dict[str, Any]] = [
-                {"type": "Title", "value": "Confirm this exact revision"},
-                {"type": "Text", "value": f"Target: {plan.target}", "weight": "semibold"},
-                {"type": "Text", "value": "Your instruction"},
-                {"type": "Text", "value": instruction},
-                {"type": "Divider"},
-                {"type": "Text", "value": "This confirmation will:"},
-            ]
-            children.extend({"type": "Text", "value": f"• {effect}"} for effect in plan.effects)
-            if plan.disclosures:
-                children.append({"type": "Divider"})
-                children.extend(
-                    {"type": "Text", "value": disclosure, "color": "secondary"}
-                    for disclosure in plan.disclosures
-                )
-            children.extend(
-                [
-                    {"type": "Divider"},
-                    {
-                        "type": "Text",
-                        "value": f"Request fingerprint: {plan.request_fingerprint}",
-                        "size": "xs",
-                        "color": "tertiary",
-                    },
-                    {
-                        "type": "Text",
-                        "value": (
-                            "Confirm is one-use. At the click, janki re-plans and refuses "
-                            "if the target or request changed."
-                        ),
-                        "size": "xs",
-                        "color": "tertiary",
-                    },
-                ]
-            )
             return DynamicWidgetRoot.model_validate(
                 {
                     "type": "Card",
-                    "children": children,
+                    "size": "full",
+                    "children": [
+                        _confirmation_body(
+                            title="Confirm this exact revision",
+                            target=plan.target,
+                            instruction=instruction,
+                            effects=plan.effects,
+                            disclosures=plan.disclosures,
+                            fingerprint_label="Request fingerprint",
+                            fingerprint=plan.request_fingerprint,
+                            one_use_note=(
+                                "Confirm is one-use. At the click, janki re-plans and "
+                                "refuses if the target or request changed."
+                            ),
+                        )
+                    ],
                     "confirm": {
                         "label": "Confirm exact revision",
                         "action": {
@@ -695,43 +876,24 @@ def create_assistant_core(
 
         @staticmethod
         def _owner_plan_widget(plan: OwnerActionPlan, *, capability: str) -> Any:
-            children: list[dict[str, Any]] = [
-                {"type": "Title", "value": plan.title},
-                {"type": "Text", "value": f"Target: {plan.target}", "weight": "semibold"},
-                {"type": "Divider"},
-                {"type": "Text", "value": "This confirmation will:"},
-            ]
-            children.extend({"type": "Text", "value": f"• {effect}"} for effect in plan.effects)
-            if plan.disclosures:
-                children.append({"type": "Divider"})
-                children.extend(
-                    {"type": "Text", "value": disclosure, "color": "secondary"}
-                    for disclosure in plan.disclosures
-                )
-            children.extend(
-                [
-                    {"type": "Divider"},
-                    {
-                        "type": "Text",
-                        "value": f"Plan fingerprint: {plan.fingerprint}",
-                        "size": "xs",
-                        "color": "tertiary",
-                    },
-                    {
-                        "type": "Text",
-                        "value": (
-                            "Confirm is one-use. janki re-plans under its ordinary locks "
-                            "and refuses if any bound input changed."
-                        ),
-                        "size": "xs",
-                        "color": "tertiary",
-                    },
-                ]
-            )
             return DynamicWidgetRoot.model_validate(
                 {
                     "type": "Card",
-                    "children": children,
+                    "size": "full",
+                    "children": [
+                        _confirmation_body(
+                            title=plan.title,
+                            target=plan.target,
+                            effects=plan.effects,
+                            disclosures=plan.disclosures,
+                            fingerprint_label="Plan fingerprint",
+                            fingerprint=plan.fingerprint,
+                            one_use_note=(
+                                "Confirm is one-use. janki re-plans under its ordinary "
+                                "locks and refuses if any bound input changed."
+                            ),
+                        )
+                    ],
                     "confirm": {
                         "label": f"Confirm exact {plan.kind}",
                         "action": {
@@ -787,6 +949,7 @@ def create_assistant_core(
                     widget=DynamicWidgetRoot.model_validate(
                         {
                             "type": "Card",
+                            "size": "full",
                             "children": [
                                 {
                                     "type": "Text",
