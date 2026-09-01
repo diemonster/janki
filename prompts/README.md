@@ -13,32 +13,34 @@ of why the asking changed.
 
 | File | Sent by | As |
 | --- | --- | --- |
-| `style-guide.md` | every pass below except `approve-coverage` | system context, first block |
+| `style-guide.md` | every card-writing pass below | system context, first block |
 | `extract-auto.md` | `janki extract` with no `--mode` | system |
 | `extract-table.md` | `janki extract --mode table` | system |
 | `extract-prose.md` | `janki extract --mode prose` | system |
 | `enrich-bare-word.md` | `janki enrich --ai` | system |
 | `revise-conjugation-deck.md` | confirmed conjugation-deck `revise` | system |
+| `assistant-chat.md` | ordinary read-only Ask janki conversation | complete system prompt |
 | `approve-coverage.md` | `janki promote --accept-coverage` | system |
 
-The coverage check is the one pass that does not lead with the style guide.
-It is not judging Japanese — it counts whether the page is accounted for —
-and handing it a guide to writing good glosses is an invitation to volunteer
-opinions about them, which is exactly what `approve-coverage.md` tells it not
-to do.
+The coverage check and conversational Assistant do not lead with the style
+guide. Coverage counts whether the page is accounted for rather than judging
+Japanese. The Assistant answers from its disclosed deck scope and bounded
+thread history without writing cards, so a card-writing style guide would give
+it the wrong job.
 
 The configured Codex enrichment provider receives the same style and task
 template, but its transport adapter rejoins those blocks and prepends a small
 JSON-only/no-tools preamble. That wrapper contains no Japanese-content policy;
 the Markdown file remains the complete task instruction.
 
-The **user turn** is not a file. It is the record's own data — the expression,
-the reading, what janki already knows about the word — composed by Python. For
-the passes that read a source, it also carries the page itself: the same
-base64 image or PDF, so the model is looking at what you are looking at.
-That is data, not instruction, and it is the only non-file content. The terse
-schema labels and Codex transport preamble described above are the other
-Python-owned pieces of request structure.
+The **user turn** is not a file. For card-writing passes it is the record's own
+data — the expression, the reading, what janki already knows about the word —
+composed by Python. For the passes that read a source, it also carries the page
+itself: the same base64 image or PDF, so the model is looking at what you are
+looking at. For Assistant chat it carries only the selected deck scope, bounded
+visible thread history, and current message. That is data, not instruction.
+The terse schema labels and Codex transport preamble described above are the
+other Python-owned pieces of request structure.
 
 ## The rules that keep this a directory of files
 
@@ -77,8 +79,8 @@ that removing it should break something, `tests/test_prompts.py` is where that
 assertion goes — it reads these files, so a retired clause is a failing test
 rather than a silent weakening.
 
-Today that holds for `enrich-bare-word.md`, `revise-conjugation-deck.md`, the
-three `extract-*.md` files, and `approve-coverage.md`. Assertions living in
-tests read the files too: they once read Python constants holding byte-identical
-copies, which meant deleting a clause from the live template changed nothing
-anyone would notice.
+Today that holds for `enrich-bare-word.md`, `revise-conjugation-deck.md`,
+`assistant-chat.md`, the three `extract-*.md` files, and
+`approve-coverage.md`. Assertions living in tests read the files too: they once
+read Python constants holding byte-identical copies, which meant deleting a
+clause from the live template changed nothing anyone would notice.

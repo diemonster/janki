@@ -102,28 +102,47 @@ The first-run guide in the workbench keeps this distinction visible:
 | OpenAI Realtime | Optionally speaks example sentences with a stable per-record voice | Networked, paid API. `OPENAI_API_KEY` is required; ChatGPT billing is separate. |
 | Codex | Alternative `enrich --ai` provider for bare-word cards | Networked; run `codex login` and select `enrich_provider = "codex"`. It is not used to read a PDF or photo. |
 
-The **Ask janki** ChatKit surface is a deterministic controller over these
-repository operations; it does not buy a separate conversational-model turn.
-Its existing-card revision action has one shared consent, journal, recovery,
-staging and apply pipeline with a transport selected in `janki.toml`:
+The **Ask janki** surface is a real model-backed conversation rendered in
+OpenAI's hosted ChatKit UI and served by janki's custom backend. ChatKit is the
+interface here, not the inference provider: by default each sent message is one
+journaled, non-mutating Claude turn through the logged-in Claude Code Pro/Max
+subscription. It can answer questions from the context the surface discloses,
+but a plain message cannot edit the deck. Only the explicit **Change deck**
+action can prepare a revision plan.
+
+Conversation and card writing have independent transport settings:
 
 ```toml
+[paths]
+assistant_dir = "data/assistant"  # durable conversational turns
+
+[assistant]
+enabled = true
+provider = "claude-code"          # ordinary Ask turns: local Pro/Max login
+model = "claude-opus-5"           # pinned; other model ids are refused
+
 [ai]
-revise_provider = "claude-code"   # local Claude Code Pro/Max subscription login
+revise_provider = "claude-code"   # card-writing revision pass
 revise_model = "claude-opus-5"
 ```
 
-Change only `revise_provider` to `"anthropic-api"` to use
-`ANTHROPIC_API_KEY` and Anthropic platform billing instead. The confirmation
-shows the selected billing path, authentication class or subscription tier,
-model, and exact request fingerprints; changing the setting invalidates an
-already-rendered confirmation. OpenAI Realtime audio remains a separate API
-operation regardless of this selection.
+Either provider can be changed independently to `"anthropic-api"` to use
+`ANTHROPIC_API_KEY` and Anthropic platform billing instead. Changing the
+Assistant provider does not silently reroute revision, and changing revision
+does not reroute conversation. A revision confirmation shows and binds its
+billing path, authentication class or subscription tier, model, and exact
+request fingerprints. It stages the model's proposal and stops for owner
+review. W7's remaining workflow step is a later **Apply and finish** action:
+explicit content authority over the visible proposal, not an automatic unseen
+apply or a sequence of separate apply/audio/build confirmations. OpenAI
+Realtime audio remains API-backed regardless of either Claude transport
+setting.
 
 Provider credentials are environment variables:
 
 ```bash
-export ANTHROPIC_API_KEY='...'   # extract, Anthropic enrich --ai,
+export ANTHROPIC_API_KEY='...'   # extract, Anthropic enrich --ai, Assistant or
+                                 # revise when configured for anthropic-api,
                                  # AI batches, and optional coverage approval
 export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
                                  # reading check, jpdb ping,

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import builtins
 import hashlib
+import http.client
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -13,14 +15,10 @@ import pytest
 from japanese_anki.application import revision
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.models import ExampleSentence
 from japanese_anki.workbench import assistant_adapter
 from japanese_anki.workbench import server as workbench_server
-from japanese_anki.workbench.assistant import (
-    OwnerActionConfirmation,
-    RevisionConfirmation,
-    RevisionRefusal,
-)
+from japanese_anki.workbench.assistant import RevisionConfirmation, RevisionRefusal
+from japanese_anki.workbench.assistant_http import create_assistant_sidecar
 
 
 def _config(tmp_path: Path, *, enabled: bool = True) -> ProjectConfig:
@@ -166,6 +164,178 @@ def test_adapter_plans_the_complete_stored_order_and_displays_application_bindin
     ) in wire
     assert "Anthropic" not in wire
     assert "API" not in wire
+
+
+def test_adapter_routes_an_ordinary_question_only_through_the_chat_service(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "potential.yaml"
+    adapter = assistant_adapter.RevisionAssistantAdapter(
+        config=_config(tmp_path),
+        deck_path=deck,
+        record_ids=("word:one",),
+    )
+    planned = SimpleNamespace(request_fingerprint="chat-request")
+    observed: list[tuple[str, str]] = []
+
+    def plan_chat(
+        _config: ProjectConfig,
+        *,
+        deck_scope: str,
+        history: tuple[tuple[str, str], ...],
+        message: str,
+    ) -> Any:
+        assert history == (("user", "earlier"), ("assistant", "Earlier answer."))
+        observed.append((deck_scope, message))
+        return planned
+
+    monkeypatch.setattr(assistant_adapter.assistant_chat, "plan_chat", plan_chat)
+    monkeypatch.setattr(
+        assistant_adapter.assistant_chat,
+        "run_chat",
+        lambda _config, expected, *, progress: SimpleNamespace(
+            answer="You are viewing the Potential Practice deck.",
+            operation_id="assistant-operation",
+        )
+        if expected is planned
+        else pytest.fail("chat dispatched another plan"),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.revision,
+        "plan_revision",
+        lambda *_args, **_kwargs: pytest.fail(
+            "an ordinary question must not become a revision"
+        ),
+    )
+
+    progress: list[str] = []
+    reply = adapter.chat(
+        deck_scope=adapter.deck_scope,
+        history=(("user", "earlier"), ("assistant", "Earlier answer.")),
+        message="which deck?",
+        progress=progress.append,
+    )
+
+    assert observed == [("data/decks/potential.yaml", "which deck?")]
+    assert reply.text == "You are viewing the Potential Practice deck."
+
+
+def test_adapter_discloses_chat_billing_context_and_durable_destination(
+    tmp_path: Path,
+) -> None:
+    adapter = assistant_adapter.RevisionAssistantAdapter(
+        config=_config(tmp_path),
+        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
+        record_ids=("word:one",),
+    )
+
+    disclosure = adapter.chat_disclosure
+
+    assert "claude-code" in disclosure
+    assert "Claude Pro/Max subscription" in disclosure
+    assert "claude-opus-5" in disclosure
+    assert "bounded visible conversation history" in disclosure
+    assert "data/assistant" in disclosure
+
+
+def test_adapter_discloses_the_configured_assistant_destination(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "janki.toml").write_text(
+        "[paths]\n"
+        'assistant_dir = "state/assistant-turns"\n'
+        "[assistant]\n"
+        "enabled = true\n",
+        encoding="utf-8",
+    )
+    adapter = assistant_adapter.RevisionAssistantAdapter(
+        config=ProjectConfig.load(tmp_path),
+        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
+        record_ids=("word:one",),
+    )
+
+    disclosure = adapter.chat_disclosure
+
+    assert "state/assistant-turns" in disclosure
+    assert "data/assistant" not in disclosure
+
+
+def test_assistant_page_reloads_provider_disclosure_and_falls_back_safely(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "janki.toml"
+    config_path.write_text(
+        "[assistant]\n"
+        "enabled = true\n"
+        'provider = "claude-code"\n'
+        'model = "claude-opus-5"\n',
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+    adapter = assistant_adapter.RevisionAssistantAdapter(
+        config=config,
+        deck_path=config.deck_dir / "potential.yaml",
+        record_ids=("word:one",),
+    )
+    sidecar = create_assistant_sidecar(
+        adapter,
+        deck_scope=adapter.deck_scope,
+        session_token="assistant-session-token-000000000000",
+    )
+    rendered_config = replace(
+        config,
+        assistant_provider="anthropic-api",
+        assistant_model="claude-sonnet-5",
+    )
+    monkeypatch.setattr(
+        assistant_adapter.ProjectConfig,
+        "load",
+        lambda _root: rendered_config,
+    )
+    sidecar.start()
+    try:
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            sidecar.server.server_address[1],
+            timeout=3,
+        )
+        connection.request("GET", sidecar.server.shell_path)
+        response = connection.getresponse()
+        fresh_body = response.read().decode("utf-8")
+        connection.close()
+
+        assert response.status == 200
+        assert "anthropic-api" in fresh_body
+        assert "Anthropic API billing" in fresh_body
+        assert "claude-sonnet-5" in fresh_body
+        assert "claude-opus-5" not in fresh_body
+
+        def fail_load(_root: Path) -> ProjectConfig:
+            raise JankiError("the current project configuration is invalid")
+
+        monkeypatch.setattr(
+            assistant_adapter.ProjectConfig,
+            "load",
+            fail_load,
+        )
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            sidecar.server.server_address[1],
+            timeout=3,
+        )
+        connection.request("GET", sidecar.server.shell_path)
+        response = connection.getresponse()
+        fallback_body = response.read().decode("utf-8")
+        connection.close()
+
+        assert response.status == 200
+        assert "provider and model details are unavailable" in fallback_body
+        assert "anthropic-api" not in fallback_body
+        assert "claude-sonnet-5" not in fallback_body
+    finally:
+        sidecar.close()
 
 
 def test_adapter_renders_the_same_confirmation_shape_for_anthropic_api(
@@ -344,7 +514,7 @@ def test_adapter_delegates_replan_and_dispatch_to_run_revision(
     ]
     assert "data/staging/proposal.json" in result.message
     assert result.review_url is None
-    assert result.next_action == "apply"
+    assert "will not start another confirmation chain" in result.message
 
 
 def test_adapter_reloads_the_on_disk_provider_before_confirmation_dispatch(
@@ -410,306 +580,6 @@ def test_adapter_reloads_the_on_disk_provider_before_confirmation_dispatch(
 
     assert not config.operations_file.exists()
     assert not config.staging_dir.exists()
-
-
-def test_adapter_binds_apply_audio_and_build_to_the_existing_services(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    deck = tmp_path / "data" / "decks" / "potential.yaml"
-    staging = tmp_path / "data" / "staging" / "proposal.json"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
-    deck_text = "applied deck bytes"
-    deck_sha = hashlib.sha256(deck_text.encode()).hexdigest()
-    monkeypatch.setattr(
-        assistant_adapter,
-        "read_drill_deck_content",
-        lambda _path: SimpleNamespace(revision=SimpleNamespace(text=deck_text)),
-    )
-    example = ExampleSentence(
-        japanese="話せます。",
-        furigana="話[はな]せます。",
-        romaji="",
-        english="I can speak.",
-        register="polite",
-    )
-
-    class FakeApplyPlan:
-        plan_fingerprint = "apply-plan"
-        staging_path = staging
-        deck_relative_path = "data/decks/potential.yaml"
-        selected_record_ids = ("word:one",)
-        current_form_note = "Old note."
-        current_drill_examples = {"word:one": (example,)}
-        operation_id = "operation-one"
-        model = "claude-opus-5"
-        request_fingerprint = "request-fingerprint"
-        intended_deck_sha256 = deck_sha
-        form_note = "Use the potential form."
-        drill_examples = {"word:one": (example,)}
-        archive_path = tmp_path / "data" / "staging" / "done" / "proposal.json"
-
-    apply_plan = FakeApplyPlan()
-    monkeypatch.setattr(
-        assistant_adapter.revision_apply,
-        "RevisionApplyPlan",
-        FakeApplyPlan,
-    )
-    monkeypatch.setattr(
-        assistant_adapter.revision_apply,
-        "plan_revision_apply",
-        lambda config, path: apply_plan,
-    )
-    apply_runs: list[Any] = []
-    apply_progress: list[str] = []
-
-    def execute_apply(config: Any, plan: Any, *, progress: Any) -> Any:
-        apply_runs.append(plan)
-        for label in (
-            "Preparing proposal",
-            "Re-reading proposal",
-            "Applying revision",
-            "Archiving proposal",
-        ):
-            progress(label)
-        return SimpleNamespace(
-            archive_path=apply_plan.archive_path,
-            deck_sha256=deck_sha,
-        )
-
-    monkeypatch.setattr(
-        assistant_adapter.revision_apply,
-        "execute_revision_apply",
-        execute_apply,
-    )
-
-    rendered_apply = adapter.prepare_followup(
-        "apply",
-        deck_scope=adapter.deck_scope,
-        continuation_context="data/staging/proposal.json",
-    )
-    assert rendered_apply.fingerprint == "apply-plan"
-    assert "話せます" in "\n".join(rendered_apply.effects)
-    applied = adapter.consume_followup(
-        OwnerActionConfirmation(
-            capability="one-use",
-            deck_scope=adapter.deck_scope,
-            kind="apply",
-            expected_fingerprint="apply-plan",
-            target=rendered_apply.target,
-        ),
-        progress=apply_progress.append,
-    )
-    assert apply_runs == [apply_plan]
-    assert apply_progress == [
-        "Preparing proposal",
-        "Re-reading proposal",
-        "Applying revision",
-        "Archiving proposal",
-    ]
-    assert applied.next_action == "audio"
-
-    class FakeAudioPlan:
-        fingerprint = "audio-plan"
-        example_counts = SimpleNamespace(
-            total=32,
-            current=4,
-            recoverable=2,
-            provider_required=26,
-        )
-        example_provider = SimpleNamespace(
-            name="openai-realtime",
-            access="paid-network",
-            voice="cedar",
-            speed=0.75,
-            settings={"model": "gpt-realtime-1.5"},
-        )
-        clips = (
-            SimpleNamespace(
-                state="provider-required",
-                request_input="話せます。",
-                target="audio/example.wav",
-                provider=example_provider,
-            ),
-        )
-
-    audio_plan = FakeAudioPlan()
-    monkeypatch.setattr(assistant_adapter.audio_application, "AudioPlan", FakeAudioPlan)
-    monkeypatch.setattr(
-        assistant_adapter.audio_application,
-        "plan_deck_audio",
-        lambda *args, **kwargs: audio_plan,
-    )
-    audio_runs: list[dict[str, Any]] = []
-
-    def execute_audio(*args: Any, **kwargs: Any) -> Any:
-        audio_runs.append(kwargs)
-        return SimpleNamespace(
-            succeeded=True,
-            pending_recovery=False,
-            ledger_error=None,
-            stopped_by=None,
-            state="complete",
-            file_count=26,
-            up_to_date=4,
-        )
-
-    monkeypatch.setattr(
-        assistant_adapter.audio_application,
-        "execute_deck_audio",
-        execute_audio,
-    )
-    rendered_audio = adapter.prepare_followup(
-        "audio",
-        deck_scope=adapter.deck_scope,
-        continuation_context=deck_sha,
-    )
-    audio_wire = "\n".join((*rendered_audio.effects, *rendered_audio.disclosures))
-    assert "26 clips from the provider" in audio_wire
-    assert "model gpt-realtime-1.5" in audio_wire
-    assert "26 paid provider calls" in audio_wire
-    voiced = adapter.consume_followup(
-        OwnerActionConfirmation(
-            capability="one-use",
-            deck_scope=adapter.deck_scope,
-            kind="audio",
-            expected_fingerprint="audio-plan",
-            target=rendered_audio.target,
-        ),
-        progress=lambda _label: None,
-    )
-    assert audio_runs[0]["expected_fingerprint"] == "audio-plan"
-    assert audio_runs[0]["force"] is False
-    assert audio_runs[0]["prune"] is False
-    assert voiced.next_action == "build"
-
-    class FakeBuildPlan:
-        fingerprint = "build-plan"
-        output_path = tmp_path / "dist" / "potential.apkg"
-        card_count = 16
-        deck_name = "Potential Practice"
-        form = "potential"
-        deck_sha256 = deck_sha
-        source_sha256 = "b" * 64
-
-    build_plan = FakeBuildPlan()
-    monkeypatch.setattr(
-        assistant_adapter.deck_build,
-        "ConjugationDeckBuildPlan",
-        FakeBuildPlan,
-    )
-    monkeypatch.setattr(
-        assistant_adapter.deck_build,
-        "plan_conjugation_deck_build",
-        lambda *args: build_plan,
-    )
-    build_runs: list[Any] = []
-    monkeypatch.setattr(
-        assistant_adapter.deck_build,
-        "execute_conjugation_deck_build",
-        lambda config, plan: build_runs.append(plan)
-        or SimpleNamespace(
-            card_count=16,
-            output_path=build_plan.output_path,
-            package_sha256="a" * 64,
-        ),
-    )
-    rendered_build = adapter.prepare_followup(
-        "build",
-        deck_scope=adapter.deck_scope,
-        continuation_context=deck_sha,
-    )
-    assert "16 cards" in "\n".join(rendered_build.effects)
-    built = adapter.consume_followup(
-        OwnerActionConfirmation(
-            capability="one-use",
-            deck_scope=adapter.deck_scope,
-            kind="build",
-            expected_fingerprint="build-plan",
-            target=rendered_build.target,
-        ),
-        progress=lambda _label: None,
-    )
-    assert build_runs == [build_plan]
-    assert built.next_action is None
-
-
-def test_adapter_never_offers_build_after_audio_did_not_finish_durably(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    deck = tmp_path / "data" / "decks" / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
-    deck_text = "applied deck bytes"
-    deck_sha = hashlib.sha256(deck_text.encode()).hexdigest()
-    monkeypatch.setattr(
-        assistant_adapter,
-        "read_drill_deck_content",
-        lambda _path: SimpleNamespace(revision=SimpleNamespace(text=deck_text)),
-    )
-
-    class FakeAudioPlan:
-        fingerprint = "audio-plan"
-        example_counts = SimpleNamespace(
-            total=2,
-            current=0,
-            recoverable=0,
-            provider_required=2,
-        )
-        example_provider = SimpleNamespace(
-            name="openai-realtime",
-            access="paid-network",
-            voice="cedar",
-            speed=0.75,
-            settings={"model": "gpt-realtime-1.5"},
-        )
-        clips = ()
-
-    monkeypatch.setattr(assistant_adapter.audio_application, "AudioPlan", FakeAudioPlan)
-    monkeypatch.setattr(
-        assistant_adapter.audio_application,
-        "plan_deck_audio",
-        lambda *args, **kwargs: FakeAudioPlan(),
-    )
-    monkeypatch.setattr(
-        assistant_adapter.audio_application,
-        "execute_deck_audio",
-        lambda *args, **kwargs: SimpleNamespace(
-            succeeded=False,
-            pending_recovery=True,
-            ledger_error=None,
-            stopped_by="paid response needs recovery",
-            state="generation-stopped",
-            file_count=0,
-            up_to_date=0,
-        ),
-    )
-    plan = adapter.prepare_followup(
-        "audio",
-        deck_scope=adapter.deck_scope,
-        continuation_context=deck_sha,
-    )
-
-    with pytest.raises(RevisionRefusal, match="did not complete durably"):
-        adapter.consume_followup(
-            OwnerActionConfirmation(
-                capability="one-use",
-                deck_scope=adapter.deck_scope,
-                kind="audio",
-                expected_fingerprint=plan.fingerprint,
-                target=plan.target,
-            ),
-            progress=lambda _label: None,
-        )
-
 
 
 def test_serve_starts_assistant_first_and_closes_it_after_main_server(

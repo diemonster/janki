@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 __all__ = [
+    "assistant_chat_schema",
     "conjugation_deck_revision_schema",
     "generated_example_schema",
     "adapt_rich_card",
@@ -42,6 +43,23 @@ class RichCardContent:
     examples: tuple[Any, ...]
     usage_notes: str
     romaji_rejected: tuple[str, ...]
+
+
+@functools.cache
+def assistant_chat_schema() -> Any:
+    """One ordinary Assistant answer, with no mutation or tool channel."""
+    from typing import Annotated
+
+    from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+    NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+    class AssistantChatAnswer(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        answer: NonBlank = Field(description="Markdown answer to the user.")
+
+    return AssistantChatAnswer
 
 
 def adapt_rich_card(value: Any) -> RichCardContent:

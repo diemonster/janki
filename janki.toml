@@ -10,6 +10,7 @@ dist_dir = "dist"
 ledger_file = "data/ledger.json"
 staging_dir = "data/staging"
 media_dir = "data/media"
+assistant_dir = "data/assistant"
 kanji_file = "data/kanji.json"
 scan_inbox = "data/inbox/scans"
 
@@ -44,11 +45,13 @@ enrich_reasoning_effort = "ultra"
 [assistant]
 # Opens a second, separately keyed loopback origin for ChatKit. The main
 # workbench never loads third-party JavaScript or shares its session/CSRF
-# secrets with the assistant origin. The ChatKit UI itself is hosted by OpenAI,
-# so text entered there is handled by that UI. Merely opening it supplies no PDF
-# or card content; the selected deck is sent through the configured revision
-# provider only after an exact revision plan is confirmed.
+# secrets with the assistant origin. OpenAI hosts the ChatKit UI, while janki's
+# custom backend sends each ordinary Ask message through this configured Claude
+# transport as one journaled, non-mutating turn. Only the explicit Change deck
+# action can prepare a revision plan.
 enabled = true
+provider = "claude-code"          # local Claude Code Pro/Max subscription login
+model = "claude-opus-5"           # pinned; unsupported model ids are refused
 
 [tts]
 provider = "voicevox"              # words only; the one engine that forces accent

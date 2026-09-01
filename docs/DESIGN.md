@@ -34,6 +34,12 @@ surface rather than a fourth writing path. Revision has one shared
 plan/consent/journal/recovery/staging/review/apply pipeline; configuration
 selects only its transport: `claude-code` consumes the logged-in Claude Pro or
 Max subscription allowance, while `anthropic-api` uses Anthropic API billing.
+An ordinary Ask janki message is a separate, non-card-writing model turn. Its
+own `[assistant]` provider chooses between the same two Claude transports
+independently from revision, while its model is pinned to `claude-opus-5`.
+Sending the message authorizes exactly that one journaled conversational call,
+which may answer but cannot mutate repository state. Only an explicit **Change
+deck** action can turn an instruction into a revision plan.
 Pattern listing and human review remain local operations over extraction
 output. Prompts are template files, readable without opening Python, and they
 are the quality mechanism: **when the output is wrong or thin, expand the
@@ -174,6 +180,10 @@ frames already on disk; it never redispatches. Nonempty response frames from a
 call that may have been sent require `operations --forget --force` when they
 did not become committed output; an ordinary forget cannot silently erase
 partial paid output.
+An ordinary Assistant turn follows that shape too. Once captured, its exact
+user message, disclosed context binding, provider/model identity and assistant
+reply become a durable turn under `data/assistant/`; ChatKit's thread is a view
+of that repository record, never its only copy or its authority source.
 Normal capture keeps its terminal operation-bound marker until the
 `result_captured` journal write durably records the relative name, pending
 directory identity, five-field file snapshot (including ctime), and response
@@ -219,24 +229,34 @@ workbench is not a second database of what happened — the repository already
 is — and it may not weaken an authority gate the CLI enforces: a consent,
 review, or approval demanded at the prompt is demanded identically in the tab.
 
-ChatKit uses its self-hosted/custom-backend integration as a conversational
-controller inside that workbench, not a separate authority or provider-owned
-workflow. It may inspect, plan, propose, and execute any operation janki
-supports when the repository owner explicitly authorizes the exact rendered
-plan in the conversation. The owner-visible plan and request detail name the
-transport provider, billing path, authentication class or subscription tier,
-model, CLI version when applicable, and exact request-byte fingerprint. The
-controlled request bytes are bound behind that fingerprint. Confirmation is a
-one-use capability bound to all of them as well as the target, current
-repository fingerprints, cost-bearing purpose and consequences; changing the
-transport invalidates it. Execution re-plans under the same locks and refuses
-drift; the assistant cannot confirm for the owner, widen the plan, reuse the
-capability, or bypass a review, journal or identity gate. A content revision
-lands as a proposal for the owner to review. OpenAI Realtime audio remains a
-separate, API-backed operation with its own plan and confirmation; the revision
-transport setting never switches it. A natural-language request can therefore
-control the tool without becoming unbounded permission to edit the repository
-or spend money.
+ChatKit uses its self-hosted/custom-backend integration as the conversational
+surface inside that workbench, not as the inference provider or a
+provider-owned workflow. OpenAI hosts the UI; janki's backend supplies the
+conversation through `[assistant].provider`, which defaults to `claude-code`
+and the logged-in Claude Pro or Max subscription. `anthropic-api` is the
+separately selectable API-billed alternative. These settings do not inherit
+from or silently change `[ai].revise_provider`.
+
+Sending an ordinary Ask message authorizes one journaled Assistant turn over
+the message and its disclosed context. That turn cannot mutate, prepare a
+revision by implication, or treat a question such as “which deck?” as a deck
+instruction. Only the explicit **Change deck** action may prepare an exact
+revision plan. Its owner-visible request detail names the transport provider,
+billing path, authentication class or subscription tier, model, CLI version
+when applicable, and exact request-byte fingerprint. One exact owner
+confirmation consumes a one-use capability bound to those values, the target,
+current repository fingerprints, cost-bearing purpose and consequences. It
+dispatches `revise`, captures the result, stages the unseen Japanese proposal,
+and then stops.
+
+The owner next reviews or edits that visible proposal. **Apply and finish** is
+a later exact content-authority event over those reviewed bytes and its stated
+audio/build consequences; unseen content is never applied automatically. It
+re-plans under the same locks and refuses drift, but it is not a ladder of
+separate ChatKit confirmations for apply, audio and build. The assistant cannot
+confirm for the owner, widen a plan, reuse a capability, or bypass a review,
+journal or identity gate. OpenAI Realtime audio remains API-backed and its
+provider cannot be switched by either Claude transport setting.
 
 Code review and Japanese-content approval are separate gates. A machinery
 review neither judges nor approves Japanese, and content approval neither

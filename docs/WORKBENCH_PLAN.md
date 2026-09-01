@@ -1013,18 +1013,20 @@ submitted to an agent in a coding interface. The owner may delegate supported
 actions to the chatbot. What remains forbidden is invented or widened
 authority, not owner authority carried through conversation.*
 
-*Progress 2026-09-01. The first vertical slice now ships in code: the isolated
-ChatKit surface plans an exact full-deck conjugation revision, consumes one-use
-owner confirmation, dispatches through the configured Claude subscription or
-Anthropic API adapter, captures before decoding, stages for editable owner
-review, and separately plans/confirms apply, Realtime audio and package build.
-Provider/model/billing/authentication/CLI-version/request-byte identity are
-visible and bound, and changing the configured transport stales an open
-confirmation. The two transports share one application transaction and
-recovery format. Code-review hooks now exclude repository content so a deck
-submission cannot launch a machinery audit. What remains is owner acceptance
-of one real browser journey through confirmation, proposal review/apply, audio
-and build; implementation and tests made no model call.*
+*Owner correction and progress 2026-09-01. The first browser journey exposed
+that every nonblank message — including “which deck?” and “is there anything
+else needed?” — was routed into revision preparation. That produced repeated
+paid revisions and a confirmation loop. The corrected backend now gives
+ordinary Ask messages their own journaled, non-mutating conversational Claude
+turn; only an explicit **Change deck** action can create a revision plan.
+Conversation defaults to Claude Code Pro/Max through `[assistant]`, independently
+from the revision transport. One revision confirmation stages the proposal and
+stops for review, with no apply/audio/build confirmation ladder. The remaining
+workflow work is the later **Apply and finish** content-authority action plus
+owner acceptance of the corrected real-browser journey. The existing two
+revision transports already share one application transaction and recovery
+format, and code-review hooks already exclude repository content so a deck
+submission cannot launch a machinery audit.*
 
 Surface ChatKit in the ordinary workbench using its custom-server integration
 and janki's own server-side agent; do not build new work on the retiring Agent
@@ -1033,17 +1035,20 @@ state sends nothing and leaves no broken overlay. This stays ChatKit's
 self-hosted/custom-backend shape: janki owns the agent, application services
 and durable workflow rather than delegating them to a provider-hosted agent.
 
-The assistant has three classes of tools:
+The assistant has four deliberately separate interaction classes:
 
-1. Read and explain deterministic repository state and navigate without a
-   confirmation.
-2. Prepare a local or paid action and render its exact target, input scope,
-   provider/model, cost-bearing purpose, consequences, fresh fingerprints and
-   refusal state without executing it.
-3. Execute that one rendered plan only after the owner explicitly confirms it
-   in ChatKit. The confirmation consumes a one-use capability; execution
-   re-plans and compares every binding under the same locks as the CLI and
-   ordinary workbench controller.
+1. Answer an ordinary Ask message through one journaled Claude turn. Sending
+   the message authorizes that one subscription/API call, but it is
+   non-mutating and cannot prepare a revision by implication.
+2. Read deterministic repository state and navigate without mutation.
+3. On the explicit **Change deck** action, prepare a paid revision and render
+   its exact target, input scope, provider/model, cost-bearing purpose,
+   consequences, fresh fingerprints and refusal state without executing it.
+4. Execute that one rendered revision plan only after the owner explicitly
+   confirms it in ChatKit. The confirmation consumes a one-use capability;
+   execution re-plans and compares every binding under the same locks as the
+   CLI and ordinary workbench controller, captures the answer, stages it, and
+   stops for content review.
 
 This includes content edits, explicit replacement, example and pattern review,
 identity and deck decisions, coverage decisions, promotion, audio, build and
@@ -1052,8 +1057,10 @@ does not gain a parallel implementation and cannot confirm on the owner's
 behalf. A request to write new Japanese routes through the journaled `revise`
 pass: selected current content plus the owner's instruction go to the model,
 and the exact answer becomes a staging proposal that the owner can edit or
-reject before anything canonical changes. Applying that proposal, buying its
-audio and building are separately rendered actions.
+reject before anything canonical changes. A later **Apply and finish** action
+is exact owner authority over the visible reviewed proposal and its stated
+audio/build consequences. It is not an automatic unseen apply, and apply,
+audio and build do not each demand another ChatKit confirmation.
 
 There is one revision pipeline, not an implementation per billing route:
 plan, exact owner consent, operation journal, captured-response recovery,
@@ -1069,19 +1076,29 @@ prior confirmation. Provider adapters may prepare, dispatch, capture and decode
 their own wire envelope; they do not fork consent, recovery, staging, review or
 apply.
 
+Ordinary conversation has separate `[assistant].provider` and
+`[assistant].model` settings, with the same allowed `claude-code` and
+`anthropic-api` transports. The provider defaults to `claude-code`; the model
+is pinned to `claude-opus-5`, and configuration refuses any other id. This does
+not create a second revision path: Assistant turns cannot write cards, and the
+explicit Change deck action still hands work to the one revision pipeline
+above.
+
 The PDF, page images and card text are not sent merely because the surface is
 open. Each message names what text and repository context it will send; adding
 source or card context is opt-in and source switches do not carry it forward.
 Every paid assistant or revision turn uses the operation journal and preserves
-its exact response before parsing. Threads are convenience context, never the
+its exact response before parsing. Completed conversational turns persist under
+`data/assistant/`; ChatKit threads are convenience views, never the sole copy,
 authority or provenance record.
 
 Keys stay server-side. OpenAI API billing is described separately from
-ChatGPT, and Anthropic API billing separately from Claude Pro or Max. The
-revision selector does not affect audio: OpenAI Realtime remains its own
-API-backed, separately planned and confirmed operation. Stream long work as
-named progress states and preserve the deliverable even if the chat drawer
-disconnects.
+ChatGPT, and Anthropic API billing separately from Claude Pro or Max. Neither
+the revision nor Assistant selector affects audio: OpenAI Realtime remains its
+own API-backed operation. Its exact spend and consequences are included in the
+later Apply and finish authority rather than exposed as another confirmation
+rung. Stream long work as named progress states and preserve the deliverable
+even if the chat drawer disconnects.
 
 The staged Japanese proposal is approved as content in the workbench. Codebase
 review remains a separate development-session activity: it neither judges nor
@@ -1090,8 +1107,9 @@ audit.
 
 Ship the first vertical slice against the owner's real lesson workflow: from a
 conversation, select the Potential Practice deck, request polite/casual
-examples, review and apply the staged proposal, authorize its existing Realtime
-audio plan, and build the `.apkg` without VS Code, YAML or a terminal.
+examples through Change deck, confirm the revision once, review its staged
+proposal, then Apply and finish its audio and `.apkg` without VS Code, YAML or
+a terminal.
 
 - **Depends on:** W5. **Files:** `workbench/`, `application/`, `operations.py`,
   `config.py`, a revision prompt and schema, `docs/QUALITY.md`.
@@ -1111,6 +1129,9 @@ outcome, after capture before staging, after archive creation, and during paid
 audio finalization; assistant disabled, network-failed, and carrying malicious
 text, plus proof that no assistant action exists without an exact one-use
 owner capability and the underlying application service's ordinary gates.
+Plain questions — including “which deck?” and “is anything else needed?” —
+must emit conversational replies without preparing or dispatching revision;
+only the explicit Change deck action crosses that boundary.
 Exercise both revision transports with fakes, prove they produce the same
 proposal/recovery/apply semantics, and prove a provider, billing tier, model,
 CLI-version or request-byte change invalidates a rendered confirmation. Audio

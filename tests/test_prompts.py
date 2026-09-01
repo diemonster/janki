@@ -28,6 +28,7 @@ SHIPPED = (
     "extract-prose",
     "enrich-bare-word",
     "revise-conjugation-deck",
+    "assistant-chat",
     "approve-coverage",
 )
 
@@ -206,10 +207,23 @@ def test_the_directory_holds_no_file_nothing_sends() -> None:
 
 def test_card_writing_has_exactly_five_task_templates() -> None:
     """Three source shapes, bare-record enrichment, and deck revision."""
-    assert set(SHIPPED) - {"style-guide", "approve-coverage"} == set(
+    assert set(SHIPPED) - {
+        "style-guide",
+        "assistant-chat",
+        "approve-coverage",
+    } == set(
         CARD_WRITING_TEMPLATES
     )
     assert len(CARD_WRITING_TEMPLATES) == 5
+
+
+def test_assistant_chat_is_conversation_not_an_implicit_revision() -> None:
+    text = " ".join(prompts.load(REPO_ROOT, "assistant-chat").split())
+
+    assert "bounded transcript" in text
+    assert "never a deck-edit instruction" in text
+    assert "explicit revision proposal" in text
+    assert "no other conversation history, deck contents, filesystem access, tools" in text
 
 
 def test_the_three_extraction_modes_are_three_complete_files() -> None:

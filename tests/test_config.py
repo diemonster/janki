@@ -33,6 +33,7 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.ledger_file == root / "data/ledger.json"
     assert config.staging_dir == root / "data/staging"
     assert config.media_dir == root / "data/media"
+    assert config.assistant_dir == root / "data/assistant"
     assert config.scan_inbox == root / "data/inbox/scans"
     assert config.extract_model == "claude-opus-5"
     # One model at one depth across the complete bare-word pass. Codex stays
@@ -46,6 +47,8 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46
     assert config.assistant_enabled is False
+    assert config.assistant_provider == "claude-code"
+    assert config.assistant_model == "claude-opus-5"
     assert capsys.readouterr().err == ""
 
 
@@ -59,6 +62,7 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
         ledger_file = "state/ledger.json"
         staging_dir = "state/staging"
         media_dir = "assets"
+        assistant_dir = "state/assistant"
         scan_inbox = "data/inbox/pages"
 
         [ai]
@@ -76,6 +80,8 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
 
         [assistant]
         enabled = true
+        provider = "anthropic-api"
+        model = "claude-opus-5"
         """,
     )
 
@@ -84,6 +90,7 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.ledger_file == root / "state/ledger.json"
     assert config.staging_dir == root / "state/staging"
     assert config.media_dir == root / "assets"
+    assert config.assistant_dir == root / "state/assistant"
     assert config.scan_inbox == root / "data/inbox/pages"
     assert config.extract_model == "claude-haiku-4-5"
     assert config.enrich_provider == "anthropic"
@@ -98,6 +105,8 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     # above, and a future coercion regression would fail here.
     assert type(config.voicevox_speaker) is int
     assert config.assistant_enabled is True
+    assert config.assistant_provider == "anthropic-api"
+    assert config.assistant_model == "claude-opus-5"
     assert capsys.readouterr().err == ""
 
 
@@ -114,6 +123,72 @@ def test_assistant_enabled_refuses_a_string_that_only_looks_boolean(
 
     with pytest.raises(ConfigError, match=r"\[assistant\] enabled must be true or false"):
         ProjectConfig.load(tmp_path)
+
+
+def test_an_unknown_assistant_provider_is_rejected(tmp_path: Path) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [assistant]
+        provider = "automatic"
+        """,
+    )
+
+    with pytest.raises(ConfigError) as caught:
+        ProjectConfig.load(tmp_path)
+
+    message = str(caught.value)
+    assert "[assistant] provider" in message
+    assert "claude-code" in message
+    assert "anthropic-api" in message
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["claude-sonnet-5", "claude-opus-5-20260801"],
+)
+def test_an_unpinned_assistant_model_is_rejected(
+    tmp_path: Path,
+    model: str,
+) -> None:
+    _write_config(
+        tmp_path,
+        f"""
+        [assistant]
+        model = "{model}"
+        """,
+    )
+
+    with pytest.raises(ConfigError) as caught:
+        ProjectConfig.load(tmp_path)
+
+    message = str(caught.value)
+    assert "[assistant] model" in message
+    assert "claude-opus-5" in message
+
+
+def test_assistant_transport_is_independent_from_revision_transport(
+    tmp_path: Path,
+) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        revise_provider = "anthropic-api"
+        revise_model = "claude-opus-5-api"
+
+        [assistant]
+        provider = "claude-code"
+        model = "claude-opus-5"
+        """,
+    )
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.revise_provider == "anthropic-api"
+    assert config.revise_model == "claude-opus-5-api"
+    assert config.assistant_provider == "claude-code"
+    assert config.assistant_model == "claude-opus-5"
 
 
 @pytest.mark.parametrize("retired", ["azure_voice", "azure_region"])

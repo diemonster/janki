@@ -228,6 +228,16 @@ below is what is left, and it is the loop every other project already uses.*
    binding. Never delete its evidence or edit the intent by hand. Never delete
    either by hand while an operation is unfinished, and never re-dispatch an
    `outcome_unknown` one — a fresh charge needs fresh authority.
+1c. `data/assistant/` (the `[paths].assistant_dir` default): the durable
+   ordinary-Assistant turn store — **committed**. Before an Assistant call is
+   dispatched, its exact user message, disclosed bounded context,
+   provider/model identity and request fingerprint are written here as a
+   request manifest. After the journal has captured the paid reply, that same
+   manifest records the exact decoded answer and provenance before the
+   operation becomes `committed`. An unfinished request remains governed by
+   its operation-journal entry; never delete or edit it by hand. ChatKit
+   threads are convenience views of these repository records, not their
+   replacement, and this store never grants revision or content authority.
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a
@@ -324,10 +334,11 @@ below is what is left, and it is the loop every other project already uses.*
 
 Only `dist/`'s *contents* are disposable — the directory itself is held open
 by a tracked `.gitkeep` like the others. Everything under `data/` is tracked:
-the media, the staging files, and three `.gitkeep`s (`data/inbox/shirabe/`,
-`data/media/`, `data/staging/`) so those directories exist in a fresh clone
-whether or not they have contents yet — because the repository, not Anki's
-database and not an uncommitted working tree, is the source of truth.
+the media, the staging files, and four `.gitkeep`s (`data/inbox/shirabe/`,
+`data/media/`, `data/staging/`, `data/assistant/`) so those directories exist
+in a fresh clone whether or not they have contents yet — because the
+repository, not Anki's database and not an uncommitted working tree, is the
+source of truth.
 
 A new import must not erase manually curated examples, notes, conjugations, or furigana.
 

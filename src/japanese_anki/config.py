@@ -29,6 +29,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "ledger_file",
         "staging_dir",
         "media_dir",
+        "assistant_dir",
         "kanji_file",
         "operations_file",
         "patterns_file",
@@ -58,7 +59,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "voicevox_speed",
         "sentence_provider",
     ),
-    "assistant": ("enabled",),
+    "assistant": ("enabled", "provider", "model"),
 }
 
 
@@ -283,6 +284,8 @@ class ProjectConfig:
     ledger_file: Path
     staging_dir: Path
     media_dir: Path
+    #: Durable ordinary Assistant turns after their paid replies are captured.
+    assistant_dir: Path
     #: Looked-up reference data about characters, shared across records.
     kanji_file: Path
     #: What documents teach, inferred and reviewed before anything uses it.
@@ -327,6 +330,12 @@ class ProjectConfig:
     #: or 'openai-realtime'. Words are never affected — only VOICEVOX can
     #: force an accent, which is what a word clip is for.
     sentence_provider: str
+    #: How ordinary Assistant conversation reaches Claude. This is independent
+    #: from ``revise_provider``: asking a question and writing Japanese cards
+    #: are different paid operations with separate prompts and authority.
+    assistant_provider: str
+    #: The pinned model used for ordinary, non-mutating Assistant conversation.
+    assistant_model: str
     #: Whether `janki workbench` starts the isolated ChatKit sidecar. The
     #: default is deliberately off so a base install neither imports the
     #: optional SDK nor loads OpenAI-hosted UI code merely by opening a local
@@ -380,6 +389,20 @@ class ProjectConfig:
             "anthropic-api",
             ("claude-code", "anthropic-api"),
         )
+        assistant_provider = _choice(
+            data,
+            "assistant",
+            "provider",
+            "claude-code",
+            ("claude-code", "anthropic-api"),
+        )
+        assistant_model = _choice(
+            data,
+            "assistant",
+            "model",
+            "claude-opus-5",
+            ("claude-opus-5",),
+        )
 
         return cls(
             root=project_root,
@@ -402,6 +425,9 @@ class ProjectConfig:
             ledger_file=project_path(_str(data, "paths", "ledger_file", "data/ledger.json")),
             staging_dir=project_path(_str(data, "paths", "staging_dir", "data/staging")),
             media_dir=project_path(_str(data, "paths", "media_dir", "data/media")),
+            assistant_dir=project_path(
+                _str(data, "paths", "assistant_dir", "data/assistant")
+            ),
             kanji_file=project_path(_str(data, "paths", "kanji_file", "data/kanji.json")),
             operations_file=project_path(
                 _str(data, "paths", "operations_file", "data/operations.json")
@@ -435,5 +461,7 @@ class ProjectConfig:
             voicevox_sentence_speaker=_int_or_none(data, "tts", "voicevox_sentence_speaker"),
             voicevox_speed=_float(data, "tts", "voicevox_speed", 1.0),
             sentence_provider=_str(data, "tts", "sentence_provider", ""),
+            assistant_provider=assistant_provider,
+            assistant_model=assistant_model,
             assistant_enabled=_bool(data, "assistant", "enabled", False),
         )

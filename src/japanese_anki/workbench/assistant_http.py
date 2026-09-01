@@ -1,8 +1,9 @@
 """Isolated loopback HTTP origin for the workbench ChatKit surface.
 
 The hosted ChatKit JavaScript never runs in the main workbench authority
-origin.  This sidecar has its own random path token, one deck-scoped in-memory
-store, and no access to the workbench session or CSRF secrets.
+origin. This sidecar has its own random path token, one deck-scoped in-memory
+store, and no access to the workbench session or CSRF secrets. Its own narrow
+capabilities authorize one conversational turn or one exact revision plan.
 """
 
 from __future__ import annotations
@@ -10,15 +11,17 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
+import html
 import json
 import queue
 import re
 import secrets
 import threading
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
+from japanese_anki.errors import JankiError
 from japanese_anki.localhttp import MAX_BODY_BYTES, LocalOnlyHandler, LocalOnlyServer, bind_loopback
 from japanese_anki.workbench.assistant import (
     AssistantCore,
@@ -42,6 +45,14 @@ _CHATKIT_SCRIPT = f"{_CHATKIT_CDN}/deployments/chatkit/chatkit.js"
 # widening the isolated origin to arbitrary inline styles.
 _CHATKIT_STYLE_SOURCE = "'sha256-G2shiuZXM1qoGNHm7OQ6u7Ye45SO8f8LKO17q0kfGvw='"
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{32,}$")
+_DEFAULT_CHAT_DISCLOSURE = (
+    "Each message is one journaled, read-only model call with only the selected "
+    "deck path and that message."
+)
+_UNAVAILABLE_CHAT_DISCLOSURE = (
+    "Current provider and model details are unavailable because janki could not "
+    "load the project configuration. Fix janki.toml and reload before sending."
+)
 _DENIED_OPERATIONS = frozenset(
     {
         "attachments.create",
@@ -127,7 +138,7 @@ class AsyncLoopBridge:
 
 
 class AssistantHTTPServer(LocalOnlyServer):
-    """Loopback server carrying only the authority-free ChatKit sidecar."""
+    """Loopback server carrying only the deck-scoped ChatKit sidecar."""
 
     assistant_core: AssistantCore
     bridge: AsyncLoopBridge
@@ -136,6 +147,7 @@ class AssistantHTTPServer(LocalOnlyServer):
     api_path: str
     script_path: str
     style_path: str
+    chat_disclosure: Callable[[], str]
 
 
 class _AssistantHandler(LocalOnlyHandler):
@@ -340,7 +352,7 @@ def _request_refusal(payload: Any) -> str | None:
         or not isinstance(content[0].get("text"), str)
         or not content[0]["text"].strip()
     ):
-        return "Send exactly one nonblank plain-text revision instruction."
+        return "Send exactly one nonblank plain-text message."
     inference = message.get("inference_options")
     if not isinstance(inference, dict):
         return "The ChatKit inference options were refused."
@@ -350,6 +362,7 @@ def _request_refusal(payload: Any) -> str | None:
 
 
 def _shell_html(server: AssistantHTTPServer) -> str:
+    disclosure = html.escape(server.chat_disclosure(), quote=True)
     return (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
@@ -358,8 +371,10 @@ def _shell_html(server: AssistantHTTPServer) -> str:
         f'<script src="{_CHATKIT_SCRIPT}" async></script>'
         f'<script src="{server.script_path}" defer></script>'
         "</head><body><main>"
-        "<header><h1>Ask janki</h1><p>Describe one change to the selected deck. "
-        "The assistant prepares an exact plan; nothing runs until you confirm that plan.</p>"
+        "<header><h1>Ask janki</h1><p>Ask a question in ordinary language. "
+        "Conversation is read-only; use the explicit Change this deck action when "
+        "you want the message turned into an exact revision plan.</p>"
+        f"<p class=boundary>{disclosure}</p>"
         "<p class=boundary>This isolated page loads OpenAI's hosted ChatKit UI. It does "
         "not receive the main workbench session or its CSRF authority.</p></header>"
         '<openai-chatkit id="janki-chat" aria-label="janki deck assistant"></openai-chatkit>'
@@ -398,12 +413,12 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
       retry: false,
     }},
     composer: {{
-      placeholder: "Describe one revision to this deck",
+      placeholder: "Ask about this deck",
       attachments: {{ enabled: false }},
       tools: [],
     }},
     startScreen: {{
-      greeting: "What would you like to revise in this deck?",
+      greeting: "What would you like to know about this deck?",
       prompts: [],
     }},
   }});
@@ -485,7 +500,7 @@ def create_assistant_sidecar(
     deck_scope: str,
     session_token: str | None = None,
 ) -> AssistantSidecar:
-    """Bind, but do not start, a separate ephemeral IPv4-loopback origin."""
+    """Bind a sidecar whose send disclosure is re-read for every shell render."""
 
     token = session_token or secrets.token_urlsafe(32)
     if not _TOKEN.fullmatch(token):
@@ -504,6 +519,19 @@ def create_assistant_sidecar(
         server.api_path = f"{root}chatkit"
         server.script_path = f"{root}application.js"
         server.style_path = f"{root}application.css"
+        def current_chat_disclosure() -> str:
+            try:
+                return str(
+                    getattr(
+                        callbacks,
+                        "chat_disclosure",
+                        _DEFAULT_CHAT_DISCLOSURE,
+                    )
+                )
+            except JankiError:
+                return _UNAVAILABLE_CHAT_DISCLOSURE
+
+        server.chat_disclosure = current_chat_disclosure
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:
         if server is not None:
