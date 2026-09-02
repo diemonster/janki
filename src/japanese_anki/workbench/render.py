@@ -33,11 +33,14 @@ from japanese_anki.application import (
 )
 from japanese_anki.application.audio import AudioPlan
 from japanese_anki.application.build import FinishBuildPlan, FinishDeckBuildPlan
-from japanese_anki.application.deck_build import ConjugationDeckBuildPlan
 from japanese_anki.application.enrichment import DictionaryEnrichmentDecision
 from japanese_anki.application.finish import FinishScope
 from japanese_anki.application.kanji_addition import KanjiAdditionPlan
 from japanese_anki.application.revision_apply import RevisionApplyPlan
+from japanese_anki.application.revision_finish import (
+    RevisionFinishPlan,
+    RevisionFinishResult,
+)
 from japanese_anki.credential_safety import redact_environment_credentials
 from japanese_anki.enrich import format_field_diff
 
@@ -61,7 +64,11 @@ __all__ = [
     "render_finish",
     "render_reidentify",
     "render_revision",
-    "render_revision_finish",
+    "render_revision_finish_progress_failure",
+    "render_revision_finish_progress_result",
+    "render_revision_finish_progress_start",
+    "render_revision_finish_progress_step",
+    "render_revision_finish_status",
     "render_source",
 ]
 
@@ -576,6 +583,8 @@ def render_dashboard(
     assistant_url: str = "",
     revisions: Sequence[RevisionApplyPlan] = (),
     revision_warnings: Sequence[str] = (),
+    revision_finishes: Sequence[RevisionFinishResult] = (),
+    revision_finish_warnings: Sequence[str] = (),
 ) -> str:
     """The whole page. `token` prefixes every same-session link."""
     prefix = f"/{html.escape(token, quote=True)}" if token else ""
@@ -679,6 +688,46 @@ def render_dashboard(
                 ]
             )
         body.append("</section>")
+    if revision_finishes or revision_finish_warnings:
+        body.append('<section class="revisions"><h2>Revision finishes</h2>')
+        if revision_finish_warnings:
+            body.append(
+                '<div class="warnings" role=alert><h3>Needs attention</h3><ul>'
+            )
+            body.extend(
+                f"<li>{_escaped(warning)}</li>"
+                for warning in revision_finish_warnings
+            )
+            body.append("</ul></div>")
+        for result in revision_finishes:
+            target = f"{prefix}/revision-finishes/{result.receipt_id}"
+            if result.succeeded:
+                state = "Package needs exact verification or rebuild"
+                detail = (
+                    "The reviewed revision and audio are durable. Its disposable "
+                    "Anki package is missing, changed, or could not be safely "
+                    "verified; the exact receipt can rebuild it."
+                )
+            else:
+                state = (
+                    "Waiting to resume from "
+                    f'{result.state.replace("_", " ")}'
+                )
+                detail = (
+                    "The exact authority and completed phase receipts are durable. "
+                    "Open this finish to continue without broadening it."
+                )
+            body.extend(
+                [
+                    '<article class="source revision">',
+                    f'<h3><a href="{html.escape(target, quote=True)}">'
+                    f'{_escaped(result.deck_path.name)}</a></h3>',
+                    f'<p class=state>{_escaped(state)}</p>',
+                    f'<p>{_escaped(detail)}</p>',
+                    '</article>',
+                ]
+            )
+        body.append("</section>")
     if not journeys:
         where = "above" if csrf else "to your inbox folder"
         body.append(
@@ -710,14 +759,24 @@ def _revision_examples(
 
 
 def render_revision(
-    plan: RevisionApplyPlan,
+    plan: RevisionFinishPlan,
     *,
     token: str,
     csrf: str,
 ) -> str:
-    """Review one exact current/proposed plan and offer its bound apply."""
+    """Review one exact proposal and all consequences of applying it."""
+    revision = plan.revision
     prefix = f"/{html.escape(token, quote=True)}"
-    action = f"{prefix}/revisions/{quote(plan.staging_path.name, safe='')}/apply"
+    action = (
+        f"{prefix}/revisions/{quote(revision.staging_path.name, safe='')}/finish"
+    )
+    counts = plan.audio.example_counts
+    provider = plan.audio.example_provider
+    provider_name = provider.name if provider is not None else "unavailable"
+    provider_access = provider.access if provider is not None else "unavailable"
+    provider_model = "unavailable"
+    if provider is not None:
+        provider_model = provider.settings.get("model") or "not separately named"
     body = [
         "<!doctype html><html lang=en><head><meta charset=utf-8>",
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
@@ -726,42 +785,71 @@ def render_revision(
         "</head><body><main>",
         f'<p><a href="{prefix}/">&larr; All sources</a></p>',
         "<h1>Review deck revision</h1>",
-        f'<p class=saved>Target: <code>{_escaped(plan.deck_relative_path)}</code>. '
-        "Applying changes only the form note and the selected cards’ drill "
-        "examples. It archives this proposal; it does not generate audio or "
-        "build an Anki package.</p>",
+        f'<p class=saved>Target: <code>{_escaped(revision.deck_relative_path)}</code>. '
+        "One confirmation applies these reviewed bytes, creates their example "
+        "audio, and builds the Anki package. It does not approve unseen content.</p>",
         '<section class=source><h2>Form note</h2><div class=panels>',
         '<div><h3>Current</h3>',
-        f'<p>{_escaped(plan.current_form_note) or "<i>Empty</i>"}</p></div>',
+        f'<p>{_escaped(revision.current_form_note) or "<i>Empty</i>"}</p></div>',
         '<div><h3>Proposed</h3>',
-        f'<p>{_escaped(plan.form_note) or "<i>Empty</i>"}</p></div>',
+        f'<p>{_escaped(revision.form_note) or "<i>Empty</i>"}</p></div>',
         '</div></section>',
     ]
-    for record_id in plan.selected_record_ids:
+    for record_id in revision.selected_record_ids:
         body.extend(
             [
                 '<section class=card>',
                 f'<h2><code>{_escaped(record_id)}</code></h2>',
                 '<div class=panels><div><h3>Current polite/casual examples</h3>',
-                _revision_examples(plan.current_drill_examples[record_id]),
+                _revision_examples(revision.current_drill_examples[record_id]),
                 '</div><div><h3>Proposed polite/casual examples</h3>',
-                _revision_examples(plan.drill_examples[record_id]),
+                _revision_examples(revision.drill_examples[record_id]),
                 '</div></div></section>',
             ]
         )
-    if plan.state == "accepted":
+    body.extend(
+        [
+            '<section class=source><h2>Audio and package consequences</h2>',
+            f'<p><b>Example audio:</b> {_escaped(provider_name)} · '
+            f'{_escaped(provider_model)} · {_escaped(provider_access)}.</p>',
+            '<dl class=fields>',
+            f'<div class=field><dt>Total clips</dt><dd>{counts.total}</dd></div>',
+            f'<div class=field><dt>Already current</dt><dd>{counts.current}</dd></div>',
+            f'<div class=field><dt>Recoverable exact clips</dt>'
+            f'<dd>{counts.recoverable}</dd></div>',
+            f'<div class=field><dt>Provider calls required</dt>'
+            f'<dd>{counts.provider_required}</dd></div>',
+            '</dl>',
+            '<p>Only the reviewed drill examples are voiced. Existing clips are '
+            'not forcibly replaced and unrelated media is not pruned.</p>',
+            f'<p><b>Anki package:</b> <code>{_escaped(plan.build.output_path)}</code> '
+            f'· <b>cards:</b> {_escaped(plan.build.card_count)}.</p>',
+            '</section>',
+            '<section class=source><h2>What happens after confirmation</h2>',
+            '<ol class=progress>',
+            '<li>Preparing finish</li>',
+            '<li>Applying reviewed revision</li>',
+            '<li>Creating example audio</li>',
+            '<li>Building Anki package</li>',
+            '<li>Saving finish receipt</li>',
+            '</ol><p>No invented percentage is shown. Interrupted work keeps its '
+            'exact receipt so it can resume without widening this authority.</p>',
+            '</section>',
+        ]
+    )
+    if revision.state == "accepted":
         body.append(
             '<p class="status held">You already accepted this exact plan. '
-            'Applying now resumes its recorded local transaction.</p>'
+            'Apply and finish resumes its recorded revision transaction.</p>'
         )
     body.extend(
         [
             f'<form method=post action="{html.escape(action, quote=True)}" '
             'class=submit>',
-            _hidden("action", "apply-revision"),
+            _hidden("action", "apply-and-finish"),
             _hidden("csrf", csrf),
-            _hidden("plan_fingerprint", plan.plan_fingerprint),
-            '<button type=submit>Apply this exact revision</button>',
+            _hidden("plan_fingerprint", plan.fingerprint),
+            '<button type=submit>Apply and finish</button>',
             '</form>',
             '</main></body></html>',
         ]
@@ -769,99 +857,172 @@ def render_revision(
     return "".join(body)
 
 
-def render_revision_finish(
-    deck_path: Path,
+def _revision_finish_status_body(
+    result: RevisionFinishResult,
     *,
     token: str,
     csrf: str,
-    audio_plan: AudioPlan | None,
-    build_plan: ConjugationDeckBuildPlan | None,
-    audio_error: str = "",
-    build_error: str = "",
-    banner: str = "",
+    problem: str = "",
+    offer_complete_resume: bool = False,
+    package_needs_rebuild: bool = False,
 ) -> str:
-    """The separate example-audio and build actions after a deck revision."""
+    """Render durable aggregate state and its exact recovery action."""
     prefix = f"/{html.escape(token, quote=True)}"
-    action = f"{prefix}/decks/{quote(deck_path.name, safe='')}/finish"
-    body = [
-        "<!doctype html><html lang=en><head><meta charset=utf-8>",
-        '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        "<title>Finish revised deck · janki workbench</title>",
-        f'<link rel=stylesheet href="{prefix}/style.css">',
-        "</head><body><main>",
-        f'<p><a href="{prefix}/">&larr; All sources</a></p>',
-        "<h1>Finish revised deck</h1>",
-        f'<p class=saved>Deck: <code>{_escaped(deck_path.name)}</code>. '
-        "Audio and package build remain separate owner-authorized actions.</p>",
-    ]
-    if banner:
-        body.append(f'<p class="status reviewed">{_escaped(banner)}</p>')
-    body.append('<section class=source><h2>1. Example audio</h2>')
-    if audio_error:
-        body.append(
-            '<p class="status problem">The audio plan cannot be prepared: '
-            f'{_escaped(audio_error)}</p>'
+    descriptions = {
+        "authorized": (
+            "Your exact authority is saved. The reviewed revision has not yet "
+            "received its durable apply receipt."
+        ),
+        "revision_applied": (
+            "The reviewed revision is applied and archived. Example audio and "
+            "the Anki package still need to finish."
+        ),
+        "audio_complete": (
+            "The reviewed revision and its exact example audio are durable. "
+            "The Anki package still needs to finish."
+        ),
+        "complete": (
+            "The reviewed revision, example audio, and Anki package are complete."
+        ),
+    }
+    if result.succeeded and package_needs_rebuild:
+        descriptions["complete"] = (
+            "The reviewed revision and exact example audio are durable. The "
+            "disposable Anki package is missing, changed, or could not be safely "
+            "verified, so it needs the exact rebuild below."
         )
-    elif audio_plan is not None:
-        provider = audio_plan.example_provider
-        counts = audio_plan.example_counts
-        assert provider is not None
-        model = provider.settings.get("model") or "not separately named"
-        body.extend(
-            [
-                f'<p><b>Provider:</b> {_escaped(provider.name)} · '
-                f'<b>model:</b> {_escaped(model)} · '
-                f'<b>access:</b> {_escaped(provider.access)}</p>',
-                '<dl class=fields>',
-                f'<div class=field><dt>Total clips</dt><dd>{counts.total}</dd></div>',
-                f'<div class=field><dt>Already current</dt><dd>{counts.current}</dd></div>',
-                f'<div class=field><dt>Recoverable exact clips</dt>'
-                f'<dd>{counts.recoverable}</dd></div>',
-                f'<div class=field><dt>Provider calls required</dt>'
-                f'<dd>{counts.provider_required}</dd></div>',
-                '</dl>',
-                '<p>This voices examples only. It neither forces replacement nor '
-                'prunes other media.</p>',
-                f'<form method=post action="{html.escape(action, quote=True)}">',
-                _hidden("action", "deck-audio"),
-                _hidden("csrf", csrf),
-                _hidden("plan_fingerprint", audio_plan.fingerprint),
-                '<button type=submit>Authorize this exact example-audio plan</button>',
-                '</form>',
-            ]
-        )
-    body.append('</section><section class=source><h2>2. Build Anki package</h2>')
-    if build_error:
-        body.append(
-            '<p class="status problem">The build plan cannot be prepared: '
-            f'{_escaped(build_error)}</p>'
-        )
-    elif build_plan is not None:
-        missing = (
-            audio_plan.example_counts.total - audio_plan.example_counts.current
-            if audio_plan is not None
-            else None
-        )
-        if missing:
-            body.append(
-                '<p class="status held"><b>Audio is not fully current:</b> '
-                f'{_escaped(missing)} example clip(s) remain. Building stays '
-                'available because audio is a separate owner decision.</p>'
+    status_class = "reviewed" if result.succeeded else "held"
+    body: list[str] = []
+    if problem:
+        body.append(f'<p class="status problem" role=alert>{_escaped(problem)}</p>')
+    body.extend(
+        [
+            f'<p class="status {status_class}">{_escaped(descriptions[result.state])}</p>',
+            '<dl class=fields>',
+            f'<div class=field><dt>Receipt</dt><dd><code>'
+            f'{_escaped(result.receipt_id)}</code></dd></div>',
+            f'<div class=field><dt>Deck</dt><dd><code>'
+            f'{_escaped(result.deck_path)}</code></dd></div>',
+            f'<div class=field><dt>Package</dt><dd><code>'
+            f'{_escaped(result.output_path)}</code></dd></div>',
+            '</dl>',
+        ]
+    )
+    if not result.succeeded or offer_complete_resume:
+        action = f"{prefix}/revision-finishes/{result.receipt_id}/resume"
+        if result.succeeded:
+            explanation = (
+                "This exact receipt can verify the disposable Anki package and "
+                "rebuild it if it is missing or changed. It will not repeat "
+                "revision apply or example audio."
             )
+            label = "Verify or rebuild this exact package"
+        else:
+            explanation = (
+                "Resume uses only the authority already recorded by this receipt. "
+                "It does not ask for a broader plan or repeat an exact paid call "
+                "whose recovery bytes are durable."
+            )
+            label = "Resume this exact finish"
         body.extend(
             [
-                f'<p><b>Output:</b> <code>{_escaped(build_plan.output_path)}</code> · '
-                f'<b>cards:</b> {_escaped(build_plan.card_count)}</p>',
-                f'<form method=post action="{html.escape(action, quote=True)}">',
-                _hidden("action", "deck-build"),
+                f'<p>{_escaped(explanation)}</p>',
+                f'<form method=post action="{html.escape(action, quote=True)}" '
+                'class=submit>',
+                _hidden("action", "resume-apply-and-finish"),
                 _hidden("csrf", csrf),
-                _hidden("plan_fingerprint", build_plan.fingerprint),
-                '<button type=submit>Build this exact deck package</button>',
+                _hidden("receipt_id", result.receipt_id),
+                f'<button type=submit>{_escaped(label)}</button>',
                 '</form>',
             ]
         )
-    body.append('</section></main></body></html>')
+    body.append(f'<p><a class=button href="{prefix}/">Return to Janki</a></p>')
     return "".join(body)
+
+
+def render_revision_finish_status(
+    result: RevisionFinishResult,
+    *,
+    token: str,
+    csrf: str,
+    package_needs_rebuild: bool = False,
+) -> str:
+    """A refreshable view over one strictly inspected durable receipt."""
+    prefix = f"/{html.escape(token, quote=True)}"
+    return "".join(
+        [
+            "<!doctype html><html lang=en><head><meta charset=utf-8>",
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            "<title>Revision finish · janki workbench</title>",
+            f'<link rel=stylesheet href="{prefix}/style.css">',
+            "</head><body><main>",
+            f'<p><a href="{prefix}/">&larr; All sources</a></p>',
+            "<h1>Revision finish</h1>",
+            _revision_finish_status_body(
+                result,
+                token=token,
+                csrf=csrf,
+                offer_complete_resume=True,
+                package_needs_rebuild=package_needs_rebuild,
+            ),
+            "</main></body></html>",
+        ]
+    )
+
+
+def render_revision_finish_progress_start(
+    deck_name: str,
+    *,
+    token: str,
+) -> str:
+    """Open the streamed apply-and-finish page; later chunks close it."""
+    prefix = f"/{html.escape(token, quote=True)}"
+    return (
+        "<!doctype html><html lang=en><head><meta charset=utf-8>"
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>Finishing {_escaped(deck_name)}</title>"
+        f'<link rel=stylesheet href="{prefix}/style.css">'
+        "</head><body><main>"
+        f"<h1>Finishing {_escaped(deck_name)}</h1>"
+        '<p class=saved>Closing this page does not cancel work already covered '
+        "by the exact finish authority.</p>"
+        '<ol class=progress aria-live=polite>'
+    )
+
+
+def render_revision_finish_progress_step(label: str) -> str:
+    """Append one service-reported phase, never a fabricated percentage."""
+    return f'<li role=status><strong>{_escaped(label)}</strong></li>'
+
+
+def render_revision_finish_progress_result(
+    result: RevisionFinishResult,
+    *,
+    token: str,
+    csrf: str,
+    problem: str = "",
+) -> str:
+    """Close a streamed finish page with durable success or recovery state."""
+    return (
+        "</ol>"
+        + _revision_finish_status_body(
+            result,
+            token=token,
+            csrf=csrf,
+            problem=problem,
+        )
+        + "</main></body></html>"
+    )
+
+
+def render_revision_finish_progress_failure(failure: FailureView) -> str:
+    """Close a streamed finish page when no readable receipt can be shown."""
+    return (
+        "</ol>"
+        '<section class="status problem" role=alert>'
+        f"{_failure_facts(failure)}</section>"
+        "</main></body></html>"
+    )
 
 
 def render_finish(

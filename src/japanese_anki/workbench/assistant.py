@@ -31,6 +31,11 @@ __all__ = [
     "RevisionCallbacks",
     "RevisionConfirmation",
     "RevisionExecution",
+    "RevisionExampleReview",
+    "RevisionFinishConfirmation",
+    "RevisionFinishExecution",
+    "RevisionFinishReview",
+    "RevisionRecordReview",
     "RevisionPlan",
     "RevisionRefusal",
     "ScopedMemoryStore",
@@ -43,6 +48,7 @@ __all__ = [
 
 _PREPARE_ACTION = "janki.revision.prepare"
 _CONFIRM_ACTION = "janki.revision.confirm"
+_FINISH_ACTION = "janki.revision.finish"
 _EXTRACT_CONFIRM_ACTION = "janki.extraction.confirm"
 _FINGERPRINT_DISPLAY_CHARS = 32
 _MAX_CHAT_HISTORY_ENTRIES = 12
@@ -60,6 +66,15 @@ _PROGRESS_LABELS = frozenset(
         "Reading the source",
         "Checking the answer's shape",
         "Saving proposals",
+    }
+)
+_FINISH_PROGRESS_LABELS = frozenset(
+    {
+        "Preparing finish",
+        "Applying reviewed revision",
+        "Creating example audio",
+        "Building Anki package",
+        "Saving finish receipt",
     }
 )
 _EXTRACTION_PROGRESS_LABELS = frozenset(
@@ -86,11 +101,9 @@ def _bounded_chat_history(
             ).encode("utf-8")
         )
 
-    bounded = [
-        item
-        for item in entries
-        if wire_size([item]) <= _MAX_CHAT_HISTORY_BYTES
-    ][-_MAX_CHAT_HISTORY_ENTRIES:]
+    bounded = [item for item in entries if wire_size([item]) <= _MAX_CHAT_HISTORY_BYTES][
+        -_MAX_CHAT_HISTORY_ENTRIES:
+    ]
     while bounded and wire_size(bounded) > _MAX_CHAT_HISTORY_BYTES:
         del bounded[0]
     return tuple(bounded)
@@ -131,13 +144,74 @@ class RevisionConfirmation:
 
 
 @dataclass(frozen=True, slots=True)
-class RevisionExecution:
-    """Durable result of a confirmed revision operation."""
+class RevisionExampleReview:
+    """One exact sentence value shown without interpreting its Japanese."""
 
-    message: str = (
-        "The revision proposal is ready. Refresh the workbench dashboard to review it."
-    )
-    review_url: str | None = None
+    register: str
+    japanese: str
+    furigana: str
+    english: str
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionRecordReview:
+    """Current and proposed examples for one exact selected record."""
+
+    record_id: str
+    current_examples: tuple[RevisionExampleReview, ...]
+    proposed_examples: tuple[RevisionExampleReview, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionFinishReview:
+    """Exact reviewed bytes and aggregate consequences shown before authority."""
+
+    preparation_id: str
+    request_fingerprint: str
+    target: str
+    current_form_note: str
+    proposed_form_note: str
+    records: tuple[RevisionRecordReview, ...]
+    audio_provider: str
+    audio_model: str
+    audio_access: str
+    audio_total: int
+    audio_current: int
+    audio_recoverable: int
+    audio_provider_required: int
+    output_path: str
+    card_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionExecution:
+    """Durable staged proposal plus its fresh exact finish review."""
+
+    message: str
+    finish: RevisionFinishReview | None
+    finish_unavailable: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionFinishConfirmation:
+    """One server-held finish plan consumed by the owner's review action."""
+
+    preparation_id: str
+    expected_fingerprint: str
+    target: str
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionFinishExecution:
+    """Truthful durable aggregate state after Apply and finish."""
+
+    message: str
+    receipt_id: str
+    state: str
+    target: str
+    output_path: str
+    package_sha256: str | None = None
+    card_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,7 +275,15 @@ class RevisionCallbacks(Protocol):
         *,
         progress: Callable[[str], None],
     ) -> RevisionExecution | Awaitable[RevisionExecution]:
-        """Re-plan, compare, authorize, execute, and durably stage the result."""
+        """Re-plan, compare, authorize, stage, and prepare exact owner review."""
+
+    def consume_replan_and_finish(
+        self,
+        confirmation: RevisionFinishConfirmation,
+        *,
+        progress: Callable[[str], None],
+    ) -> RevisionFinishExecution | Awaitable[RevisionFinishExecution]:
+        """Re-plan, compare, and execute one reviewed aggregate finish."""
 
     def prepare_source_extraction(
         self,
@@ -227,6 +309,7 @@ class AssistantAttachmentStore(Protocol):
 
     def commit_attachment(self, attachment_id: str) -> Any:
         """Preserve the uploaded bytes in the immutable source inbox."""
+
 
 @dataclass(frozen=True, slots=True)
 class AssistantRequestContext:
@@ -263,6 +346,13 @@ class _MessageBinding:
 @dataclass(frozen=True, slots=True)
 class _ExtractionBinding:
     confirmation: SourceExtractionConfirmation
+    thread_id: str
+    widget_item_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _FinishBinding:
+    confirmation: RevisionFinishConfirmation
     thread_id: str
     widget_item_id: str
 
@@ -619,13 +709,136 @@ def _validate_source_extraction_plan(plan: Any) -> SourceExtractionPlan:
 def _validate_execution(result: Any) -> RevisionExecution:
     if not isinstance(result, RevisionExecution):
         raise TypeError("consume_replan_and_execute must return RevisionExecution")
-    if result.review_url is not None and result.review_url != "":
-        raise ValueError(
-            "Review links remain disabled until the sidecar has its own "
-            "least-authority review route."
-        )
     if not result.message.strip():
         raise ValueError("The revision result message must not be blank.")
+    if result.finish is None:
+        if result.finish_unavailable is None or not result.finish_unavailable.strip():
+            raise ValueError("A staged revision without a finish review must explain why.")
+    else:
+        if result.finish_unavailable is not None:
+            raise ValueError("A staged revision cannot be both reviewable and unavailable.")
+        _validate_finish_review(result.finish)
+    return result
+
+
+def _staged_finish_unavailable(error: Exception) -> str:
+    detail = str(error) or type(error).__name__
+    return (
+        "Janki could not render its Apply and finish review after the paid "
+        f"revision was staged: {detail} The staged proposal remains the durable "
+        "deliverable. Repair the local review path and reopen this exact proposal; "
+        "do not repeat the paid revision call."
+    )
+
+
+def _is_lower_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def _validate_review_example(
+    example: Any,
+    *,
+    require_furigana: bool,
+) -> RevisionExampleReview:
+    if not isinstance(example, RevisionExampleReview):
+        raise TypeError("Revision review examples must be RevisionExampleReview values.")
+    required = (
+        example.register,
+        example.japanese,
+        example.english,
+    )
+    if require_furigana:
+        required = (*required, example.furigana)
+    if any(not value.strip() for value in required):
+        raise ValueError("Revision review examples must be complete.")
+    return example
+
+
+def _validate_finish_review(review: Any) -> RevisionFinishReview:
+    if not isinstance(review, RevisionFinishReview):
+        raise TypeError("The staged revision must include a RevisionFinishReview.")
+    if any(
+        not value.strip()
+        for value in (
+            review.preparation_id,
+            review.request_fingerprint,
+            review.target,
+            review.audio_provider,
+            review.audio_model,
+            review.audio_access,
+            review.output_path,
+        )
+    ):
+        raise ValueError("The revision finish review is incomplete.")
+    if not _is_lower_sha256(review.request_fingerprint):
+        raise ValueError("The revision finish fingerprint is malformed.")
+    if not review.records or any(
+        not isinstance(item, RevisionRecordReview) for item in review.records
+    ):
+        raise ValueError("The revision finish review needs record values.")
+    if len({item.record_id for item in review.records}) != len(review.records):
+        raise ValueError("The revision finish review needs unique record ids.")
+    for item in review.records:
+        if not item.record_id.strip():
+            raise ValueError("The revision finish record review is incomplete.")
+        if len(item.current_examples) != 2 or len(item.proposed_examples) != 2:
+            raise ValueError("Every revision finish record needs two exact examples.")
+        for example in item.current_examples:
+            _validate_review_example(example, require_furigana=False)
+        for example in item.proposed_examples:
+            _validate_review_example(example, require_furigana=True)
+    counts = (
+        review.audio_total,
+        review.audio_current,
+        review.audio_recoverable,
+        review.audio_provider_required,
+    )
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in counts):
+        raise ValueError("Revision finish audio counts must be nonnegative integers.")
+    if review.audio_total != sum(counts[1:]):
+        raise ValueError("Revision finish audio counts do not add up.")
+    if (
+        isinstance(review.card_count, bool)
+        or not isinstance(review.card_count, int)
+        or review.card_count <= 0
+    ):
+        raise ValueError("Revision finish must name a positive package card count.")
+    return review
+
+
+def _validate_finish_execution(result: Any) -> RevisionFinishExecution:
+    if not isinstance(result, RevisionFinishExecution):
+        raise TypeError("consume_replan_and_finish must return RevisionFinishExecution")
+    if any(
+        not value.strip()
+        for value in (
+            result.message,
+            result.receipt_id,
+            result.state,
+            result.target,
+            result.output_path,
+        )
+    ):
+        raise ValueError("The revision finish result is incomplete.")
+    if not _is_lower_sha256(result.receipt_id):
+        raise ValueError("The revision finish receipt id is malformed.")
+    if result.state not in {
+        "authorized",
+        "revision_applied",
+        "audio_complete",
+        "complete",
+    }:
+        raise ValueError("The revision finish result has an unknown durable state.")
+    if result.package_sha256 is not None and not _is_lower_sha256(result.package_sha256):
+        raise ValueError("The revision finish package hash is malformed.")
+    if result.card_count is not None and (
+        isinstance(result.card_count, bool)
+        or not isinstance(result.card_count, int)
+        or result.card_count <= 0
+    ):
+        raise ValueError("The revision finish card count is malformed.")
+    if result.state == "complete" and (result.package_sha256 is None or result.card_count is None):
+        raise ValueError("A completed revision finish needs its package receipt.")
     return result
 
 
@@ -711,9 +924,7 @@ def _confirmation_body(
                     "type": "Col",
                     "flex": 1,
                     "minWidth": 0,
-                    "children": [
-                        {"type": "Text", "value": effect, "width": "100%"}
-                    ],
+                    "children": [{"type": "Text", "value": effect, "width": "100%"}],
                 },
             ],
         }
@@ -837,6 +1048,286 @@ def _confirmation_body(
     }
 
 
+def _review_examples_body(
+    title: str,
+    examples: tuple[RevisionExampleReview, ...],
+) -> dict[str, Any]:
+    return {
+        "type": "Col",
+        "gap": 2,
+        "width": "100%",
+        "minWidth": 0,
+        "children": [
+            {"type": "Text", "value": title, "weight": "semibold"},
+            *[
+                {
+                    "type": "Col",
+                    "gap": 1,
+                    "width": "100%",
+                    "minWidth": 0,
+                    "children": [
+                        {
+                            "type": "Text",
+                            "value": example.register.title(),
+                            "size": "xs",
+                            "color": "secondary",
+                            "weight": "semibold",
+                        },
+                        {
+                            "type": "Text",
+                            "value": example.japanese,
+                            "weight": "semibold",
+                            "width": "100%",
+                        },
+                        {
+                            "type": "Text",
+                            "value": example.furigana,
+                            "color": "secondary",
+                            "width": "100%",
+                        },
+                        {
+                            "type": "Text",
+                            "value": example.english,
+                            "width": "100%",
+                        },
+                    ],
+                }
+                for example in examples
+            ],
+        ],
+    }
+
+
+def _finish_review_body(review: RevisionFinishReview) -> dict[str, Any]:
+    counts = (
+        ("Total clips", review.audio_total),
+        ("Already current", review.audio_current),
+        ("Recoverable exact clips", review.audio_recoverable),
+        ("Provider calls required", review.audio_provider_required),
+    )
+    phases = (
+        "Preparing finish",
+        "Applying reviewed revision",
+        "Creating example audio",
+        "Building Anki package",
+        "Saving finish receipt",
+    )
+    children: list[dict[str, Any]] = [
+        {"type": "Title", "value": "Review this exact revision"},
+        {
+            "type": "Col",
+            "gap": 1,
+            "width": "100%",
+            "minWidth": 0,
+            "children": [
+                {
+                    "type": "Text",
+                    "value": "Target",
+                    "size": "sm",
+                    "color": "secondary",
+                    "weight": "semibold",
+                },
+                {
+                    "type": "Text",
+                    "value": review.target,
+                    "weight": "semibold",
+                    "width": "100%",
+                },
+            ],
+        },
+        {"type": "Divider", "spacing": 2},
+        {
+            "type": "Col",
+            "id": "revision-form-note-review",
+            "gap": 2,
+            "width": "100%",
+            "minWidth": 0,
+            "children": [
+                {"type": "Text", "value": "Form note", "weight": "semibold"},
+                {
+                    "type": "Text",
+                    "value": "Current",
+                    "size": "xs",
+                    "color": "secondary",
+                    "weight": "semibold",
+                },
+                {
+                    "type": "Text",
+                    "value": review.current_form_note or "Empty",
+                    "width": "100%",
+                },
+                {
+                    "type": "Text",
+                    "value": "Proposed",
+                    "size": "xs",
+                    "color": "secondary",
+                    "weight": "semibold",
+                },
+                {
+                    "type": "Text",
+                    "value": review.proposed_form_note or "Empty",
+                    "width": "100%",
+                },
+            ],
+        },
+    ]
+    for record in review.records:
+        children.extend(
+            [
+                {"type": "Divider", "spacing": 2},
+                {
+                    "type": "Col",
+                    "gap": 3,
+                    "width": "100%",
+                    "minWidth": 0,
+                    "children": [
+                        {
+                            "type": "Text",
+                            "value": record.record_id,
+                            "weight": "semibold",
+                            "width": "100%",
+                        },
+                        _review_examples_body(
+                            "Current polite/casual examples",
+                            record.current_examples,
+                        ),
+                        _review_examples_body(
+                            "Proposed polite/casual examples",
+                            record.proposed_examples,
+                        ),
+                    ],
+                },
+            ]
+        )
+    children.extend(
+        [
+            {"type": "Divider", "spacing": 2},
+            {
+                "type": "Col",
+                "id": "revision-finish-consequences",
+                "gap": 2,
+                "width": "100%",
+                "minWidth": 0,
+                "children": [
+                    {
+                        "type": "Text",
+                        "value": "Audio and package consequences",
+                        "weight": "semibold",
+                    },
+                    {
+                        "type": "Text",
+                        "value": (
+                            f"Example audio: {review.audio_provider} · "
+                            f"{review.audio_model} · {review.audio_access}"
+                        ),
+                        "width": "100%",
+                    },
+                    *[
+                        {
+                            "type": "Text",
+                            "value": f"{label}: {value}",
+                            "width": "100%",
+                        }
+                        for label, value in counts
+                    ],
+                    {
+                        "type": "Text",
+                        "value": (
+                            "Only these reviewed examples are voiced. Existing "
+                            "current clips are reused; unrelated media is not pruned."
+                        ),
+                        "color": "secondary",
+                        "width": "100%",
+                    },
+                    {
+                        "type": "Text",
+                        "value": (
+                            f"Anki package: {review.output_path} · cards: {review.card_count}"
+                        ),
+                        "width": "100%",
+                    },
+                ],
+            },
+            {"type": "Divider", "spacing": 2},
+            {
+                "type": "Col",
+                "id": "revision-finish-phases",
+                "gap": 2,
+                "width": "100%",
+                "minWidth": 0,
+                "children": [
+                    {
+                        "type": "Text",
+                        "value": "After one confirmation",
+                        "weight": "semibold",
+                    },
+                    *[{"type": "Text", "value": f"• {phase}", "width": "100%"} for phase in phases],
+                    {
+                        "type": "Text",
+                        "value": (
+                            "No provider-invented percentage is shown. Interrupted "
+                            "work keeps one exact durable finish receipt."
+                        ),
+                        "color": "secondary",
+                        "width": "100%",
+                    },
+                ],
+            },
+            {"type": "Divider", "spacing": 2},
+            {
+                "type": "Col",
+                "id": "revision-finish-fingerprint",
+                "gap": 0,
+                "width": "100%",
+                "minWidth": 0,
+                "children": [
+                    {
+                        "type": "Text",
+                        "value": "Finish fingerprint",
+                        "size": "xs",
+                        "color": "tertiary",
+                        "weight": "semibold",
+                    },
+                    *[
+                        {
+                            "type": "Text",
+                            "value": review.request_fingerprint[
+                                offset : offset + _FINGERPRINT_DISPLAY_CHARS
+                            ],
+                            "size": "xs",
+                            "color": "tertiary",
+                            "width": "100%",
+                        }
+                        for offset in range(
+                            0,
+                            len(review.request_fingerprint),
+                            _FINGERPRINT_DISPLAY_CHARS,
+                        )
+                    ],
+                    {
+                        "type": "Text",
+                        "value": (
+                            "Apply and finish is one-use. At the click, janki "
+                            "re-plans and refuses if the reviewed proposal, audio, "
+                            "or build inputs changed."
+                        ),
+                        "size": "xs",
+                        "color": "tertiary",
+                        "width": "100%",
+                    },
+                ],
+            },
+        ]
+    )
+    return {
+        "type": "Col",
+        "gap": 4,
+        "width": "100%",
+        "minWidth": 0,
+        "children": children,
+    }
+
+
 async def _call_callback(function: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
     if inspect.iscoroutinefunction(function):
         return await function(*args, **kwargs)
@@ -879,6 +1370,7 @@ def create_assistant_core(
             super().__init__(store=store, attachment_store=attachment_store)
             self._messages: dict[str, _MessageBinding] = {}
             self._plans: dict[str, _PlanBinding] = {}
+            self._finishes: dict[str, _FinishBinding] = {}
             self._extractions: dict[str, _ExtractionBinding] = {}
             self._histories: dict[str, list[tuple[str, str]]] = {}
             self._history_locks: dict[str, asyncio.Lock] = {}
@@ -996,6 +1488,33 @@ def create_assistant_core(
                             "payload": {
                                 "capability": capability,
                                 "request_fingerprint": plan.request_fingerprint,
+                            },
+                            "handler": "server",
+                            "loadingBehavior": "container",
+                            "streaming": True,
+                        },
+                    },
+                }
+            )
+
+        @staticmethod
+        def _finish_widget(
+            review: RevisionFinishReview,
+            *,
+            capability: str,
+        ) -> Any:
+            return DynamicWidgetRoot.model_validate(
+                {
+                    "type": "Card",
+                    "size": "full",
+                    "children": [_finish_review_body(review)],
+                    "confirm": {
+                        "label": "Apply and finish",
+                        "action": {
+                            "type": _FINISH_ACTION,
+                            "payload": {
+                                "capability": capability,
+                                "request_fingerprint": review.request_fingerprint,
                             },
                             "handler": "server",
                             "loadingBehavior": "container",
@@ -1139,9 +1658,7 @@ def create_assistant_core(
             async def execute_chat() -> ChatReply:
                 history_lock = self._history_locks.setdefault(thread.id, asyncio.Lock())
                 async with history_lock:
-                    history = _bounded_chat_history(
-                        self._histories.get(thread.id, ())
-                    )
+                    history = _bounded_chat_history(self._histories.get(thread.id, ()))
                     reply = _validate_chat_reply(
                         await _call_callback(
                             callbacks.chat,
@@ -1237,8 +1754,7 @@ def create_assistant_core(
                     or extraction_binding.thread_id != thread.id
                     or sender is None
                     or sender.id != extraction_binding.widget_item_id
-                    or fingerprint
-                    != extraction_binding.confirmation.expected_fingerprint
+                    or fingerprint != extraction_binding.confirmation.expected_fingerprint
                 ):
                     yield ErrorEvent(
                         message=(
@@ -1280,9 +1796,7 @@ def create_assistant_core(
                 try:
                     while not execution_task.done():
                         try:
-                            label = await asyncio.wait_for(
-                                progress_queue.get(), timeout=0.1
-                            )
+                            label = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
                         except TimeoutError:
                             continue
                         yield ProgressUpdateEvent(text=label, icon="write")
@@ -1300,6 +1814,96 @@ def create_assistant_core(
                     )
                     return
                 yield self._message_event(thread, result.message)
+                return
+
+            if action.type == _FINISH_ACTION:
+                payload = action.payload
+                if not isinstance(payload, dict):
+                    yield ErrorEvent(
+                        message="The finish confirmation payload was refused.",
+                        allow_retry=False,
+                    )
+                    return
+                capability = payload.get("capability")
+                if not isinstance(capability, str):
+                    yield ErrorEvent(
+                        message="The finish confirmation payload was refused.",
+                        allow_retry=False,
+                    )
+                    return
+
+                # A recognizable capability is consumed before any binding or
+                # fingerprint check. A tampered click can never be repaired and
+                # replayed into the authority the owner originally saw.
+                finish_binding = self._finishes.pop(capability, None)
+                fingerprint = payload.get("request_fingerprint")
+                if (
+                    set(payload) != {"capability", "request_fingerprint"}
+                    or not isinstance(fingerprint, str)
+                    or finish_binding is None
+                    or finish_binding.thread_id != thread.id
+                    or sender is None
+                    or sender.id != finish_binding.widget_item_id
+                    or fingerprint != finish_binding.confirmation.expected_fingerprint
+                ):
+                    yield ErrorEvent(
+                        message=(
+                            "This Apply and finish action is missing, stale, already "
+                            "used, or belongs elsewhere."
+                        ),
+                        allow_retry=False,
+                    )
+                    return
+
+                progress_queue: asyncio.Queue[str] = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def report_finish_progress(label: str) -> None:
+                    normalized = label.strip()
+                    if normalized not in _FINISH_PROGRESS_LABELS:
+                        raise ValueError(
+                            "The revision finish service reported an unknown progress state."
+                        )
+                    loop.call_soon_threadsafe(progress_queue.put_nowait, normalized)
+
+                async def execute_finish() -> RevisionFinishExecution:
+                    result = await _call_callback(
+                        callbacks.consume_replan_and_finish,
+                        finish_binding.confirmation,
+                        progress=report_finish_progress,
+                    )
+                    return _validate_finish_execution(result)
+
+                execution_task = asyncio.create_task(execute_finish())
+                self._durable_tasks.add(execution_task)
+
+                def forget_finish(done: asyncio.Task[Any]) -> None:
+                    self._durable_tasks.discard(done)
+                    if not done.cancelled():
+                        done.exception()
+
+                execution_task.add_done_callback(forget_finish)
+                try:
+                    while not execution_task.done():
+                        try:
+                            label = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                        except TimeoutError:
+                            continue
+                        yield ProgressUpdateEvent(text=label, icon="write")
+                    while not progress_queue.empty():
+                        yield ProgressUpdateEvent(
+                            text=progress_queue.get_nowait(),
+                            icon="write",
+                        )
+                    finish_result = await asyncio.shield(execution_task)
+                except RevisionRefusal as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Apply and finish refused",
+                        message=str(error),
+                    )
+                    return
+                yield self._message_event(thread, finish_result.message)
                 return
 
             if action.type == _PREPARE_ACTION:
@@ -1398,8 +2002,7 @@ def create_assistant_core(
             ):
                 yield ErrorEvent(
                     message=(
-                        "This confirmation is missing, stale, already used, "
-                        "or belongs elsewhere."
+                        "This confirmation is missing, stale, already used, or belongs elsewhere."
                     ),
                     allow_retry=False,
                 )
@@ -1420,7 +2023,22 @@ def create_assistant_core(
                     binding.confirmation,
                     progress=report_progress,
                 )
-                return _validate_execution(result)
+                try:
+                    return _validate_execution(result)
+                except RevisionRefusal:
+                    raise
+                except Exception as error:
+                    if (
+                        not isinstance(result, RevisionExecution)
+                        or not isinstance(result.message, str)
+                        or not result.message.strip()
+                    ):
+                        raise
+                    return RevisionExecution(
+                        message=result.message,
+                        finish=None,
+                        finish_unavailable=_staged_finish_unavailable(error),
+                    )
 
             execution_task = asyncio.create_task(execute())
             self._durable_tasks.add(execution_task)
@@ -1451,6 +2069,48 @@ def create_assistant_core(
                 return
 
             yield self._message_event(thread, result.message)
+            finish = result.finish
+            if finish is None:
+                yield NoticeEvent(
+                    level="warning",
+                    title="Apply and finish review unavailable",
+                    message=result.finish_unavailable or "The finish plan is unavailable.",
+                )
+                return
+            capability = secrets.token_urlsafe(32)
+            item_id = store.generate_item_id("message", thread, request_context)
+            finish_confirmation = RevisionFinishConfirmation(
+                preparation_id=finish.preparation_id,
+                expected_fingerprint=finish.request_fingerprint,
+                target=finish.target,
+            )
+            try:
+                finish_widget = self._finish_widget(
+                    finish,
+                    capability=capability,
+                )
+                finish_event = ThreadItemDoneEvent(
+                    item=WidgetItem(
+                        id=item_id,
+                        thread_id=thread.id,
+                        created_at=datetime.now(),
+                        widget=finish_widget,
+                        copy_text=None,
+                    )
+                )
+            except Exception as error:
+                yield NoticeEvent(
+                    level="warning",
+                    title="Apply and finish review unavailable",
+                    message=_staged_finish_unavailable(error),
+                )
+                return
+            self._finishes[capability] = _FinishBinding(
+                confirmation=finish_confirmation,
+                thread_id=thread.id,
+                widget_item_id=item_id,
+            )
+            yield finish_event
 
     server = _JankiChatKitServer()
     return AssistantCore(

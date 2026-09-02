@@ -19,9 +19,14 @@ from japanese_anki.application.audio import (
     plan_targeted_audio,
 )
 from japanese_anki.config import ProjectConfig
-from japanese_anki.io import load_records_snapshot, load_structured
+from japanese_anki.io import (
+    RecordsRevision,
+    load_records_snapshot,
+    load_structured,
+    records_revision,
+)
 from japanese_anki.models import ExampleSentence, VocabularyRecord
-from japanese_anki.tts import TtsError
+from japanese_anki.tts import TtsError, openai_realtime
 
 
 class Provider:
@@ -903,6 +908,320 @@ def test_drill_audio_plan_uses_the_deck_revision_and_distinct_audio_owner(
         "日本語が話せます。",
         "英語も、話せる？",
     ]
+
+
+def test_projected_drill_audio_plan_equals_the_plan_after_exact_bytes_land(
+    tmp_path: Path,
+) -> None:
+    config, deck, item = _drill_project(tmp_path)
+    alternate = replace(item, usage_notes="Projected source version.")
+    alternate_path = tmp_path / "alternate.json"
+    alternate_path.write_text(
+        json.dumps([alternate.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    expected = records_revision(deck)
+    assert expected.text is not None
+    proposed_text = expected.text.replace(
+        "source: ../vocabulary.json",
+        "source: ../alternate.json",
+    ).replace(
+        "日本語が話せます。",
+        "来週は日本語が話せます。",
+    )
+    proposed_revision = RecordsRevision(expected.path, proposed_text)
+    words = Provider("voicevox", 7)
+    sentences = Provider("openai-realtime", "cedar")
+
+    projected = audio_application.plan_deck_audio_revision(
+        config,
+        deck,
+        proposed_revision,
+        word_provider=words,
+        sentence_provider=sentences,
+    )
+
+    assert deck.read_text(encoding="utf-8") == expected.text
+    current = audio_application.plan_deck_audio(
+        config,
+        deck,
+        word_provider=words,
+        sentence_provider=sentences,
+    )
+    assert projected.fingerprint != current.fingerprint
+
+    deck.write_text(proposed_text, encoding="utf-8")
+    landed = audio_application.plan_deck_audio(
+        config,
+        deck,
+        word_provider=words,
+        sentence_provider=sentences,
+    )
+
+    assert projected == landed
+
+
+def test_paid_deck_audio_preflight_checks_exact_required_clips_without_side_effects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, deck, _item = _drill_project(tmp_path)
+    contacted = False
+
+    def unexpected_transport(*_args: object, **_kwargs: object) -> object:
+        nonlocal contacted
+        contacted = True
+        raise AssertionError("availability preflight contacted OpenAI")
+
+    sentence_provider = openai_realtime.OpenAiRealtimePool(
+        api_key="test-key",
+        transport=unexpected_transport,
+        operations_path=config.operations_file,
+    )
+    plan = audio_application.plan_deck_audio(
+        config,
+        deck,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=sentence_provider,
+    )
+    checked: list[tuple[str, bool, str, str]] = []
+    original = openai_realtime.OpenAiRealtimeProvider.available_for
+
+    def recording_available_for(
+        provider: openai_realtime.OpenAiRealtimeProvider,
+        text: str,
+        *,
+        forced_accent: bool,
+        source_file: str,
+        source_sha256: str,
+    ) -> bool:
+        checked.append((text, forced_accent, source_file, source_sha256))
+        return original(
+            provider,
+            text,
+            forced_accent=forced_accent,
+            source_file=source_file,
+            source_sha256=source_sha256,
+        )
+
+    monkeypatch.setattr(
+        openai_realtime.OpenAiRealtimeProvider,
+        "available_for",
+        recording_available_for,
+    )
+    before = {
+        path.relative_to(tmp_path): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    }
+
+    audio_application.preflight_paid_deck_audio_plan(
+        plan,
+        sentence_provider=sentence_provider,
+    )
+
+    required = [
+        clip
+        for clip in plan.clips
+        if clip.state == "provider-required"
+        and clip.provider.access == "paid-network"
+    ]
+    assert checked == [
+        (
+            clip.request_input,
+            clip.forced_accent,
+            f"{clip.record_id}#{clip.kind}:{clip.target}",
+            clip.content_fingerprint,
+        )
+        for clip in required
+    ]
+    assert contacted is False
+    assert {
+        path.relative_to(tmp_path): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    } == before
+
+
+def test_paid_deck_audio_preflight_refuses_missing_key_without_contact_or_write(
+    tmp_path: Path,
+) -> None:
+    config, deck, _item = _drill_project(tmp_path)
+    contacted = False
+
+    def unexpected_transport(*_args: object, **_kwargs: object) -> object:
+        nonlocal contacted
+        contacted = True
+        raise AssertionError("availability preflight contacted OpenAI")
+
+    sentence_provider = openai_realtime.OpenAiRealtimePool(
+        api_key="",
+        transport=unexpected_transport,
+        operations_path=config.operations_file,
+    )
+    plan = audio_application.plan_deck_audio(
+        config,
+        deck,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=sentence_provider,
+    )
+    before = {
+        path.relative_to(tmp_path): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    }
+
+    with pytest.raises(AudioPlanError, match="OPENAI_API_KEY"):
+        audio_application.preflight_paid_deck_audio_plan(
+            plan,
+            sentence_provider=sentence_provider,
+        )
+
+    assert contacted is False
+    assert {
+        path.relative_to(tmp_path): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    } == before
+
+
+def test_paid_deck_audio_preflight_refuses_a_provider_changed_after_planning(
+    tmp_path: Path,
+) -> None:
+    config, deck, _item = _drill_project(tmp_path)
+
+    def planned_transport(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("preflight contacted the planned transport")
+
+    planned_provider = openai_realtime.OpenAiRealtimePool(
+        api_key="test-key",
+        transport=planned_transport,
+        operations_path=config.operations_file,
+    )
+    plan = audio_application.plan_deck_audio(
+        config,
+        deck,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=planned_provider,
+    )
+    changed_provider = openai_realtime.OpenAiRealtimePool(
+        api_key="test-key",
+        operations_path=config.operations_file,
+    )
+
+    with pytest.raises(AudioPlanError, match="changed after this plan"):
+        audio_application.preflight_paid_deck_audio_plan(
+            plan,
+            sentence_provider=changed_provider,
+        )
+
+
+def test_paid_deck_audio_preflight_skips_local_current_and_recoverable_clips(
+    tmp_path: Path,
+) -> None:
+    config, deck, _item = _drill_project(tmp_path)
+    local_plan = audio_application.plan_deck_audio(
+        config,
+        deck,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=Provider("voicevox", 8),
+    )
+    audio_application.preflight_paid_deck_audio_plan(local_plan)
+
+    paid_provider = openai_realtime.OpenAiRealtimePool(
+        api_key="",
+        operations_path=config.operations_file,
+    )
+    paid_plan = audio_application.plan_deck_audio(
+        config,
+        deck,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=paid_provider,
+    )
+    states = ("current", "recoverable")
+    skipped = replace(
+        paid_plan,
+        clips=tuple(
+            replace(clip, state=states[position])
+            for position, clip in enumerate(paid_plan.clips)
+        ),
+        example_counts=audio_application.AudioClipCounts(
+            total=2,
+            current=1,
+            recoverable=1,
+            provider_required=0,
+        ),
+    )
+
+    audio_application.preflight_paid_deck_audio_plan(skipped)
+
+
+def test_locked_deck_audio_execution_skips_only_the_operation_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, deck, _item = _drill_project(tmp_path)
+    expected = audio_application.AudioExecutionOutcome(
+        state="no-records",
+        plan=None,
+        output_dir=config.media_dir / "audio",
+        no_records=True,
+    )
+    calls: list[tuple[Path | None, bool, bool, bool]] = []
+
+    def execute_locked(
+        received: ProjectConfig,
+        record_ids: tuple[str, ...] | None,
+        **kwargs: object,
+    ) -> audio_application.AudioExecutionOutcome:
+        assert received is config
+        calls.append(
+            (
+                kwargs["deck_path"],
+                bool(kwargs["words"]),
+                bool(kwargs["examples"]),
+                bool(kwargs["prune"]),
+            )
+        )
+        return expected
+
+    monkeypatch.setattr(audio_application, "_execute_audio_locked", execute_locked)
+
+    def unexpected_lock(path: Path):
+        pytest.fail(f"locked deck execution tried to acquire {path}")
+
+    monkeypatch.setattr(audio_application, "exclusive_path_lock", unexpected_lock)
+
+    outcome = audio_application.execute_deck_audio_locked(config, deck)
+
+    assert outcome is expected
+    assert calls == [(deck.resolve(), False, True, False)]
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"words": True},
+        {"examples": False},
+        {"prune": True},
+    ],
+)
+def test_locked_deck_audio_execution_keeps_deck_only_constraints(
+    tmp_path: Path,
+    options: dict[str, bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, deck, _item = _drill_project(tmp_path)
+    monkeypatch.setattr(
+        audio_application,
+        "_execute_audio_locked",
+        lambda *_args, **_kwargs: pytest.fail(
+            "invalid deck scope reached locked audio execution"
+        ),
+    )
+
+    with pytest.raises(AudioPlanError, match="examples only|global media cleanup"):
+        audio_application.execute_deck_audio_locked(config, deck, **options)
 
 
 def test_drill_audio_uses_the_shared_transaction_and_persists_both_references(

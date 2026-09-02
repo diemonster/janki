@@ -143,9 +143,12 @@ Assistant provider does not silently reroute revision, and changing revision
 does not reroute conversation. A revision confirmation shows and binds its
 billing path, authentication class or subscription tier, model, and exact
 request fingerprints. It stages the model's proposal and stops for owner
-review. W7's remaining workflow step is a later **Apply and finish** action:
-explicit content authority over the visible proposal, not an automatic unseen
-apply or a sequence of separate apply/audio/build confirmations. OpenAI
+review. After that exact review, one **Apply and finish** action re-plans the
+same proposal, applies it, voices only the selected cards whose examples were
+shown, and builds the whole deck package. A durable receipt resumes an
+interrupted finish without widening it or repeating completed paid audio. This
+is explicit content authority over the visible proposal, not an automatic
+unseen apply or a sequence of separate apply/audio/build confirmations. OpenAI
 Realtime audio remains API-backed regardless of either Claude transport
 setting.
 

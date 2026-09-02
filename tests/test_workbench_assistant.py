@@ -11,7 +11,7 @@ import http.client
 import io
 import json
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -22,8 +22,13 @@ from japanese_anki.workbench.assistant import (
     AssistantRequestContext,
     ChatReply,
     RevisionConfirmation,
+    RevisionExampleReview,
     RevisionExecution,
+    RevisionFinishConfirmation,
+    RevisionFinishExecution,
+    RevisionFinishReview,
     RevisionPlan,
+    RevisionRecordReview,
     ScopedMemoryStore,
     SourceExtractionConfirmation,
     SourceExtractionExecution,
@@ -33,6 +38,62 @@ from japanese_anki.workbench.assistant_http import create_assistant_sidecar
 
 SESSION_TOKEN = "assistant-session-token-000000000000"
 REQUEST_FINGERPRINT = "0123456789abcdef" * 4
+FINISH_FINGERPRINT = "fedcba9876543210" * 4
+PACKAGE_FINGERPRINT = "abcdef0123456789" * 4
+
+
+def _finish_review() -> RevisionFinishReview:
+    current = (
+        RevisionExampleReview(
+            register="polite",
+            japanese="今は遊べません。",
+            furigana="今[いま]は 遊[あそ]べません。",
+            english="I cannot play now.",
+        ),
+        RevisionExampleReview(
+            register="casual",
+            japanese="今日は遊べない。",
+            furigana="今日[きょう]は 遊[あそ]べない。",
+            english="I can't play today.",
+        ),
+    )
+    proposed = (
+        RevisionExampleReview(
+            register="polite",
+            japanese="明日は遊べます。",
+            furigana="明日[あした]は 遊[あそ]べます。",
+            english="I can play tomorrow.",
+        ),
+        RevisionExampleReview(
+            register="casual",
+            japanese="今日は遊べる。",
+            furigana="今日[きょう]は 遊[あそ]べる。",
+            english="I can play today.",
+        ),
+    )
+    return RevisionFinishReview(
+        preparation_id="finish-preparation-1",
+        request_fingerprint=FINISH_FINGERPRINT,
+        target="data/decks/potential.yaml",
+        current_form_note="Old potential note.",
+        proposed_form_note="Potential expresses ability or possibility.",
+        records=(
+            RevisionRecordReview(
+                record_id="word:遊ぶ:あそぶ",
+                current_examples=current,
+                proposed_examples=proposed,
+            ),
+        ),
+        audio_provider="openai-realtime",
+        audio_model="gpt-realtime-1.5",
+        audio_access="paid-network",
+        audio_total=2,
+        audio_current=0,
+        audio_recoverable=1,
+        audio_provider_required=1,
+        output_path="dist/potential.apkg",
+        card_count=16,
+    )
 
 
 @dataclass
@@ -41,6 +102,7 @@ class _FakeRevisions:
     chat_histories: list[tuple[tuple[str, str], ...]] = field(default_factory=list)
     prepared: list[tuple[str, str]] = field(default_factory=list)
     executed: list[RevisionConfirmation] = field(default_factory=list)
+    finish_executed: list[RevisionFinishConfirmation] = field(default_factory=list)
     extraction_prepared: list[Path] = field(default_factory=list)
     extracted: list[SourceExtractionConfirmation] = field(default_factory=list)
     entered: threading.Event | None = None
@@ -49,6 +111,9 @@ class _FakeRevisions:
     chat_entered: threading.Event | None = None
     chat_release: threading.Event | None = None
     chat_finished: threading.Event | None = None
+    finish_entered: threading.Event | None = None
+    finish_release: threading.Event | None = None
+    finish_finished: threading.Event | None = None
 
     def chat(
         self,
@@ -99,7 +164,38 @@ class _FakeRevisions:
         progress("Saving proposals")
         if self.finished is not None:
             self.finished.set()
-        return RevisionExecution()
+        return RevisionExecution(
+            message=("The revision proposal is staged. Nothing has been accepted or applied."),
+            finish=_finish_review(),
+        )
+
+    def consume_replan_and_finish(
+        self,
+        confirmation: RevisionFinishConfirmation,
+        *,
+        progress: Any,
+    ) -> RevisionFinishExecution:
+        self.finish_executed.append(confirmation)
+        if self.finish_entered is not None:
+            self.finish_entered.set()
+        if self.finish_release is not None and not self.finish_release.wait(3):
+            raise AssertionError("the test never released the fake finish")
+        progress("Preparing finish")
+        progress("Applying reviewed revision")
+        progress("Creating example audio")
+        progress("Building Anki package")
+        progress("Saving finish receipt")
+        if self.finish_finished is not None:
+            self.finish_finished.set()
+        return RevisionFinishExecution(
+            message=("The reviewed revision, example audio, and Anki package are complete."),
+            receipt_id=FINISH_FINGERPRINT,
+            state="complete",
+            target="data/decks/potential.yaml",
+            output_path="dist/potential.apkg",
+            package_sha256=PACKAGE_FINGERPRINT,
+            card_count=16,
+        )
 
     def prepare_source_extraction(self, *, source_path: Path) -> SourceExtractionPlan:
         self.extraction_prepared.append(source_path)
@@ -233,9 +329,7 @@ def _widget_items(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _prepare_action(widget: dict[str, Any]) -> dict[str, Any]:
-    button = next(
-        child for child in widget["widget"]["children"] if child["type"] == "Button"
-    )
+    button = next(child for child in widget["widget"]["children"] if child["type"] == "Button")
     return button["onClickAction"]
 
 
@@ -255,8 +349,7 @@ def _create_chat(
     assistant = next(
         event["item"]
         for event in events
-        if event["type"] == "thread.item.done"
-        and event["item"]["type"] == "assistant_message"
+        if event["type"] == "thread.item.done" and event["item"]["type"] == "assistant_message"
     )
     widget = _widget_items(events)[0]
     return created["thread"]["id"], assistant, widget, events
@@ -276,6 +369,20 @@ def _create_plan(
     return thread_id, _widget_items(prepare_events)[0], prepare_events
 
 
+def _create_finish_review(
+    sidecar: Any,
+    message: str = "Add polite and casual examples",
+) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    thread_id, revision_widget, _prepare_events = _create_plan(sidecar, message)
+    finish_events = _events(
+        _post(
+            sidecar,
+            _confirmation_request(thread_id, revision_widget),
+        )[2]
+    )
+    return thread_id, _widget_items(finish_events)[0], finish_events
+
+
 def _create_source_extraction_plan(
     sidecar: Any,
     source: bytes,
@@ -289,23 +396,22 @@ def _create_source_extraction_plan(
     assert status == 200
     attachment = json.loads(body)
     upload_path = urlsplit(attachment["upload_descriptor"]["url"]).path
-    assert _request(
-        sidecar,
-        "PUT",
-        upload_path,
-        body=source,
-        headers={"Origin": sidecar.origin},
-    )[0] == 204
+    assert (
+        _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )[0]
+        == 204
+    )
     message = _message_request(caption)
     message["params"]["input"]["attachments"] = [attachment["id"]]
     send_status, _send_headers, send_body = _post(sidecar, message)
     assert send_status == 200
     events = _events(send_body)
-    thread_id = next(
-        event["thread"]["id"]
-        for event in events
-        if event["type"] == "thread.created"
-    )
+    thread_id = next(event["thread"]["id"] for event in events if event["type"] == "thread.created")
     return thread_id, _widget_items(events)[0]
 
 
@@ -338,10 +444,7 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         csp = headers["content-security-policy"]
         assert "script-src 'self' https://cdn.platform.openai.com" in csp
         assert "frame-src https://cdn.platform.openai.com" in csp
-        assert (
-            "style-src 'self' "
-            "'sha256-G2shiuZXM1qoGNHm7OQ6u7Ye45SO8f8LKO17q0kfGvw='"
-        ) in csp
+        assert ("style-src 'self' 'sha256-G2shiuZXM1qoGNHm7OQ6u7Ye45SO8f8LKO17q0kfGvw='") in csp
         assert "'unsafe-inline'" not in csp
         assert b"https://cdn.platform.openai.com/deployments/chatkit/chatkit.js" in body
         assert b"<title>Janki</title>" in body
@@ -362,12 +465,11 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b"return window.fetch(isRequest ? input : target, {" in script
         assert b'credentials: "omit"' in script
         assert b'referrerPolicy: "no-referrer"' in script
-        assert b'attachments: { enabled: false }' in script
+        assert b"attachments: { enabled: false }" in script
         assert b'placeholder: "Ask about this deck or attach a source"' in script
         assert b'greeting: "What would you like to know about this deck?"' in script
         assert (
-            b"threadItemActions: {\n      feedback: false,\n      retry: false,\n    },"
-            in script
+            b"threadItemActions: {\n      feedback: false,\n      retry: false,\n    }," in script
         )
         assert b"onClientTool" not in script
     finally:
@@ -481,10 +583,10 @@ def test_attachment_send_saves_the_exact_source_locally_without_calling_claude(
             sidecar.server.script_path,
         )
         assert script_status == 200
-        assert b'enabled: true' in script
+        assert b"enabled: true" in script
         assert b'uploadStrategy: { type: "two_phase" }' in script
-        assert b'maxSize: 128 * 1024 * 1024' in script
-        assert b'maxCount: 1' in script
+        assert b"maxSize: 128 * 1024 * 1024" in script
+        assert b"maxCount: 1" in script
         assert b'"application/pdf": [".pdf"]' in script
         assert b'"image/heic": [".heic"]' in script
 
@@ -520,8 +622,7 @@ def test_attachment_send_saves_the_exact_source_locally_without_calling_claude(
         answer = next(
             event["item"]["content"][0]["text"]
             for event in events
-            if event["type"] == "thread.item.done"
-            and event["item"]["type"] == "assistant_message"
+            if event["type"] == "thread.item.done" and event["item"]["type"] == "assistant_message"
         )
         assert "lesson.pdf" in answer
         assert "saved" in answer.casefold()
@@ -612,9 +713,7 @@ def test_attachment_can_be_sent_without_a_caption(tmp_path: Path) -> None:
             caption="",
         )
 
-        assert widget["widget"]["confirm"]["action"]["type"] == (
-            "janki.extraction.confirm"
-        )
+        assert widget["widget"]["confirm"]["action"]["type"] == ("janki.extraction.confirm")
         assert revisions.chatted == []
         assert revisions.extraction_prepared == [inbox / "lesson.pdf"]
         assert (inbox / "lesson.pdf").read_bytes() == source
@@ -641,13 +740,16 @@ def test_one_attachment_cannot_be_reused_in_a_second_thread(tmp_path: Path) -> N
         assert create_status == 200
         attachment = json.loads(create_body)
         upload_path = urlsplit(attachment["upload_descriptor"]["url"]).path
-        assert _request(
-            sidecar,
-            "PUT",
-            upload_path,
-            body=source,
-            headers={"Origin": sidecar.origin},
-        )[0] == 204
+        assert (
+            _request(
+                sidecar,
+                "PUT",
+                upload_path,
+                body=source,
+                headers={"Origin": sidecar.origin},
+            )[0]
+            == 204
+        )
         first = _message_request("")
         first["params"]["input"]["attachments"] = [attachment["id"]]
         assert _post(sidecar, first)[0] == 200
@@ -713,9 +815,7 @@ def test_attachment_upload_capability_is_exact_size_and_one_use(
             _attachment_request(size=len(source)),
         )
         assert status == 200
-        upload_path = urlsplit(
-            json.loads(body)["upload_descriptor"]["url"]
-        ).path
+        upload_path = urlsplit(json.loads(body)["upload_descriptor"]["url"]).path
 
         missing_origin = _request(
             sidecar,
@@ -819,9 +919,7 @@ def test_put_streams_request_body_directly_into_attachment_store(
             _attachment_request(size=len(source)),
         )
         assert status == 200
-        upload_path = urlsplit(
-            json.loads(body)["upload_descriptor"]["url"]
-        ).path
+        upload_path = urlsplit(json.loads(body)["upload_descriptor"]["url"]).path
 
         uploaded = _request(
             sidecar,
@@ -882,22 +980,23 @@ def test_one_extraction_confirmation_survives_attachment_cleanup_and_runs_once(
         assert create_status == 200
         attachment = json.loads(create_body)
         upload_path = urlsplit(attachment["upload_descriptor"]["url"]).path
-        assert _request(
-            sidecar,
-            "PUT",
-            upload_path,
-            body=source,
-            headers={"Origin": sidecar.origin},
-        )[0] == 204
+        assert (
+            _request(
+                sidecar,
+                "PUT",
+                upload_path,
+                body=source,
+                headers={"Origin": sidecar.origin},
+            )[0]
+            == 204
+        )
         message = _message_request("Create card proposals from this source")
         message["params"]["input"]["attachments"] = [attachment["id"]]
         send_status, _send_headers, send_body = _post(sidecar, message)
         assert send_status == 200
         send_events = _events(send_body)
         thread_id = next(
-            event["thread"]["id"]
-            for event in send_events
-            if event["type"] == "thread.created"
+            event["thread"]["id"] for event in send_events if event["type"] == "thread.created"
         )
         widget = _widget_items(send_events)[0]
 
@@ -916,9 +1015,7 @@ def test_one_extraction_confirmation_survives_attachment_cleanup_and_runs_once(
 
         assert status == 200
         events = _events(body)
-        progress = [
-            event["text"] for event in events if event["type"] == "progress_update"
-        ]
+        progress = [event["text"] for event in events if event["type"] == "progress_update"]
         assert progress == [
             "Preparing pages",
             "Reading the source",
@@ -939,8 +1036,7 @@ def test_one_extraction_confirmation_survives_attachment_cleanup_and_runs_once(
         replay = _events(_post(sidecar, request)[2])
         assert len(revisions.extracted) == 1
         assert any(
-            event["type"] == "error" and "already used" in event["message"]
-            for event in replay
+            event["type"] == "error" and "already used" in event["message"] for event in replay
         )
     finally:
         sidecar.close()
@@ -968,19 +1064,13 @@ def test_tampered_extraction_fingerprint_consumes_confirmation_without_dispatch(
         refused = _events(_post(sidecar, request)[2])
 
         assert revisions.extracted == []
-        assert any(
-            event["type"] == "error" and "stale" in event["message"]
-            for event in refused
-        )
+        assert any(event["type"] == "error" and "stale" in event["message"] for event in refused)
 
-        request["params"]["action"]["payload"][
-            "request_fingerprint"
-        ] = REQUEST_FINGERPRINT
+        request["params"]["action"]["payload"]["request_fingerprint"] = REQUEST_FINGERPRINT
         replay = _events(_post(sidecar, request)[2])
         assert revisions.extracted == []
         assert any(
-            event["type"] == "error" and "already used" in event["message"]
-            for event in replay
+            event["type"] == "error" and "already used" in event["message"] for event in replay
         )
     finally:
         sidecar.close()
@@ -1018,9 +1108,11 @@ def test_every_composer_message_is_chat_only_even_when_it_sounds_mutating(
         assert next(event for event in events if event["type"] == "stream_options")[
             "stream_options"
         ] == {"allow_cancel": False}
-        assert [
-            event["text"] for event in events if event["type"] == "progress_update"
-        ] == ["Preparing answer", "Writing answer", "Saving answer"]
+        assert [event["text"] for event in events if event["type"] == "progress_update"] == [
+            "Preparing answer",
+            "Writing answer",
+            "Saving answer",
+        ]
 
         root = widget["widget"]
         assert root["size"] == "full"
@@ -1043,9 +1135,7 @@ def test_second_turn_receives_only_the_prior_user_and_assistant_text() -> None:
     )
     sidecar.start()
     try:
-        thread_id, _assistant, _widget, _events_before = _create_chat(
-            sidecar, "which deck?"
-        )
+        thread_id, _assistant, _widget, _events_before = _create_chat(sidecar, "which deck?")
 
         status, _headers, body = _post(
             sidecar,
@@ -1082,10 +1172,13 @@ def test_history_drops_oldest_entries_before_the_thirteenth_prior_message() -> N
     try:
         thread_id, _assistant, _widget, _ = _create_chat(sidecar, "message 1")
         for number in range(2, 9):
-            assert _post(
-                sidecar,
-                _followup_message_request(thread_id, f"message {number}"),
-            )[0] == 200
+            assert (
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, f"message {number}"),
+                )[0]
+                == 200
+            )
 
         eighth_history = revisions.chat_histories[-1]
         assert len(eighth_history) == 12
@@ -1128,10 +1221,13 @@ def test_history_drops_an_oversized_prior_reply_without_truncating_it() -> None:
     try:
         thread_id, _assistant, _widget, _ = _create_chat(sidecar, "first")
 
-        assert _post(
-            sidecar,
-            _followup_message_request(thread_id, "second"),
-        )[0] == 200
+        assert (
+            _post(
+                sidecar,
+                _followup_message_request(thread_id, "second"),
+            )[0]
+            == 200
+        )
 
         assert revisions.chat_histories == [(), (("user", "first"),)]
     finally:
@@ -1155,9 +1251,7 @@ def test_only_the_explicit_one_use_prepare_action_renders_the_exact_plan() -> No
         )
 
         events = _events(_post(sidecar, request)[2])
-        assert revisions.prepared == [
-            ("potential-practice", "Add polite and casual examples")
-        ]
+        assert revisions.prepared == [("potential-practice", "Add polite and casual examples")]
         assert revisions.executed == []
         widget = _widget_items(events)[0]
         wire = json.dumps(widget, ensure_ascii=False)
@@ -1174,10 +1268,7 @@ def test_only_the_explicit_one_use_prepare_action_renders_the_exact_plan() -> No
 
         effects = _component_with_id(root, "confirmation-effects")
         assert effects["gap"] == 3
-        assert [
-            row["children"][1]["children"][0]["value"]
-            for row in effects["children"]
-        ] == [
+        assert [row["children"][1]["children"][0]["value"] for row in effects["children"]] == [
             "propose one polite and one casual example per selected card",
             "stage the proposal without changing the deck",
         ]
@@ -1197,8 +1288,7 @@ def test_only_the_explicit_one_use_prepare_action_renders_the_exact_plan() -> No
         repeated = _events(_post(sidecar, request)[2])
         assert len(revisions.prepared) == 1
         assert any(
-            event["type"] == "error" and "already used" in event["message"]
-            for event in repeated
+            event["type"] == "error" and "already used" in event["message"] for event in repeated
         )
     finally:
         sidecar.close()
@@ -1227,10 +1317,7 @@ def test_prepare_capability_is_consumed_on_thread_or_sender_mismatch() -> None:
         )
         refused = _events(_post(sidecar, cross_thread)[2])
         assert revisions.prepared == []
-        assert any(
-            event["type"] == "error" and "stale" in event["message"]
-            for event in refused
-        )
+        assert any(event["type"] == "error" and "stale" in event["message"] for event in refused)
 
         original = _action_request(
             first_thread,
@@ -1240,8 +1327,7 @@ def test_prepare_capability_is_consumed_on_thread_or_sender_mismatch() -> None:
         replay = _events(_post(sidecar, original)[2])
         assert revisions.prepared == []
         assert any(
-            event["type"] == "error" and "already used" in event["message"]
-            for event in replay
+            event["type"] == "error" and "already used" in event["message"] for event in replay
         )
 
         third_thread, _third_assistant, third_widget, _ = _create_chat(
@@ -1274,7 +1360,7 @@ def test_prepare_capability_is_consumed_on_thread_or_sender_mismatch() -> None:
         sidecar.close()
 
 
-def test_confirm_stages_one_proposal_and_offers_no_continuation_actions() -> None:
+def test_confirm_stages_one_proposal_and_renders_one_exact_finish_review() -> None:
     revisions = _FakeRevisions()
     sidecar = create_assistant_sidecar(
         revisions,
@@ -1289,9 +1375,7 @@ def test_confirm_stages_one_proposal_and_offers_no_continuation_actions() -> Non
         status, _headers, body = _post(sidecar, request)
         assert status == 200
         events = _events(body)
-        progress = [
-            event["text"] for event in events if event["type"] == "progress_update"
-        ]
+        progress = [event["text"] for event in events if event["type"] == "progress_update"]
         assert progress == [
             "Preparing revision",
             "Reading the source",
@@ -1304,16 +1388,385 @@ def test_confirm_stages_one_proposal_and_offers_no_continuation_actions() -> Non
         assert confirmation.deck_scope == "potential-practice"
         assert confirmation.instruction == "Add polite and casual examples"
         assert confirmation.expected_fingerprint == REQUEST_FINGERPRINT
-        assert b"Refresh the workbench dashboard to review it" in body
+        assert b"Nothing has been accepted or applied" in body
         assert b"http://127.0.0.1:" not in body
-        assert _widget_items(events) == []
+        finish_widgets = _widget_items(events)
+        assert len(finish_widgets) == 1
+        finish_widget = finish_widgets[0]
+        wire = json.dumps(finish_widget, ensure_ascii=False)
+        assert "Old potential note." in wire
+        assert "Potential expresses ability or possibility." in wire
+        assert "今は遊べません。" in wire
+        assert "明日は遊べます。" in wire
+        assert "Today" not in wire
+        assert "openai-realtime · gpt-realtime-1.5 · paid-network" in wire
+        assert "Total clips: 2" in wire
+        assert "Recoverable exact clips: 1" in wire
+        assert "Provider calls required: 1" in wire
+        assert "dist/potential.apkg · cards: 16" in wire
+        assert FINISH_FINGERPRINT in wire
+        finish_action = finish_widget["widget"]["confirm"]
+        assert finish_action["label"] == "Apply and finish"
+        assert finish_action["action"]["type"] == "janki.revision.finish"
+        assert finish_action["action"]["handler"] == "server"
 
         repeated = _events(_post(sidecar, request)[2])
         assert len(revisions.executed) == 1
         assert any(
-            event["type"] == "error" and "already used" in event["message"]
-            for event in repeated
+            event["type"] == "error" and "already used" in event["message"] for event in repeated
         )
+    finally:
+        sidecar.close()
+
+
+def test_blank_current_furigana_keeps_the_staged_revision_reviewable() -> None:
+    @dataclass
+    class BlankCurrentFurigana(_FakeRevisions):
+        def consume_replan_and_execute(
+            self,
+            confirmation: RevisionConfirmation,
+            *,
+            progress: Any,
+        ) -> RevisionExecution:
+            result = super().consume_replan_and_execute(
+                confirmation,
+                progress=progress,
+            )
+            assert result.finish is not None
+            record = result.finish.records[0]
+            current = (
+                replace(record.current_examples[0], furigana=""),
+                record.current_examples[1],
+            )
+            return replace(
+                result,
+                finish=replace(
+                    result.finish,
+                    records=(replace(record, current_examples=current),),
+                ),
+            )
+
+    revisions = BlankCurrentFurigana()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, widget, _events_before = _create_plan(sidecar)
+
+        events = _events(_post(sidecar, _confirmation_request(thread_id, widget))[2])
+
+        wire = json.dumps(events, ensure_ascii=False)
+        assert "revision proposal is staged" in wire
+        assert "今は遊べません。" in wire
+        finish_widgets = _widget_items(events)
+        assert len(finish_widgets) == 1
+        assert finish_widgets[0]["widget"]["confirm"]["label"] == "Apply and finish"
+        assert len(sidecar.server.assistant_core.server._finishes) == 1
+    finally:
+        sidecar.close()
+
+
+def test_invalid_proposed_review_preserves_the_paid_staged_deliverable() -> None:
+    @dataclass
+    class BlankProposedFurigana(_FakeRevisions):
+        def consume_replan_and_execute(
+            self,
+            confirmation: RevisionConfirmation,
+            *,
+            progress: Any,
+        ) -> RevisionExecution:
+            result = super().consume_replan_and_execute(
+                confirmation,
+                progress=progress,
+            )
+            assert result.finish is not None
+            record = result.finish.records[0]
+            proposed = (
+                replace(record.proposed_examples[0], furigana=""),
+                record.proposed_examples[1],
+            )
+            return replace(
+                result,
+                finish=replace(
+                    result.finish,
+                    records=(replace(record, proposed_examples=proposed),),
+                ),
+            )
+
+    revisions = BlankProposedFurigana()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, widget, _events_before = _create_plan(sidecar)
+        request = _confirmation_request(thread_id, widget)
+
+        events = _events(_post(sidecar, request)[2])
+
+        wire = json.dumps(events)
+        assert "revision proposal is staged" in wire
+        assert "staged proposal remains the durable deliverable" in wire
+        assert "do not repeat the paid revision call" in wire
+        assert _widget_items(events) == []
+        assert sidecar.server.assistant_core.server._finishes == {}
+        assert len(revisions.executed) == 1
+
+        replay = _events(_post(sidecar, request)[2])
+        assert len(revisions.executed) == 1
+        assert any(
+            event["type"] == "error" and "already used" in event["message"] for event in replay
+        )
+    finally:
+        sidecar.close()
+
+
+def test_finish_widget_render_failure_preserves_staging_without_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    server = sidecar.server.assistant_core.server
+
+    def fail_render(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("widget schema unavailable")
+
+    monkeypatch.setattr(type(server), "_finish_widget", staticmethod(fail_render))
+    sidecar.start()
+    try:
+        thread_id, widget, _events_before = _create_plan(sidecar)
+
+        events = _events(_post(sidecar, _confirmation_request(thread_id, widget))[2])
+
+        wire = json.dumps(events)
+        assert "revision proposal is staged" in wire
+        assert "widget schema unavailable" in wire
+        assert "staged proposal remains the durable deliverable" in wire
+        assert _widget_items(events) == []
+        assert server._finishes == {}
+        assert len(revisions.executed) == 1
+    finally:
+        sidecar.close()
+
+
+def test_apply_and_finish_is_one_action_with_only_shared_named_progress() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, widget, _review_events = _create_finish_review(sidecar)
+        request = _confirmation_request(thread_id, widget)
+
+        status, _headers, body = _post(sidecar, request)
+
+        assert status == 200
+        events = _events(body)
+        assert [event["text"] for event in events if event["type"] == "progress_update"] == [
+            "Preparing finish",
+            "Applying reviewed revision",
+            "Creating example audio",
+            "Building Anki package",
+            "Saving finish receipt",
+        ]
+        assert b"reviewed revision, example audio, and Anki package are complete" in body
+        assert _widget_items(events) == []
+        assert revisions.finish_executed == [
+            RevisionFinishConfirmation(
+                preparation_id="finish-preparation-1",
+                expected_fingerprint=FINISH_FINGERPRINT,
+                target="data/decks/potential.yaml",
+            )
+        ]
+
+        replay = _events(_post(sidecar, request)[2])
+        assert len(revisions.finish_executed) == 1
+        assert any(
+            event["type"] == "error" and "already used" in event["message"] for event in replay
+        )
+    finally:
+        sidecar.close()
+
+
+def test_tampered_finish_fingerprint_consumes_exact_capability() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, widget, _review_events = _create_finish_review(sidecar)
+        request = _confirmation_request(thread_id, widget)
+        request["params"]["action"]["payload"]["request_fingerprint"] = "0" * 64
+
+        refused = _events(_post(sidecar, request)[2])
+
+        assert revisions.finish_executed == []
+        assert any(event["type"] == "error" and "stale" in event["message"] for event in refused)
+        request["params"]["action"]["payload"]["request_fingerprint"] = FINISH_FINGERPRINT
+        replay = _events(_post(sidecar, request)[2])
+        assert revisions.finish_executed == []
+        assert any(
+            event["type"] == "error" and "already used" in event["message"] for event in replay
+        )
+    finally:
+        sidecar.close()
+
+
+def test_finish_capability_is_consumed_on_cross_thread_use() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        first_thread, first_widget, _ = _create_finish_review(
+            sidecar,
+            "first revision",
+        )
+        second_thread, second_widget, _ = _create_finish_review(
+            sidecar,
+            "second revision",
+        )
+        first_action = first_widget["widget"]["confirm"]["action"]
+        capability = first_action["payload"]["capability"]
+        finish_bindings = sidecar.server.assistant_core.server._finishes
+        first_binding = finish_bindings[capability]
+        # Isolate the thread binding from the independently tested sender
+        # binding: make the action's sender valid for the second thread while
+        # preserving the capability's original thread id.
+        finish_bindings[capability] = type(first_binding)(
+            confirmation=first_binding.confirmation,
+            thread_id=first_binding.thread_id,
+            widget_item_id=second_widget["id"],
+        )
+
+        refused = _events(
+            _post(
+                sidecar,
+                _action_request(second_thread, second_widget, first_action),
+            )[2]
+        )
+
+        assert revisions.finish_executed == []
+        assert any(
+            event["type"] == "error" and "belongs elsewhere" in event["message"]
+            for event in refused
+        )
+        replay = _events(
+            _post(
+                sidecar,
+                _action_request(first_thread, first_widget, first_action),
+            )[2]
+        )
+        assert revisions.finish_executed == []
+        assert any(
+            event["type"] == "error" and "already used" in event["message"] for event in replay
+        )
+    finally:
+        sidecar.close()
+
+
+def test_finish_capability_is_consumed_on_same_thread_sender_mismatch() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, finish_widget, _ = _create_finish_review(sidecar)
+        followup_events = _events(
+            _post(
+                sidecar,
+                _followup_message_request(thread_id, "unrelated follow-up"),
+            )[2]
+        )
+        other_widget = _widget_items(followup_events)[0]
+        finish_action = finish_widget["widget"]["confirm"]["action"]
+
+        refused = _events(
+            _post(
+                sidecar,
+                _action_request(thread_id, other_widget, finish_action),
+            )[2]
+        )
+
+        assert revisions.finish_executed == []
+        assert any(
+            event["type"] == "error" and "belongs elsewhere" in event["message"]
+            for event in refused
+        )
+        replay = _events(
+            _post(
+                sidecar,
+                _action_request(thread_id, finish_widget, finish_action),
+            )[2]
+        )
+        assert revisions.finish_executed == []
+        assert any(
+            event["type"] == "error" and "already used" in event["message"] for event in replay
+        )
+    finally:
+        sidecar.close()
+
+
+def test_staged_proposal_without_finish_plan_shows_truth_and_no_action() -> None:
+    @dataclass
+    class FinishUnavailable(_FakeRevisions):
+        def consume_replan_and_execute(
+            self,
+            confirmation: RevisionConfirmation,
+            *,
+            progress: Any,
+        ) -> RevisionExecution:
+            self.executed.append(confirmation)
+            progress("Reading the source")
+            progress("Checking the answer's shape")
+            progress("Saving proposals")
+            return RevisionExecution(
+                message=("The paid proposal is staged. Do not repeat the revision call."),
+                finish=None,
+                finish_unavailable=(
+                    "Apply and finish cannot be reviewed because a template is missing."
+                ),
+            )
+
+    revisions = FinishUnavailable()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, widget, _events_before = _create_plan(sidecar)
+
+        events = _events(_post(sidecar, _confirmation_request(thread_id, widget))[2])
+
+        wire = json.dumps(events)
+        assert "paid proposal is staged" in wire
+        assert "Do not repeat the revision call" in wire
+        assert "template is missing" in wire
+        assert _widget_items(events) == []
+        assert revisions.finish_executed == []
     finally:
         sidecar.close()
 
@@ -1333,19 +1786,13 @@ def test_tampered_fingerprint_consumes_the_capability_without_execution() -> Non
 
         first = _events(_post(sidecar, request)[2])
         assert revisions.executed == []
-        assert any(
-            event["type"] == "error" and "stale" in event["message"]
-            for event in first
-        )
+        assert any(event["type"] == "error" and "stale" in event["message"] for event in first)
 
-        request["params"]["action"]["payload"][
-            "request_fingerprint"
-        ] = REQUEST_FINGERPRINT
+        request["params"]["action"]["payload"]["request_fingerprint"] = REQUEST_FINGERPRINT
         second = _events(_post(sidecar, request)[2])
         assert revisions.executed == []
         assert any(
-            event["type"] == "error" and "already used" in event["message"]
-            for event in second
+            event["type"] == "error" and "already used" in event["message"] for event in second
         )
     finally:
         sidecar.close()
@@ -1383,8 +1830,7 @@ def test_invented_legacy_followup_actions_are_refused(old_action: str) -> None:
         assert revisions.prepared == []
         assert revisions.executed == []
         assert any(
-            event["type"] == "error"
-            and event["message"] == "That assistant action was refused."
+            event["type"] == "error" and event["message"] == "That assistant action was refused."
             for event in events
         )
     finally:
@@ -1465,6 +1911,48 @@ def test_browser_disconnect_does_not_cancel_a_confirmed_durable_action() -> None
         release.set()
         assert finished.wait(3)
         assert len(revisions.executed) == 1
+    finally:
+        release.set()
+        sidecar.close()
+
+
+def test_browser_disconnect_does_not_cancel_apply_and_finish() -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+    revisions = _FakeRevisions(
+        finish_entered=entered,
+        finish_release=release,
+        finish_finished=finished,
+    )
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, widget, _events_before = _create_finish_review(sidecar)
+        payload = json.dumps(_confirmation_request(thread_id, widget)).encode()
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            sidecar.server.server_address[1],
+            timeout=3,
+        )
+        connection.request(
+            "POST",
+            sidecar.server.api_path,
+            body=payload,
+            headers={"Content-Type": "application/json", "Origin": sidecar.origin},
+        )
+        response = connection.getresponse()
+        assert response.status == 200
+        connection.close()
+
+        assert entered.wait(3)
+        release.set()
+        assert finished.wait(3)
+        assert len(revisions.finish_executed) == 1
     finally:
         release.set()
         sidecar.close()

@@ -349,6 +349,150 @@ def test_revision_apply_lands_archives_and_is_exactly_idempotent(
     assert repeated.deck_sha256 == result.deck_sha256
 
 
+def test_revision_apply_recovery_plan_exactly_matches_live_accepted_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, _deck, staging = _fixture(tmp_path)
+    proposed = revision_apply.plan_revision_apply(config, staging)
+    real_unlink = revision_apply.atomic_unlink_bound
+
+    def interrupt(_path: Path, *, expected_revision: str) -> None:
+        raise DataError(f"interrupted {expected_revision}")
+
+    monkeypatch.setattr(revision_apply, "atomic_unlink_bound", interrupt)
+    with pytest.raises(DataError, match="interrupted"):
+        revision_apply.execute_revision_apply(config, proposed)
+    accepted = revision_apply.plan_revision_apply(config, staging)
+    real_unlink(staging, expected_revision=accepted.live_sha256)
+
+    recovered = revision_apply.plan_revision_apply_recovery(
+        config,
+        staging,
+        archive_path=accepted.archive_path,
+        plan_fingerprint=accepted.plan_fingerprint,
+    )
+
+    assert recovered == accepted
+
+
+def test_revision_apply_recovery_refuses_missing_archive(tmp_path: Path) -> None:
+    config, _deck, staging = _fixture(tmp_path)
+    proposed = revision_apply.plan_revision_apply(config, staging)
+    staging.unlink()
+
+    with pytest.raises(revision_apply.RevisionApplyError, match="archive no longer exists"):
+        revision_apply.plan_revision_apply_recovery(
+            config,
+            staging,
+            archive_path=proposed.archive_path,
+            plan_fingerprint=proposed.plan_fingerprint,
+        )
+
+
+def test_revision_apply_recovery_refuses_divergent_plan_fingerprint(
+    tmp_path: Path,
+) -> None:
+    config, _deck, staging = _fixture(tmp_path)
+    plan = revision_apply.plan_revision_apply(config, staging)
+    result = revision_apply.execute_revision_apply(config, plan)
+
+    with pytest.raises(revision_apply.RevisionApplyError, match="accepted plan"):
+        revision_apply.plan_revision_apply_recovery(
+            config,
+            staging,
+            archive_path=result.archive_path,
+            plan_fingerprint="f" * 64,
+        )
+
+
+def test_revision_apply_recovery_refuses_divergent_archive_content(tmp_path: Path) -> None:
+    config, _deck, staging = _fixture(tmp_path)
+    plan = revision_apply.plan_revision_apply(config, staging)
+    result = revision_apply.execute_revision_apply(config, plan)
+    archived = json.loads(result.archive_path.read_text(encoding="utf-8"))
+    archived["proposal"]["form_note"] = "Divergent archive."
+    result.archive_path.write_text(
+        json.dumps(archived, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(revision_apply.RevisionApplyError, match="proposal content is corrupt"):
+        revision_apply.plan_revision_apply_recovery(
+            config,
+            staging,
+            archive_path=result.archive_path,
+            plan_fingerprint=plan.plan_fingerprint,
+        )
+
+
+def test_revision_apply_recovery_refuses_a_lexical_same_name_archive(
+    tmp_path: Path,
+) -> None:
+    config, _deck, staging = _fixture(tmp_path)
+    plan = revision_apply.plan_revision_apply(config, staging)
+    result = revision_apply.execute_revision_apply(config, plan)
+    replacement_root = result.archive_path.parent / "replacement"
+    replacement_root.mkdir()
+    replacement = replacement_root / result.archive_path.name
+    replacement.write_bytes(result.archive_path.read_bytes())
+
+    with pytest.raises(revision_apply.RevisionApplyError, match="logical proposal archive"):
+        revision_apply.plan_revision_apply_recovery(
+            config,
+            staging,
+            archive_path=replacement,
+            plan_fingerprint=plan.plan_fingerprint,
+        )
+
+
+def test_revision_apply_wrapper_owns_global_lock_once_and_locked_executor_does_not(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, _deck, staging = _fixture(tmp_path)
+    plan = revision_apply.plan_revision_apply(config, staging)
+    real_lock = revision_apply.exclusive_path_lock
+    global_lock = config.root / ".janki-audio-operation"
+    acquired: list[Path] = []
+
+    @contextlib.contextmanager
+    def observed_lock(path: Path):
+        if path == global_lock:
+            acquired.append(path)
+        with real_lock(path):
+            yield
+
+    monkeypatch.setattr(revision_apply, "exclusive_path_lock", observed_lock)
+    revision_apply.execute_revision_apply(config, plan)
+    assert acquired == [global_lock]
+
+    recovery = revision_apply.plan_revision_apply_recovery(
+        config,
+        staging,
+        archive_path=plan.archive_path,
+        plan_fingerprint=plan.plan_fingerprint,
+    )
+    revision_apply.execute_revision_apply_locked(config, recovery)
+    assert acquired == [global_lock]
+
+
+def test_completed_revision_recovery_plan_executes_idempotently(tmp_path: Path) -> None:
+    config, _deck, staging = _fixture(tmp_path)
+    plan = revision_apply.plan_revision_apply(config, staging)
+    first = revision_apply.execute_revision_apply(config, plan)
+    recovery = revision_apply.plan_revision_apply_recovery(
+        config,
+        staging,
+        archive_path=first.archive_path,
+        plan_fingerprint=plan.plan_fingerprint,
+    )
+
+    second = revision_apply.execute_revision_apply(config, recovery)
+    third = revision_apply.execute_revision_apply(config, recovery)
+
+    assert second == third
+    assert second.recovered is True
+
+
 def test_revision_apply_purely_reconstructs_claude_subscription_provenance(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -64,9 +64,11 @@ __all__ = [
     "AUDIO_SUBDIR",
     "AudioError",
     "AudioClipRequirement",
+    "AudioPaidDispatch",
     "AudioResult",
     "SynthesisError",
     "audio_clip_requirements",
+    "audio_journal_source",
     "cleanup_pending_stages",
     "cleanup_unclaimed_pending_stages",
     "commit_promoted_audio",
@@ -333,6 +335,20 @@ class AudioClipRequirement:
     recovery_source: AudioRecoverySource | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class AudioPaidDispatch:
+    """Exact paid clip identity reserved immediately before provider dispatch."""
+
+    operation_id: str
+    record_id: str
+    kind: Literal["word", "example"]
+    target: str
+    request_input: str
+    forced_accent: bool
+    content_fingerprint: str
+    provider: SpeechProvider = field(repr=False, compare=False)
+
+
 @dataclass(slots=True)
 class AudioResult:
     """What a run generated, skipped, and refused."""
@@ -586,7 +602,7 @@ def _pending_current_file(
         provider.reconcile_journaled(
             request_input,
             forced_accent=forced_accent,
-            source_file=_journal_source(record_id, of=of, target=expected),
+            source_file=audio_journal_source(record_id, of=of, target=expected),
             source_sha256=content_fp,
             audio_sha256=recovery.staged_sha256,
         )
@@ -657,7 +673,7 @@ def _write(path: Path, data: bytes) -> None:
         ) from exc
 
 
-def _journal_source(record_id: str, *, of: str, target: str) -> str:
+def audio_journal_source(record_id: str, *, of: str, target: str) -> str:
     """The stable human-readable operation scope for one exact audio target."""
     return f"{record_id}#{of}:{target}"
 
@@ -666,19 +682,47 @@ def _synthesize_and_stage(
     provider: SpeechProvider,
     text: str,
     *,
+    record_id: str,
+    kind: Literal["word", "example"],
+    target: str,
     forced_accent: bool,
     source_file: str,
     source_sha256: str,
     persist: Callable[[bytes], str],
+    before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None,
 ) -> str:
     """Use a captured paid-reply transaction when the provider offers one."""
     if isinstance(provider, JournaledSpeechProvider):
+        callback = None
+        if before_paid_dispatch is not None:
+            def callback(operation_id: str) -> None:
+                before_paid_dispatch(
+                    AudioPaidDispatch(
+                        operation_id=operation_id,
+                        record_id=record_id,
+                        kind=kind,
+                        target=target,
+                        request_input=text,
+                        forced_accent=forced_accent,
+                        content_fingerprint=source_sha256,
+                        provider=provider,
+                    )
+                )
+        if callback is None:
+            return provider.synthesize_journaled(
+                text,
+                forced_accent=forced_accent,
+                source_file=source_file,
+                source_sha256=source_sha256,
+                persist=persist,
+            )
         return provider.synthesize_journaled(
             text,
             forced_accent=forced_accent,
             source_file=source_file,
             source_sha256=source_sha256,
             persist=persist,
+            before_dispatch=callback,
         )
     return persist(provider.synthesize(text, forced_accent=forced_accent))
 
@@ -699,6 +743,7 @@ def _word_audio(
     force: bool,
     stage_only: bool,
     persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
+    before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None,
 ) -> VocabularyRecord:
     # Decided before the currency check, deliberately. Whether this record's
     # accent can be forced is a property of the *record*, true on every run,
@@ -766,8 +811,11 @@ def _word_audio(
         key = _synthesize_and_stage(
             provider,
             utterance,
+            record_id=record.id,
+            kind="word",
+            target=name,
             forced_accent=forced,
-            source_file=_journal_source(record.id, of="word", target=name),
+            source_file=audio_journal_source(record.id, of="word", target=name),
             source_sha256=content_fp,
             persist=partial(
                 _stage_audio,
@@ -783,6 +831,7 @@ def _word_audio(
                 details=details,
                 persist_pending=persist_pending,
             ),
+            before_paid_dispatch=before_paid_dispatch,
         )
         if key not in result.pending_keys:
             result.pending_keys.append(key)
@@ -817,6 +866,7 @@ def _example_audio(
     force: bool,
     stage_only: bool,
     persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
+    before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None,
 ) -> VocabularyRecord:
     """Voice this record's examples, keeping whatever gets written.
 
@@ -914,8 +964,11 @@ def _example_audio(
                 key = _synthesize_and_stage(
                     provider,
                     request_input,
+                    record_id=record.id,
+                    kind="example",
+                    target=name,
                     forced_accent=False,
-                    source_file=_journal_source(
+                    source_file=audio_journal_source(
                         record.id, of="example", target=name
                     ),
                     source_sha256=content_fp,
@@ -932,6 +985,7 @@ def _example_audio(
                         audio_dir=audio_dir,
                         persist_pending=persist_pending,
                     ),
+                    before_paid_dispatch=before_paid_dispatch,
                 )
                 if key not in result.pending_keys:
                     result.pending_keys.append(key)
@@ -998,6 +1052,7 @@ def generate_audio(
     protected_records: Sequence[VocabularyRecord] = (),
     stage_only: bool = False,
     persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
+    before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None = None,
 ) -> AudioResult:
     """Synthesize what is missing, and report what was deliberately not.
 
@@ -1076,6 +1131,7 @@ def generate_audio(
                     force=force,
                     stage_only=stage_only,
                     persist_pending=persist_pending,
+                    before_paid_dispatch=before_paid_dispatch,
                 )
             if examples:
                 updated = _example_audio(
@@ -1088,6 +1144,7 @@ def generate_audio(
                     force=force,
                     stage_only=stage_only,
                     persist_pending=persist_pending,
+                    before_paid_dispatch=before_paid_dispatch,
                 )
         except AudioError:
             # This module's own refusals — a caller error, not a run to salvage.
@@ -1386,7 +1443,7 @@ def _preflight_provider_availability(
             if not available_for(
                 requirement.request_input,
                 forced_accent=requirement.forced_accent,
-                source_file=_journal_source(
+                source_file=audio_journal_source(
                     requirement.record_id,
                     of=requirement.kind,
                     target=requirement.target,

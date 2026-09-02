@@ -30,15 +30,22 @@ from japanese_anki.application import (
     describe_extraction,
     dispatch_extraction,
     revision,
+    revision_finish,
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.exporters.pattern_cards import read_drill_deck_content
+from japanese_anki.models import ExampleSentence
 from japanese_anki.workbench.assistant import (
     ChatReply,
     RevisionConfirmation,
+    RevisionExampleReview,
     RevisionExecution,
+    RevisionFinishConfirmation,
+    RevisionFinishExecution,
+    RevisionFinishReview,
+    RevisionRecordReview,
     RevisionRefusal,
     SourceExtractionConfirmation,
     SourceExtractionExecution,
@@ -162,6 +169,11 @@ class RevisionAssistantAdapter:
         init=False,
         repr=False,
     )
+    _finish_plans: dict[str, revision_finish.RevisionFinishPlan] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
     _plan_lock: threading.Lock = field(
         default_factory=threading.Lock,
         init=False,
@@ -255,9 +267,7 @@ class RevisionAssistantAdapter:
         cli_version = plan.transport.get("cli_version")
         if cli_version is not None:
             effects.append(f"Claude Code version: {cli_version}")
-        request_bytes_sha256 = hashlib.sha256(
-            plan.provider_plan.request_bytes
-        ).hexdigest()
+        request_bytes_sha256 = hashlib.sha256(plan.provider_plan.request_bytes).hexdigest()
         effects.extend(
             (
                 (
@@ -324,9 +334,7 @@ class RevisionAssistantAdapter:
             self._extraction_expectations[preparation_id] = expectation
 
         try:
-            target_display = target.staging_path.relative_to(
-                fresh_config.root.resolve()
-            ).as_posix()
+            target_display = target.staging_path.relative_to(fresh_config.root.resolve()).as_posix()
         except ValueError:
             target_display = str(target.staging_path)
         mode_display = consent.mode or "automatic source-shape selection"
@@ -339,9 +347,7 @@ class RevisionAssistantAdapter:
             "Propose vocabulary cards and grammar for owner review",
         ]
         if consent.sends_known_words:
-            effects.append(
-                "Also send the existing expression list so prose extraction can skip it"
-            )
+            effects.append("Also send the existing expression list so prose extraction can skip it")
         replaces = consent.replaces is not None
         if replaces:
             card_review = (
@@ -349,9 +355,7 @@ class RevisionAssistantAdapter:
                 if consent.replaces_state
                 else "the existing card review"
             )
-            grammar = (
-                f"; {consent.replaces_grammar}" if consent.replaces_grammar else ""
-            )
+            grammar = f"; {consent.replaces_grammar}" if consent.replaces_grammar else ""
             effects.append(
                 "Permanently replace the named review: "
                 f"{card_review}{grammar}. That work is not recoverable"
@@ -423,9 +427,7 @@ class RevisionAssistantAdapter:
             raise _extraction_refusal(exc) from exc
 
         try:
-            target_display = outcome.target.relative_to(
-                fresh_config.root.resolve()
-            ).as_posix()
+            target_display = outcome.target.relative_to(fresh_config.root.resolve()).as_posix()
         except ValueError:
             target_display = str(outcome.target)
         return SourceExtractionExecution(
@@ -443,7 +445,7 @@ class RevisionAssistantAdapter:
         *,
         progress: Callable[[str], None],
     ) -> RevisionExecution:
-        """Consume the displayed plan and let ``run_revision`` re-plan under lock."""
+        """Stage unseen content, then prepare its exact aggregate owner review."""
 
         self._revision_deck()
         with self._plan_lock:
@@ -469,12 +471,215 @@ class RevisionAssistantAdapter:
             staged = result.staging_path.relative_to(fresh_config.root.resolve()).as_posix()
         except ValueError:
             staged = str(result.staging_path)
+        preparation_id = secrets.token_urlsafe(32)
+        try:
+            finish = revision_finish.plan_revision_finish(
+                fresh_config,
+                result.staging_path,
+            )
+            review = self._finish_review(
+                fresh_config,
+                finish,
+                preparation_id=preparation_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - the paid proposal is already durable
+            detail = str(exc) or type(exc).__name__
+            return RevisionExecution(
+                message=(
+                    f"The revision proposal is staged at {staged}. Nothing in it has "
+                    "been accepted or applied. Do not repeat the paid revision call."
+                ),
+                finish=None,
+                finish_unavailable=(
+                    f"Janki could not prepare its Apply and finish review: {detail} "
+                    "The staged proposal remains the deliverable; repair the local "
+                    "finish prerequisite, then review this exact proposal."
+                ),
+            )
+        with self._plan_lock:
+            while len(self._finish_plans) >= 256:
+                self._finish_plans.pop(next(iter(self._finish_plans)))
+            self._finish_plans[preparation_id] = finish
         return RevisionExecution(
             message=(
-                f"The revision proposal is staged at {staged}. Its exact old/new "
-                "content has not been accepted. Review it in the main workbench; "
-                "this Assistant will not start another confirmation chain."
+                f"The revision proposal is staged at {staged}. Nothing in it has "
+                "been accepted or applied. Review the exact current and proposed "
+                "content below."
             ),
+            finish=review,
+        )
+
+    @staticmethod
+    def _display_path(config: ProjectConfig, path: Path) -> str:
+        try:
+            return path.resolve().relative_to(config.root.resolve()).as_posix()
+        except ValueError:
+            return str(path)
+
+    @staticmethod
+    def _review_example(example: ExampleSentence) -> RevisionExampleReview:
+        return RevisionExampleReview(
+            register=example.register,
+            japanese=example.japanese,
+            furigana=example.furigana,
+            english=example.english,
+        )
+
+    def _finish_review(
+        self,
+        config: ProjectConfig,
+        plan: revision_finish.RevisionFinishPlan,
+        *,
+        preparation_id: str,
+    ) -> RevisionFinishReview:
+        provider = plan.audio.example_provider
+        if provider is None:
+            raise RevisionRefusal(
+                "The exact example-audio provider is unavailable, so Apply and "
+                "finish cannot be reviewed yet. The staged proposal was not applied."
+            )
+        records = tuple(
+            RevisionRecordReview(
+                record_id=record_id,
+                current_examples=tuple(
+                    self._review_example(example)
+                    for example in plan.revision.current_drill_examples[record_id]
+                ),
+                proposed_examples=tuple(
+                    self._review_example(example)
+                    for example in plan.revision.drill_examples[record_id]
+                ),
+            )
+            for record_id in plan.revision.selected_record_ids
+        )
+        counts = plan.audio.example_counts
+        return RevisionFinishReview(
+            preparation_id=preparation_id,
+            request_fingerprint=plan.fingerprint,
+            target=plan.revision.deck_relative_path,
+            current_form_note=plan.revision.current_form_note,
+            proposed_form_note=plan.revision.form_note,
+            records=records,
+            audio_provider=provider.name,
+            audio_model=provider.settings.get("model") or "not separately named",
+            audio_access=provider.access,
+            audio_total=counts.total,
+            audio_current=counts.current,
+            audio_recoverable=counts.recoverable,
+            audio_provider_required=counts.provider_required,
+            output_path=self._display_path(config, plan.build.output_path),
+            card_count=plan.build.card_count,
+        )
+
+    def consume_replan_and_finish(
+        self,
+        confirmation: RevisionFinishConfirmation,
+        *,
+        progress: Callable[[str], None],
+    ) -> RevisionFinishExecution:
+        """Consume, re-plan, compare, and run the shared aggregate finish."""
+
+        with self._plan_lock:
+            expected = self._finish_plans.pop(confirmation.preparation_id, None)
+        if (
+            expected is None
+            or confirmation.target != expected.revision.deck_relative_path
+            or confirmation.expected_fingerprint != expected.fingerprint
+        ):
+            raise RevisionRefusal(
+                "This Apply and finish review is missing, stale, already used, or "
+                "belongs elsewhere. Nothing was applied. Return to the Workbench "
+                "and reopen the existing staged proposal for a fresh finish review; "
+                "do not repeat the paid revise call."
+            )
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            fresh = revision_finish.plan_revision_finish(
+                fresh_config,
+                expected.revision.staging_path,
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(
+                f"The reviewed Apply and finish plan could not be re-created: {exc} "
+                "Nothing was applied. Return to the Workbench and reopen the existing "
+                "staged proposal for a fresh finish review; do not repeat the paid "
+                "revise call."
+            ) from exc
+        if not secrets.compare_digest(fresh.fingerprint, expected.fingerprint) or dict(
+            fresh.authority
+        ) != dict(expected.authority):
+            raise RevisionRefusal(
+                "The staged content or its audio/build consequences changed after "
+                "you reviewed them. Nothing was applied. Return to the Workbench and "
+                "reopen the existing staged proposal for a fresh finish review; do "
+                "not repeat the paid revise call."
+            )
+
+        problem: str | None = None
+        try:
+            result = revision_finish.execute_revision_finish(
+                fresh_config,
+                fresh,
+                progress=progress,
+            )
+        except Exception as exc:  # noqa: BLE001 - report durable receipt truth
+            problem = str(exc) or type(exc).__name__
+            try:
+                result = revision_finish.inspect_revision_finish(
+                    fresh_config,
+                    fresh.fingerprint,
+                )
+            except Exception as inspect_error:  # noqa: BLE001 - state is genuinely unknown
+                detail = str(inspect_error) or type(inspect_error).__name__
+                raise RevisionRefusal(
+                    f"Apply and finish stopped: {problem} Janki could not prove a "
+                    f"durable finish state: {detail} Do not click again or prepare a "
+                    "replacement until you inspect the operation journal and finish "
+                    "records."
+                ) from exc
+        return self._finish_execution(fresh_config, result, problem=problem)
+
+    def _finish_execution(
+        self,
+        config: ProjectConfig,
+        result: revision_finish.RevisionFinishResult,
+        *,
+        problem: str | None,
+    ) -> RevisionFinishExecution:
+        states = {
+            "authorized": (
+                "The exact finish authority is durable, but the reviewed revision "
+                "is not yet proven applied."
+            ),
+            "revision_applied": (
+                "The reviewed revision is applied and archived; example audio and "
+                "the Anki package still need to finish."
+            ),
+            "audio_complete": (
+                "The reviewed revision and exact example audio are durable; the "
+                "Anki package still needs to finish."
+            ),
+            "complete": ("The reviewed revision, example audio, and Anki package are complete."),
+        }
+        summary = states[result.state]
+        if problem is not None:
+            summary = f"Apply and finish stopped: {problem} {summary}"
+        if result.state != "complete":
+            summary += (
+                f" Resume only receipt {result.receipt_id}; do not create a broader "
+                "replacement plan."
+            )
+        else:
+            summary += f" Package: {self._display_path(config, result.output_path)}."
+        return RevisionFinishExecution(
+            message=summary,
+            receipt_id=result.receipt_id,
+            state=result.state,
+            target=self._display_path(config, result.deck_path),
+            output_path=self._display_path(config, result.output_path),
+            package_sha256=result.package_sha256,
+            card_count=result.card_count,
         )
 
 
@@ -508,10 +713,7 @@ def discover_revision_adapter(
                 "and revision are disabled.",
             )
         examples = deck_config.get("drill_examples")
-        if (
-            str(deck_config.get("kind") or "").strip().lower() == "conjugation"
-            and bool(examples)
-        ):
+        if str(deck_config.get("kind") or "").strip().lower() == "conjugation" and bool(examples):
             candidates.append(deck_path)
 
     if len(candidates) != 1:

@@ -218,6 +218,14 @@ review and apply path. The confirmation names which billing path is active;
 changing the setting makes an open confirmation stale. This selector does not
 change OpenAI Realtime audio.
 
+For an existing-card change, the confirmed revision call first saves a staging
+proposal; it does not alter the deck. Janki then shows the exact current and
+proposed form note and examples, the example-audio provider and clip counts,
+and the final package path and card count. One **Apply and finish** confirmation
+applies that reviewed proposal, voices only its selected cards, and builds the
+whole deck. If the browser disconnects or a later phase stops, resume the named
+finish receipt rather than preparing another paid revision or audio plan.
+
 1. **Add source material.** Choose a PDF, JPEG, PNG or HEIC file. This saves a
    durable copy on this computer and sends nothing to a provider.
 2. **Read the source.** Open the saved source and use its separate reading

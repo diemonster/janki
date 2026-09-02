@@ -83,21 +83,29 @@ from japanese_anki.validation import (
 )
 
 __all__ = [
+    "PATTERN_TEMPLATE_FILENAMES",
     "PatternCard",
     "PatternDeckError",
     "build_conjugation_deck",
     "build_pattern_deck",
     "cards_for",
+    "collection_for_section",
     "collection_for",
+    "conjugation_media_paths_for_section",
+    "conjugation_deck_section",
     "shipping_records",
+    "shipping_records_for_section",
     "deck_problems",
     "drill_cards",
     "declared_drill_audio_owner_ids",
     "drill_audio_owner_id",
     "drill_audio_records",
+    "drill_audio_records_from_revision",
     "DrillDeckContent",
     "read_drill_deck_content",
     "render_drill_deck_content",
+    "render_drill_audio_records",
+    "pattern_template_paths",
     "save_drill_deck_content",
     "save_drill_audio_records",
 ]
@@ -136,6 +144,15 @@ _DRILL_EXAMPLE_FIELDS = frozenset({
 })
 
 _DRILL_YAML_WIDTH = 1 << 30
+
+# The complete template set consumed by both rule and conjugation packages.
+# Build authority imports this tuple rather than maintaining a second list, so
+# adding a new exporter input cannot leave it outside the confirmed plan.
+PATTERN_TEMPLATE_FILENAMES: tuple[str, ...] = (
+    "pattern-front.html",
+    "pattern-back.html",
+    "style.css",
+)
 
 
 class _UniqueDeckKeyLoader(yaml.SafeLoader):
@@ -637,15 +654,25 @@ def _tidy(text: str) -> str:
     return text.strip().strip(_SEPARATOR_CHARS).strip()
 
 
+def pattern_template_paths(template_dir: Path) -> tuple[Path, ...]:
+    """Return every exact filesystem input consumed by the pattern notetype."""
+
+    return tuple(
+        (template_dir / filename).resolve()
+        for filename in PATTERN_TEMPLATE_FILENAMES
+    )
+
+
 def _notetype(model_id: int, model_name: str, template_dir: Path) -> Any:
-    front = _read(template_dir / "pattern-front.html")
-    back = _read(template_dir / "pattern-back.html")
+    front_path, back_path, style_path = pattern_template_paths(template_dir)
+    front = _read(front_path)
+    back = _read(back_path)
     return genanki.Model(
         model_id,
         model_name,
         fields=[{"name": name} for name in FIELDS],
         templates=[{"name": "Rule", "qfmt": front, "afmt": back}],
-        css=_read(template_dir / "style.css"),
+        css=_read(style_path),
     )
 
 
@@ -853,6 +880,13 @@ def _strict_drill_document(
     if str(section.get("kind") or "").strip().lower() != "conjugation":
         raise DataError(f"Drill revision requires a conjugation deck: {deck_path}")
     return document, section
+
+
+def conjugation_deck_section(deck_path: Path, text: str) -> dict[str, Any]:
+    """Parse one exact in-memory conjugation-deck snapshot."""
+
+    _document, section = _strict_drill_document(text, deck_path)
+    return section
 
 
 def _ordered_drill_scope(
@@ -1259,42 +1293,70 @@ def drill_audio_records(
     :class:`ExampleSentence` values it already journals, stages, recovers and
     ledgers for vocabulary cards.
     """
-    deck_config = _deck_section(deck_path)
+    return drill_audio_records_from_revision(
+        deck_path,
+        project_config,
+        records_revision(deck_path),
+        records,
+    )
+
+
+def drill_audio_records_from_revision(
+    deck_path: Path,
+    project_config: ProjectConfig,
+    revision: RecordsRevision,
+    records: Sequence[VocabularyRecord] | None = None,
+) -> list[VocabularyRecord]:
+    """Project sentence-audio owners from exact proposed deck bytes."""
+    target = deck_path.resolve()
+    if revision.path.resolve() != target:
+        raise DataError(
+            f"Drill revision for {revision.path} cannot project audio for {target}."
+        )
+    if revision.text is None:
+        raise DataError(f"Deck file no longer exists: {target}")
+    try:
+        raw = yaml.load(revision.text, Loader=_UniqueDeckKeyLoader)
+    except yaml.YAMLError as exc:
+        raise DataError(f"Could not parse {target}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise DataError(f"Deck file must contain a mapping: {target}")
+    deck_config = raw.get("deck") or {}
+    if not isinstance(deck_config, dict):
+        raise DataError(f"The deck section must be a mapping: {target}")
+    _refuse_conjugation_only_content(deck_config, target)
     kind = str(deck_config.get("kind") or "").strip().lower()
     if kind != "conjugation":
         raise DataError(
             f"Deck audio examples require a conjugation deck, got {kind or 'vocabulary'}: "
-            f"{deck_path}"
+            f"{target}"
         )
     if deck_config.get("drill_examples") is None:
         raise DataError(
-            f"{deck_path}: deck.drill_examples is required for deck example audio"
+            f"{target}: deck.drill_examples is required for deck example audio"
         )
-    revision = records_revision(deck_path)
-    if revision.text is None:
-        raise DataError(f"Deck file no longer exists: {deck_path}")
     # A static rewrite failure is knowable before a paid sentence call. The
     # writer uses this same round-trip parser so comments, quoting and anchors
     # survive when only generated audio scalars are inserted.
-    _editable_drill_document(revision.text, deck_path)
+    _editable_drill_document(revision.text, target)
     form = str(deck_config.get("form") or "te_form").strip()
     if form not in CONJUGATION_FORMS:
         raise DataError(
-            f"{deck_path}: form must be one of {', '.join(CONJUGATION_FORMS)}, "
+            f"{target}: form must be one of {', '.join(CONJUGATION_FORMS)}, "
             f"got {form!r}"
         )
     source_records = (
         list(records)
         if records is not None
-        else load_records(collection_for(deck_path, project_config))
+        else load_records(collection_for_section(target, project_config, deck_config))
     )
-    shipping = shipping_records(deck_path, source_records, form)
-    examples_by_id = _drill_examples(deck_config, shipping, deck_path, form)
+    shipping = shipping_records_for_section(target, deck_config, source_records, form)
+    examples_by_id = _drill_examples(deck_config, shipping, target, form)
     if not examples_by_id:
         raise DataError(
-            f"{deck_path}: deck.drill_examples is required for deck example audio"
+            f"{target}: deck.drill_examples is required for deck example audio"
         )
-    deck_id = _identifier(deck_config, "deck_id", deck_path)
+    deck_id = _identifier(deck_config, "deck_id", target)
     projected: list[VocabularyRecord] = []
     for record in shipping:
         examples = examples_by_id.get(record.id)
@@ -1312,31 +1374,23 @@ def drill_audio_records(
     return projected
 
 
-def save_drill_audio_records(
+def render_drill_audio_records(
     deck_path: Path,
     records: Sequence[VocabularyRecord],
     *,
     expected: RecordsRevision,
-) -> None:
-    """Write only generated audio references back to a locked drill YAML.
+) -> str:
+    """Render only generated audio references from an exact drill snapshot.
 
-    The caller holds the deck owner lock across synthesis, this compare, media
-    publication and ledger commit. The round-trip editor changes only the
-    generated audio scalars, preserving comments, quoting, anchors and unknown
-    keys. A semantic reparse proves the rendered document differs in no other
-    value, and the duplicate-key loader prevents silently choosing one of two
-    authored entries.
+    This pure projection changes only generated audio scalars, preserving
+    comments, quoting, anchors and unknown keys. A semantic reparse proves the
+    rendered document differs in no other value, and the duplicate-key loader
+    prevents silently choosing one of two authored entries.
     """
     target = deck_path.resolve()
     if expected.path.resolve() != target:
         raise DataError(
             f"Drill revision for {expected.path} cannot guard a write to {target}."
-        )
-    current = records_revision(target)
-    if current.text != expected.text:
-        raise DataError(
-            f"Drill deck {target} changed on disk since it was read; saving now "
-            "would discard those changes. Re-run the audio command."
         )
     if expected.text is None:
         raise DataError(f"Drill deck {target} no longer exists.")
@@ -1433,6 +1487,34 @@ def save_drill_audio_records(
         raise DataError(
             f"Refused an audio update that would change other deck content: {target}"
         )
+    return rendered
+
+
+def save_drill_audio_records(
+    deck_path: Path,
+    records: Sequence[VocabularyRecord],
+    *,
+    expected: RecordsRevision,
+) -> None:
+    """CAS one pure drill-audio rendering while its owner lock is held."""
+    target = deck_path.resolve()
+    if expected.path.resolve() != target:
+        raise DataError(
+            f"Drill revision for {expected.path} cannot guard a write to {target}."
+        )
+    current = records_revision(target)
+    if current.text != expected.text:
+        raise DataError(
+            f"Drill deck {target} changed on disk since it was read; saving now "
+            "would discard those changes. Re-run the audio command."
+        )
+    if expected.text is None:
+        raise DataError(f"Drill deck {target} no longer exists.")
+    rendered = render_drill_audio_records(
+        target,
+        records,
+        expected=expected,
+    )
     atomic_write_text_bound(
         target,
         rendered,
@@ -1575,6 +1657,7 @@ def _resolve_drill_audio_fields(
     record_id: str,
     media_files: list[str],
     claimed_media: dict[str, tuple[str, str]],
+    allowed_missing_media: frozenset[Path] = frozenset(),
 ) -> list[str]:
     """Resolve and claim every authored clip exactly as the package will."""
     audio_fields: list[str] = []
@@ -1592,11 +1675,49 @@ def _resolve_drill_audio_fields(
             media_files=media_files,
             warnings=warnings,
             claimed=claimed_media,
+            allowed_missing=allowed_missing_media,
         )
         audio_fields.append(f"[sound:{found.name}]" if found is not None else "")
     if warnings:
         raise PatternDeckError("; ".join(warnings))
     return audio_fields
+
+
+def conjugation_media_paths_for_section(
+    deck_path: Path,
+    project_config: ProjectConfig,
+    section: Mapping[str, Any],
+    records: Sequence[VocabularyRecord],
+    form: str,
+    *,
+    allowed_missing_media: frozenset[Path] = frozenset(),
+) -> tuple[Path, ...]:
+    """Resolve every file a conjugation package will consume.
+
+    A finish plan may name provider output that does not exist yet.  Its exact
+    future path is passed in ``allowed_missing_media``; ordinary builds pass no
+    exception and therefore retain the exporter's missing-media refusal.  The
+    resolution and basename-collision rules are the same ones used while
+    rendering the package.
+    """
+
+    target = deck_path.resolve()
+    shipping = shipping_records_for_section(target, section, records, form)
+    examples_by_id = _drill_examples(section, shipping, target, form)
+    cards = drill_cards(shipping, form)
+    media_files: list[str] = []
+    claimed_media: dict[str, tuple[str, str]] = {}
+    for _card, record_id in cards:
+        _resolve_drill_audio_fields(
+            examples_by_id.get(record_id, ()),
+            project_config=project_config,
+            deck_path=target,
+            record_id=record_id,
+            media_files=media_files,
+            claimed_media=claimed_media,
+            allowed_missing_media=allowed_missing_media,
+        )
+    return tuple(sorted({Path(path) for path in media_files}, key=str))
 
 
 def _identifier(deck_config: dict[str, Any], key: str, deck_path: Path) -> int:
@@ -1628,7 +1749,22 @@ def shipping_records(
     noun has no verb class, so no drill card could ever carry it — and over
     records the deck's own `exclude_ids` had deliberately held back.
     """
-    section = _deck_section(deck_path)
+    return shipping_records_for_section(
+        deck_path,
+        _deck_section(deck_path),
+        records,
+        form,
+    )
+
+
+def shipping_records_for_section(
+    deck_path: Path,
+    section: Mapping[str, Any],
+    records: Sequence[VocabularyRecord],
+    form: str = "",
+) -> list[VocabularyRecord]:
+    """Filter one collection using an already-parsed exact deck snapshot."""
+
     wanted = str(form or section.get("form") or "te_form").strip()
     include = _deck_string_set(section, "include_ids", deck_path)
     exclude = _deck_string_set(section, "exclude_ids", deck_path)
@@ -1650,7 +1786,16 @@ def collection_for(deck_path: Path, project_config: ProjectConfig) -> Path:
     wrong one. Missing is reported here rather than as an empty record list,
     which `build_conjugation_deck` could only describe as a missing verb class.
     """
-    section = _deck_section(deck_path)
+    return collection_for_section(deck_path, project_config, _deck_section(deck_path))
+
+
+def collection_for_section(
+    deck_path: Path,
+    project_config: ProjectConfig,
+    section: Mapping[str, Any],
+) -> Path:
+    """Resolve the collection named by an already-parsed exact deck snapshot."""
+
     source = section.get("source")
     if source is None:
         path = project_config.normalized_file.resolve()

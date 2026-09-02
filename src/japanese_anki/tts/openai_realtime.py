@@ -615,6 +615,7 @@ class OpenAiRealtimeProvider:
         text: str,
         *,
         forced_accent: bool,
+        before_dispatch: Callable[[str], None] | None,
     ) -> Operation:
         # The key is knowable before send. Retire a missing-key authority as a
         # proven before-send failure rather than inventing an unknown charge.
@@ -648,6 +649,18 @@ class OpenAiRealtimeProvider:
             journal.forget([held.operation_id])
             raise
 
+        if before_dispatch is not None:
+            try:
+                before_dispatch(held.operation_id)
+            except BaseException as exc:
+                journal = OperationJournal.load(path)
+                journal.advance(
+                    held.operation_id,
+                    "failed_before_send",
+                    detail=f"Dispatch authority callback refused: {exc}",
+                )
+                raise
+
         OperationJournal.load(path).advance(held.operation_id, "dispatching")
         OperationJournal.load(path).advance(held.operation_id, "running")
         try:
@@ -665,7 +678,8 @@ class OpenAiRealtimeProvider:
                 "failed_before_send",
                 detail=str(exc),
             )
-            journal.forget([held.operation_id])
+            if before_dispatch is None:
+                journal.forget([held.operation_id])
             raise
         except BaseException as exc:
             # The frame callback fsyncs before this path can parse. A malformed
@@ -696,6 +710,7 @@ class OpenAiRealtimeProvider:
         source_sha256: str,
         persist: Callable[[bytes], _Persisted],
         operations_path: Path | None = None,
+        before_dispatch: Callable[[str], None] | None = None,
     ) -> _Persisted:
         """Capture before decode, then commit only through ``persist``."""
         path = self._operations_path(operations_path)
@@ -732,6 +747,7 @@ class OpenAiRealtimeProvider:
                 held,
                 text,
                 forced_accent=forced_accent,
+                before_dispatch=before_dispatch,
             )
         elif held.state == "authorized":
             raise TtsError(

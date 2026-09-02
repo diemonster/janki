@@ -24,7 +24,7 @@ from japanese_anki.exporters.pattern_cards import (
     build_pattern_deck,
     cards_for,
 )
-from japanese_anki.io import DataError, records_revision
+from japanese_anki.io import DataError, RecordsRevision, records_revision
 from japanese_anki.models import ExampleSentence
 from japanese_anki.patterns import Pattern, PatternSet
 
@@ -1217,6 +1217,78 @@ def test_drill_audio_save_binds_the_spoken_override_not_only_display_text(
             deck,
             [changed],
             expected=records_revision(deck),
+        )
+
+
+def test_drill_audio_projection_reads_the_exact_deck_revision(
+    tmp_path: Path,
+) -> None:
+    rich_drill(tmp_path)
+    deck = tmp_path / "decks" / "drill.yaml"
+    config = ProjectConfig.load(tmp_path)
+    expected = records_revision(deck)
+    assert expected.text is not None
+    proposed = RecordsRevision(
+        expected.path,
+        expected.text.replace(
+            "私は日本語が話せます。",
+            "来週は日本語が話せます。",
+        ),
+    )
+    deck.write_text("not: the proposed deck\n", encoding="utf-8")
+
+    [record] = pattern_cards.drill_audio_records_from_revision(
+        deck,
+        config,
+        proposed,
+        [verb("話す", "はなす", "godan", ["to speak"])],
+    )
+
+    assert record.examples[0].japanese == "来週は日本語が話せます。"
+    assert deck.read_text(encoding="utf-8") == "not: the proposed deck\n"
+
+
+def test_drill_audio_renderer_is_pure_over_the_exact_revision(
+    tmp_path: Path,
+) -> None:
+    rich_drill(tmp_path)
+    deck = tmp_path / "decks" / "drill.yaml"
+    config = ProjectConfig.load(tmp_path)
+    expected = records_revision(deck)
+    [record] = pattern_cards.drill_audio_records_from_revision(
+        deck,
+        config,
+        expected,
+        [verb("話す", "はなす", "godan", ["to speak"])],
+    )
+    voiced = replace(
+        record,
+        examples=[
+            replace(example, audio=f"audio/example-{position}.wav")
+            for position, example in enumerate(record.examples, start=1)
+        ],
+    )
+    assert expected.text is not None
+    concurrent = expected.text.replace(
+        "私は日本語が話せます。",
+        "今は日本語が話せます。",
+    )
+    deck.write_text(concurrent, encoding="utf-8")
+
+    rendered = pattern_cards.render_drill_audio_records(
+        deck,
+        [voiced],
+        expected=expected,
+    )
+
+    assert "audio/example-1.wav" in rendered
+    assert "audio/example-2.wav" in rendered
+    assert deck.read_text(encoding="utf-8") == concurrent
+    with pytest.raises(DataError, match="changed on disk"):
+        pattern_cards.save_drill_audio_records(
+            deck,
+            [voiced],
+            expected=expected,
         )
 
 

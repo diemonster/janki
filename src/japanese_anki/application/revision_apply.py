@@ -37,7 +37,10 @@ __all__ = [
     "RevisionApplyProgress",
     "RevisionApplyResult",
     "execute_revision_apply",
+    "execute_revision_apply_locked",
     "plan_revision_apply",
+    "plan_revision_apply_archived_authority",
+    "plan_revision_apply_recovery",
 ]
 
 RevisionApplyPhase = Literal[
@@ -479,11 +482,18 @@ def _read_optional(path: Path) -> tuple[bytes | None, str | None]:
     return wire, _sha(wire)
 
 
-def _load_plan(config: ProjectConfig, staging_path: Path) -> RevisionApplyPlan:
-    wire, live_sha = _read_optional(staging_path)
+def _load_plan(
+    config: ProjectConfig,
+    staging_path: Path,
+    *,
+    artifact_path: Path | None = None,
+    validate_accepted_deck: bool = True,
+) -> RevisionApplyPlan:
+    read_path = staging_path if artifact_path is None else artifact_path
+    wire, live_sha = _read_optional(read_path)
     if wire is None or live_sha is None:
-        raise RevisionApplyError(f"Revision proposal no longer exists: {staging_path}")
-    manifest = _strict_json(wire, staging_path)
+        raise RevisionApplyError(f"Revision proposal no longer exists: {read_path}")
+    manifest = _strict_json(wire, read_path)
     state = manifest.get("state")
     top = _TOP_PROPOSED if state == "proposed" else _TOP_PROPOSED | {"acceptance"}
     _exact(manifest, top, "top-level")
@@ -616,12 +626,17 @@ def _load_plan(config: ProjectConfig, staging_path: Path) -> RevisionApplyPlan:
         )
         if calculated != plan_fp:
             raise RevisionApplyError("Accepted revision plan fingerprint is corrupt.")
-        current = pattern_cards.read_drill_deck_content(deck_path)
-        current_sha = _sha(current.revision.text.encode("utf-8"))
-        if current_sha not in {base_sha, intended_sha}:
-            raise RevisionApplyError("Accepted revision deck diverged from both bound states.")
-        if current_sha == base_sha:
-            _validate_before_snapshot(current, selected, current_note, current_examples)
+        if validate_accepted_deck:
+            current = pattern_cards.read_drill_deck_content(deck_path)
+            current_sha = _sha(current.revision.text.encode("utf-8"))
+            if current_sha not in {base_sha, intended_sha}:
+                raise RevisionApplyError(
+                    "Accepted revision deck diverged from both bound states."
+                )
+            if current_sha == base_sha:
+                _validate_before_snapshot(
+                    current, selected, current_note, current_examples
+                )
         archive_wire, _ = _read_optional(archive)
         if archive_wire is not None and archive_wire != wire:
             raise RevisionApplyError("Revision archive differs from the accepted artifact.")
@@ -663,6 +678,100 @@ def _load_plan(config: ProjectConfig, staging_path: Path) -> RevisionApplyPlan:
 def plan_revision_apply(config: ProjectConfig, staging_path: Path | str) -> RevisionApplyPlan:
     """Plan one exact proposal apply without writing repository state."""
     return _load_plan(config, _staging_target(config, staging_path))
+
+
+def plan_revision_apply_recovery(
+    config: ProjectConfig,
+    staging_path: Path | str,
+    *,
+    archive_path: Path | str,
+    plan_fingerprint: str,
+) -> RevisionApplyPlan:
+    """Reconstruct one completed plan from its exact accepted archive binding."""
+    logical_staging = _staging_target(config, staging_path)
+    if not _is_sha(plan_fingerprint):
+        raise RevisionApplyError("Revision recovery plan fingerprint is malformed.")
+    live_wire, _ = _read_optional(logical_staging)
+    if live_wire is not None:
+        raise RevisionApplyError("Revision recovery requires the live proposal to be gone.")
+    expected_archive = (config.staging_dir / "done" / "revisions" / logical_staging.name).absolute()
+    bound_archive = _contained_file(
+        Path(archive_path), config.staging_dir / "done" / "revisions", "Revision archive"
+    )
+    if bound_archive != expected_archive:
+        raise RevisionApplyError("Revision recovery archive is not the logical proposal archive.")
+    archive_wire, _ = _read_optional(bound_archive)
+    if archive_wire is None:
+        raise RevisionApplyError(f"Revision recovery archive no longer exists: {bound_archive}")
+    recovered = _load_plan(
+        config,
+        logical_staging,
+        artifact_path=bound_archive,
+    )
+    if (
+        recovered.state != "accepted"
+        or recovered.archive_path != bound_archive
+        or recovered.plan_fingerprint != plan_fingerprint
+    ):
+        raise RevisionApplyError("Archived revision is not this accepted plan.")
+    return recovered
+
+
+def plan_revision_apply_archived_authority(
+    config: ProjectConfig,
+    staging_path: Path | str,
+    *,
+    archive_path: Path | str,
+    plan_fingerprint: str,
+) -> RevisionApplyPlan:
+    """Reconstruct accepted authority after a caller-owned deck transaction.
+
+    Unlike :func:`plan_revision_apply_recovery`, this does not assert that the
+    canonical deck still equals the pre-audio revision bytes.  It is only for a
+    higher-level transaction that separately validates every allowed post-apply
+    deck evolution before proceeding.
+    """
+
+    logical_staging = _staging_target(config, staging_path)
+    if not _is_sha(plan_fingerprint):
+        raise RevisionApplyError("Archived revision plan fingerprint is malformed.")
+    live_wire, _ = _read_optional(logical_staging)
+    if live_wire is not None:
+        raise RevisionApplyError(
+            "Archived revision authority requires the live proposal to be gone."
+        )
+    expected_archive = (
+        config.staging_dir / "done" / "revisions" / logical_staging.name
+    ).absolute()
+    bound_archive = _contained_file(
+        Path(archive_path),
+        config.staging_dir / "done" / "revisions",
+        "Revision archive",
+    )
+    if bound_archive != expected_archive:
+        raise RevisionApplyError(
+            "Revision archive is not the logical proposal archive."
+        )
+    archive_wire, _ = _read_optional(bound_archive)
+    if archive_wire is None:
+        raise RevisionApplyError(
+            f"Revision archive no longer exists: {bound_archive}"
+        )
+    recovered = _load_plan(
+        config,
+        logical_staging,
+        artifact_path=bound_archive,
+        validate_accepted_deck=False,
+    )
+    if (
+        recovered.state != "accepted"
+        or recovered.archive_path != bound_archive
+        or recovered.plan_fingerprint != plan_fingerprint
+    ):
+        raise RevisionApplyError(
+            "Archived revision is not this accepted authority."
+        )
+    return recovered
 
 
 def _same_authority(expected: RevisionApplyPlan, fresh: RevisionApplyPlan) -> bool:
@@ -755,11 +864,19 @@ def execute_revision_apply(
     if expected_plan.repository_root != config.root.resolve():
         raise RevisionApplyError("Revision apply plan belongs to another repository.")
     prepare_bound_directory(expected_plan.archive_path.parent)
+    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+        return execute_revision_apply_locked(config, expected_plan, progress=progress)
+
+
+def execute_revision_apply_locked(
+    config: ProjectConfig,
+    expected_plan: RevisionApplyPlan,
+    *,
+    progress: RevisionApplyProgress | None = None,
+) -> RevisionApplyResult:
+    """Execute while the caller owns the repository audio-operation lock."""
     recovered = expected_plan.state == "accepted"
-    with (
-        exclusive_path_lock(config.root / ".janki-audio-operation"),
-        contextlib.ExitStack() as locks,
-    ):
+    with contextlib.ExitStack() as locks:
         for path in sorted(
             {
                 expected_plan.deck_path,

@@ -137,8 +137,13 @@ class JournaledSpeechProvider(SpeechProvider, Protocol):
         source_file: str,
         source_sha256: str,
         persist: Callable[[bytes], _Persisted],
+        before_dispatch: Callable[[str], None] | None = None,
     ) -> _Persisted:
-        """Capture, decode, and persist one reply under its operation entry."""
+        """Capture, decode, and persist one reply under its operation entry.
+
+        ``before_dispatch`` receives the durable operation id after response
+        capture is prepared but before the provider transport may be opened.
+        """
         ...
 
     def reconcile_journaled(

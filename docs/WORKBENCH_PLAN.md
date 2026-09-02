@@ -1042,6 +1042,17 @@ conversation; one click dispatches it, with no additional consent page or
 confirmation chain. “Separate” describes its authority boundary from local
 upload, not a different interface.*
 
+*Progress 2026-09-02. The remaining Apply-and-finish slice now exists as one
+shared application transaction used by both the ordinary Workbench and Janki.
+It renders the exact current/proposed form note and polite/casual examples,
+provider and clip counts, package path and card count, then consumes one
+plan-bound owner action. The service persists finish authority before applying,
+voices only the selected reviewed cards, binds all whole-deck templates and
+media by digest, builds the package, and records resumable phase receipts.
+Missing or changed disposable packages rebuild from the same receipt without
+repeating audio. The milestone remains partial only until the owner completes
+the real-browser acceptance journey.*
+
 Surface ChatKit in the ordinary workbench using its custom-server integration
 and janki's own server-side agent; do not build new work on the retiring Agent
 Builder path. The workbench remains useful with ChatKit disabled, and its off
@@ -1049,7 +1060,7 @@ state sends nothing and leaves no broken overlay. This stays ChatKit's
 self-hosted/custom-backend shape: janki owns the agent, application services
 and durable workflow rather than delegating them to a provider-hosted agent.
 
-The assistant has four deliberately separate interaction classes:
+The assistant has five deliberately separate interaction classes:
 
 1. Answer an ordinary Janki message through one journaled Claude turn. Sending
    the message authorizes that one subscription/API call, but it is
@@ -1063,6 +1074,11 @@ The assistant has four deliberately separate interaction classes:
    execution re-plans and compares every binding under the same locks as the
    CLI and ordinary workbench controller, captures the answer, stages it, and
    stops for content review.
+5. After the exact staged content and consequences are visible, consume one
+   separate **Apply and finish** capability. Re-plan before mutation, apply the
+   reviewed bytes, voice only the selected reviewed cards, build the whole-deck
+   package, and persist one receipt that is the sole recovery authority. Apply,
+   audio and build are phases of this one owner action, not more confirmations.
 
 This includes content edits, explicit replacement, example and pattern review,
 identity and deck decisions, coverage decisions, promotion, audio, build and

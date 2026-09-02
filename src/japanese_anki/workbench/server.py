@@ -74,8 +74,8 @@ from japanese_anki.application import (
 )
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import build as build_application
-from japanese_anki.application import deck_build as deck_build_application
 from japanese_anki.application import revision_apply as revision_apply_application
+from japanese_anki.application import revision_finish as revision_finish_application
 from japanese_anki.application.assignment import (
     AssignmentError,
     DeckAssignmentAttempt,
@@ -112,7 +112,7 @@ from japanese_anki.application.promotion_action import (
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.io import load_records
+from japanese_anki.io import DataError, load_records, read_bytes_bound
 from japanese_anki.localhttp import (
     MAX_BODY_BYTES,
     LocalOnlyHandler,
@@ -168,7 +168,11 @@ from japanese_anki.workbench.render import (
     render_finish,
     render_reidentify,
     render_revision,
-    render_revision_finish,
+    render_revision_finish_progress_failure,
+    render_revision_finish_progress_result,
+    render_revision_finish_progress_start,
+    render_revision_finish_progress_step,
+    render_revision_finish_status,
     render_source,
 )
 
@@ -179,7 +183,7 @@ _EXTRACT_PREFIX = "/extract/"
 _FINISH_PREFIX = "/finish/"
 _DECK_CREATOR_ROUTE = "/decks/new"
 _REVISION_PREFIX = "/revisions/"
-_DECK_PREFIX = "/decks/"
+_REVISION_FINISH_PREFIX = "/revision-finishes/"
 
 #: An uploaded source is orders of magnitude larger than a form. It is
 #: still bounded: this is a localhost tool reading a scan or a lesson PDF,
@@ -231,24 +235,23 @@ class _StudyDeckSubmission:
 
 
 @dataclass(frozen=True, slots=True)
-class _RevisionApplySubmission:
-    """The exact apply control rendered on one revision review page."""
+class _RevisionFinishSubmission:
+    """The exact aggregate control rendered on one revision review page."""
 
     csrf: str
     plan_fingerprint: str
 
 
 @dataclass(frozen=True, slots=True)
-class _RevisionFinishSubmission:
-    """One of the two separately authorized post-revision actions."""
+class _RevisionFinishResumeSubmission:
+    """A retry of one already-durable finish authority."""
 
-    action: str
     csrf: str
-    plan_fingerprint: str
+    receipt_id: str
 
 
-def _parse_revision_apply_form(body: bytes) -> _RevisionApplySubmission:
-    """Accept only the one bounded form shape the review page emits."""
+def _parse_revision_finish_form(body: bytes) -> _RevisionFinishSubmission:
+    """Accept only the one aggregate authority form the review page emits."""
     try:
         pairs = parse_qsl(
             body.decode("utf-8", errors="strict"),
@@ -259,35 +262,37 @@ def _parse_revision_apply_form(body: bytes) -> _RevisionApplySubmission:
             max_num_fields=4,
         )
     except (UnicodeError, ValueError) as exc:
-        raise revision_apply_application.RevisionApplyError(
+        raise revision_finish_application.RevisionFinishError(
             "That revision form could not be read."
         ) from exc
     names = [name for name, _value in pairs]
     if len(names) != len(set(names)):
-        raise revision_apply_application.RevisionApplyError(
+        raise revision_finish_application.RevisionFinishError(
             "That revision form repeats a field."
         )
     fields = dict(pairs)
     if set(fields) != {"action", "csrf", "plan_fingerprint"}:
-        raise revision_apply_application.RevisionApplyError(
+        raise revision_finish_application.RevisionFinishError(
             "That revision form is not one this page offered."
         )
-    if fields["action"] != "apply-revision":
-        raise revision_apply_application.RevisionApplyError(
+    if fields["action"] != "apply-and-finish":
+        raise revision_finish_application.RevisionFinishError(
             "That revision form names no available action."
         )
     fingerprint = fields["plan_fingerprint"]
     if not _is_lower_sha256(fingerprint):
-        raise revision_apply_application.RevisionApplyError(
+        raise revision_finish_application.RevisionFinishError(
             "That revision plan fingerprint is malformed."
         )
-    return _RevisionApplySubmission(
+    return _RevisionFinishSubmission(
         csrf=fields["csrf"], plan_fingerprint=fingerprint
     )
 
 
-def _parse_revision_finish_form(body: bytes) -> _RevisionFinishSubmission:
-    """Strictly parse an audio or build form from the deck finish page."""
+def _parse_revision_finish_resume_form(
+    body: bytes,
+) -> _RevisionFinishResumeSubmission:
+    """Strictly parse a retry of one durable aggregate authority."""
     try:
         pairs = parse_qsl(
             body.decode("utf-8", errors="strict"),
@@ -298,23 +303,51 @@ def _parse_revision_finish_form(body: bytes) -> _RevisionFinishSubmission:
             max_num_fields=4,
         )
     except (UnicodeError, ValueError) as exc:
-        raise JankiError("That deck finish form could not be read.") from exc
+        raise revision_finish_application.RevisionFinishError(
+            "That revision finish form could not be read."
+        ) from exc
     names = [name for name, _value in pairs]
     if len(names) != len(set(names)):
-        raise JankiError("That deck finish form repeats a field.")
+        raise revision_finish_application.RevisionFinishError(
+            "That revision finish form repeats a field."
+        )
     fields = dict(pairs)
-    if set(fields) != {"action", "csrf", "plan_fingerprint"}:
-        raise JankiError("That deck finish form is not one this page offered.")
-    action = fields["action"]
-    if action not in {"deck-audio", "deck-build"}:
-        raise JankiError("That deck finish form names no available action.")
-    fingerprint = fields["plan_fingerprint"]
-    if not _is_lower_sha256(fingerprint):
-        raise JankiError("That deck finish plan fingerprint is malformed.")
-    return _RevisionFinishSubmission(
-        action=action,
+    if set(fields) != {"action", "csrf", "receipt_id"}:
+        raise revision_finish_application.RevisionFinishError(
+            "That revision finish form is not one this page offered."
+        )
+    if fields["action"] != "resume-apply-and-finish":
+        raise revision_finish_application.RevisionFinishError(
+            "That revision finish form names no available action."
+        )
+    receipt_id = fields["receipt_id"]
+    if not _is_lower_sha256(receipt_id):
+        raise revision_finish_application.RevisionFinishError(
+            "That revision finish receipt is malformed."
+        )
+    return _RevisionFinishResumeSubmission(
         csrf=fields["csrf"],
-        plan_fingerprint=fingerprint,
+        receipt_id=receipt_id,
+    )
+
+
+def _revision_finish_no_paid_call_message(
+    result: revision_finish_application.RevisionFinishResult,
+) -> str:
+    """Explain why this exact durable authority cannot incur a paid call."""
+    if result.state in {"audio_complete", "complete"}:
+        return (
+            "Example audio was already durable before this resume, so "
+            "this resume could not contact a paid provider."
+        )
+    if result.example_provider_access == "local-network":
+        return (
+            "This exact finish uses a local-network example provider, so "
+            "this resume could not incur a paid provider charge."
+        )
+    return (
+        "This exact finish authorized no provider-required example clips, so "
+        "this resume could not incur a paid provider charge."
     )
 
 
@@ -695,24 +728,97 @@ class WorkbenchSession:
                 warnings.append(f"Could not open revision {candidate.name}: {exc}")
         return plans, warnings
 
-    def revision_proposal(
+    def revision_finish_plan(
         self, name: str
-    ) -> revision_apply_application.RevisionApplyPlan | None:
-        """Plan a named candidate found by directory walk, never path joining."""
+    ) -> revision_finish_application.RevisionFinishPlan | None:
+        """Plan all consequences for a named, directory-discovered proposal."""
         candidates, _warnings = self._revision_candidate_paths()
         path = next((candidate for candidate in candidates if candidate.name == name), None)
         if path is None:
             return None
-        return revision_apply_application.plan_revision_apply(self.config, path)
+        return revision_finish_application.plan_revision_finish(self.config, path)
 
-    def configured_deck(self, name: str) -> Path | None:
-        """Resolve one exact configured filename without joining request text."""
-        matches = [
-            path.resolve()
-            for path in status_module.deck_files(self.config)
-            if path.name == name
-        ]
-        return matches[0] if len(matches) == 1 else None
+    def revision_finishes(
+        self,
+    ) -> tuple[
+        list[revision_finish_application.RevisionFinishResult],
+        list[str],
+    ]:
+        """Recoverable finishes, without clutter from current completed ones."""
+        directory = self.config.staging_dir / "done" / "revisions"
+        try:
+            entries = sorted(directory.iterdir(), key=lambda path: path.name)
+        except FileNotFoundError:
+            return [], []
+        except OSError as exc:
+            return [], [f"Could not inspect revision finishes: {exc}"]
+        finishes: list[revision_finish_application.RevisionFinishResult] = []
+        warnings: list[str] = []
+        for entry in entries:
+            if not entry.name.startswith("finish-") or entry.suffix != ".json":
+                continue
+            receipt_id = entry.name.removeprefix("finish-").removesuffix(".json")
+            if not _is_lower_sha256(receipt_id):
+                warnings.append(
+                    f"Revision finish {entry.name} has an invalid receipt name."
+                )
+                continue
+            try:
+                details = os.lstat(entry)
+            except OSError as exc:
+                warnings.append(f"Could not inspect revision finish {entry.name}: {exc}")
+                continue
+            if not stat.S_ISREG(details.st_mode):
+                warnings.append(
+                    f"Revision finish {entry.name} is not a direct regular file "
+                    "and was refused."
+                )
+                continue
+            try:
+                result = revision_finish_application.inspect_revision_finish(
+                    self.config,
+                    receipt_id,
+                )
+            except Exception as exc:  # noqa: BLE001 - one receipt cannot hide others
+                warnings.append(
+                    f"Could not open revision finish {entry.name}: "
+                    f"{_exception_text(exc)}"
+                )
+                continue
+            needs_recovery, package_warning = self._revision_package_recovery(result)
+            if package_warning:
+                warnings.append(
+                    f"Revision finish {entry.name}: {package_warning}"
+                )
+            if not result.succeeded or needs_recovery:
+                finishes.append(result)
+        return finishes, warnings
+
+    def _revision_package_recovery(
+        self,
+        result: revision_finish_application.RevisionFinishResult,
+    ) -> tuple[bool, str | None]:
+        """Whether a completed receipt's disposable package needs attention."""
+        if not result.succeeded:
+            return False, None
+        expected_package = result.package_sha256
+        if not _is_lower_sha256(expected_package or ""):
+            return True, "its completed package receipt is malformed."
+        try:
+            package_sha256 = hashlib.sha256(
+                read_bytes_bound(result.output_path)
+            ).hexdigest()
+        except FileNotFoundError:
+            # ``dist`` is disposable. The durable finish receipt is the exact
+            # authority that can rebuild this package without revisiting apply
+            # or audio.
+            return True, None
+        except (DataError, OSError) as exc:
+            return True, f"its package could not be safely inspected: {_exception_text(exc)}"
+        return (
+            not secrets.compare_digest(package_sha256, expected_package),
+            None,
+        )
 
     def take_dashboard_tour_open(self) -> bool:
         """Open the guide once per server session, independent of corpus state."""
@@ -931,6 +1037,67 @@ class _ExtractionProgress:
 
     def failure(self, failure: FailureView) -> None:
         self._write(render_extraction_failure(failure))
+
+
+class _RevisionFinishProgress:
+    """Stream aggregate phases without making the browser own the work."""
+
+    def __init__(
+        self,
+        handler: _WorkbenchHandler,
+        deck_name: str,
+        token: str,
+        csrf: str,
+    ) -> None:
+        self.handler = handler
+        self.deck_name = deck_name
+        self.token = token
+        self.csrf = csrf
+        self.writable = True
+
+    def _write(self, chunk: str) -> None:
+        if not self.writable:
+            return
+        try:
+            self.handler.wfile.write(chunk.encode("utf-8"))
+            self.handler.wfile.flush()
+        except OSError:
+            # The durable finish authority, not the open tab, owns recovery.
+            self.writable = False
+
+    def start(self) -> None:
+        try:
+            self.handler._start_response(200)
+        except OSError:
+            self.writable = False
+            return
+        self._write(
+            render_revision_finish_progress_start(
+                self.deck_name,
+                token=self.token,
+            )
+        )
+
+    def step(self, label: str) -> None:
+        self._write(render_revision_finish_progress_step(label))
+
+    def result(
+        self,
+        result: revision_finish_application.RevisionFinishResult,
+        *,
+        problem: str = "",
+    ) -> None:
+        self._write(
+            render_revision_finish_progress_result(
+                result,
+                token=self.token,
+                csrf=self.csrf,
+                problem=problem,
+            )
+        )
+
+    def failure(self, failure: FailureView) -> None:
+        self._write(render_revision_finish_progress_failure(failure))
 
 
 def _completion_refusal_note(config: ProjectConfig, operation_id: str) -> str:
@@ -1292,60 +1459,32 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return None
         return fields["source"], promoted, held
 
-    def _revision_finish_banner(self) -> str:
-        """Display-only result of one deck finish POST."""
-        query = self.path.split("?", 1)
-        if len(query) != 2:
-            return ""
-        fields = dict(parse_qsl(query[1]))
-        if fields.get("audio") == "complete":
-            return "Example audio finished. Build remains a separate action below."
-        if fields.get("build") == "complete":
-            return "Built the Anki package from the exact plan shown."
-        return ""
-
-    def _revision_finish_page(self, name: str) -> None:
-        """Render independent current audio and build plans for a known deck."""
+    def _revision_finish_status_page(self, receipt_id: str) -> None:
+        """Render only strictly inspected durable aggregate state."""
         session = self.server.session
         try:
-            deck = session.configured_deck(name)
-        except Exception as exc:  # noqa: BLE001 - configured-deck errors are refusals
-            self._error(409, _exception_text(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
-            return
-        if deck is None:
-            self._error(404, "No such configured deck.")
-            return
-        audio_plan = None
-        audio_error = ""
-        build_plan = None
-        build_error = ""
-        try:
-            audio_plan = audio_application.plan_deck_audio(
-                session.config,
-                deck,
-                words=False,
-                examples=True,
-                force=False,
+            result = revision_finish_application.inspect_revision_finish(
+                session.config, receipt_id
             )
-        except Exception as exc:  # noqa: BLE001 - keep the independent build visible
-            audio_error = _exception_text(exc)
-        try:
-            build_plan = deck_build_application.plan_conjugation_deck_build(
-                session.config, deck
+        except Exception as exc:  # noqa: BLE001 - corrupt receipts remain refusals
+            self._error(
+                409,
+                _exception_text(exc),
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+                next_step=(
+                    "Return to the dashboard and inspect the revision and paid "
+                    "operation notices before trying to resume."
+                ),
             )
-        except Exception as exc:  # noqa: BLE001 - keep the independent audio visible
-            build_error = _exception_text(exc)
+            return
+        package_needs_rebuild, _warning = session._revision_package_recovery(result)
         self._send(
             200,
-            render_revision_finish(
-                deck,
+            render_revision_finish_status(
+                result,
                 token=session.token,
                 csrf=session.csrf_token,
-                audio_plan=audio_plan,
-                build_plan=build_plan,
-                audio_error=audio_error,
-                build_error=build_error,
-                banner=self._revision_finish_banner(),
+                package_needs_rebuild=package_needs_rebuild,
             ),
         )
 
@@ -1416,6 +1555,9 @@ class _WorkbenchHandler(LocalOnlyHandler):
             revisions, revision_warnings = (
                 self.server.session.revision_proposals()
             )
+            revision_finishes, revision_finish_warnings = (
+                self.server.session.revision_finishes()
+            )
             tour_open = self.server.session.take_dashboard_tour_open()
             self._send(
                 200,
@@ -1432,6 +1574,8 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     assistant_url=self.server.session.assistant_url,
                     revisions=revisions,
                     revision_warnings=revision_warnings,
+                    revision_finishes=revision_finishes,
+                    revision_finish_warnings=revision_finish_warnings,
                 ),
             )
             return
@@ -1447,12 +1591,12 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 ),
             )
             return
-        if route.startswith(_DECK_PREFIX) and route.endswith("/finish"):
-            encoded_name = route[len(_DECK_PREFIX) : -len("/finish")]
-            if not encoded_name or "/" in encoded_name:
-                self._error(404, "No such deck finish page.")
+        if route.startswith(_REVISION_FINISH_PREFIX):
+            receipt_id = unquote(route[len(_REVISION_FINISH_PREFIX) :])
+            if not _is_lower_sha256(receipt_id):
+                self._error(404, "No such revision finish.")
                 return
-            self._revision_finish_page(unquote(encoded_name))
+            self._revision_finish_status_page(receipt_id)
             return
         if route.startswith(_REVISION_PREFIX):
             encoded_name = route[len(_REVISION_PREFIX) :]
@@ -1461,7 +1605,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 return
             name = unquote(encoded_name)
             try:
-                plan = self.server.session.revision_proposal(name)
+                plan = self.server.session.revision_finish_plan(name)
             except Exception as exc:  # noqa: BLE001 - revision errors stay a refusal page
                 self._error(
                     409,
@@ -1901,7 +2045,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             and not route.startswith(_EXTRACT_PREFIX)
             and not route.startswith(_FINISH_PREFIX)
             and not route.startswith(_REVISION_PREFIX)
-            and not route.startswith(_DECK_PREFIX)
+            and not route.startswith(_REVISION_FINISH_PREFIX)
         ):
             self._error(404, "No such workbench action.")
             return
@@ -1917,26 +2061,31 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 return
             self._study_deck(body)
             return
-        if route.startswith(_DECK_PREFIX) and route.endswith("/finish"):
-            encoded_name = route[len(_DECK_PREFIX) : -len("/finish")]
-            if not encoded_name or "/" in encoded_name:
-                self._error(404, "No such deck finish action.")
+        if route.startswith(_REVISION_FINISH_PREFIX):
+            rest = route[len(_REVISION_FINISH_PREFIX) :]
+            receipt_id, separator, action = rest.rpartition("/")
+            if (
+                separator != "/"
+                or action != "resume"
+                or not _is_lower_sha256(unquote(receipt_id))
+            ):
+                self._error(404, "No such revision finish action.")
                 return
             body = self._read_body()
             if body is None:
                 return
-            self._revision_finish(unquote(encoded_name), body)
+            self._resume_revision_finish(unquote(receipt_id), body)
             return
         if route.startswith(_REVISION_PREFIX):
             rest = route[len(_REVISION_PREFIX) :]
             encoded_name, separator, action = rest.rpartition("/")
-            if separator != "/" or action != "apply" or not encoded_name:
+            if separator != "/" or action != "finish" or not encoded_name:
                 self._error(404, "No such deck revision action.")
                 return
             body = self._read_body()
             if body is None:
                 return
-            self._apply_revision(unquote(encoded_name), body)
+            self._apply_and_finish_revision(unquote(encoded_name), body)
             return
         if route.startswith(_FINISH_PREFIX):
             receipt_id = unquote(route[len(_FINISH_PREFIX) :])
@@ -1988,19 +2137,19 @@ class _WorkbenchHandler(LocalOnlyHandler):
         self.end_headers()
         self.close_connection = True
 
-    def _apply_revision(self, name: str, body: bytes) -> None:
-        """Re-plan and apply only the exact revision the owner just reviewed."""
+    def _apply_and_finish_revision(self, name: str, body: bytes) -> None:
+        """Re-plan, then execute the one aggregate plan the owner reviewed."""
         session = self.server.session
         try:
-            submission = _parse_revision_apply_form(body)
-        except revision_apply_application.RevisionApplyError as exc:
+            submission = _parse_revision_finish_form(body)
+        except revision_finish_application.RevisionFinishError as exc:
             self._error(400, str(exc))
             return
         if not secrets.compare_digest(submission.csrf, session.csrf_token):
             self._error(403, "That form did not come from this workbench session.")
             return
         try:
-            fresh = session.revision_proposal(name)
+            fresh = session.revision_finish_plan(name)
         except Exception as exc:  # noqa: BLE001 - read failures are local refusals
             self._error(
                 409,
@@ -2016,11 +2165,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._error(404, "No such deck revision action.")
             return
         if not secrets.compare_digest(
-            submission.plan_fingerprint, fresh.plan_fingerprint
+            submission.plan_fingerprint, fresh.fingerprint
         ):
             self._error(
                 409,
-                "This revision changed after the page was rendered.",
+                "This apply-and-finish plan changed after the page was rendered.",
                 truth=_ErrorTruth.LOCAL_NO_WRITE,
                 next_step=(
                     "Use your browser's Back button rather than reloading this "
@@ -2028,220 +2177,116 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 ),
             )
             return
+        progress = _RevisionFinishProgress(
+            self,
+            fresh.revision.deck_path.name,
+            session.token,
+            session.csrf_token,
+        )
+        progress.start()
         try:
-            result = revision_apply_application.execute_revision_apply(
-                session.config, fresh
+            result = revision_finish_application.execute_revision_finish(
+                session.config,
+                fresh,
+                progress=progress.step,
             )
-        except Exception as exc:  # noqa: BLE001 - never turn a recoverable apply into 500
-            self._error(
-                409,
-                _exception_text(exc),
-                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
-                next_step=(
-                    "Use your browser's Back button rather than reloading this "
-                    "POST. Return to the dashboard and inspect the revision's "
-                    "current recovery state before trying again."
-                ),
+        except Exception as exc:  # noqa: BLE001 - preserve durable recovery truth
+            self._revision_finish_stream_failure(
+                progress,
+                fresh.fingerprint,
+                exc,
+                paid_call_possible=fresh.paid_provider_call_possible,
             )
             return
-        self._redirect(
-            f"/{session.token}/decks/{quote(result.deck_path.name, safe='')}/finish"
-        )
+        progress.result(result)
 
-    def _revision_finish(self, name: str, body: bytes) -> None:
-        """Dispatch one separately bound deck-audio or deck-build action."""
+    def _resume_revision_finish(self, receipt_id: str, body: bytes) -> None:
+        """Resume an already-recorded aggregate authority without widening it."""
         session = self.server.session
         try:
-            submission = _parse_revision_finish_form(body)
-        except JankiError as exc:
+            submission = _parse_revision_finish_resume_form(body)
+        except revision_finish_application.RevisionFinishError as exc:
             self._error(400, str(exc))
             return
         if not secrets.compare_digest(submission.csrf, session.csrf_token):
             self._error(403, "That form did not come from this workbench session.")
             return
+        if not secrets.compare_digest(submission.receipt_id, receipt_id):
+            self._error(
+                409,
+                "That resume form names a different finish receipt.",
+                truth=_ErrorTruth.LOCAL_NO_WRITE,
+            )
+            return
         try:
-            deck = session.configured_deck(name)
-        except Exception as exc:  # noqa: BLE001 - configured-deck errors are refusals
+            inspected = revision_finish_application.inspect_revision_finish(
+                session.config, receipt_id
+            )
+        except Exception as exc:  # noqa: BLE001 - no retry began
             self._error(409, _exception_text(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
             return
-        if deck is None:
-            self._error(404, "No such configured deck.")
-            return
-        if submission.action == "deck-audio":
-            self._revision_finish_audio(deck, submission)
-        else:
-            self._revision_finish_build(deck, submission)
-
-    def _revision_finish_audio(
-        self,
-        deck: Path,
-        submission: _RevisionFinishSubmission,
-    ) -> None:
-        """Re-plan then run the exact examples-only, non-forced audio plan."""
-        session = self.server.session
-        try:
-            fresh = audio_application.plan_deck_audio(
-                session.config,
-                deck,
-                words=False,
-                examples=True,
-                force=False,
-            )
-        except Exception as exc:  # noqa: BLE001 - planning proves no dispatch/write
-            self._error(
-                409,
-                _exception_text(exc),
-                truth=_ErrorTruth.LOCAL_NO_WRITE,
-                next_step=(
-                    "Use your browser's Back button rather than reloading this "
-                    "POST, then reload the deck finish page."
-                ),
-            )
-            return
-        if not secrets.compare_digest(
-            submission.plan_fingerprint, fresh.fingerprint
-        ):
-            self._error(
-                409,
-                "This example-audio plan changed after the page was rendered.",
-                truth=_ErrorTruth.LOCAL_NO_WRITE,
-                next_step=(
-                    "Use your browser's Back button rather than reloading this "
-                    "POST, then reload and review the fresh audio counts."
-                ),
-            )
-            return
-        provider = fresh.example_provider
-        paid_call_possible = bool(
-            provider is not None
-            and provider.access == "paid-network"
-            and fresh.example_counts.provider_required > 0
+        progress = _RevisionFinishProgress(
+            self,
+            inspected.deck_path.name,
+            session.token,
+            session.csrf_token,
         )
+        progress.start()
         try:
-            execution = audio_application.execute_deck_audio(
+            result = revision_finish_application.resume_revision_finish(
                 session.config,
-                deck,
-                words=False,
-                examples=True,
-                expected_fingerprint=fresh.fingerprint,
-                force=False,
-                prune=False,
+                receipt_id,
+                progress=progress.step,
             )
-        except Exception as exc:  # noqa: BLE001 - provider/write truth is unknown
-            self._failure(
-                409,
+        except Exception as exc:  # noqa: BLE001 - preserve durable recovery truth
+            self._revision_finish_stream_failure(
+                progress,
+                receipt_id,
+                exc,
+                paid_call_possible=inspected.paid_provider_call_possible,
+                no_paid_call_message=_revision_finish_no_paid_call_message(inspected),
+            )
+            return
+        progress.result(result)
+
+    def _revision_finish_stream_failure(
+        self,
+        progress: _RevisionFinishProgress,
+        receipt_id: str,
+        exc: BaseException,
+        *,
+        paid_call_possible: bool,
+        no_paid_call_message: str = (
+            "This exact plan required no paid provider call."
+        ),
+    ) -> None:
+        """Prefer an inspected durable receipt over generic failure guesses."""
+        try:
+            result = revision_finish_application.inspect_revision_finish(
+                self.server.session.config,
+                receipt_id,
+            )
+        except Exception:  # noqa: BLE001 - the receipt itself may be absent/corrupt
+            progress.failure(
                 FailureView(
-                    happened=f"Could not finish this example audio: {_exception_text(exc)}",
+                    happened=_exception_text(exc),
                     changed=(
-                        "This failure cannot prove whether deck audio references, "
-                        "canonical media, or the audio ledger changed."
+                        "This failure cannot safely prove which finish phases "
+                        "became durable."
                     ),
                     money=(
                         "A paid provider call may have been billed."
                         if paid_call_possible
-                        else "This exact plan required no paid provider call."
+                        else no_paid_call_message
                     ),
                     next_step=(
-                        "Use your browser's Back button rather than reloading this "
-                        "POST. Return to the deck finish page and inspect its fresh "
-                        "current and recoverable counts before retrying."
+                        "Return to the dashboard, inspect the revision and paid "
+                        "operation notices, then reopen the current durable action."
                     ),
-                ),
-            )
-            return
-        if not execution.succeeded:
-            changed = " ".join(
-                (
-                    "This action wrote deck audio references."
-                    if execution.record_references_written
-                    else "This action did not write deck audio references.",
-                    "This action published canonical media."
-                    if execution.media_published
-                    else "This action did not publish canonical media.",
-                    "This action committed its canonical audio ledger changes."
-                    if execution.ledger_committed
-                    else "This action did not commit canonical audio ledger changes.",
                 )
             )
-            technical = " ".join(
-                value
-                for value in (
-                    execution.stopped_by,
-                    execution.prune_error,
-                    execution.ledger_error,
-                )
-                if value
-            )
-            self._failure(
-                409,
-                FailureView(
-                    happened="Example audio did not finish.",
-                    changed=changed,
-                    money=(
-                        "A paid provider call may have been billed."
-                        if paid_call_possible
-                        else "This exact plan required no paid provider call."
-                    ),
-                    next_step=(
-                        "Exact recovery is durable. Reload this deck finish page "
-                        "and repeat the matching action to adopt it without rebilling."
-                        if execution.pending_recovery
-                        else "Reload this deck finish page and review the fresh "
-                        "audio plan before trying again."
-                    ),
-                    technical_detail=technical,
-                ),
-            )
             return
-        self._redirect(
-            f"/{session.token}/decks/{quote(deck.name, safe='')}/finish?audio=complete"
-        )
-
-    def _revision_finish_build(
-        self,
-        deck: Path,
-        submission: _RevisionFinishSubmission,
-    ) -> None:
-        """Re-plan then publish only the exact local package shown."""
-        session = self.server.session
-        try:
-            fresh = deck_build_application.plan_conjugation_deck_build(
-                session.config, deck
-            )
-        except Exception as exc:  # noqa: BLE001 - planning proves no write
-            self._error(409, _exception_text(exc), truth=_ErrorTruth.LOCAL_NO_WRITE)
-            return
-        if not secrets.compare_digest(
-            submission.plan_fingerprint, fresh.fingerprint
-        ):
-            self._error(
-                409,
-                "This deck-build plan changed after the page was rendered.",
-                truth=_ErrorTruth.LOCAL_NO_WRITE,
-                next_step=(
-                    "Use your browser's Back button rather than reloading this "
-                    "POST, then reload and review the fresh build plan."
-                ),
-            )
-            return
-        try:
-            deck_build_application.execute_conjugation_deck_build(
-                session.config, fresh
-            )
-        except Exception as exc:  # noqa: BLE001 - a local package may have landed
-            self._error(
-                409,
-                _exception_text(exc),
-                truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
-                next_step=(
-                    "Use your browser's Back button rather than reloading this "
-                    "POST, then reload the finish page and inspect the package path."
-                ),
-            )
-            return
-        self._redirect(
-            f"/{session.token}/decks/{quote(deck.name, safe='')}/finish?build=complete"
-        )
+        progress.result(result, problem=_exception_text(exc))
 
     def _finish(self, receipt_id: str, body: bytes) -> None:
         """Plan or consume one exact finish-page dictionary/kanji action."""

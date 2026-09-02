@@ -23,6 +23,7 @@ from japanese_anki.errors import JankiError
 from japanese_anki.exporters import pattern_cards
 from japanese_anki.exporters.anki import (
     deck_declared_record_versions,
+    deck_declared_record_versions_from_revision,
     deck_kind,
 )
 from japanese_anki.io import (
@@ -40,6 +41,7 @@ from japanese_anki.tts import (
     SentenceProfileSelector,
     SpeechProvider,
     openai_realtime,
+    sentence_profile_for,
     voicevox,
 )
 
@@ -169,13 +171,19 @@ class AudioPlan:
         return self.word_counts.provider_required + self.example_counts.provider_required
 
 
+@dataclass(frozen=True, slots=True)
+class PaidAudioDispatch:
+    """One fresh paid call at the last durable boundary before transport."""
+
+    operation_id: str
+    clip: AudioClipPlan
+
+
 def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
     return (chosen or config.tts_provider or "voicevox").strip().lower()
 
 
-def _drill_audio_records_for_deck(
-    config: ProjectConfig, deck_path: Path
-) -> list[VocabularyRecord]:
+def _drill_audio_records_for_deck(config: ProjectConfig, deck_path: Path) -> list[VocabularyRecord]:
     """Return a conjugation deck's synthetic audio owners, if it has any."""
     if deck_kind(deck_path) != "conjugation":
         return []
@@ -190,23 +198,44 @@ def _all_durable_audio_records(
     config: ProjectConfig,
     deck_paths: Sequence[Path],
     normalized_records: Sequence[VocabularyRecord] | None = None,
+    *,
+    deck_revisions: Mapping[Path, RecordsRevision] | None = None,
+    drill_overrides: Mapping[Path, Sequence[VocabularyRecord]] | None = None,
 ) -> list[VocabularyRecord]:
     """Every record-shaped owner that can keep a media reference alive."""
+    revisions = {path.resolve(): revision for path, revision in (deck_revisions or {}).items()}
+    projected_drills = {
+        path.resolve(): list(records) for path, records in (drill_overrides or {}).items()
+    }
     durable = list(
         normalized_records
         if normalized_records is not None
-        else (
-            load_records(config.normalized_file)
-            if config.normalized_file.exists()
-            else []
-        )
+        else (load_records(config.normalized_file) if config.normalized_file.exists() else [])
     )
     for deck_path in deck_paths:
-        durable.extend(deck_declared_record_versions(deck_path))
+        target = deck_path.resolve()
+        revision = revisions.get(target)
+        durable.extend(
+            deck_declared_record_versions_from_revision(target, revision)
+            if revision is not None
+            else deck_declared_record_versions(target)
+        )
     ordinary_ids = {record.id for record in durable}
     drill_origins: dict[str, Path] = {}
     for deck_path in deck_paths:
-        drill_records = _drill_audio_records_for_deck(config, deck_path)
+        target = deck_path.resolve()
+        drill_records = projected_drills.get(target)
+        if drill_records is None:
+            revision = revisions.get(target)
+            drill_records = (
+                pattern_cards.drill_audio_records_from_revision(
+                    target,
+                    config,
+                    revision,
+                )
+                if revision is not None
+                else _drill_audio_records_for_deck(config, target)
+            )
         for record in drill_records:
             if record.id in ordinary_ids:
                 raise AudioPlanError(
@@ -277,9 +306,7 @@ def resolve_sentence_provider(
 
 
 def _provider_plan(provider: SentenceProvider) -> AudioProviderPlan:
-    access: AudioAccess = (
-        "paid-network" if provider.name == "openai-realtime" else "local-network"
-    )
+    access: AudioAccess = "paid-network" if provider.name == "openai-realtime" else "local-network"
     if provider.name == "openai-realtime":
         destination = openai_realtime.ENDPOINT
     else:
@@ -620,6 +647,7 @@ def plan_deck_audio(
     config: ProjectConfig,
     deck_path: Path,
     *,
+    record_ids: Sequence[str] | None = None,
     words: bool = False,
     examples: bool = True,
     force: bool = False,
@@ -628,6 +656,77 @@ def plan_deck_audio(
     sentence_provider: SentenceProvider | None = None,
 ) -> AudioPlan:
     """Plan the existing sentence-audio transaction for one rich drill deck."""
+    target, known = _deck_audio_plan_scope(config, deck_path, words, examples)
+    records = pattern_cards.drill_audio_records(target, config)
+    revision = records_revision(target)
+    protected = tuple(_all_durable_audio_records(config, known))
+    return _plan_records(
+        config,
+        records,
+        revision,
+        None if record_ids is None else _exact_ids(record_ids),
+        words=False,
+        examples=True,
+        force=force,
+        chosen_provider=chosen_provider,
+        word_provider=word_provider,
+        sentence_provider=sentence_provider,
+        protected_records=protected,
+        owner_path=target,
+    )
+
+
+def plan_deck_audio_revision(
+    config: ProjectConfig,
+    deck_path: Path,
+    revision: RecordsRevision,
+    *,
+    record_ids: Sequence[str] | None = None,
+    words: bool = False,
+    examples: bool = True,
+    force: bool = False,
+    chosen_provider: str | None = None,
+    word_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
+) -> AudioPlan:
+    """Plan deck audio as though one exact deck revision had already landed."""
+    target, known = _deck_audio_plan_scope(config, deck_path, words, examples)
+    records = pattern_cards.drill_audio_records_from_revision(
+        target,
+        config,
+        revision,
+    )
+    protected = tuple(
+        _all_durable_audio_records(
+            config,
+            known,
+            deck_revisions={target: revision},
+            drill_overrides={target: records},
+        )
+    )
+    return _plan_records(
+        config,
+        records,
+        revision,
+        None if record_ids is None else _exact_ids(record_ids),
+        words=False,
+        examples=True,
+        force=force,
+        chosen_provider=chosen_provider,
+        word_provider=word_provider,
+        sentence_provider=sentence_provider,
+        protected_records=protected,
+        owner_path=target,
+    )
+
+
+def _deck_audio_plan_scope(
+    config: ProjectConfig,
+    deck_path: Path,
+    words: bool,
+    examples: bool,
+) -> tuple[Path, list[Path]]:
+    """Validate the shared examples-only scope for disk and revision plans."""
     if words or not examples:
         raise AudioPlanError(
             "Deck-authored drill audio supports --examples only; word audio "
@@ -640,23 +739,97 @@ def plan_deck_audio(
             f"Deck audio target {target} is not a configured deck under "
             f"{config.deck_dir.resolve()}."
         )
-    records = pattern_cards.drill_audio_records(target, config)
-    revision = records_revision(target)
-    protected = tuple(_all_durable_audio_records(config, known))
-    return _plan_records(
-        config,
-        records,
-        revision,
-        None,
-        words=False,
-        examples=True,
-        force=force,
-        chosen_provider=chosen_provider,
-        word_provider=word_provider,
-        sentence_provider=sentence_provider,
-        protected_records=protected,
-        owner_path=target,
-    )
+    return target, known
+
+
+def preflight_paid_deck_audio_plan(
+    plan: AudioPlan,
+    *,
+    word_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
+) -> None:
+    """Refuse unavailable paid clips without contacting a provider or writing.
+
+    Only ``provider-required`` clips whose exact plan declares
+    ``paid-network`` are checked. Current and recoverable clips need no fresh
+    provider authority, while probing a local-network service would itself be
+    contact and carries no billing risk. The only paid provider currently
+    supported here is OpenAI Realtime, whose ``available_for`` method performs
+    an exact journal/credential lookup without opening a connection.
+    """
+    for clip in plan.clips:
+        if clip.state != "provider-required" or clip.provider.access != "paid-network":
+            continue
+        selected: SentenceProvider | None = (
+            word_provider if clip.kind == "word" else sentence_provider
+        )
+        if selected is None:
+            raise AudioPlanError(
+                f"The exact {clip.provider.name} provider for {clip.kind} audio "
+                "is required for paid-provider preflight."
+            )
+        try:
+            provider = sentence_profile_for(selected, clip.record_id)
+        except JankiError as exc:
+            raise AudioPlanError(str(exc)) from exc
+        if _provider_plan(provider) != clip.provider:
+            raise AudioPlanError(
+                f"The {clip.kind} audio provider changed after this plan was made; "
+                "make and confirm a fresh audio plan."
+            )
+        if not isinstance(provider, openai_realtime.OpenAiRealtimeProvider):
+            raise AudioPlanError(
+                f"{clip.provider.name} has no supported no-contact paid-provider preflight."
+            )
+        try:
+            available = provider.available_for(
+                clip.request_input,
+                forced_accent=clip.forced_accent,
+                source_file=audio_cmd.audio_journal_source(
+                    clip.record_id,
+                    of=clip.kind,
+                    target=clip.target,
+                ),
+                source_sha256=clip.content_fingerprint,
+            )
+        except JankiError as exc:
+            raise AudioPlanError(str(exc)) from exc
+        if not available:
+            raise AudioPlanError(f"{provider.name}: {provider.launch_hint}")
+
+
+def _paid_dispatch_adapter(
+    plan: AudioPlan,
+    callback: Callable[[PaidAudioDispatch], None] | None,
+) -> Callable[[audio_cmd.AudioPaidDispatch], None] | None:
+    if callback is None:
+        return None
+
+    def reserve(dispatched: audio_cmd.AudioPaidDispatch) -> None:
+        provider = _provider_plan(dispatched.provider)
+        matches = [
+            clip
+            for clip in plan.clips
+            if clip.record_id == dispatched.record_id
+            and clip.kind == dispatched.kind
+            and clip.target == dispatched.target
+            and clip.request_input == dispatched.request_input
+            and clip.forced_accent == dispatched.forced_accent
+            and clip.content_fingerprint == dispatched.content_fingerprint
+            and clip.provider == provider
+        ]
+        if (
+            len(matches) != 1
+            or matches[0].state != "provider-required"
+            or matches[0].provider.access != "paid-network"
+        ):
+            raise AudioPlanError(
+                "Paid audio dispatch no longer matches one provider-required "
+                "clip in the fresh plan."
+            )
+        callback(PaidAudioDispatch(dispatched.operation_id, matches[0]))
+
+    return reserve
 
 
 def _emit_progress(progress: AudioProgress | None, phase: AudioPhase) -> None:
@@ -768,13 +941,10 @@ def _cleanup_unclaimed_audio_stages(
     )
 
 
-def _selected_pending(
-    book: ledger.Ledger, selected_slots: set[tuple[str, str]]
-) -> bool:
+def _selected_pending(book: ledger.Ledger, selected_slots: set[tuple[str, str]]) -> bool:
     return any(
         isinstance(entry, Mapping)
-        and (str(entry.get("record_id") or ""), str(entry.get("of") or ""))
-        in selected_slots
+        and (str(entry.get("record_id") or ""), str(entry.get("of") or "")) in selected_slots
         for entry in book.pending_audio.values()
     )
 
@@ -849,6 +1019,7 @@ def execute_deck_audio(
     config: ProjectConfig,
     deck_path: Path,
     *,
+    record_ids: Sequence[str] | None = None,
     words: bool = False,
     examples: bool = True,
     expected_fingerprint: str | None = None,
@@ -860,19 +1031,10 @@ def execute_deck_audio(
     sentence_provider: SentenceProvider | None = None,
 ) -> AudioExecutionOutcome:
     """Execute the shared transaction against one rich drill deck owner."""
-    if words or not examples:
-        raise AudioPlanError(
-            "Deck-authored drill audio supports --examples only; word audio "
-            "belongs to the canonical vocabulary records."
-        )
-    if prune:
-        raise AudioPlanError(
-            "Run corpus 'janki audio --examples --prune' for global media cleanup; "
-            "a deck-scoped call only voices that deck."
-        )
+    _validate_deck_audio_execution(words=words, examples=examples, prune=prune)
     return _execute_audio(
         config,
-        None,
+        None if record_ids is None else _exact_ids(record_ids),
         deck_path=deck_path.resolve(),
         words=False,
         examples=True,
@@ -884,6 +1046,60 @@ def execute_deck_audio(
         word_provider=word_provider,
         sentence_provider=sentence_provider,
     )
+
+
+def execute_deck_audio_locked(
+    config: ProjectConfig,
+    deck_path: Path,
+    *,
+    record_ids: Sequence[str] | None = None,
+    words: bool = False,
+    examples: bool = True,
+    expected_fingerprint: str | None = None,
+    force: bool = False,
+    prune: bool = False,
+    chosen_provider: str | None = None,
+    progress: AudioProgress | None = None,
+    word_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
+    before_paid_dispatch: Callable[[PaidAudioDispatch], None] | None = None,
+) -> AudioExecutionOutcome:
+    """Execute deck audio while the caller owns ``.janki-audio-operation``."""
+    _validate_deck_audio_execution(words=words, examples=examples, prune=prune)
+    return _execute_audio_locked(
+        config,
+        None if record_ids is None else _exact_ids(record_ids),
+        deck_path=deck_path.resolve(),
+        words=False,
+        examples=True,
+        expected_fingerprint=expected_fingerprint,
+        force=force,
+        prune=False,
+        chosen_provider=chosen_provider,
+        progress=progress,
+        word_provider=word_provider,
+        sentence_provider=sentence_provider,
+        before_paid_dispatch=before_paid_dispatch,
+    )
+
+
+def _validate_deck_audio_execution(
+    *,
+    words: bool,
+    examples: bool,
+    prune: bool,
+) -> None:
+    """Keep locked and ordinary deck execution on one narrow contract."""
+    if words or not examples:
+        raise AudioPlanError(
+            "Deck-authored drill audio supports --examples only; word audio "
+            "belongs to the canonical vocabulary records."
+        )
+    if prune:
+        raise AudioPlanError(
+            "Run corpus 'janki audio --examples --prune' for global media cleanup; "
+            "a deck-scoped call only voices that deck."
+        )
 
 
 def _execute_audio(
@@ -916,6 +1132,7 @@ def _execute_audio(
             progress=progress,
             word_provider=word_provider,
             sentence_provider=sentence_provider,
+            before_paid_dispatch=None,
         )
 
 
@@ -933,13 +1150,12 @@ def _execute_audio_locked(
     progress: AudioProgress | None,
     word_provider: SpeechProvider | None,
     sentence_provider: SentenceProvider | None,
+    before_paid_dispatch: Callable[[PaidAudioDispatch], None] | None,
 ) -> AudioExecutionOutcome:
     """Lock every current record owner before taking its exact snapshot."""
     _emit_progress(progress, "Preparing audio")
     deck_paths = status.deck_files(config)
-    if deck_path is not None and deck_path.resolve() not in {
-        path.resolve() for path in deck_paths
-    }:
+    if deck_path is not None and deck_path.resolve() not in {path.resolve() for path in deck_paths}:
         raise AudioPlanError(
             f"Deck audio target {deck_path.resolve()} is not a configured deck "
             f"under {config.deck_dir.resolve()}."
@@ -979,6 +1195,7 @@ def _execute_audio_locked(
             progress=progress,
             word_provider=word_provider,
             sentence_provider=sentence_provider,
+            before_paid_dispatch=before_paid_dispatch,
         )
 
 
@@ -999,15 +1216,12 @@ def _execute_audio_owner_locked(
     progress: AudioProgress | None,
     word_provider: SpeechProvider | None,
     sentence_provider: SentenceProvider | None,
+    before_paid_dispatch: Callable[[PaidAudioDispatch], None] | None,
 ) -> AudioExecutionOutcome:
     """Run the provider/WAL/record/media/ledger transaction under owner locks."""
     normalized_path = config.normalized_file.resolve()
-    normalized_records = (
-        load_records(normalized_path) if normalized_path.exists() else []
-    )
-    output_path = (
-        deck_path.resolve() if deck_path is not None else normalized_path
-    )
+    normalized_records = load_records(normalized_path) if normalized_path.exists() else []
+    output_path = deck_path.resolve() if deck_path is not None else normalized_path
     output_revision = owner_revisions[output_path]
     records = (
         pattern_cards.drill_audio_records(output_path, config)
@@ -1031,9 +1245,7 @@ def _execute_audio_owner_locked(
             prune_requested=False,
         )
 
-    protected_records = _all_durable_audio_records(
-        config, deck_paths, normalized_records
-    )
+    protected_records = _all_durable_audio_records(config, deck_paths, normalized_records)
     media_dir = config.media_dir.resolve()
     warnings: list[str] = []
     book: ledger.Ledger | None = None
@@ -1078,9 +1290,7 @@ def _execute_audio_owner_locked(
         )
         if deleted_pending:
             book.save()
-            warnings.extend(
-                audio_cmd.cleanup_pending_stages(deleted_pending, output_dir)
-            )
+            warnings.extend(audio_cmd.cleanup_pending_stages(deleted_pending, output_dir))
         if not records:
             try:
                 removed = audio_cmd.prune_unreferenced(
@@ -1130,15 +1340,17 @@ def _execute_audio_owner_locked(
                 prune_requested=True,
             )
 
-    words_engine = words_engine or word_provider or resolve_word_provider(
-        config, chosen_provider
-    )
+    words_engine = words_engine or word_provider or resolve_word_provider(config, chosen_provider)
     # A words-only run must not fail because an unused sentence provider is
     # unavailable or misconfigured.
-    sentences_engine = sentences_engine or sentence_provider or (
-        resolve_sentence_provider(config, chosen_provider, words_engine)
-        if examples
-        else words_engine
+    sentences_engine = (
+        sentences_engine
+        or sentence_provider
+        or (
+            resolve_sentence_provider(config, chosen_provider, words_engine)
+            if examples
+            else words_engine
+        )
     )
     if book is None:
         book = ledger.load(config.ledger_file)
@@ -1176,9 +1388,8 @@ def _execute_audio_owner_locked(
         force=force,
         protected_records=protected_records,
         stage_only=True,
-        persist_pending=lambda current, key: _persist_audio_wal(
-            current, [key], replace=force
-        ),
+        persist_pending=lambda current, key: _persist_audio_wal(current, [key], replace=force),
+        before_paid_dispatch=_paid_dispatch_adapter(plan, before_paid_dispatch),
     )
     generation_stopped = bool(result.stopped_by)
     record_references_written = False
@@ -1192,8 +1403,7 @@ def _execute_audio_owner_locked(
     }
     stale_selected_pending = any(
         isinstance(entry, Mapping)
-        and (str(entry.get("record_id") or ""), str(entry.get("of") or ""))
-        in selected_slots
+        and (str(entry.get("record_id") or ""), str(entry.get("of") or "")) in selected_slots
         and key not in result.pending_keys
         for key, entry in book.pending_audio.items()
     )
@@ -1208,9 +1418,7 @@ def _execute_audio_owner_locked(
     ):
         try:
             if deck_path is None:
-                save_records_json_locked(
-                    output_path, result.records, expected=output_revision
-                )
+                save_records_json_locked(output_path, result.records, expected=output_revision)
             else:
                 pattern_cards.save_drill_audio_records(
                     output_path, result.records, expected=output_revision
@@ -1270,9 +1478,7 @@ def _execute_audio_owner_locked(
         ledger_error = _save_audio_ledger(book)
         if ledger_error is None:
             ledger_committed = True
-            warnings.extend(
-                audio_cmd.cleanup_pending_stages(committed_pending, output_dir)
-            )
+            warnings.extend(audio_cmd.cleanup_pending_stages(committed_pending, output_dir))
 
     _emit_progress(progress, "Cleaning up audio")
     prune_error = ""
@@ -1289,9 +1495,7 @@ def _execute_audio_owner_locked(
         if deleted_pending:
             ledger_error = _save_audio_ledger(book)
             if ledger_error is None:
-                warnings.extend(
-                    audio_cmd.cleanup_pending_stages(deleted_pending, output_dir)
-                )
+                warnings.extend(audio_cmd.cleanup_pending_stages(deleted_pending, output_dir))
         if ledger_error is None:
             try:
                 removed = audio_cmd.prune_unreferenced(
@@ -1345,9 +1549,7 @@ def _execute_audio_owner_locked(
     selected_pending = _selected_pending(book, selected_slots)
     # A failed save leaves the prior on-disk WAL intact even though the
     # in-memory book has already converted or retired those rows.
-    pending_recovery = (
-        ledger_changed if ledger_error is not None else selected_pending
-    )
+    pending_recovery = ledger_changed if ledger_error is not None else selected_pending
     return AudioExecutionOutcome(
         state=state,
         plan=plan,

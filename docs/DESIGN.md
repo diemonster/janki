@@ -264,11 +264,16 @@ separate from upload only because saving locally is not authority to transmit.
 The owner next reviews or edits that visible proposal. **Apply and finish** is
 a later exact content-authority event over those reviewed bytes and its stated
 audio/build consequences; unseen content is never applied automatically. It
-re-plans under the same locks and refuses drift, but it is not a ladder of
-separate ChatKit confirmations for apply, audio and build. The assistant cannot
-confirm for the owner, widen a plan, reuse a capability, or bypass a review,
-journal or identity gate. OpenAI Realtime audio remains API-backed and its
-provider cannot be switched by either Claude transport setting.
+re-plans under the same locks and refuses drift, then records one durable finish
+authority before canonical mutation. Only the selected cards whose examples
+were displayed are voiced; unchanged cards remain byte-identical, while the
+whole-deck package still binds every referenced media file by path and digest.
+Its receipt advances through apply, audio and package completion and is the only
+authority an interruption may resume. This is not a ladder of separate ChatKit
+confirmations for apply, audio and build. The assistant cannot confirm for the
+owner, widen a plan, reuse a capability, or bypass a review, journal or identity
+gate. OpenAI Realtime audio remains API-backed and its provider cannot be
+switched by either Claude transport setting.
 
 Code review and Japanese-content approval are separate gates. A machinery
 review neither judges nor approves Japanese, and content approval neither

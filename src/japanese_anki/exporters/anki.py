@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 try:
     import genanki
 except ImportError:  # pragma: no cover - exercised by the bootstrap environment
@@ -17,7 +19,7 @@ except ImportError:  # pragma: no cover - exercised by the bootstrap environment
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.io import DataError, load_records, load_structured
+from japanese_anki.io import DataError, RecordsRevision, load_records, load_structured
 from japanese_anki.kanji import load_store as load_kanji_store
 from japanese_anki.kanji import render_kanji_html
 from japanese_anki.models import ModelError, VocabularyRecord
@@ -167,6 +169,7 @@ def _resolve_media(
     warnings: list[str],
     claimed: dict[str, tuple[str, str]],
     sound_tags: bool = True,
+    allowed_missing: frozenset[Path] = frozenset(),
 ) -> Path | None:
     """Find a media file, preferring ``media_dir`` and falling back to the deck.
 
@@ -201,8 +204,8 @@ def _resolve_media(
             "your collection."
         )
         return None
-    for base in (media_dir, deck_dir):
-        candidate = (base / value).resolve()
+    candidates = tuple((base / value).resolve() for base in (media_dir, deck_dir))
+    for candidate in candidates:
         if not candidate.exists():
             continue
         resolved = str(candidate)
@@ -234,6 +237,22 @@ def _resolve_media(
             # two in `media_count`.
             candidate = Path(owner[0])
             resolved = owner[0]
+        media_files.append(resolved)
+        return candidate
+    for candidate in candidates:
+        if candidate not in allowed_missing:
+            continue
+        resolved = str(candidate)
+        key = unicodedata.normalize("NFC", candidate.name).casefold()
+        owner = claimed.setdefault(key, (resolved, record_id))
+        if owner[0] != resolved:
+            raise AnkiBuildError(
+                f"Two different files would be packaged under one media "
+                f"name: {owner[0]} for {owner[1]} and {resolved} for "
+                f"{record_id}. Anki stores media by basename, so one would "
+                "overwrite the other and a card would play the wrong clip. "
+                "Rename one."
+            )
         media_files.append(resolved)
         return candidate
     raise AnkiBuildError(
@@ -668,12 +687,37 @@ def deck_declared_record_versions(deck_path: Path) -> list[VocabularyRecord]:
     media file. Audio preflight needs every such reference so a normalized clip
     cannot overwrite bytes an inline card continues to play.
 
-    The ordinary resolver runs first as the single validator for deck shape.
-    Re-reading this small YAML file avoids growing a second, subtly different
-    validation path just for the preservation census.
+    The ordinary resolver is also the single validator for deck shape.
     """
-    resolve_deck_records(deck_path)
     raw = load_structured(deck_path)
+    return _deck_declared_record_versions_from_document(deck_path, raw)
+
+
+def deck_declared_record_versions_from_revision(
+    deck_path: Path,
+    revision: RecordsRevision,
+) -> list[VocabularyRecord]:
+    """Project the preservation census from exact proposed deck bytes."""
+    target = deck_path.resolve()
+    if revision.path.resolve() != target:
+        raise DataError(
+            f"Deck revision for {revision.path} cannot describe {target}."
+        )
+    if revision.text is None:
+        raise DataError(f"Deck file no longer exists: {target}")
+    try:
+        raw = yaml.safe_load(revision.text)
+    except yaml.YAMLError as exc:
+        raise DataError(f"Could not parse {target}: {exc}") from exc
+    return _deck_declared_record_versions_from_document(target, raw)
+
+
+def _deck_declared_record_versions_from_document(
+    deck_path: Path,
+    raw: Any,
+) -> list[VocabularyRecord]:
+    """Return durable versions after the shared complete deck validation."""
+    _resolve_deck_records_document(deck_path, raw)
     deck_config = raw.get("deck") or {}
     by_id: dict[str, VocabularyRecord] = {}
     versions: list[VocabularyRecord] = []
@@ -694,6 +738,14 @@ def deck_declared_record_versions(deck_path: Path) -> list[VocabularyRecord]:
 
 def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[VocabularyRecord]]:
     raw = load_structured(deck_path)
+    return _resolve_deck_records_document(deck_path, raw)
+
+
+def _resolve_deck_records_document(
+    deck_path: Path,
+    raw: Any,
+) -> tuple[dict[str, Any], list[VocabularyRecord]]:
+    """Resolve records through the same validator for disk or snapshot input."""
     if not isinstance(raw, dict):
         raise DataError(f"Deck file must contain a mapping: {deck_path}")
     deck_config = raw.get("deck") or {}
