@@ -2,9 +2,10 @@
 
 This module is imported only when ``[assistant] enabled = true``. Project-wide
 attachment intake and extraction are always available. Discovery lists every
-configured deck but never guesses which one the owner meant. Only a conjugation
-deck carrying complete rich drill examples is selectable for conversation and
-revision, and every card in that selected deck is revised in its stored order.
+configured deck but never guesses which one the owner meant. Every safely read
+deck is selectable for conversation. Only a conjugation deck carrying complete
+rich drill examples is selectable for revision, and every card in that selected
+deck is revised in its stored order.
 """
 
 from __future__ import annotations
@@ -104,8 +105,8 @@ def _inspect_deck(
     try:
         content = read_drill_deck_content(deck_path)
     except (JankiError, OSError) as exc:
-        detail = f"This rich conjugation deck could not be read safely: {exc}"
-        return label, None, detail, detail
+        detail = f"Deck changes cannot safely read this rich conjugation deck: {exc}"
+        return label, None, detail, None
     if not content.record_ids or not content.drill_examples:
         return label, None, _DRILL_EXAMPLES_REQUIRED, None
     return label, tuple(content.record_ids), None, None
@@ -244,6 +245,20 @@ class RevisionAssistantAdapter:
             return target
         raise RevisionRefusal("The requested deck is outside this assistant's allowlist.")
 
+    def _chat_target_for_scope(self, deck_scope: str) -> _RevisionDeckTarget:
+        if not isinstance(deck_scope, str) or not deck_scope.strip():
+            raise RevisionRefusal("Choose one available deck before asking about it.")
+        for target in self._targets:
+            if target.choice.scope != deck_scope:
+                continue
+            if not target.choice.chat_supported:
+                raise RevisionRefusal(
+                    target.choice.unavailable_reason
+                    or "This configured deck is not available for Assistant chat."
+                )
+            return target
+        raise RevisionRefusal("The requested deck is outside this assistant's allowlist.")
+
     def resolve_deck_selection(self, deck_id: str) -> AssistantDeckChoice:
         """Freshly validate one opaque startup choice without probing a provider."""
 
@@ -257,23 +272,33 @@ class RevisionAssistantAdapter:
                 break
         if selected is None:
             raise RevisionRefusal("The selected deck id is unknown.")
-        if not selected.choice.revision_supported or selected.record_ids is None:
+        if not selected.choice.chat_supported:
             raise RevisionRefusal(
                 selected.choice.unavailable_reason
-                or "This configured deck is not available for deck changes."
+                or "This configured deck is not available for Assistant chat."
             )
 
-        label, record_ids, reason, _warning = _inspect_deck(selected.path)
-        if reason is not None or record_ids is None:
+        label, record_ids, reason, warning = _inspect_deck(selected.path)
+        chat_supported = warning is None
+        revision_supported = record_ids is not None
+        if not chat_supported:
             raise RevisionRefusal(
-                reason or "This configured deck is no longer available for deck changes."
+                reason or "This configured deck is no longer available for Assistant chat."
             )
-        if record_ids != selected.record_ids:
+        if (
+            chat_supported != selected.choice.chat_supported
+            or revision_supported != selected.choice.revision_supported
+        ):
+            raise RevisionRefusal(
+                "This deck's Assistant capabilities changed after the selector was "
+                "prepared. Restart Janki before selecting it."
+            )
+        if revision_supported and record_ids != selected.record_ids:
             raise RevisionRefusal(
                 "This deck's revision scope changed after the selector was prepared. "
                 "Restart Janki before selecting it."
             )
-        return replace(selected.choice, label=label)
+        return replace(selected.choice, label=label, unavailable_reason=reason)
 
     def chat(
         self,
@@ -285,7 +310,7 @@ class RevisionAssistantAdapter:
     ) -> ChatReply:
         """Answer one ordinary turn without granting any revision authority."""
 
-        self._target_for_scope(deck_scope)
+        target = self._chat_target_for_scope(deck_scope)
         try:
             fresh_config = ProjectConfig.load(self.config.root)
             plan = assistant_chat.plan_chat(
@@ -293,6 +318,7 @@ class RevisionAssistantAdapter:
                 deck_scope=deck_scope,
                 history=history,
                 message=message,
+                revision_supported=target.choice.revision_supported,
             )
             result = assistant_chat.run_chat(fresh_config, plan, progress=progress)
         except JankiError as exc:
@@ -807,6 +833,7 @@ def discover_revision_adapter(
             deck_id=deck_id,
             label=label,
             scope=scope,
+            chat_supported=warning is None,
             revision_supported=record_ids is not None,
             unavailable_reason=reason,
         )

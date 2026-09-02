@@ -132,12 +132,15 @@ class AssistantDeckChoice:
 
     ``deck_id`` is the only target value accepted from the browser. ``scope``
     stays server-side and is passed to application callbacks only after the
-    opaque id has been resolved through the immutable startup catalog.
+    opaque id has been resolved through the immutable startup catalog. Chat
+    selection and revision are separate capabilities: every revision target
+    is chat-supported, while a safely readable deck may be chat-only.
     """
 
     deck_id: str
     label: str
     scope: str
+    chat_supported: bool
     revision_supported: bool
     unavailable_reason: str | None = None
 
@@ -1424,6 +1427,8 @@ def create_assistant_core(
         raise ValueError("Assistant deck choice ids must be unique.")
     if len({choice.scope for choice in choices}) != len(choices):
         raise ValueError("Assistant deck choice scopes must be unique.")
+    if any(choice.revision_supported and not choice.chat_supported for choice in choices):
+        raise ValueError("Every revision-supported deck must also support chat.")
     if any(
         choice.revision_supported == bool(choice.unavailable_reason)
         for choice in choices
@@ -1432,6 +1437,8 @@ def create_assistant_core(
             "Supported decks cannot have an unavailable reason, and unsupported "
             "decks must have one."
         )
+    conversation_available = any(choice.chat_supported for choice in choices)
+    revision_available = any(choice.revision_supported for choice in choices)
     choices_by_id = {choice.deck_id: choice for choice in choices}
 
     store = ScopedMemoryStore(_ASSISTANT_SCOPE, attachment_store=attachment_store)
@@ -1500,7 +1507,7 @@ def create_assistant_core(
             choice = choices_by_id.get(deck_id)
             if (
                 choice is None
-                or not choice.revision_supported
+                or not choice.chat_supported
                 or choice.scope != deck_scope
             ):
                 raise RevisionRefusal("This thread's active deck is no longer available.")
@@ -1537,17 +1544,38 @@ def create_assistant_core(
 
         @staticmethod
         def _local_help(message: str) -> str | None:
+            if (
+                not conversation_available
+                and message in {_CAPABILITIES_MESSAGE, _CHANGES_HELP_MESSAGE}
+            ):
+                return (
+                    "No readable deck is available for questions or deck changes. "
+                    "Configure or repair a deck first; local PDF or photo intake "
+                    "remains available."
+                )
             if message == _CAPABILITIES_MESSAGE:
+                if not revision_available:
+                    return (
+                        "Choose an active deck, ask read-only questions, or attach one "
+                        "PDF or photo for local source intake. This project has no "
+                        "Chat + changes deck, so deck changes are unavailable."
+                    )
                 return (
                     "Choose an active deck, ask read-only questions, or attach one "
-                    "PDF or photo for local source intake. A supported deck can also "
-                    "turn an exact message into a reviewed change proposal."
+                    "PDF or photo for local source intake. A Chat + changes deck can "
+                    "also turn an exact message into a reviewed change proposal."
                 )
             if message == _CHANGES_HELP_MESSAGE:
+                if not revision_available:
+                    return (
+                        "This project has no Chat + changes deck. Choose a readable "
+                        "deck for read-only questions; deck changes remain unavailable "
+                        "until a supported rich drill deck is configured."
+                    )
                 return (
-                    "Choose an active deck, send the requested change, then use the "
-                    "explicit deck-change action under Janki's answer. Janki shows "
-                    "one exact plan before any revision is sent."
+                    "Choose a Chat + changes deck, send the requested change, then "
+                    "use the explicit deck-change action under Janki's answer. Janki "
+                    "shows one exact plan before any revision is sent."
                 )
             if message == _SOURCE_HELP_MESSAGE:
                 return (
@@ -1582,10 +1610,17 @@ def create_assistant_core(
                         "color": "info",
                         "variant": "soft",
                     }
+                elif choice.chat_supported:
+                    badge = {
+                        "type": "Badge",
+                        "label": "Chat only",
+                        "color": "secondary",
+                        "variant": "soft",
+                    }
                 else:
                     badge = {
                         "type": "Badge",
-                        "label": "Unsupported",
+                        "label": "Unavailable",
                         "color": "secondary",
                         "variant": "soft",
                     }
@@ -1623,7 +1658,7 @@ def create_assistant_core(
                         }
                     ],
                 }
-                if choice.revision_supported and not is_active:
+                if choice.chat_supported and not is_active:
                     row["onClickAction"] = {
                         "type": _SELECT_DECK_ACTION,
                         "payload": {
@@ -1672,7 +1707,7 @@ def create_assistant_core(
                 widget_item_id=item_id,
                 selection_epoch=active.epoch if active is not None else 0,
                 deck_ids=frozenset(
-                    choice.deck_id for choice in choices if choice.revision_supported
+                    choice.deck_id for choice in choices if choice.chat_supported
                 ),
             )
             return ThreadItemDoneEvent(
@@ -1962,13 +1997,25 @@ def create_assistant_core(
                 return
 
             if message == _SHOW_DECKS_MESSAGE:
+                if not choices:
+                    yield NoticeEvent(
+                        level="warning",
+                        title="No configured deck available",
+                        message=(
+                            "No configured deck is available to select. Configure "
+                            "a readable deck first; local source intake remains "
+                            "available."
+                        ),
+                    )
+                    return
                 yield self._selector_event(thread, request_context)
                 return
 
             local_help = self._local_help(message)
             if local_help is not None:
                 yield self._message_event(thread, local_help)
-                yield self._selector_event(thread, request_context)
+                if choices:
+                    yield self._selector_event(thread, request_context)
                 return
 
             try:
@@ -1978,15 +2025,26 @@ def create_assistant_core(
                 yield self._selector_event(thread, request_context)
                 return
             if selection is None:
+                if conversation_available:
+                    title = "Choose an active deck"
+                    message = (
+                        "Janki did not send this message to a model. Choose a "
+                        "deck below, then send the question again."
+                    )
+                else:
+                    title = "No readable deck available"
+                    message = (
+                        "Janki did not send this message to a model. No readable "
+                        "deck is available; configure or repair one before asking "
+                        "deck questions. Local source intake remains available."
+                    )
                 yield NoticeEvent(
                     level="warning",
-                    title="Choose an active deck",
-                    message=(
-                        "Janki did not send this message to a model. Choose a "
-                        "supported deck below, then send the question again."
-                    ),
+                    title=title,
+                    message=message,
                 )
-                yield self._selector_event(thread, request_context)
+                if choices:
+                    yield self._selector_event(thread, request_context)
                 return
             if thread.id in self._busy_threads:
                 yield NoticeEvent(
@@ -2049,6 +2107,8 @@ def create_assistant_core(
                     return
 
                 yield self._message_event(thread, reply.text)
+                if not selection.choice.revision_supported:
+                    return
                 capability = secrets.token_urlsafe(32)
                 item_id = store.generate_item_id("message", thread, request_context)
                 self._messages[capability] = _MessageBinding(
@@ -2142,10 +2202,10 @@ def create_assistant_core(
                             allow_retry=False,
                         )
                         return
-                    if not choice.revision_supported:
+                    if not choice.chat_supported:
                         yield ErrorEvent(
                             message=choice.unavailable_reason
-                            or "That deck is not available for Assistant changes.",
+                            or "That deck is not available for Assistant chat.",
                             allow_retry=False,
                         )
                         return
@@ -2164,7 +2224,8 @@ def create_assistant_core(
                         not isinstance(fresh_choice, AssistantDeckChoice)
                         or fresh_choice.deck_id != choice.deck_id
                         or fresh_choice.scope != choice.scope
-                        or not fresh_choice.revision_supported
+                        or fresh_choice.chat_supported != choice.chat_supported
+                        or fresh_choice.revision_supported != choice.revision_supported
                     ):
                         yield ErrorEvent(
                             message="That deck changed after the selector was rendered.",
@@ -2427,6 +2488,7 @@ def create_assistant_core(
                     )
                     or message_binding.deck_scope
                     != current_selection.choice.scope
+                    or not current_selection.choice.revision_supported
                 ):
                     yield ErrorEvent(
                         message=(

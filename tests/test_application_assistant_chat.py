@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 from typing import Any
 
@@ -141,6 +142,126 @@ def test_plan_sends_only_selected_scope_and_exact_current_message(
     assert plan.transport["kind"] == "anthropic-messages-api"
     with pytest.raises(FrozenInstanceError):
         plan.message = "changed"  # type: ignore[misc]
+
+
+def test_chat_only_plan_uses_its_dedicated_non_revision_prompt(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+
+    revision_plan = assistant_chat.plan_chat(
+        config,
+        deck_scope=DECK_SCOPE,
+        message="Please add an example.",
+    )
+    chat_only_plan = assistant_chat.plan_chat(
+        config,
+        deck_scope=DECK_SCOPE,
+        message="Please add an example.",
+        revision_supported=False,
+    )
+
+    assert revision_plan.task_template_name == "assistant-chat"
+    assert chat_only_plan.task_template_name == "assistant-chat-only"
+    assert "This selected deck is **Chat only**" in chat_only_plan.task_template
+    normalized_template = " ".join(chat_only_plan.task_template.casefold().split())
+    assert (
+        "do not direct the owner to a revision action"
+        in normalized_template
+    )
+    assert chat_only_plan.request_fingerprint != revision_plan.request_fingerprint
+
+
+def test_plan_refuses_a_non_boolean_revision_capability_before_provider_planning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _project(tmp_path)
+    monkeypatch.setattr(
+        assistant_chat.revision_provider,
+        "plan_provider",
+        lambda *_args, **_kwargs: pytest.fail("must refuse before provider planning"),
+    )
+
+    with pytest.raises(
+        assistant_chat.ChatApplicationError,
+        match="revision capability must be true or false",
+    ):
+        assistant_chat.plan_chat(
+            config,
+            deck_scope=DECK_SCOPE,
+            message="Can this deck change?",
+            revision_supported="yes",  # type: ignore[arg-type]
+        )
+
+
+def test_run_refuses_an_unknown_task_template_identity_before_dispatch(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    plan = assistant_chat.plan_chat(
+        config,
+        deck_scope=DECK_SCOPE,
+        message="Can this deck change?",
+        revision_supported=False,
+    )
+    tampered = replace(plan, task_template_name="../data/ledger")
+
+    with pytest.raises(
+        assistant_chat.ChatApplicationError,
+        match="no valid task template identity",
+    ):
+        assistant_chat.run_chat(
+            config,
+            tampered,
+            client=object(),
+            api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
+        )
+
+    assert not config.operations_file.exists()
+    assert not config.assistant_dir.exists()
+
+
+def test_chat_only_run_replans_and_locks_its_dedicated_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _project(tmp_path)
+    plan = assistant_chat.plan_chat(
+        config,
+        deck_scope=DECK_SCOPE,
+        message="Can you change this deck?",
+        revision_supported=False,
+    )
+    locked: list[Path] = []
+    real_lock = assistant_chat.exclusive_path_lock
+
+    @contextlib.contextmanager
+    def recording_lock(path: Path) -> Any:
+        locked.append(path)
+        with real_lock(path):
+            yield
+
+    monkeypatch.setattr(assistant_chat, "exclusive_path_lock", recording_lock)
+
+    def call(*_args: Any, capture=None, **_kwargs: Any) -> CallResult:
+        assert capture is not None
+        capture(_api_response("This selected deck is Chat only."))
+        return CallResult(None, "end_turn", None)
+
+    result = assistant_chat.run_chat(
+        config,
+        plan,
+        client=object(),
+        api_call=call,
+    )
+
+    prompt_path = tmp_path / "prompts" / "assistant-chat-only.md"
+    assert prompt_path in locked
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["request"]["task_template"] == prompt_path.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_claude_code_chat_plans_plain_markdown_without_changing_api_chat(

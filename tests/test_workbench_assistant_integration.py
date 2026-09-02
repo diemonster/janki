@@ -66,6 +66,7 @@ def _adapter(
         deck_id="test-deck-id",
         label=label,
         scope=scope,
+        chat_supported=True,
         revision_supported=True,
     )
     return assistant_adapter.RevisionAssistantAdapter(
@@ -254,6 +255,7 @@ def test_enabled_workbench_gives_assistant_the_configured_local_inbox(
             deck_id="opaque-deck",
             label="Potential Practice",
             scope="data/decks/potential.yaml",
+            chat_supported=True,
             revision_supported=True,
         ),
     )
@@ -344,6 +346,7 @@ def test_discovery_lists_one_supported_deck_without_exposing_its_path_as_the_id(
             deck_id="opaque-deck",
             label="Brandon Japanese::Potential Practice",
             scope="data/decks/potential.yaml",
+            chat_supported=True,
             revision_supported=True,
         ),
     )
@@ -452,15 +455,96 @@ def test_discovery_keeps_every_configured_deck_visible_with_exact_support_reason
         False,
         False,
     ]
+    assert [choice.chat_supported for choice in adapter.deck_choices] == [
+        True,
+        True,
+        True,
+    ]
     assert adapter.deck_choices[0].unavailable_reason is None
     assert "rich conjugation" in (adapter.deck_choices[1].unavailable_reason or "")
     assert "drill examples" in (adapter.deck_choices[2].unavailable_reason or "")
-    with pytest.raises(RevisionRefusal, match="rich conjugation"):
-        adapter.resolve_deck_selection("opaque-plain")
+    assert adapter.resolve_deck_selection("opaque-plain") == adapter.deck_choices[1]
     with pytest.raises(RevisionRefusal, match="unknown"):
         adapter.resolve_deck_selection("invented")
     with pytest.raises(RevisionRefusal, match="unknown"):
         adapter.resolve_deck_selection("未知")
+
+
+def test_chat_only_deck_uses_its_exact_scope_but_revision_remains_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "vocabulary.yaml"
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [deck])
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: ({"kind": "vocabulary", "name": "Vocabulary"}, []),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: "opaque-vocabulary",
+    )
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+    [choice] = adapter.deck_choices
+    planned: list[tuple[str, tuple[tuple[str, str], ...], str]] = []
+    plan = object()
+
+    def plan_chat(
+        _config: ProjectConfig,
+        *,
+        deck_scope: str,
+        history: tuple[tuple[str, str], ...],
+        message: str,
+        revision_supported: bool,
+    ) -> object:
+        assert revision_supported is False
+        planned.append((deck_scope, history, message))
+        return plan
+
+    monkeypatch.setattr(assistant_adapter.assistant_chat, "plan_chat", plan_chat)
+    monkeypatch.setattr(
+        assistant_adapter.assistant_chat,
+        "run_chat",
+        lambda _config, received, *, progress: (
+            SimpleNamespace(answer="This is the selected vocabulary deck.")
+            if received is plan
+            else pytest.fail("chat ran a different plan")
+        ),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.revision,
+        "plan_revision",
+        lambda *_args, **_kwargs: pytest.fail(
+            "a chat-only deck must refuse before revision planning"
+        ),
+    )
+
+    assert warnings == ()
+    assert choice.chat_supported is True
+    assert choice.revision_supported is False
+    assert adapter.resolve_deck_selection(choice.deck_id) == choice
+    result = adapter.chat(
+        deck_scope=choice.scope,
+        history=(("user", "Earlier question"),),
+        message="What does this deck teach?",
+        progress=lambda _label: None,
+    )
+
+    assert result.text == "This is the selected vocabulary deck."
+    assert planned == [
+        (
+            "data/decks/vocabulary.yaml",
+            (("user", "Earlier question"),),
+            "What does this deck teach?",
+        )
+    ]
+    with pytest.raises(RevisionRefusal, match="rich conjugation"):
+        adapter.prepare_revision(
+            deck_scope=choice.scope,
+            instruction="Change this deck.",
+        )
 
 
 def test_discovery_disambiguates_duplicate_visible_deck_names(
@@ -602,7 +686,7 @@ def test_discovery_skips_a_deck_without_a_visible_name(
     assert "has no display name" in warnings[0]
 
 
-def test_selection_freshly_revalidates_the_allowlisted_deck_without_a_provider_probe(
+def test_selection_refuses_a_fresh_revision_reader_failure_as_capability_drift(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -647,9 +731,137 @@ def test_selection_freshly_revalidates_the_allowlisted_deck_without_a_provider_p
     adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
 
     assert warnings == ()
-    with pytest.raises(RevisionRefusal, match="changed after the selector"):
+    with pytest.raises(RevisionRefusal, match="Assistant capabilities changed"):
         adapter.resolve_deck_selection("opaque-deck")
     assert inspections == 2
+
+
+def test_selection_refuses_when_deck_capabilities_change_after_catalog_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "potential.yaml"
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [deck])
+    deck_configs = iter(
+        (
+            {
+                "kind": "conjugation",
+                "name": "Potential Practice",
+                "drill_examples": {"word:one": []},
+            },
+            {"kind": "vocabulary", "name": "Potential Practice"},
+        )
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: (next(deck_configs), []),
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "read_drill_deck_content",
+        lambda _path: SimpleNamespace(
+            record_ids=("word:one",),
+            drill_examples={"word:one": object()},
+        ),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: "opaque-deck",
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    assert warnings == ()
+    assert adapter.deck_choices[0].revision_supported is True
+    with pytest.raises(RevisionRefusal, match="capabilities changed"):
+        adapter.resolve_deck_selection("opaque-deck")
+
+
+def test_discovery_keeps_an_unreadable_deck_visible_but_chat_inert(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "broken.yaml"
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [deck])
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: (_ for _ in ()).throw(JankiError("invalid deck document")),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: "opaque-broken",
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    [choice] = adapter.deck_choices
+    assert choice.label == "broken"
+    assert choice.chat_supported is False
+    assert choice.revision_supported is False
+    assert "could not be read safely" in (choice.unavailable_reason or "")
+    assert len(warnings) == 1
+    assert "could not safely inspect" in warnings[0]
+    with pytest.raises(RevisionRefusal, match="could not be read safely"):
+        adapter.resolve_deck_selection("opaque-broken")
+    monkeypatch.setattr(
+        assistant_adapter.assistant_chat,
+        "plan_chat",
+        lambda *_args, **_kwargs: pytest.fail(
+            "an unreadable deck must refuse before chat planning"
+        ),
+    )
+    with pytest.raises(RevisionRefusal, match="could not be read safely"):
+        adapter.chat(
+            deck_scope=choice.scope,
+            history=(),
+            message="Can you read this deck?",
+            progress=lambda _label: None,
+        )
+
+
+def test_revision_only_deck_error_remains_selectable_for_chat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "broken-drill.yaml"
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [deck])
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: (
+            {
+                "kind": "conjugation",
+                "name": "Broken Drill",
+                "drill_examples": {"word:outside-scope": []},
+            },
+            [],
+        ),
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "read_drill_deck_content",
+        lambda _path: (_ for _ in ()).throw(
+            JankiError("drill example is outside include_ids")
+        ),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: "opaque-broken-drill",
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    [choice] = adapter.deck_choices
+    assert warnings == ()
+    assert choice.chat_supported is True
+    assert choice.revision_supported is False
+    assert "Deck changes cannot safely read" in (choice.unavailable_reason or "")
+    assert adapter.resolve_deck_selection(choice.deck_id) == choice
 
 
 def test_selection_refuses_a_deck_whose_full_revision_scope_changed(
@@ -791,7 +1003,9 @@ def test_adapter_routes_an_ordinary_question_only_through_the_chat_service(
         deck_scope: str,
         history: tuple[tuple[str, str], ...],
         message: str,
+        revision_supported: bool,
     ) -> Any:
+        assert revision_supported is True
         assert history == (("user", "earlier"), ("assistant", "Earlier answer."))
         observed.append((deck_scope, message))
         return planned

@@ -1,10 +1,11 @@
 """Journal one ordinary, non-mutating Assistant conversation turn.
 
 The composer send is direct owner authority for exactly one conversational
-call.  This pass receives only the selected deck scope, a bounded caller-supplied
-history, and the current message; it never reads deck content and its provider
-runs without tools or filesystem context.  The separate ``revise`` service
-remains the only Assistant path that writes Japanese card proposals.
+call.  This pass receives only the selected deck scope, its locally resolved
+revision capability, a bounded caller-supplied history, and the current
+message; it never reads deck content and its provider runs without tools or
+filesystem context.  The separate ``revise`` service remains the only
+Assistant path that writes Japanese card proposals.
 
 Every call publishes its exact request manifest before dispatch, captures the
 provider's exact reply before decoding, and commits only after the decoded
@@ -75,6 +76,7 @@ class ChatPlan:
     deck_scope: str
     message: str
     history: tuple[tuple[str, str], ...]
+    task_template_name: str
     task_template: str
     user_turn: str
     provider_plan: revision_provider.RevisionProviderPlan
@@ -197,6 +199,7 @@ def _plan_chat(
     deck_scope: str,
     message: str,
     history: tuple[tuple[str, str], ...] = (),
+    revision_supported: bool = True,
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
@@ -209,6 +212,10 @@ def _plan_chat(
         raise ChatApplicationError(
             "Write a nonblank Assistant message; nothing was sent."
         )
+    if not isinstance(revision_supported, bool):
+        raise ChatApplicationError(
+            "Assistant revision capability must be true or false; nothing was sent."
+        )
     checked_history = _validated_history(history)
     provider_name = str(config.assistant_provider).strip().lower()
     model = str(config.assistant_model).strip()
@@ -217,7 +224,10 @@ def _plan_chat(
             "Assistant model must be nonblank; nothing was sent."
         )
 
-    task_template = prompts.load(config.root, "assistant-chat")
+    task_template_name = (
+        "assistant-chat" if revision_supported else "assistant-chat-only"
+    )
+    task_template = prompts.load(config.root, task_template_name)
     system_blocks = tuple(claude_client.system_blocks(task_template))
     user_turn = _user_turn(
         deck_scope=deck_scope,
@@ -247,6 +257,7 @@ def _plan_chat(
         deck_scope=deck_scope,
         message=message,
         history=checked_history,
+        task_template_name=task_template_name,
         task_template=task_template,
         user_turn=user_turn,
         provider_plan=provider_plan,
@@ -259,6 +270,7 @@ def plan_chat(
     deck_scope: str,
     message: str,
     history: tuple[tuple[str, str], ...] = (),
+    revision_supported: bool = True,
 ) -> ChatPlan:
     """Plan one conversational call without granting authority or writing state."""
     return _plan_chat(
@@ -266,6 +278,7 @@ def plan_chat(
         deck_scope=deck_scope,
         message=message,
         history=history,
+        revision_supported=revision_supported,
     )
 
 
@@ -282,11 +295,20 @@ def _fresh_plan(
             "This Assistant request belongs to a different repository; nothing "
             "was sent."
         )
+    if expected.task_template_name not in {
+        "assistant-chat",
+        "assistant-chat-only",
+    }:
+        raise ChatApplicationError(
+            "This Assistant request has no valid task template identity; nothing "
+            "was sent."
+        )
     fresh = _plan_chat(
         config,
         deck_scope=expected.deck_scope,
         message=expected.message,
         history=expected.history,
+        revision_supported=expected.task_template_name == "assistant-chat",
         provider_env=provider_env,
         provider_runner=provider_runner,
         provider_which=provider_which,
@@ -595,6 +617,7 @@ def _request_manifest_for_recovery(
         deck_scope=deck_scope,
         message=message,
         history=history,
+        task_template_name="captured-assistant-chat",
         task_template=task_template,
         user_turn=rebuilt_turn,
         provider_plan=provider_plan,
@@ -729,7 +752,7 @@ def run_chat(
     operation_id = str(uuid.uuid4())
     assistant_dir = config.assistant_dir
     manifest_path = assistant_dir / f"{operation_id}.json"
-    prompt_path = prompts.path_for(config.root, "assistant-chat")
+    prompt_path = prompts.path_for(config.root, fresh.task_template_name)
 
     with contextlib.ExitStack() as binding_locks:
         for path in sorted({manifest_path, prompt_path}, key=lambda item: str(item)):

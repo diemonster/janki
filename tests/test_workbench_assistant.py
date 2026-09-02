@@ -38,6 +38,7 @@ from japanese_anki.workbench.assistant import (
     SourceExtractionConfirmation,
     SourceExtractionExecution,
     SourceExtractionPlan,
+    create_assistant_core,
 )
 from japanese_anki.workbench.assistant_http import (
     create_assistant_sidecar as _create_assistant_sidecar,
@@ -274,6 +275,7 @@ def create_assistant_sidecar(
                     deck_id="fixture-deck",
                     label=deck_display_name or deck_scope,
                     scope=deck_scope,
+                    chat_supported=True,
                     revision_supported=True,
                 ),
             )
@@ -515,18 +517,21 @@ def _assistant_deck_choices() -> tuple[AssistantDeckChoice, ...]:
             deck_id="potential",
             label="Brandon Japanese::Genki II::Lesson 13::Potential Practice",
             scope="data/decks/potential-practice.yaml",
+            chat_supported=True,
             revision_supported=True,
         ),
         AssistantDeckChoice(
             deck_id="te-form",
             label="Brandon Japanese::Te-form Practice",
             scope="data/decks/teform-drill.yaml",
+            chat_supported=True,
             revision_supported=True,
         ),
         AssistantDeckChoice(
             deck_id="lesson-vocabulary",
             label="Brandon Japanese::Genki II::Lesson 13::Vocabulary",
             scope="data/decks/lesson-13-vocabulary.yaml",
+            chat_supported=True,
             revision_supported=False,
             unavailable_reason=(
                 "Deck revision currently requires a rich conjugation practice deck."
@@ -563,6 +568,25 @@ def _deck_selector_action(widget: dict[str, Any], deck_id: str) -> dict[str, Any
     )
 
 
+def test_revision_supported_deck_must_also_support_chat() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Every revision-supported deck must also support chat",
+    ):
+        create_assistant_core(
+            _FakeRevisions(),
+            deck_choices=(
+                AssistantDeckChoice(
+                    deck_id="invalid",
+                    label="Invalid",
+                    scope="data/decks/invalid.yaml",
+                    chat_supported=False,
+                    revision_supported=True,
+                ),
+            ),
+        )
+
+
 def test_local_deck_starter_renders_one_use_selector_without_chat_callback() -> None:
     revisions = _FakeRevisions()
     sidecar = create_assistant_sidecar(
@@ -597,10 +621,19 @@ def test_local_deck_starter_renders_one_use_selector_without_chat_callback() -> 
 
         actions = []
         for choice, row in zip(_assistant_deck_choices(), root["children"], strict=True):
-            if choice.revision_supported:
+            if choice.chat_supported:
                 actions.append(_deck_selector_action(selector, choice.deck_id))
             else:
                 assert "onClickAction" not in row
+        badges = [
+            next(
+                child["label"]
+                for child in row["children"][0]["children"]
+                if child["type"] == "Badge"
+            )
+            for row in root["children"]
+        ]
+        assert badges == ["Chat + changes", "Chat + changes", "Chat only"]
         assert {action["type"] for action in actions} == {"janki.deck.select"}
         assert {action["handler"] for action in actions} == {"server"}
         assert {action["loadingBehavior"] for action in actions} == {"container"}
@@ -681,6 +714,53 @@ def test_supported_deck_selection_routes_next_message_with_empty_history() -> No
         ]
         assert revisions.chat_histories == [()]
         assert len(_widget_items(_events(body))) == 1
+    finally:
+        sidecar.close()
+
+
+def test_chat_only_deck_routes_exact_scope_without_offering_a_change_action() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, selector, _events_before = _start_deck_selector(sidecar)
+        selection = _action_request(
+            thread_id,
+            selector,
+            _deck_selector_action(selector, "lesson-vocabulary"),
+        )
+
+        selected_events = _events(_post(sidecar, selection)[2])
+
+        assert revisions.resolved == ["lesson-vocabulary"]
+        assert not any(event["type"] == "error" for event in selected_events)
+
+        status, _headers, body = _post(
+            sidecar,
+            _followup_message_request(thread_id, "What does this deck teach?"),
+        )
+
+        assert status == 200
+        assert revisions.chatted == [
+            (
+                "data/decks/lesson-13-vocabulary.yaml",
+                "What does this deck teach?",
+            )
+        ]
+        assert revisions.chat_histories == [()]
+        events = _events(body)
+        assert any(
+            event["type"] == "thread.item.done"
+            and event["item"]["type"] == "assistant_message"
+            for event in events
+        )
+        assert _widget_items(events) == []
+        assert revisions.prepared == []
+        assert revisions.executed == []
     finally:
         sidecar.close()
 
@@ -799,11 +879,22 @@ def test_switching_decks_clears_history_and_invalidates_old_change_bindings() ->
         sidecar.close()
 
 
-def test_selector_refuses_tampering_and_renders_unsupported_decks_inert() -> None:
+def test_selector_refuses_tampering_and_renders_chat_unavailable_decks_inert() -> None:
     revisions = _FakeRevisions()
+    choices = (
+        *_assistant_deck_choices(),
+        AssistantDeckChoice(
+            deck_id="broken-deck",
+            label="Broken Deck",
+            scope="data/decks/broken.yaml",
+            chat_supported=False,
+            revision_supported=False,
+            unavailable_reason="This configured deck could not be read safely.",
+        ),
+    )
     sidecar = create_assistant_sidecar(
         revisions,
-        deck_choices=_assistant_deck_choices(),
+        deck_choices=choices,
         session_token=SESSION_TOKEN,
     )
     sidecar.start()
@@ -820,14 +911,20 @@ def test_selector_refuses_tampering_and_renders_unsupported_decks_inert() -> Non
         assert any(event["type"] == "error" for event in tampered)
 
         second_thread, second_selector, _events_before = _start_deck_selector(sidecar)
-        unsupported_row = next(
+        unavailable_row = next(
             row
             for row in second_selector["widget"]["children"]
-            if "Lesson 13::Vocabulary" in json.dumps(row, ensure_ascii=False)
+            if "Broken Deck" in json.dumps(row, ensure_ascii=False)
         )
-        assert "onClickAction" not in unsupported_row
-        assert "rich conjugation practice deck" in json.dumps(
-            unsupported_row,
+        assert "onClickAction" not in unavailable_row
+        unavailable_badge = next(
+            child
+            for child in unavailable_row["children"][0]["children"]
+            if child["type"] == "Badge"
+        )
+        assert unavailable_badge["label"] == "Unavailable"
+        assert "could not be read safely" in json.dumps(
+            unavailable_row,
             ensure_ascii=False,
         )
         selected = _events(
@@ -843,24 +940,24 @@ def test_selector_refuses_tampering_and_renders_unsupported_decks_inert() -> Non
         assert not any(event["type"] == "error" for event in selected)
 
         third_thread, third_selector, _events_before = _start_deck_selector(sidecar)
-        forged_unsupported = json.loads(
+        forged_unavailable = json.loads(
             json.dumps(_deck_selector_action(third_selector, "potential"))
         )
-        forged_unsupported["payload"]["deck_id"] = "lesson-vocabulary"
-        refused_unsupported = _events(
+        forged_unavailable["payload"]["deck_id"] = "broken-deck"
+        refused_unavailable = _events(
             _post(
                 sidecar,
                 _action_request(
                     third_thread,
                     third_selector,
-                    forged_unsupported,
+                    forged_unavailable,
                 ),
             )[2]
         )
         assert any(
             event["type"] == "error"
             and ("tampered" in event["message"] or "stale" in event["message"])
-            for event in refused_unsupported
+            for event in refused_unavailable
         )
         assert revisions.resolved == ["potential"]
         assert revisions.chatted == []
@@ -1409,6 +1506,7 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b"<h1>Janki</h1>" in body
         assert b"Ask janki" not in body
         assert b"Questions are read-only" in body
+        assert b"explicit deck-change action" in body
         assert b"Choose the active deck inside this chat" in body
         assert b"Selected deck for changes:" not in body
         assert b"Brandon Japanese::Potential Practice" not in body
@@ -1512,6 +1610,8 @@ def test_project_only_shell_names_only_source_intake_and_extraction(
         assert status == 200
         assert script_status == 200
         assert b"Attach one PDF or photo" in body
+        assert b"until a readable deck is configured" in body
+        assert b"deck changes additionally require a supported rich drill deck" in body
         assert b"Ask a question in ordinary language" not in body
         assert b"Questions are read-only" not in body
         assert b'placeholder: "Attach a PDF or photo"' in script
@@ -1520,6 +1620,256 @@ def test_project_only_shell_names_only_source_intake_and_extraction(
         assert b'label: "What Janki can do"' not in script
         assert b'label: "How changes work"' not in script
         assert b'label: "Create from a source"' not in script
+    finally:
+        sidecar.close()
+
+
+def test_project_without_a_readable_deck_does_not_offer_a_dead_end() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        question_events = _events(
+            _post(sidecar, _message_request("Can you help with a deck?"))[2]
+        )
+        assert any(
+            event["type"] == "notice"
+            and "No readable deck is available" in event["message"]
+            for event in question_events
+        )
+        assert not any(
+            event["type"] == "notice" and "Choose a deck below" in event["message"]
+            for event in question_events
+        )
+        assert _widget_items(question_events) == []
+
+        for prompt in (
+            "What can Janki help me do here?",
+            "Explain how I can prepare and confirm a deck change.",
+        ):
+            events = _events(_post(sidecar, _message_request(prompt))[2])
+            answer = next(
+                event["item"]["content"][0]["text"]
+                for event in events
+                if event["type"] == "thread.item.done"
+                and event["item"]["type"] == "assistant_message"
+            )
+            assert "No readable deck is available" in answer
+            assert "Choose a readable deck" not in answer
+            assert "ask read-only questions" not in answer
+            assert _widget_items(events) == []
+
+        choose_events = _events(
+            _post(sidecar, _message_request("Choose an active deck"))[2]
+        )
+        assert any(
+            event["type"] == "notice"
+            and "No configured deck is available" in event["message"]
+            for event in choose_events
+        )
+        assert _widget_items(choose_events) == []
+
+        assert revisions.chatted == []
+        assert revisions.prepared == []
+    finally:
+        sidecar.close()
+
+
+def test_chat_only_shell_does_not_offer_a_deck_change_starter() -> None:
+    sidecar = create_assistant_sidecar(
+        _FakeRevisions(),
+        deck_choices=(
+            AssistantDeckChoice(
+                deck_id="vocabulary",
+                label="Vocabulary",
+                scope="data/decks/vocabulary.yaml",
+                chat_supported=True,
+                revision_supported=False,
+                unavailable_reason=(
+                    "Deck changes currently support rich conjugation practice "
+                    "decks only."
+                ),
+            ),
+        ),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        status, _headers, body = _request(
+            sidecar,
+            "GET",
+            sidecar.server.shell_path,
+        )
+        script_status, _script_headers, script = _request(
+            sidecar,
+            "GET",
+            sidecar.server.script_path,
+        )
+
+        assert status == 200
+        assert script_status == 200
+        assert b"Questions are read-only" in body
+        assert b"explicit deck-change action" not in body
+        assert b"chat only" in body
+        assert b'label: "Choose active deck"' in script
+        assert b'label: "What Janki can do"' in script
+        assert b'label: "How changes work"' not in script
+        assert b'label: "Create from a source"' in script
+    finally:
+        sidecar.close()
+
+
+def test_chat_only_project_refuses_typed_deck_change_help_without_a_model_call() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=(
+            AssistantDeckChoice(
+                deck_id="vocabulary",
+                label="Vocabulary",
+                scope="data/decks/vocabulary.yaml",
+                chat_supported=True,
+                revision_supported=False,
+                unavailable_reason=(
+                    "Deck changes currently support rich conjugation practice "
+                    "decks only."
+                ),
+            ),
+        ),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, selector, _events_before = _start_deck_selector(sidecar)
+        selection = _action_request(
+            thread_id,
+            selector,
+            _deck_selector_action(selector, "vocabulary"),
+        )
+        assert _post(sidecar, selection)[0] == 200
+
+        status, _headers, body = _post(
+            sidecar,
+            _followup_message_request(
+                thread_id,
+                "Explain how I can prepare and confirm a deck change.",
+            ),
+        )
+
+        assert status == 200
+        answer = next(
+            event["item"]["content"][0]["text"]
+            for event in _events(body)
+            if event["type"] == "thread.item.done"
+            and event["item"]["type"] == "assistant_message"
+        )
+        assert "no Chat + changes deck" in answer
+        assert "explicit deck-change action" not in answer
+        assert revisions.chatted == []
+        assert revisions.prepared == []
+    finally:
+        sidecar.close()
+
+
+def test_chat_only_project_describes_capabilities_without_claiming_deck_changes() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=(
+            AssistantDeckChoice(
+                deck_id="vocabulary",
+                label="Vocabulary",
+                scope="data/decks/vocabulary.yaml",
+                chat_supported=True,
+                revision_supported=False,
+                unavailable_reason=(
+                    "Deck changes currently support rich conjugation practice "
+                    "decks only."
+                ),
+            ),
+        ),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, _selector, _events_before = _start_deck_selector(sidecar)
+
+        status, _headers, body = _post(
+            sidecar,
+            _followup_message_request(
+                thread_id,
+                "What can Janki help me do here?",
+            ),
+        )
+
+        assert status == 200
+        answer = next(
+            event["item"]["content"][0]["text"]
+            for event in _events(body)
+            if event["type"] == "thread.item.done"
+            and event["item"]["type"] == "assistant_message"
+        )
+        assert "read-only questions" in answer
+        assert "no Chat + changes deck" in answer
+        assert "reviewed change proposal" not in answer
+        assert revisions.chatted == []
+        assert revisions.prepared == []
+    finally:
+        sidecar.close()
+
+
+def test_revision_project_explains_typed_deck_change_help_without_a_model_call() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="data/decks/potential.yaml",
+        deck_display_name="Potential Practice",
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, _selector, _events_before = _start_deck_selector(sidecar)
+
+        status, _headers, body = _post(
+            sidecar,
+            _followup_message_request(
+                thread_id,
+                "Explain how I can prepare and confirm a deck change.",
+            ),
+        )
+
+        assert status == 200
+        answer = next(
+            event["item"]["content"][0]["text"]
+            for event in _events(body)
+            if event["type"] == "thread.item.done"
+            and event["item"]["type"] == "assistant_message"
+        )
+        assert "Choose a Chat + changes deck" in answer
+        assert "explicit deck-change action" in answer
+
+        capabilities_status, _headers, capabilities_body = _post(
+            sidecar,
+            _followup_message_request(
+                thread_id,
+                "What can Janki help me do here?",
+            ),
+        )
+        assert capabilities_status == 200
+        capabilities_answer = next(
+            event["item"]["content"][0]["text"]
+            for event in _events(capabilities_body)
+            if event["type"] == "thread.item.done"
+            and event["item"]["type"] == "assistant_message"
+        )
+        assert "A Chat + changes deck" in capabilities_answer
+        assert "reviewed change proposal" in capabilities_answer
+        assert revisions.chatted == []
+        assert revisions.prepared == []
     finally:
         sidecar.close()
 

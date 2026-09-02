@@ -19,14 +19,16 @@ of why the asking changed.
 | `extract-prose.md` | `janki extract --mode prose` | system |
 | `enrich-bare-word.md` | `janki enrich --ai` | system |
 | `revise-conjugation-deck.md` | confirmed conjugation-deck `revise` | system |
-| `assistant-chat.md` | ordinary read-only Janki conversation | complete system prompt |
+| `assistant-chat.md` | ordinary Janki conversation for a **Chat + changes** deck | complete system prompt |
+| `assistant-chat-only.md` | ordinary Janki conversation for a **Chat only** deck | complete system prompt |
 | `approve-coverage.md` | `janki promote --accept-coverage` | system |
 
 The coverage check and conversational Assistant do not lead with the style
 guide. Coverage counts whether the page is accounted for rather than judging
-Japanese. The Assistant answers from its bounded deck scope and bounded
+Japanese. Both Assistant prompts answer from a bounded deck scope and bounded
 thread history without writing cards, so a card-writing style guide would give
-it the wrong job.
+them the wrong job. The local deck capability chooses between the revision-aware
+and chat-only prompts before the provider request is fingerprinted.
 
 The configured Codex enrichment provider receives the same style and task
 template, but its transport adapter rejoins those blocks and prepends a small
@@ -79,8 +81,8 @@ that removing it should break something, `tests/test_prompts.py` is where that
 assertion goes — it reads these files, so a retired clause is a failing test
 rather than a silent weakening.
 
-Today that holds for `enrich-bare-word.md`, `revise-conjugation-deck.md`,
-`assistant-chat.md`, the three `extract-*.md` files, and
+Today that holds for `enrich-bare-word.md`, `revise-conjugation-deck.md`, both
+`assistant-chat*.md` files, the three `extract-*.md` files, and
 `approve-coverage.md`. Assertions living in tests read the files too: they once
 read Python constants holding byte-identical copies, which meant deleting a
 clause from the live template changed nothing anyone would notice.

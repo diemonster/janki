@@ -29,6 +29,7 @@ SHIPPED = (
     "enrich-bare-word",
     "revise-conjugation-deck",
     "assistant-chat",
+    "assistant-chat-only",
     "approve-coverage",
 )
 
@@ -210,6 +211,7 @@ def test_card_writing_has_exactly_five_task_templates() -> None:
     assert set(SHIPPED) - {
         "style-guide",
         "assistant-chat",
+        "assistant-chat-only",
         "approve-coverage",
     } == set(
         CARD_WRITING_TEMPLATES
@@ -226,6 +228,21 @@ def test_assistant_chat_is_conversation_not_an_implicit_revision() -> None:
     assert "no other conversation history, deck contents, filesystem access, tools" in text
     assert "one supported pdf or photo" in text.casefold()
     assert "never supplied to this conversational model" in text.casefold()
+
+
+def test_chat_only_assistant_never_promises_an_unavailable_revision_action() -> None:
+    text = " ".join(prompts.load(REPO_ROOT, "assistant-chat-only").split())
+    folded = text.casefold()
+
+    assert "bounded transcript" in text
+    assert "no other conversation history, deck contents, filesystem access, tools" in text
+    assert "one supported pdf or photo" in folded
+    assert "never supplied to this conversational model" in folded
+    assert "this selected deck is **chat only**" in folded
+    assert "conversation cannot prepare a revision" in folded
+    assert "do not direct the owner to a revision action" in folded
+    assert "write a proposal in this answer" in folded
+    assert "merely asking authorized a change" in folded
 
 
 def test_the_three_extraction_modes_are_three_complete_files() -> None:

@@ -146,6 +146,7 @@ class AssistantHTTPServer(LocalOnlyServer):
     upload_path_prefix: str | None
     attachment_store: LocalAssistantAttachmentStore | None
     conversation_available: bool
+    revision_available: bool
     deck_choices: tuple[AssistantDeckChoice, ...]
 
 
@@ -465,16 +466,26 @@ def _shell_html(server: AssistantHTTPServer) -> str:
         introduction = (
             "Choose the active deck inside this chat, ask a question in ordinary "
             "language, or attach one PDF or photo for local source intake. Questions "
-            "are read-only; use the explicit deck-change action when you want one "
-            "exact revision plan."
+            "are read-only."
         )
+        if server.revision_available:
+            introduction += (
+                " Use the explicit deck-change action when you want one exact "
+                "revision plan."
+            )
+        else:
+            introduction += (
+                " The available decks are chat only; deck changes require a "
+                "supported rich drill deck."
+            )
         assistant_label = "janki deck assistant"
     else:
         introduction = (
             "Attach one PDF or photo to save it to your local source inbox. Janki "
             "then shows one exact extraction plan in this conversation; nothing is "
-            "sent unless you confirm it. Questions and deck changes are unavailable "
-            "until a supported rich drill deck is configured."
+            "sent unless you confirm it. Questions are unavailable until a readable "
+            "deck is configured; deck changes additionally require a supported rich "
+            "drill deck."
         )
         assistant_label = "janki source intake"
     return (
@@ -511,12 +522,15 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
           label: "What Janki can do",
           prompt: "What can Janki help me do here?",
           icon: "book-open",
-        },
+        },"""
+        if server.revision_available:
+            starter_prompts += """
         {
           label: "How changes work",
           prompt: "Explain how I can prepare and confirm a deck change.",
           icon: "write",
-        },
+        },"""
+        starter_prompts += """
         {
           label: "Create from a source",
           prompt: "Explain how to make cards here from an attached PDF or photo.",
@@ -710,6 +724,9 @@ def create_assistant_sidecar(
         server.attachment_store = attachment_store
         server.deck_choices = tuple(deck_choices)
         server.conversation_available = any(
+            choice.chat_supported for choice in server.deck_choices
+        )
+        server.revision_available = any(
             choice.revision_supported for choice in server.deck_choices
         )
         return AssistantSidecar(server=server, bridge=bridge)

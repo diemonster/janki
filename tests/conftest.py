@@ -106,8 +106,8 @@ def seed_prompts(root: Path) -> Path:
     The repository's own files, not stubs. A temp project that invented its
     own prompt text would let a CLI test pass while the shipped template said
     something else entirely — and these files are the deliverable now, so the
-    suite should exercise them. Cheap enough to do per project: seven small
-    Markdown files.
+    suite should exercise them. Cheap enough to copy the small Markdown set per
+    project.
     """
     target = Path(root) / prompts.DIRECTORY
     target.mkdir(parents=True, exist_ok=True)

@@ -243,9 +243,12 @@ before deck-scoped conversation or revision. Browser actions carry only an
 opaque startup-catalog id; janki resolves it to an allowlisted repository path
 and revalidates the deck locally without a model call. Switching decks clears
 that thread's bounded deck context and invalidates its older prepare, confirm
-and finish actions. Deck kinds the current revision pass cannot safely write
-remain visible with their limitation, but cannot be selected as though they
-were supported.
+and finish actions. Every safely readable configured deck is selectable for
+conversation. Deck kinds the current revision pass cannot safely write are
+labelled **Chat only** and never expose or enter a deck-change action; malformed
+or unreadable decks remain visible as unavailable and inert. Chat-only turns
+use their own non-revision system prompt, so the model cannot direct the owner
+to a change action that the selected deck will not render.
 
 Sending an ordinary Janki message authorizes one journaled Assistant turn over
 the message and its bounded context. The routine page need not repeat its
