@@ -458,7 +458,13 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
             "GET",
             sidecar.server.script_path,
         )
+        style_status, _style_headers, stylesheet = _request(
+            sidecar,
+            "GET",
+            sidecar.server.style_path,
+        )
         assert script_status == 200
+        assert style_status == 200
         assert sidecar.server.api_path.encode() in script
         assert b'domainKey: "domain_pk_localhost_dev"' in script
         assert b"const isRequest = input instanceof Request;" in script
@@ -468,6 +474,13 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b"attachments: { enabled: false }" in script
         assert b'placeholder: "Ask about this deck or attach a source"' in script
         assert b'greeting: "What would you like to know about this deck?"' in script
+        assert b'label: "Understand this deck"' in script
+        assert b'label: "Plan a deck change"' in script
+        assert b'label: "Create from a source"' in script
+        assert b'icon: "book-open"' in script
+        assert b'icon: "write"' in script
+        assert b'icon: "document"' in script
+        assert b"header { width: min(100%, 48rem); margin: 0 auto 1rem; }" in stylesheet
         assert (
             b"threadItemActions: {\n      feedback: false,\n      retry: false,\n    }," in script
         )
@@ -507,6 +520,9 @@ def test_project_only_shell_names_only_source_intake_and_extraction(
         assert b'placeholder: "Attach a PDF or photo"' in script
         assert b'greeting: "Add a source to Janki"' in script
         assert b"What would you like to know about this deck?" not in script
+        assert b'label: "Understand this deck"' not in script
+        assert b'label: "Plan a deck change"' not in script
+        assert b'label: "Create from a source"' not in script
     finally:
         sidecar.close()
 
@@ -584,7 +600,12 @@ def test_attachment_send_saves_the_exact_source_locally_without_calling_claude(
         )
         assert script_status == 200
         assert b"enabled: true" in script
-        assert b'uploadStrategy: { type: "two_phase" }' in script
+        assert (
+            b'api: {\n      url: apiURL,\n      domainKey: "domain_pk_localhost_dev",'
+            b'\n      fetch: localFetch,\n      uploadStrategy: { type: "two_phase" },'
+            b"\n    }" in script
+        )
+        assert b'attachments: {\n        enabled: true,\n        uploadStrategy:' not in script
         assert b"maxSize: 128 * 1024 * 1024" in script
         assert b"maxCount: 1" in script
         assert b'"application/pdf": [".pdf"]' in script

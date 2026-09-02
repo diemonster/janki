@@ -499,16 +499,34 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
         frame_title = "janki deck assistant"
         placeholder = "Ask about this deck or attach a source"
         greeting = "What would you like to know about this deck?"
+        starter_prompts = """[
+        {
+          label: "Understand this deck",
+          prompt: "Summarize what this deck is designed to teach.",
+          icon: "book-open",
+        },
+        {
+          label: "Plan a deck change",
+          prompt: "Help me plan one focused improvement to this deck.",
+          icon: "write",
+        },
+        {
+          label: "Create from a source",
+          prompt: "Explain how to make cards here from an attached PDF or photo.",
+          icon: "document",
+        },
+      ]"""
     else:
         frame_title = "janki source intake"
         placeholder = "Attach a PDF or photo"
         greeting = "Add a source to Janki"
+        starter_prompts = "[]"
     if server.attachment_store is None:
         attachments = "{ enabled: false }"
+        upload_strategy = ""
     else:
         attachments = """{
         enabled: true,
-        uploadStrategy: { type: "two_phase" },
         maxSize: 128 * 1024 * 1024,
         maxCount: 1,
         accept: {
@@ -519,6 +537,7 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
           "image/heif": [".heif"],
         },
       }"""
+        upload_strategy = '\n      uploadStrategy: { type: "two_phase" },'
     return f'''"use strict";
 (async () => {{
   await customElements.whenDefined("openai-chatkit");
@@ -543,7 +562,11 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
     }});
   }};
   chat.setOptions({{
-    api: {{ url: apiURL, domainKey: "domain_pk_localhost_dev", fetch: localFetch }},
+    api: {{
+      url: apiURL,
+      domainKey: "domain_pk_localhost_dev",
+      fetch: localFetch,{upload_strategy}
+    }},
     frameTitle: {json.dumps(frame_title)},
     header: {{ enabled: false }},
     history: {{ enabled: false }},
@@ -558,7 +581,7 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
     }},
     startScreen: {{
       greeting: {json.dumps(greeting)},
-      prompts: [],
+      prompts: {starter_prompts},
     }},
   }});
 }})().catch(() => {{
@@ -573,7 +596,7 @@ def _stylesheet() -> str:
 * { box-sizing: border-box; }
 body { margin: 0; background: Canvas; color: CanvasText; }
 main { width: min(100%, 72rem); min-height: 100vh; margin: 0 auto; padding: 1rem; }
-header { max-width: 52rem; margin-bottom: 1rem; }
+header { width: min(100%, 48rem); margin: 0 auto 1rem; }
 h1 { margin-bottom: .35rem; }
 p { margin: .35rem 0; line-height: 1.45; }
 .boundary { color: GrayText; font-size: .875rem; }
