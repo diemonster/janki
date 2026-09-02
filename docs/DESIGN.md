@@ -34,7 +34,7 @@ surface rather than a fourth writing path. Revision has one shared
 plan/consent/journal/recovery/staging/review/apply pipeline; configuration
 selects only its transport: `claude-code` consumes the logged-in Claude Pro or
 Max subscription allowance, while `anthropic-api` uses Anthropic API billing.
-An ordinary Ask janki message is a separate, non-card-writing model turn. Its
+An ordinary Janki message is a separate, non-card-writing model turn. Its
 own `[assistant]` provider chooses between the same two Claude transports
 independently from revision, while its model is pinned to `claude-opus-5`.
 Sending the message authorizes exactly that one journaled conversational call,
@@ -181,7 +181,7 @@ call that may have been sent require `operations --forget --force` when they
 did not become committed output; an ordinary forget cannot silently erase
 partial paid output.
 An ordinary Assistant turn follows that shape too. Once captured, its exact
-user message, disclosed context binding, provider/model identity and assistant
+user message, bounded context binding, provider/model identity and assistant
 reply become a durable turn under `data/assistant/`; ChatKit's thread is a view
 of that repository record, never its only copy or its authority source.
 Normal capture keeps its terminal operation-bound marker until the
@@ -237,8 +237,10 @@ and the logged-in Claude Pro or Max subscription. `anthropic-api` is the
 separately selectable API-billed alternative. These settings do not inherit
 from or silently change `[ai].revise_provider`.
 
-Sending an ordinary Ask message authorizes one journaled Assistant turn over
-the message and its disclosed context. That turn cannot mutate, prepare a
+Sending an ordinary Janki message authorizes one journaled Assistant turn over
+the message and its bounded context. The routine page need not repeat its
+provider, model or context-provenance prose; the exact request manifest and
+operation journal retain those bindings durably. That turn cannot mutate, prepare a
 revision by implication, or treat a question such as “which deck?” as a deck
 instruction. Only the explicit **Change deck** action may prepare an exact
 revision plan. Its owner-visible request detail names the transport provider,
@@ -248,6 +250,16 @@ confirmation consumes a one-use capability bound to those values, the target,
 current repository fingerprints, cost-bearing purpose and consequences. It
 dispatches `revise`, captures the result, stages the unseen Japanese proposal,
 and then stops.
+
+An attachment added through Janki is local immutable intake only. Its bytes are
+saved through the same intake service under `data/inbox/`; uploading does not
+place the source in conversational context or authorize a paid model call. This
+project-wide intake and extraction surface stays available even when Janki
+cannot select one unambiguous deck for deck-scoped conversation or revision.
+The same Janki conversation then renders one freshly planned action bound to the
+exact stored source and request. One owner-confirmation click dispatches it;
+there is no additional consent page or confirmation chain. The action is
+separate from upload only because saving locally is not authority to transmit.
 
 The owner next reviews or edits that visible proposal. **Apply and finish** is
 a later exact content-authority event over those reviewed bytes and its stated

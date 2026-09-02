@@ -56,17 +56,14 @@ from japanese_anki.application import (
     DispatchFailure,
     ExtractionCompletionError,
     ExtractionConsent,
+    ExtractionDispatchError,
+    ExtractionDispatchExpectation,
     SourceJourney,
     approve_coverage_as_owner,
-    authorize_dispatch,
     busy_refusal,
-    capture_hook,
     check_cards,
-    classify_dispatch_failure,
-    complete_extraction,
     describe_extraction,
-    extraction_replacement_revision,
-    plan_corpus_extraction,
+    dispatch_extraction,
     plan_coverage,
     plan_model_coverage,
     project_coverage,
@@ -848,7 +845,10 @@ class WorkbenchSession:
         return describe_extraction(self.config, path, mode=mode)
 
     def issue_extraction_action(self, consent: ExtractionConsent) -> str:
-        return self.extraction_actions.issue(consent)
+        return self.extraction_actions.issue(
+            consent,
+            operations_path=self.config.operations_file,
+        )
 
     def consume_extraction_action(self, token: str) -> ExtractionAction | None:
         return self.extraction_actions.consume(token)
@@ -3249,280 +3249,172 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 ),
             )
             return
-        if action.replacement_offered and not submission.replacement_confirmed:
-            self._refusal(
-                409,
-                "Confirm that this re-read replaces the review named on the "
-                "page. Nothing was sent.",
-                next_step=(
-                    "Use your browser's Back button and confirm the named "
-                    "replacement only if you intend to discard that review."
-                ),
-            )
-            return
 
         source = session.source_path(name)
         if source is None:
             self._error(404, "No such source. Nothing was sent.")
             return
-        force = submission.replacement_confirmed
-        try:
-            # Fresh at click time. GET planned with force solely to describe a
-            # collision; no object from that forced snapshot reaches here.
-            plan = plan_corpus_extraction(
-                session.config,
-                source,
-                mode=action.mode,
-                model=action.model,
-                force=force,
-            )
-        except JankiError as exc:
-            self._refusal(
-                409,
-                f"{exc} Nothing was sent.",
-                next_step=(
-                    "Use your browser's Back button, repair the named source-state "
-                    "problem, then reload the consent page."
-                ),
-            )
-            return
-        if len(plan.targets) != 1:
-            self._refusal(
-                409,
-                "That source no longer makes one extraction request.",
-                next_step=(
-                    "Use your browser's Back button and reload the source before "
-                    "reviewing any paid action."
-                ),
-            )
-            return
-        target = plan.targets[0]
-        fresh_fingerprint = str(target.provenance["request_fingerprint"])
-        if (
-            fresh_fingerprint != action.request_fingerprint
-            or target.source_sha256 != action.source_sha256
-        ):
-            self._refusal(
-                409,
-                "The extraction request changed after this page was rendered. "
-                "Nothing was sent.",
-                next_step=(
-                    "Use your browser's Back button, reload the consent page, and "
-                    "review the current call."
-                ),
-            )
-            return
+        expected = ExtractionDispatchExpectation(
+            source=source,
+            model=action.model,
+            mode=action.mode,
+            source_sha256=action.source_sha256,
+            request_fingerprint=action.request_fingerprint,
+            replacement_revision=action.replacement_revision,
+            replacement_confirmed=submission.replacement_confirmed,
+            staging_path=action.staging_path,
+            patterns_path=action.patterns_path,
+            operations_path=action.operations_path,
+        )
+        progress = _ExtractionProgress(self, name, session.token)
+        progress_started = False
+
+        def report_progress(label: str) -> None:
+            nonlocal progress_started
+            if not progress_started:
+                progress.start()
+                progress_started = True
+            progress.step(label)
 
         try:
-            fresh_revision = extraction_replacement_revision(session.config, target)
-        except JankiError as exc:
-            self._refusal(
-                409,
-                f"{exc} Nothing was sent.",
-                next_step=(
-                    "Use your browser's Back button, repair the named review-state "
-                    "problem, then reload the consent page."
-                ),
+            outcome = dispatch_extraction(
+                session.config,
+                expected,
+                progress=report_progress,
             )
-            return
-        expected_revision = action.replacement_revision
-        if fresh_revision is None or expected_revision is None:
-            if fresh_revision != expected_revision:
+        except ExtractionDispatchError as exc:
+            if exc.phase == "binding":
                 self._refusal(
                     409,
-                    "The review changed after this page was rendered. Nothing was "
-                    "sent.",
+                    f"{_exception_text(exc.cause)} Nothing was sent.",
                     next_step=(
-                        "Use your browser's Back button, reload, and review the "
-                        "current replacement."
+                        "Use your browser's Back button, reload the consent page, "
+                        "and review the current paid action."
                     ),
                 )
                 return
-        elif fresh_revision.staging_sha256 != expected_revision.staging_sha256:
-            self._refusal(
-                409,
-                "The review changed after this page was rendered. Nothing was sent. "
-                "Reload and review the current replacement.",
-                next_step=(
-                    "Use your browser's Back button, reload, and review the current "
-                    "replacement."
-                ),
-            )
-            return
-        elif (
-            fresh_revision.pattern_entry_sha256
-            != expected_revision.pattern_entry_sha256
-        ):
-            self._refusal(
-                409,
-                "The grammar review changed after this page was rendered. Nothing "
-                "was sent.",
-                next_step=(
-                    "Use your browser's Back button, reload, and review the current "
-                    "replacement."
-                ),
-            )
-            return
-
-        try:
-            client = claude_client.prepare_paid_client()
-        except JankiError as exc:
-            self._failure(
-                409,
-                FailureView(
-                    happened=str(exc),
-                    changed=(
-                        "No extraction operation was authorized and no proposal "
-                        "or journal file was changed. The source remains saved in "
-                        "the corpus from its separate intake step."
-                    ),
-                    money="No provider was contacted and no paid call was made.",
-                    next_step=(
-                        "Set ANTHROPIC_API_KEY in the shell that starts janki. "
-                        "Use your browser's Back button, reload the consent page, "
-                        "and review the paid action again."
-                    ),
-                ),
-            )
-            return
-
-        try:
-            journal = operations.OperationJournal.load(session.config.operations_file)
-            # The gate, under its own lock. `busy_refusal` was only what the
-            # GET happened to display; two old pages can both have seen clear.
-            operation_id = authorize_dispatch(journal, target, model=plan.model)
-        except JankiError as exc:
-            self._failure(
-                409,
-                FailureView(
-                    happened=_exception_text(exc),
-                    changed=(
-                        "No proposal was staged. The operation journal may contain "
-                        "an unused authority if its final pre-dispatch write failed."
-                    ),
-                    money=(
-                        "Nothing was sent to a provider by this attempt; no paid "
-                        "provider request was made."
-                    ),
-                    next_step=(
-                        "Run 'janki operations' and settle any authority it shows "
-                        "before reloading the consent page."
-                    ),
-                ),
-            )
-            return
-
-        progress = _ExtractionProgress(self, name, session.token)
-        progress.start()
-        progress.step("Preparing pages")
-        progress.step("Reading the source")
-        captured = capture_hook(session.config, journal, operation_id)
-
-        def capture(response: object) -> None:
-            captured(response)
-            progress.step("Checking the answer's shape")
-
-        try:
-            result = extract.extract_candidates(
-                target.item,
-                model=plan.model,
-                style_guide=plan.style_guide,
-                system=plan.system,
-                mode=plan.mode,
-                known=plan.skip_list,
-                client=client,
-                capture=capture,
-            )
-        except Exception as exc:  # noqa: BLE001 - settle any dispatched call
-            try:
-                failure = classify_dispatch_failure(
-                    session.config, journal, operation_id, exc
-                )
-            except JankiError as journal_error:
-                progress.failure(
+            if exc.phase == "preparation":
+                self._failure(
+                    409,
                     FailureView(
-                        happened=_exception_text(exc),
+                        happened=_exception_text(exc.cause),
                         changed=(
-                            "Nothing was proven staged because janki could not "
-                            "settle the operation journal. It also could not prove "
-                            "whether exact recovery data were saved."
+                            "No extraction operation was authorized and no proposal "
+                            "or journal file was changed. The source remains saved "
+                            "in the corpus from its separate intake step."
                         ),
                         money=(
-                            "The provider request was dispatched and may already "
-                            "have been billed."
+                            "No provider was contacted and no paid call was made."
                         ),
                         next_step=(
-                            "Do not retry the paid call. Repair the operation "
-                            "journal, then run 'janki operations'."
+                            "Set ANTHROPIC_API_KEY in the shell that starts janki. "
+                            "Use your browser's Back button, reload the consent "
+                            "page, and review the paid action again."
                         ),
-                        technical_detail=(
-                            f"Operation {operation_id}; journal error: "
-                            f"{_exception_text(journal_error)}"
+                    ),
+                )
+                return
+            if exc.phase == "authorization":
+                self._failure(
+                    409,
+                    FailureView(
+                        happened=_exception_text(exc.cause),
+                        changed=(
+                            "No proposal was staged. The operation journal may "
+                            "contain an unused authority if its final pre-dispatch "
+                            "write failed."
                         ),
+                        money=(
+                            "Nothing was sent to a provider by this attempt; no "
+                            "paid provider request was made."
+                        ),
+                        next_step=(
+                            "Run 'janki operations' and settle any authority it "
+                            "shows before reloading the consent page."
+                        ),
+                    ),
+                )
+                return
+            operation_id = exc.operation_id
+            assert operation_id is not None
+            if exc.phase == "dispatch":
+                if exc.journal_error is not None:
+                    progress.failure(
+                        FailureView(
+                            happened=_exception_text(exc.cause),
+                            changed=(
+                                "Nothing was proven staged because janki could not "
+                                "settle the operation journal. It also could not "
+                                "prove whether exact recovery data were saved."
+                            ),
+                            money=(
+                                "The provider request was dispatched and may "
+                                "already have been billed."
+                            ),
+                            next_step=(
+                                "Do not retry the paid call. Repair the operation "
+                                "journal, then run 'janki operations'."
+                            ),
+                            technical_detail=(
+                                f"Operation {operation_id}; journal error: "
+                                f"{_exception_text(exc.journal_error)}"
+                            ),
+                        )
+                    )
+                    return
+                assert exc.failure is not None
+                progress.failure(
+                    _paid_dispatch_failure_view(
+                        exc.cause,
+                        exc.failure,
+                        unchanged="Nothing was staged.",
+                    )
+                )
+                return
+            cause = exc.cause
+            if isinstance(cause, ExtractionCompletionError):
+                progress.failure(
+                    FailureView(
+                        happened=_exception_text(cause),
+                        changed=(
+                            f"The proposals were saved at {cause.staging_path}, "
+                            "including the embedded pattern set. The separate "
+                            "pattern store was not updated."
+                        ),
+                        money=(
+                            "The provider call completed and may have been billed."
+                        ),
+                        next_step=(
+                            "Reload the source and review that saved proposal file; "
+                            "do not repeat extraction to repair the pattern-store "
+                            "copy."
+                        ),
+                        technical_detail=f"Operation {operation_id}",
+                    )
+                )
+                return
+            if isinstance(cause, operations.OperationError):
+                progress.failure(
+                    FailureView(
+                        happened=_exception_text(cause),
+                        changed=(
+                            "The provider answer arrived, but this attempt could "
+                            "not prove that every proposal and journal transition "
+                            "committed."
+                        ),
+                        money=(
+                            "The provider call completed and may have been billed."
+                        ),
+                        next_step=_completion_refusal_note(
+                            session.config, operation_id
+                        ),
+                        technical_detail=f"Operation {operation_id}",
                     )
                 )
                 return
             progress.failure(
-                _paid_dispatch_failure_view(
-                    exc,
-                    failure,
-                    unchanged="Nothing was staged.",
-                )
-            )
-            return
-
-        progress.step("Saving proposals")
-        try:
-            outcome = complete_extraction(
-                session.config,
-                journal,
-                target,
-                result,
-                operation_id=operation_id,
-                known=plan.known,
-                mode=plan.mode,
-                model=plan.model,
-                force=force,
-                expected_revision=expected_revision,
-            )
-        except ExtractionCompletionError as exc:
-            progress.failure(
                 FailureView(
-                    happened=_exception_text(exc),
-                    changed=(
-                        f"The proposals were saved at {exc.staging_path}, including "
-                        "the embedded pattern set. The separate pattern store was "
-                        "not updated."
-                    ),
-                    money="The provider call completed and may have been billed.",
-                    next_step=(
-                        "Reload the source and review that saved proposal file; do "
-                        "not repeat extraction to repair the pattern-store copy."
-                    ),
-                    technical_detail=f"Operation {operation_id}",
-                )
-            )
-            return
-        except operations.OperationError as exc:
-            progress.failure(
-                FailureView(
-                    happened=_exception_text(exc),
-                    changed=(
-                        "The provider answer arrived, but this attempt could not "
-                        "prove that every proposal and journal transition committed."
-                    ),
-                    money="The provider call completed and may have been billed.",
-                    next_step=_completion_refusal_note(
-                        session.config, operation_id
-                    ),
-                    technical_detail=f"Operation {operation_id}",
-                )
-            )
-            return
-        except JankiError as exc:
-            progress.failure(
-                FailureView(
-                    happened=_exception_text(exc),
+                    happened=_exception_text(cause),
                     changed=(
                         "The provider answer arrived, but this attempt could not "
                         "prove that every proposal and journal transition committed."
@@ -4154,12 +4046,15 @@ def _start_assistant_for(config: ProjectConfig):
     adapter, warnings = discover_revision_adapter(config)
     for warning in warnings:
         print(f"warning: {warning}", file=sys.stderr)
-    if adapter is None:
-        return None
     try:
         from japanese_anki.workbench.assistant_http import start_assistant_sidecar
 
-        return start_assistant_sidecar(adapter, deck_scope=adapter.deck_scope)
+        return start_assistant_sidecar(
+            adapter,
+            deck_scope=adapter.deck_scope,
+            inbox_root=config.scan_inbox,
+            conversation_available=adapter.conversation_available,
+        )
     except (ImportError, JankiError, OSError, RuntimeError) as exc:
         print(
             "warning: the isolated assistant could not start; the main workbench "

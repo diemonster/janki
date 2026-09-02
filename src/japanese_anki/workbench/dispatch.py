@@ -17,6 +17,7 @@ import re
 import secrets
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import parse_qsl
 
 from japanese_anki import extract
@@ -49,6 +50,9 @@ class ExtractionAction:
     source_sha256: str
     request_fingerprint: str
     replacement_revision: ExtractionRevision | None
+    staging_path: Path
+    patterns_path: Path
+    operations_path: Path
 
     @property
     def replacement_offered(self) -> bool:
@@ -62,7 +66,7 @@ class ExtractionActions:
         self._lock = threading.Lock()
         self._pending: dict[str, ExtractionAction] = {}
 
-    def issue(self, consent: ExtractionConsent) -> str:
+    def issue(self, consent: ExtractionConsent, *, operations_path: Path) -> str:
         """Bind a fresh capability to one rendered, sendable consent."""
         target = consent.target
         if not consent.sendable or target is None:
@@ -74,6 +78,9 @@ class ExtractionActions:
             source_sha256=target.source_sha256,
             request_fingerprint=str(target.provenance["request_fingerprint"]),
             replacement_revision=consent.replacement_revision,
+            staging_path=target.staging_path.resolve(),
+            patterns_path=target.patterns_path.resolve(),
+            operations_path=Path(operations_path).resolve(),
         )
         with self._lock:
             # A tab can be refreshed forever. Bound the session-only memory;

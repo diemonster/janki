@@ -32,6 +32,10 @@ from japanese_anki.application.extraction import (
     OUTCOME_UNKNOWN,
     DispatchFailure,
     ExtractionCompletionError,
+    ExtractionDispatchError,
+    ExtractionDispatchExpectation,
+    ExtractionOutcome,
+    dispatch_extraction,
 )
 from japanese_anki.claude_client import CallResult
 from japanese_anki.config import ProjectConfig
@@ -258,6 +262,378 @@ def _install_fake(monkeypatch: pytest.MonkeyPatch, fake: _FakeCall) -> None:
         "japanese_anki.extract.claude_client.parse_call",
         fake,
     )
+
+
+def test_browser_paid_post_delegates_one_exact_request_to_shared_service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HTTP owns the one-use click; the application service owns the run."""
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    server, _thread = _running(session)
+    calls: list[tuple[ProjectConfig, ExtractionDispatchExpectation]] = []
+    progress_labels: list[str] = []
+
+    def shared_dispatch(
+        config: ProjectConfig,
+        expected: ExtractionDispatchExpectation,
+        *,
+        progress: Any = None,
+    ) -> ExtractionOutcome:
+        calls.append((config, expected))
+        for label in (
+            "Preparing pages",
+            "Reading the source",
+            "Checking the answer's shape",
+            "Saving proposals",
+        ):
+            progress_labels.append(label)
+            assert progress is not None
+            progress(label)
+        return ExtractionOutcome(
+            target=config.staging_dir / "lesson.pdf.yaml",
+            records=2,
+            already_known=0,
+            unusable=0,
+            duplicates=0,
+            coverage_status="selection",
+            kept_reviewed_patterns=False,
+            source="lesson.pdf",
+        )
+
+    monkeypatch.setattr(workbench_server, "dispatch_extraction", shared_dispatch)
+    try:
+        form = _form(server, session)
+        status, _headers, payload = _post(server, form)
+
+        assert status == 200, payload.decode("utf-8")
+        assert len(calls) == 1
+        config, expected = calls[0]
+        assert config == session.config
+        assert expected.source == session.source_path("lesson.pdf")
+        assert expected.model == form.fields["model"]
+        assert (expected.mode or "") == form.fields["mode"]
+        assert expected.request_fingerprint == form.fields["request_fingerprint"]
+        assert expected.source_sha256
+        assert expected.replacement_revision is None
+        assert not expected.replacement_confirmed
+        assert expected.staging_path == (
+            session.config.staging_dir / "lesson.pdf.yaml"
+        ).resolve()
+        assert expected.patterns_path == session.config.patterns_file.resolve()
+        assert expected.operations_path == session.config.operations_file.resolve()
+        assert progress_labels == [
+            "Preparing pages",
+            "Reading the source",
+            "Checking the answer's shape",
+            "Saving proposals",
+        ]
+        assert "Review proposed cards" in payload.decode("utf-8")
+        assert not session.config.operations_file.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _dispatch_expectation(
+    session: WorkbenchSession,
+    *,
+    replacement_confirmed: bool = False,
+) -> ExtractionDispatchExpectation:
+    consent = session.consent("lesson.pdf")
+    assert consent is not None and consent.target is not None
+    source = session.source_path("lesson.pdf")
+    assert source is not None
+    return ExtractionDispatchExpectation(
+        source=source,
+        model=consent.model,
+        mode=consent.mode,
+        source_sha256=consent.target.source_sha256,
+        request_fingerprint=str(
+            consent.target.provenance["request_fingerprint"]
+        ),
+        replacement_revision=consent.replacement_revision,
+        replacement_confirmed=replacement_confirmed,
+        staging_path=consent.target.staging_path.resolve(),
+        patterns_path=consent.target.patterns_path.resolve(),
+        operations_path=session.config.operations_file.resolve(),
+    )
+
+
+def test_shared_dispatch_runs_the_existing_completion_route_and_four_steps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    expected = _dispatch_expectation(session)
+    fake = _FakeCall()
+    _install_fake(monkeypatch, fake)
+    monkeypatch.setattr(
+        "japanese_anki.application.extraction.claude_client.prepare_paid_client",
+        lambda: object(),
+    )
+    import japanese_anki.application.extraction as extraction_application
+
+    real_complete = extraction_application.complete_extraction
+    completed: list[str] = []
+
+    def observed_complete(*args: Any, **kwargs: Any) -> ExtractionOutcome:
+        completed.append(str(kwargs["operation_id"]))
+        return real_complete(*args, **kwargs)
+
+    monkeypatch.setattr(extraction_application, "complete_extraction", observed_complete)
+    labels: list[str] = []
+
+    outcome = dispatch_extraction(session.config, expected, progress=labels.append)
+
+    assert outcome.target == session.config.staging_dir / "lesson.pdf.yaml"
+    assert len(fake.calls) == 1
+    assert len(completed) == 1
+    assert labels == [
+        "Preparing pages",
+        "Reading the source",
+        "Checking the answer's shape",
+        "Saving proposals",
+    ]
+    journal = operations.OperationJournal.load(session.config.operations_file)
+    assert journal.operations[completed[0]].state == "committed"
+
+
+def test_shared_dispatch_replans_and_refuses_rendered_request_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    expected = _dispatch_expectation(session)
+    fake = _FakeCall()
+    _install_fake(monkeypatch, fake)
+    prompt = tmp_path / "prompts" / "extract-auto.md"
+    prompt.write_text(
+        prompt.read_text(encoding="utf-8") + "\nChanged after consent.\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ExtractionDispatchError, match="request changed") as caught:
+        dispatch_extraction(session.config, expected, client=object())
+
+    assert caught.value.phase == "binding"
+    assert not caught.value.provider_dispatched
+    assert fake.calls == []
+    assert operations.OperationJournal.load(
+        session.config.operations_file
+    ).operations == {}
+
+
+def test_shared_dispatch_binds_source_digest_independently_of_request_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    expected = _dispatch_expectation(session)
+    import japanese_anki.application.extraction as extraction_application
+
+    real_plan = extraction_application.plan_corpus_extraction
+
+    def plan_with_divergent_source(*args: Any, **kwargs: Any):
+        planned = real_plan(*args, **kwargs)
+        target = replace(planned.targets[0], source_sha256="f" * 64)
+        return replace(planned, targets=(target,))
+
+    monkeypatch.setattr(
+        extraction_application,
+        "plan_corpus_extraction",
+        plan_with_divergent_source,
+    )
+
+    with pytest.raises(ExtractionDispatchError, match="request changed"):
+        dispatch_extraction(session.config, expected, client=object())
+
+    assert operations.OperationJournal.load(
+        session.config.operations_file
+    ).operations == {}
+
+
+def _assert_dispatch_path_drift_is_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    config_field: str,
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    expected = _dispatch_expectation(session)
+    changed_path = (tmp_path / "changed" / config_field).resolve()
+    changed_config = replace(session.config, **{config_field: changed_path})
+    fake = _FakeCall()
+    _install_fake(monkeypatch, fake)
+
+    with pytest.raises(ExtractionDispatchError, match="destination changed") as caught:
+        dispatch_extraction(changed_config, expected, client=object())
+
+    assert caught.value.phase == "binding"
+    assert not caught.value.provider_dispatched
+    assert fake.calls == []
+    assert operations.OperationJournal.load(
+        changed_config.operations_file
+    ).operations == {}
+
+
+def test_shared_dispatch_binds_the_rendered_staging_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _assert_dispatch_path_drift_is_refused(
+        tmp_path,
+        monkeypatch,
+        config_field="staging_dir",
+    )
+
+
+def test_shared_dispatch_binds_the_rendered_pattern_store_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _assert_dispatch_path_drift_is_refused(
+        tmp_path,
+        monkeypatch,
+        config_field="patterns_file",
+    )
+
+
+def test_shared_dispatch_binds_the_rendered_operation_journal_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _assert_dispatch_path_drift_is_refused(
+        tmp_path,
+        monkeypatch,
+        config_field="operations_file",
+    )
+
+
+@pytest.mark.parametrize(
+    "raised_label",
+    (
+        "Preparing pages",
+        "Reading the source",
+        "Checking the answer's shape",
+        "Saving proposals",
+    ),
+)
+def test_progress_callback_failure_cannot_interrupt_a_confirmed_extraction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    raised_label: str,
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    expected = _dispatch_expectation(session)
+    fake = _FakeCall()
+    _install_fake(monkeypatch, fake)
+    labels: list[str] = []
+
+    def broken_progress(label: str) -> None:
+        labels.append(label)
+        if label == raised_label:
+            raise RuntimeError("the presentation disappeared")
+
+    outcome = dispatch_extraction(
+        session.config,
+        expected,
+        client=object(),
+        progress=broken_progress,
+    )
+
+    assert outcome.records == 2
+    assert len(fake.calls) == 1
+    assert labels == [
+        "Preparing pages",
+        "Reading the source",
+        "Checking the answer's shape",
+        "Saving proposals",
+    ]
+    journal = operations.OperationJournal.load(session.config.operations_file)
+    assert len(journal.operations) == 1
+    assert next(iter(journal.operations.values())).state == "committed"
+
+
+def test_shared_dispatch_will_not_derive_force_from_a_rendered_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stage(tmp_path, "table_exhaustive", filename="lesson.pdf")
+    seed_prompts(tmp_path)
+    session = _session(tmp_path)
+    expected = _dispatch_expectation(session, replacement_confirmed=False)
+    assert expected.replacement_revision is not None
+    fake = _FakeCall()
+    _install_fake(monkeypatch, fake)
+    before = (tmp_path / "staging" / "lesson.pdf.yaml").read_bytes()
+    baseline = operations.OperationJournal.load(
+        session.config.operations_file
+    ).operations
+
+    with pytest.raises(ExtractionDispatchError, match="Confirm that this re-read"):
+        dispatch_extraction(session.config, expected, client=object())
+
+    assert fake.calls == []
+    assert (tmp_path / "staging" / "lesson.pdf.yaml").read_bytes() == before
+    assert (
+        operations.OperationJournal.load(session.config.operations_file).operations
+        == baseline
+    )
+
+
+def test_shared_dispatch_refuses_replacement_confirmation_the_plan_never_offered(
+    tmp_path: Path,
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    expected = replace(
+        _dispatch_expectation(session),
+        replacement_confirmed=True,
+    )
+    assert expected.replacement_revision is None
+
+    with pytest.raises(ExtractionDispatchError, match="did not offer"):
+        dispatch_extraction(session.config, expected, client=object())
+
+    assert operations.OperationJournal.load(
+        session.config.operations_file
+    ).operations == {}
+
+
+def test_shared_dispatch_reports_shape_when_provider_returns_without_capture_hook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    expected = _dispatch_expectation(session)
+    fake = _FakeCall()
+
+    def without_capture(*args: Any, **kwargs: Any) -> CallResult:
+        kwargs.pop("capture", None)
+        return fake(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "japanese_anki.extract.claude_client.parse_call",
+        without_capture,
+    )
+    labels: list[str] = []
+
+    outcome = dispatch_extraction(
+        session.config,
+        expected,
+        client=object(),
+        progress=labels.append,
+    )
+
+    assert outcome.records == 2
+    assert labels == [
+        "Preparing pages",
+        "Reading the source",
+        "Checking the answer's shape",
+        "Saving proposals",
+    ]
 
 
 def test_missing_key_refuses_before_journal_authority_or_provider_contact(
@@ -2056,7 +2432,11 @@ def test_blank_completion_exceptions_still_finish_the_paid_answer_failure_page(
     def fail_completion(*_args: Any, **_kwargs: Any) -> None:
         raise failure
 
-    monkeypatch.setattr(workbench_server, "complete_extraction", fail_completion)
+    import japanese_anki.application.extraction as extraction_application
+
+    monkeypatch.setattr(
+        extraction_application, "complete_extraction", fail_completion
+    )
     try:
         form = _form(server, session)
         status, _headers, payload = _post(server, form)
@@ -2072,6 +2452,8 @@ def test_blank_completion_exceptions_still_finish_the_paid_answer_failure_page(
     assert "provider call completed and may have been billed" in text
     assert text.endswith("</main></body></html>")
     assert len(fake.calls) == 1
+    if failure_kind == "operation":
+        assert "Saving was refused" in text
 
 
 def test_staging_directory_failure_after_dispatch_has_a_complete_recovery_page(
@@ -2300,8 +2682,8 @@ def test_browser_success_uses_complete_extraction(
     server, _thread = _running(session)
     fake = _FakeCall()
     _install_fake(monkeypatch, fake)
+    import japanese_anki.application.extraction as extraction_application
     from japanese_anki.application import complete_extraction as real_complete
-    from japanese_anki.workbench import server as server_module
 
     calls: list[str] = []
 
@@ -2309,7 +2691,9 @@ def test_browser_success_uses_complete_extraction(
         calls.append(str(kwargs["operation_id"]))
         return real_complete(*args, **kwargs)
 
-    monkeypatch.setattr(server_module, "complete_extraction", observed_complete)
+    monkeypatch.setattr(
+        extraction_application, "complete_extraction", observed_complete
+    )
     try:
         form = _form(server, session)
 

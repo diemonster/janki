@@ -1017,7 +1017,7 @@ authority, not owner authority carried through conversation.*
 that every nonblank message — including “which deck?” and “is there anything
 else needed?” — was routed into revision preparation. That produced repeated
 paid revisions and a confirmation loop. The corrected backend now gives
-ordinary Ask messages their own journaled, non-mutating conversational Claude
+ordinary Janki messages their own journaled, non-mutating conversational Claude
 turn; only an explicit **Change deck** action can create a revision plan.
 Conversation defaults to Claude Code Pro/Max through `[assistant]`, independently
 from the revision transport. One revision confirmation stages the proposal and
@@ -1028,6 +1028,20 @@ revision transports already share one application transaction and recovery
 format, and code-review hooks already exclude repository content so a deck
 submission cannot launch a machinery audit.*
 
+*Owner correction 2026-09-01. The conversational page is named **Janki**, not
+“Ask janki,” and routine use does not need a standing paragraph repeating its
+provider, model and bounded-context provenance. Those exact bindings remain in
+the durable request manifest and operation journal. Assistant attachments are
+local immutable intake only: one supported source of up to 128 MiB is streamed
+to a bound temporary file and then preserved under `data/inbox/` without adding
+it to model context. Intake and extraction remain available even when deck
+discovery cannot select one unambiguous revision deck. A separate plan-bound
+owner confirmation is still required before extraction sends source bytes to a
+paid provider. That exact plan appears immediately in the same Janki
+conversation; one click dispatches it, with no additional consent page or
+confirmation chain. “Separate” describes its authority boundary from local
+upload, not a different interface.*
+
 Surface ChatKit in the ordinary workbench using its custom-server integration
 and janki's own server-side agent; do not build new work on the retiring Agent
 Builder path. The workbench remains useful with ChatKit disabled, and its off
@@ -1037,7 +1051,7 @@ and durable workflow rather than delegating them to a provider-hosted agent.
 
 The assistant has four deliberately separate interaction classes:
 
-1. Answer an ordinary Ask message through one journaled Claude turn. Sending
+1. Answer an ordinary Janki message through one journaled Claude turn. Sending
    the message authorizes that one subscription/API call, but it is
    non-mutating and cannot prepare a revision by implication.
 2. Read deterministic repository state and navigate without mutation.
@@ -1085,8 +1099,14 @@ explicit Change deck action still hands work to the one revision pipeline
 above.
 
 The PDF, page images and card text are not sent merely because the surface is
-open. Each message names what text and repository context it will send; adding
+open. The routine page need not display provider, model or bounded-context
+provenance prose; each exact turn manifest and journal entry retain it. Adding
 source or card context is opt-in and source switches do not carry it forward.
+An Assistant attachment first uses the existing intake service to preserve an
+immutable local copy under `data/inbox/`. It is not chat context and does not
+leave the computer until an extraction plan in that same Janki conversation
+names the exact source and the owner confirms that paid-model transmission.
+That one click is the only extraction confirmation.
 Every paid assistant or revision turn uses the operation journal and preserves
 its exact response before parsing. Completed conversational turns persist under
 `data/assistant/`; ChatKit threads are convenience views, never the sole copy,

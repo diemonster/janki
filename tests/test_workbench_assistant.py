@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import http.client
+import io
 import json
 import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -22,6 +25,9 @@ from japanese_anki.workbench.assistant import (
     RevisionExecution,
     RevisionPlan,
     ScopedMemoryStore,
+    SourceExtractionConfirmation,
+    SourceExtractionExecution,
+    SourceExtractionPlan,
 )
 from japanese_anki.workbench.assistant_http import create_assistant_sidecar
 
@@ -35,6 +41,8 @@ class _FakeRevisions:
     chat_histories: list[tuple[tuple[str, str], ...]] = field(default_factory=list)
     prepared: list[tuple[str, str]] = field(default_factory=list)
     executed: list[RevisionConfirmation] = field(default_factory=list)
+    extraction_prepared: list[Path] = field(default_factory=list)
+    extracted: list[SourceExtractionConfirmation] = field(default_factory=list)
     entered: threading.Event | None = None
     release: threading.Event | None = None
     finished: threading.Event | None = None
@@ -93,6 +101,39 @@ class _FakeRevisions:
             self.finished.set()
         return RevisionExecution()
 
+    def prepare_source_extraction(self, *, source_path: Path) -> SourceExtractionPlan:
+        self.extraction_prepared.append(source_path)
+        return SourceExtractionPlan(
+            preparation_id="prepared-extraction-1",
+            source_name=source_path.name,
+            request_fingerprint=REQUEST_FINGERPRINT,
+            target=f"data/staging/{source_path.stem}.yaml",
+            effects=(
+                f"Send the whole {source_path.name} source to Claude Opus 5",
+                "Propose vocabulary cards and grammar in staging for owner review",
+            ),
+            disclosures=(
+                "This is one paid Anthropic API call; Claude Max does not pay for it.",
+                "No canonical deck, audio, or build is created by extraction.",
+            ),
+            confirm_label=f"Send {source_path.name} — paid API call",
+        )
+
+    def consume_replan_and_extract(
+        self,
+        confirmation: SourceExtractionConfirmation,
+        *,
+        progress: Any,
+    ) -> SourceExtractionExecution:
+        self.extracted.append(confirmation)
+        progress("Preparing pages")
+        progress("Reading the source")
+        progress("Checking the answer's shape")
+        progress("Saving proposals")
+        return SourceExtractionExecution(
+            message="Extraction staged 12 card proposals for owner review."
+        )
+
 
 def _message_request(message: str = "Add polite and casual examples") -> dict[str, Any]:
     return {
@@ -113,6 +154,18 @@ def _followup_message_request(thread_id: str, message: str) -> dict[str, Any]:
     request["type"] = "threads.add_user_message"
     request["params"]["thread_id"] = thread_id
     return request
+
+
+def _attachment_request(
+    *,
+    name: str = "lesson.pdf",
+    size: int,
+    mime_type: str = "application/pdf",
+) -> dict[str, Any]:
+    return {
+        "type": "attachments.create",
+        "params": {"name": name, "size": size, "mime_type": mime_type},
+    }
 
 
 def _events(payload: bytes) -> list[dict[str, Any]]:
@@ -223,6 +276,39 @@ def _create_plan(
     return thread_id, _widget_items(prepare_events)[0], prepare_events
 
 
+def _create_source_extraction_plan(
+    sidecar: Any,
+    source: bytes,
+    *,
+    caption: str = "Create card proposals from this source",
+) -> tuple[str, dict[str, Any]]:
+    status, _headers, body = _post(
+        sidecar,
+        _attachment_request(size=len(source)),
+    )
+    assert status == 200
+    attachment = json.loads(body)
+    upload_path = urlsplit(attachment["upload_descriptor"]["url"]).path
+    assert _request(
+        sidecar,
+        "PUT",
+        upload_path,
+        body=source,
+        headers={"Origin": sidecar.origin},
+    )[0] == 204
+    message = _message_request(caption)
+    message["params"]["input"]["attachments"] = [attachment["id"]]
+    send_status, _send_headers, send_body = _post(sidecar, message)
+    assert send_status == 200
+    events = _events(send_body)
+    thread_id = next(
+        event["thread"]["id"]
+        for event in events
+        if event["type"] == "thread.created"
+    )
+    return thread_id, _widget_items(events)[0]
+
+
 def _component_with_id(component: dict[str, Any], component_id: str) -> dict[str, Any]:
     if component.get("id") == component_id:
         return component
@@ -258,7 +344,10 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         ) in csp
         assert "'unsafe-inline'" not in csp
         assert b"https://cdn.platform.openai.com/deployments/chatkit/chatkit.js" in body
-        assert b"Conversation is read-only" in body
+        assert b"<title>Janki</title>" in body
+        assert b"<h1>Janki</h1>" in body
+        assert b"Ask janki" not in body
+        assert b"Questions are read-only" in body
         assert b"main-workbench-secret" not in body
 
         script_status, _script_headers, script = _request(
@@ -269,14 +358,53 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert script_status == 200
         assert sidecar.server.api_path.encode() in script
         assert b'domainKey: "domain_pk_localhost_dev"' in script
+        assert b"const isRequest = input instanceof Request;" in script
+        assert b"return window.fetch(isRequest ? input : target, {" in script
+        assert b'credentials: "omit"' in script
+        assert b'referrerPolicy: "no-referrer"' in script
         assert b'attachments: { enabled: false }' in script
-        assert b'placeholder: "Ask about this deck"' in script
+        assert b'placeholder: "Ask about this deck or attach a source"' in script
         assert b'greeting: "What would you like to know about this deck?"' in script
         assert (
             b"threadItemActions: {\n      feedback: false,\n      retry: false,\n    },"
             in script
         )
         assert b"onClientTool" not in script
+    finally:
+        sidecar.close()
+
+
+def test_project_only_shell_names_only_source_intake_and_extraction(
+    tmp_path: Path,
+) -> None:
+    sidecar = create_assistant_sidecar(
+        _FakeRevisions(),
+        deck_scope="janki-project",
+        session_token=SESSION_TOKEN,
+        inbox_root=tmp_path / "data" / "inbox",
+        conversation_available=False,
+    )
+    sidecar.start()
+    try:
+        status, _headers, body = _request(
+            sidecar,
+            "GET",
+            sidecar.server.shell_path,
+        )
+        script_status, _script_headers, script = _request(
+            sidecar,
+            "GET",
+            sidecar.server.script_path,
+        )
+
+        assert status == 200
+        assert script_status == 200
+        assert b"Attach one PDF or photo" in body
+        assert b"Ask a question in ordinary language" not in body
+        assert b"Questions are read-only" not in body
+        assert b'placeholder: "Attach a PDF or photo"' in script
+        assert b'greeting: "Add a source to Janki"' in script
+        assert b"What would you like to know about this deck?" not in script
     finally:
         sidecar.close()
 
@@ -329,6 +457,531 @@ def test_api_requires_exact_host_origin_content_type_and_capability_shape() -> N
             "params": {"thread_id": "thr_x", "result": {}},
         }
         assert _post(sidecar, client_tool)[0] == 400
+    finally:
+        sidecar.close()
+
+
+def test_attachment_send_saves_the_exact_source_locally_without_calling_claude(
+    tmp_path: Path,
+) -> None:
+    revisions = _FakeRevisions()
+    inbox = tmp_path / "data" / "inbox"
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=inbox,
+    )
+    sidecar.start()
+    source = b"%PDF-1.7\nexact owner bytes\n"
+    try:
+        script_status, _script_headers, script = _request(
+            sidecar,
+            "GET",
+            sidecar.server.script_path,
+        )
+        assert script_status == 200
+        assert b'enabled: true' in script
+        assert b'uploadStrategy: { type: "two_phase" }' in script
+        assert b'maxSize: 128 * 1024 * 1024' in script
+        assert b'maxCount: 1' in script
+        assert b'"application/pdf": [".pdf"]' in script
+        assert b'"image/heic": [".heic"]' in script
+
+        status, _headers, body = _post(
+            sidecar,
+            _attachment_request(size=len(source)),
+        )
+        assert status == 200
+        attachment = json.loads(body)
+        assert attachment["name"] == "lesson.pdf"
+        assert attachment["type"] == "file"
+        descriptor = attachment["upload_descriptor"]
+        assert descriptor["method"] == "PUT"
+        upload_url = urlsplit(descriptor["url"])
+        assert upload_url.scheme == "http"
+        assert upload_url.netloc == sidecar.server.expected_host
+
+        upload = _request(
+            sidecar,
+            "PUT",
+            upload_url.path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )
+        assert upload[0] == 204
+
+        message = _message_request("Make a deck from this source")
+        message["params"]["input"]["attachments"] = [attachment["id"]]
+        response_status, _response_headers, response_body = _post(sidecar, message)
+
+        assert response_status == 200
+        events = _events(response_body)
+        answer = next(
+            event["item"]["content"][0]["text"]
+            for event in events
+            if event["type"] == "thread.item.done"
+            and event["item"]["type"] == "assistant_message"
+        )
+        assert "lesson.pdf" in answer
+        assert "saved" in answer.casefold()
+        assert "not sent" in answer.casefold()
+        assert "text accompanying this upload was not used" in answer.casefold()
+        assert "review the exact extraction plan below" in answer.casefold()
+        widgets = _widget_items(events)
+        assert len(widgets) == 1
+        widget_wire = json.dumps(widgets[0], ensure_ascii=False)
+        assert "lesson.pdf" in widget_wire
+        assert "whole lesson.pdf" in widget_wire
+        assert "paid Anthropic API call" in widget_wire
+        assert "Claude Max does not pay" in widget_wire
+        assert "No canonical deck, audio, or build" in widget_wire
+        extract_action = widgets[0]["widget"]["confirm"]["action"]
+        assert extract_action["type"] == "janki.extraction.confirm"
+        assert extract_action["handler"] == "server"
+        assert revisions.chatted == []
+        assert revisions.prepared == []
+        assert revisions.executed == []
+        assert revisions.extraction_prepared == [inbox / "lesson.pdf"]
+        assert revisions.extracted == []
+        assert (inbox / "lesson.pdf").read_bytes() == source
+    finally:
+        sidecar.close()
+
+
+def test_localhost_page_receives_a_same_origin_attachment_upload_url(
+    tmp_path: Path,
+) -> None:
+    sidecar = create_assistant_sidecar(
+        _FakeRevisions(),
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=tmp_path / "data" / "inbox",
+    )
+    sidecar.start()
+    localhost_authority = f"localhost:{sidecar.server.server_address[1]}"
+    localhost_origin = f"http://{localhost_authority}"
+    body = json.dumps(_attachment_request(size=4)).encode("utf-8")
+    try:
+        status, _headers, response = _request(
+            sidecar,
+            "POST",
+            sidecar.server.api_path,
+            body=body,
+            headers={
+                "Content-Type": "application/json",
+                "Host": localhost_authority,
+                "Origin": localhost_origin,
+            },
+        )
+
+        assert status == 200
+        descriptor = json.loads(response)["upload_descriptor"]
+        upload_url = urlsplit(descriptor["url"])
+        assert upload_url.scheme == "http"
+        assert upload_url.netloc == localhost_authority
+        assert upload_url.netloc != sidecar.server.expected_host
+
+        upload_status, _upload_headers, _upload_body = _request(
+            sidecar,
+            "PUT",
+            upload_url.path,
+            body=b"%PDF",
+            headers={"Host": localhost_authority, "Origin": localhost_origin},
+        )
+        assert upload_status == 204
+    finally:
+        sidecar.close()
+
+
+def test_attachment_can_be_sent_without_a_caption(tmp_path: Path) -> None:
+    revisions = _FakeRevisions()
+    inbox = tmp_path / "data" / "inbox"
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=inbox,
+    )
+    sidecar.start()
+    source = b"%PDF-1.7\nno caption needed\n"
+    try:
+        _thread_id, widget = _create_source_extraction_plan(
+            sidecar,
+            source,
+            caption="",
+        )
+
+        assert widget["widget"]["confirm"]["action"]["type"] == (
+            "janki.extraction.confirm"
+        )
+        assert revisions.chatted == []
+        assert revisions.extraction_prepared == [inbox / "lesson.pdf"]
+        assert (inbox / "lesson.pdf").read_bytes() == source
+    finally:
+        sidecar.close()
+
+
+def test_one_attachment_cannot_be_reused_in_a_second_thread(tmp_path: Path) -> None:
+    revisions = _FakeRevisions()
+    inbox = tmp_path / "data" / "inbox"
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=inbox,
+    )
+    sidecar.start()
+    source = b"%PDF-1.7\none thread only\n"
+    try:
+        create_status, _headers, create_body = _post(
+            sidecar,
+            _attachment_request(size=len(source)),
+        )
+        assert create_status == 200
+        attachment = json.loads(create_body)
+        upload_path = urlsplit(attachment["upload_descriptor"]["url"]).path
+        assert _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )[0] == 204
+        first = _message_request("")
+        first["params"]["input"]["attachments"] = [attachment["id"]]
+        assert _post(sidecar, first)[0] == 200
+        assert revisions.extraction_prepared == [inbox / "lesson.pdf"]
+
+        second = _message_request("")
+        second["params"]["input"]["attachments"] = [attachment["id"]]
+        refused = _post(sidecar, second)
+
+        assert refused[0] == 200
+        assert any(event["type"] == "error" for event in _events(refused[2]))
+        assert revisions.extraction_prepared == [inbox / "lesson.pdf"]
+        assert (inbox / "lesson.pdf").read_bytes() == source
+    finally:
+        sidecar.close()
+
+
+def test_attachment_must_finish_its_one_use_upload_before_message_send(
+    tmp_path: Path,
+) -> None:
+    revisions = _FakeRevisions()
+    inbox = tmp_path / "data" / "inbox"
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=inbox,
+    )
+    sidecar.start()
+    try:
+        status, _headers, body = _post(
+            sidecar,
+            _attachment_request(size=12),
+        )
+        assert status == 200
+        attachment = json.loads(body)
+        message = _message_request("Use this source")
+        message["params"]["input"]["attachments"] = [attachment["id"]]
+
+        refused = _post(sidecar, message)
+
+        assert refused[0] == 400
+        assert revisions.chatted == []
+        assert not inbox.exists()
+    finally:
+        sidecar.close()
+
+
+def test_attachment_upload_capability_is_exact_size_and_one_use(
+    tmp_path: Path,
+) -> None:
+    sidecar = create_assistant_sidecar(
+        _FakeRevisions(),
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=tmp_path / "data" / "inbox",
+    )
+    sidecar.start()
+    source = b"%PDF-1.7\n"
+    try:
+        status, _headers, body = _post(
+            sidecar,
+            _attachment_request(size=len(source)),
+        )
+        assert status == 200
+        upload_path = urlsplit(
+            json.loads(body)["upload_descriptor"]["url"]
+        ).path
+
+        missing_origin = _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source,
+        )
+        assert missing_origin[0] == 403
+
+        attachment_id, capability = upload_path.rstrip("/").rsplit("/", 2)[-2:]
+        wrong_capability_path = upload_path[: -len(capability)] + "wrong-capability"
+        wrong_capability = _request(
+            sidecar,
+            "PUT",
+            wrong_capability_path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )
+        assert wrong_capability[0] == 409
+        assert attachment_id.startswith("atc_")
+
+        too_large = _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=b"",
+            headers={
+                "Origin": sidecar.origin,
+                "Content-Length": str(128 * 1024 * 1024 + 1),
+            },
+        )
+        assert too_large[0] == 413
+        assert b"128 MiB limit" in too_large[2]
+
+        too_short = _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source[:-1],
+            headers={"Origin": sidecar.origin},
+        )
+        assert too_short[0] == 409
+
+        accepted = _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )
+        assert accepted[0] == 204
+
+        replay = _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )
+        assert replay[0] in {404, 409}
+    finally:
+        sidecar.close()
+
+
+def test_put_streams_request_body_directly_into_attachment_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sidecar = create_assistant_sidecar(
+        _FakeRevisions(),
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=tmp_path / "data" / "inbox",
+    )
+    sidecar.start()
+    source = b"%PDF-1.7\nstream me\n"
+    observed_streams: list[Any] = []
+    store = sidecar.server.attachment_store
+    assert store is not None
+    original = store.accept_upload_stream
+
+    def capture_stream(
+        attachment_id: str,
+        capability: str,
+        stream: Any,
+        *,
+        declared_content_length: int,
+    ) -> None:
+        observed_streams.append(stream)
+        original(
+            attachment_id,
+            capability,
+            stream,
+            declared_content_length=declared_content_length,
+        )
+
+    monkeypatch.setattr(store, "accept_upload_stream", capture_stream)
+    try:
+        status, _headers, body = _post(
+            sidecar,
+            _attachment_request(size=len(source)),
+        )
+        assert status == 200
+        upload_path = urlsplit(
+            json.loads(body)["upload_descriptor"]["url"]
+        ).path
+
+        uploaded = _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )
+
+        assert uploaded[0] == 204
+        assert len(observed_streams) == 1
+        assert not isinstance(observed_streams[0], (bytes, bytearray, io.BytesIO))
+    finally:
+        sidecar.close()
+
+
+def test_attachment_registration_refusal_explains_supported_sources(
+    tmp_path: Path,
+) -> None:
+    sidecar = create_assistant_sidecar(
+        _FakeRevisions(),
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=tmp_path / "data" / "inbox",
+    )
+    sidecar.start()
+    try:
+        status, _headers, body = _post(
+            sidecar,
+            _attachment_request(name="notes.txt", size=4),
+        )
+
+        assert status == 409
+        assert b"Supported:" in body
+        assert b"ChatKit request was refused" not in body
+    finally:
+        sidecar.close()
+
+
+def test_one_extraction_confirmation_survives_attachment_cleanup_and_runs_once(
+    tmp_path: Path,
+) -> None:
+    revisions = _FakeRevisions()
+    inbox = tmp_path / "data" / "inbox"
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=inbox,
+    )
+    sidecar.start()
+    source = b"%PDF-1.7\nowner source\n"
+    try:
+        create_status, _headers, create_body = _post(
+            sidecar,
+            _attachment_request(size=len(source)),
+        )
+        assert create_status == 200
+        attachment = json.loads(create_body)
+        upload_path = urlsplit(attachment["upload_descriptor"]["url"]).path
+        assert _request(
+            sidecar,
+            "PUT",
+            upload_path,
+            body=source,
+            headers={"Origin": sidecar.origin},
+        )[0] == 204
+        message = _message_request("Create card proposals from this source")
+        message["params"]["input"]["attachments"] = [attachment["id"]]
+        send_status, _send_headers, send_body = _post(sidecar, message)
+        assert send_status == 200
+        send_events = _events(send_body)
+        thread_id = next(
+            event["thread"]["id"]
+            for event in send_events
+            if event["type"] == "thread.created"
+        )
+        widget = _widget_items(send_events)[0]
+
+        delete_status, _delete_headers, _delete_body = _post(
+            sidecar,
+            {
+                "type": "attachments.delete",
+                "params": {"attachment_id": attachment["id"]},
+            },
+        )
+        assert delete_status == 200
+        assert (inbox / "lesson.pdf").read_bytes() == source
+
+        request = _confirmation_request(thread_id, widget)
+        status, _response_headers, body = _post(sidecar, request)
+
+        assert status == 200
+        events = _events(body)
+        progress = [
+            event["text"] for event in events if event["type"] == "progress_update"
+        ]
+        assert progress == [
+            "Preparing pages",
+            "Reading the source",
+            "Checking the answer's shape",
+            "Saving proposals",
+        ]
+        assert all("%" not in label and "percent" not in label for label in progress)
+        assert revisions.extracted == [
+            SourceExtractionConfirmation(
+                preparation_id="prepared-extraction-1",
+                source_name="lesson.pdf",
+                expected_fingerprint=REQUEST_FINGERPRINT,
+            )
+        ]
+        assert b"staged 12 card proposals" in body
+        assert _widget_items(events) == []
+
+        replay = _events(_post(sidecar, request)[2])
+        assert len(revisions.extracted) == 1
+        assert any(
+            event["type"] == "error" and "already used" in event["message"]
+            for event in replay
+        )
+    finally:
+        sidecar.close()
+
+
+def test_tampered_extraction_fingerprint_consumes_confirmation_without_dispatch(
+    tmp_path: Path,
+) -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_scope="potential-practice",
+        session_token=SESSION_TOKEN,
+        inbox_root=tmp_path / "data" / "inbox",
+    )
+    sidecar.start()
+    try:
+        thread_id, widget = _create_source_extraction_plan(
+            sidecar,
+            b"%PDF-1.7\nowner source\n",
+        )
+        request = _confirmation_request(thread_id, widget)
+        request["params"]["action"]["payload"]["request_fingerprint"] = "tampered"
+
+        refused = _events(_post(sidecar, request)[2])
+
+        assert revisions.extracted == []
+        assert any(
+            event["type"] == "error" and "stale" in event["message"]
+            for event in refused
+        )
+
+        request["params"]["action"]["payload"][
+            "request_fingerprint"
+        ] = REQUEST_FINGERPRINT
+        replay = _events(_post(sidecar, request)[2])
+        assert revisions.extracted == []
+        assert any(
+            event["type"] == "error" and "already used" in event["message"]
+            for event in replay
+        )
     finally:
         sidecar.close()
 

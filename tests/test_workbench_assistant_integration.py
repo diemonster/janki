@@ -5,19 +5,35 @@ from __future__ import annotations
 import builtins
 import hashlib
 import http.client
-from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from japanese_anki.application import revision
+from japanese_anki import operations
+from japanese_anki.application import (
+    ANSWER_EMPTY,
+    ANSWER_SAVED,
+    ANSWER_UNAVAILABLE,
+    FORGOTTEN,
+    OUTCOME_UNKNOWN,
+    DispatchFailure,
+    ExtractionCompletionError,
+    ExtractionDispatchError,
+    ExtractionDispatchExpectation,
+    ExtractionRevision,
+    revision,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.workbench import assistant_adapter
+from japanese_anki.workbench import assistant_adapter, assistant_http
 from japanese_anki.workbench import server as workbench_server
-from japanese_anki.workbench.assistant import RevisionConfirmation, RevisionRefusal
+from japanese_anki.workbench.assistant import (
+    RevisionConfirmation,
+    RevisionRefusal,
+    SourceExtractionConfirmation,
+)
 from japanese_anki.workbench.assistant_http import create_assistant_sidecar
 
 
@@ -62,6 +78,48 @@ def _revision_plan(
     )
 
 
+def _seeded_extraction_confirmation(
+    tmp_path: Path,
+) -> tuple[
+    assistant_adapter.RevisionAssistantAdapter,
+    SourceExtractionConfirmation,
+    ProjectConfig,
+]:
+    config = _config(tmp_path)
+    source = config.scan_inbox / "lesson.pdf"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"%PDF")
+    adapter = assistant_adapter.RevisionAssistantAdapter(
+        config=config,
+        deck_path=config.deck_dir / "potential.yaml",
+        record_ids=("word:one",),
+    )
+    preparation_id = "prepared-source"
+    expected = ExtractionDispatchExpectation(
+        source=source,
+        model="claude-opus-5",
+        mode=None,
+        source_sha256="a" * 64,
+        request_fingerprint="b" * 64,
+        replacement_revision=None,
+        replacement_confirmed=False,
+        staging_path=(config.staging_dir / "lesson.pdf.yaml").resolve(),
+        patterns_path=config.patterns_file.resolve(),
+        operations_path=config.operations_file.resolve(),
+    )
+    with adapter._plan_lock:
+        adapter._extraction_expectations[preparation_id] = expected
+    return (
+        adapter,
+        SourceExtractionConfirmation(
+            preparation_id=preparation_id,
+            source_name="lesson.pdf",
+            expected_fingerprint="b" * 64,
+        ),
+        config,
+    )
+
+
 def test_disabled_workbench_never_imports_the_assistant_modules(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -81,7 +139,65 @@ def test_disabled_workbench_never_imports_the_assistant_modules(
     assert workbench_server._start_assistant_for(_config(tmp_path, enabled=False)) is None
 
 
-def test_discovery_refuses_two_rich_conjugation_decks_without_guessing(
+def test_enabled_workbench_gives_assistant_the_configured_local_inbox(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    adapter = SimpleNamespace(
+        deck_scope="data/decks/potential.yaml",
+        conversation_available=True,
+    )
+    expected_sidecar = object()
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(
+        assistant_adapter,
+        "discover_revision_adapter",
+        lambda _config: (adapter, []),
+    )
+
+    def start(callbacks: Any, **kwargs: Any) -> object:
+        captured.update(callbacks=callbacks, **kwargs)
+        return expected_sidecar
+
+    monkeypatch.setattr(assistant_http, "start_assistant_sidecar", start)
+
+    result = workbench_server._start_assistant_for(config)
+
+    assert result is expected_sidecar
+    assert captured == {
+        "callbacks": adapter,
+        "deck_scope": adapter.deck_scope,
+        "inbox_root": config.scan_inbox,
+        "conversation_available": True,
+    }
+
+
+def test_enabled_workbench_starts_project_intake_without_a_revision_deck(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    expected_sidecar = object()
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [])
+
+    def start(callbacks: Any, **kwargs: Any) -> object:
+        captured.update(callbacks=callbacks, **kwargs)
+        return expected_sidecar
+
+    monkeypatch.setattr(assistant_http, "start_assistant_sidecar", start)
+
+    result = workbench_server._start_assistant_for(config)
+
+    assert result is expected_sidecar
+    assert captured["callbacks"].deck_path is None
+    assert captured["deck_scope"] == "janki-project"
+    assert captured["inbox_root"] == config.scan_inbox
+    assert captured["conversation_available"] is False
+
+
+def test_discovery_keeps_project_intake_when_two_revision_decks_are_ambiguous(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -104,12 +220,22 @@ def test_discovery_refuses_two_rich_conjugation_decks_without_guessing(
 
     adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
 
-    assert adapter is None
+    assert adapter.deck_path is None
+    assert adapter.deck_scope == "janki-project"
     assert len(warnings) == 1
     assert "exactly one" in warnings[0]
     assert "potential.yaml" in warnings[0]
     assert "te-form.yaml" in warnings[0]
     assert "No deck was guessed" in warnings[0]
+    assert "Source intake and extraction remain available" in warnings[0]
+
+    with pytest.raises(RevisionRefusal, match="no unique deck selected"):
+        adapter.chat(
+            deck_scope=adapter.deck_scope,
+            history=(),
+            message="Which deck?",
+            progress=lambda _label: None,
+        )
 
 
 def test_adapter_plans_the_complete_stored_order_and_displays_application_binding(
@@ -221,50 +347,388 @@ def test_adapter_routes_an_ordinary_question_only_through_the_chat_service(
     assert reply.text == "You are viewing the Potential Practice deck."
 
 
-def test_adapter_discloses_chat_billing_context_and_durable_destination(
-    tmp_path: Path,
-) -> None:
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
-        record_ids=("word:one",),
-    )
-
-    disclosure = adapter.chat_disclosure
-
-    assert "claude-code" in disclosure
-    assert "Claude Pro/Max subscription" in disclosure
-    assert "claude-opus-5" in disclosure
-    assert "bounded visible conversation history" in disclosure
-    assert "data/assistant" in disclosure
-
-
-def test_adapter_discloses_the_configured_assistant_destination(
-    tmp_path: Path,
-) -> None:
-    (tmp_path / "janki.toml").write_text(
-        "[paths]\n"
-        'assistant_dir = "state/assistant-turns"\n'
-        "[assistant]\n"
-        "enabled = true\n",
-        encoding="utf-8",
-    )
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=ProjectConfig.load(tmp_path),
-        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
-        record_ids=("word:one",),
-    )
-
-    disclosure = adapter.chat_disclosure
-
-    assert "state/assistant-turns" in disclosure
-    assert "data/assistant" not in disclosure
-
-
-def test_assistant_page_reloads_provider_disclosure_and_falls_back_safely(
+def test_adapter_prepares_then_dispatches_one_exact_saved_source_only_after_click(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    config = _config(tmp_path)
+    source = config.scan_inbox / "lesson.pdf"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"%PDF")
+    target = SimpleNamespace(
+        source_sha256="a" * 64,
+        staging_path=config.staging_dir / "lesson.yaml",
+        patterns_path=config.patterns_file,
+        provenance={"request_fingerprint": "b" * 64},
+    )
+    consent = SimpleNamespace(
+        sendable=True,
+        target=target,
+        refusal="",
+        busy="",
+        name="lesson.pdf",
+        model="claude-opus-5",
+        mode=None,
+        replacement_revision=None,
+        replaces=None,
+        replaces_cards=0,
+        replaces_state="",
+        replaces_grammar="",
+        sends_known_words=False,
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "describe_extraction",
+        lambda fresh, path, *, mode: (
+            consent
+            if fresh.root == config.root and path == source and mode is None
+            else pytest.fail("adapter described a different source")
+        ),
+    )
+    dispatched: list[Any] = []
+
+    def dispatch(fresh: Any, expected: Any, *, progress: Any) -> Any:
+        assert fresh.root == config.root
+        dispatched.append(expected)
+        for label in (
+            "Preparing pages",
+            "Reading the source",
+            "Checking the answer's shape",
+            "Saving proposals",
+        ):
+            progress(label)
+        return SimpleNamespace(
+            target=config.staging_dir / "lesson.yaml",
+            records=12,
+        )
+
+    monkeypatch.setattr(assistant_adapter, "dispatch_extraction", dispatch)
+    adapter = assistant_adapter.RevisionAssistantAdapter(
+        config=config,
+        deck_path=None,
+        record_ids=(),
+    )
+
+    plan = adapter.prepare_source_extraction(source_path=source)
+
+    assert dispatched == []
+    assert plan.source_name == "lesson.pdf"
+    assert "whole lesson.pdf" in " ".join(plan.effects)
+    assert "page ranges" in " ".join(plan.effects)
+    assert "paid Anthropic API call" in " ".join(plan.disclosures)
+    assert "Claude Pro or Max does not pay" in " ".join(plan.disclosures)
+    assert plan.replaces is False
+    assert plan.confirm_label == "Send lesson.pdf using claude-opus-5 — paid API call"
+
+    seen_progress: list[str] = []
+    result = adapter.consume_replan_and_extract(
+        SourceExtractionConfirmation(
+            preparation_id=plan.preparation_id,
+            source_name=plan.source_name,
+            expected_fingerprint=plan.request_fingerprint,
+        ),
+        progress=seen_progress.append,
+    )
+
+    assert len(dispatched) == 1
+    expected = dispatched[0]
+    assert expected.source == source
+    assert expected.request_fingerprint == "b" * 64
+    assert expected.source_sha256 == "a" * 64
+    assert expected.replacement_confirmed is False
+    assert expected.staging_path == (config.staging_dir / "lesson.yaml").resolve()
+    assert expected.patterns_path == config.patterns_file.resolve()
+    assert expected.operations_path == config.operations_file.resolve()
+    assert seen_progress == [
+        "Preparing pages",
+        "Reading the source",
+        "Checking the answer's shape",
+        "Saving proposals",
+    ]
+    assert "12 card proposal(s)" in result.message
+
+    with pytest.raises(RevisionRefusal, match="already used"):
+        adapter.consume_replan_and_extract(
+            SourceExtractionConfirmation(
+                preparation_id=plan.preparation_id,
+                source_name=plan.source_name,
+                expected_fingerprint=plan.request_fingerprint,
+            ),
+            progress=lambda _label: None,
+        )
+    assert len(dispatched) == 1
+
+
+def test_adapter_replacement_button_is_the_only_event_that_grants_force(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    source = config.scan_inbox / "lesson.pdf"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"%PDF")
+    revision_snapshot = ExtractionRevision(
+        staging_sha256="c" * 64,
+        pattern_entry_sha256="d" * 64,
+        pattern_reviewed=True,
+        pattern_has_patterns=True,
+    )
+    consent = SimpleNamespace(
+        sendable=True,
+        target=SimpleNamespace(
+            source_sha256="a" * 64,
+            staging_path=config.staging_dir / "lesson.yaml",
+            patterns_path=config.patterns_file,
+            provenance={"request_fingerprint": "b" * 64},
+        ),
+        refusal="",
+        busy="",
+        name="lesson.pdf",
+        model="claude-opus-5",
+        mode=None,
+        replacement_revision=revision_snapshot,
+        replaces=config.staging_dir / "lesson.yaml",
+        replaces_cards=18,
+        replaces_state="Cards need edits",
+        replaces_grammar="Grammar reviewed",
+        sends_known_words=False,
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "describe_extraction",
+        lambda _config, _path, *, mode: consent,
+    )
+    dispatched: list[Any] = []
+    monkeypatch.setattr(
+        assistant_adapter,
+        "dispatch_extraction",
+        lambda _config, expected, *, progress: (
+            dispatched.append(expected)
+            or SimpleNamespace(target=config.staging_dir / "lesson.yaml", records=18)
+        ),
+    )
+    adapter = assistant_adapter.RevisionAssistantAdapter(
+        config=config,
+        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
+        record_ids=("word:one",),
+    )
+
+    plan = adapter.prepare_source_extraction(source_path=source)
+
+    assert plan.replaces is True
+    assert plan.confirm_label.startswith("Replace the named review")
+    plan_text = " ".join(plan.effects)
+    assert "18 cards, Cards need edits" in plan_text
+    assert "Grammar reviewed" in plan_text
+    assert "not recoverable" in plan_text
+    with adapter._plan_lock:
+        rendered = adapter._extraction_expectations[plan.preparation_id]
+    assert rendered.replacement_revision == revision_snapshot
+    assert rendered.replacement_confirmed is False
+
+    adapter.consume_replan_and_extract(
+        SourceExtractionConfirmation(
+            preparation_id=plan.preparation_id,
+            source_name=plan.source_name,
+            expected_fingerprint=plan.request_fingerprint,
+        ),
+        progress=lambda _label: None,
+    )
+
+    assert len(dispatched) == 1
+    assert dispatched[0].replacement_revision == revision_snapshot
+    assert dispatched[0].replacement_confirmed is True
+
+
+@pytest.mark.parametrize(
+    ("phase", "expected_text"),
+    [
+        ("binding", "no paid request was made"),
+        ("preparation", "no paid request was made"),
+        ("authorization", "may contain unused authority"),
+    ],
+)
+def test_adapter_preserves_each_pre_dispatch_failure_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+    expected_text: str,
+) -> None:
+    adapter, confirmation, _config = _seeded_extraction_confirmation(tmp_path)
+    error = ExtractionDispatchError(JankiError("pre-dispatch refusal"), phase=phase)
+
+    def refuse(*_args: Any, **_kwargs: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr(assistant_adapter, "dispatch_extraction", refuse)
+
+    with pytest.raises(RevisionRefusal) as caught:
+        adapter.consume_replan_and_extract(
+            confirmation,
+            progress=lambda _label: None,
+        )
+
+    text = str(caught.value).casefold()
+    assert expected_text in text
+    assert "nothing was sent" in text
+    if phase == "authorization":
+        assert "janki operations" in text
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_text"),
+    [
+        (
+            DispatchFailure("operation-saved", ANSWER_SAVED),
+            "operations --show-reply operation-saved",
+        ),
+        (
+            DispatchFailure("operation-empty", ANSWER_EMPTY),
+            "captured provider reply contains no answer",
+        ),
+        (
+            DispatchFailure("operation-unavailable", ANSWER_UNAVAILABLE),
+            "exact recovery bytes are unavailable",
+        ),
+        (
+            DispatchFailure("operation-forgotten", FORGOTTEN),
+            "already forgotten",
+        ),
+        (
+            DispatchFailure("operation-cleanup", FORGOTTEN, cleanup_pending=True),
+            "operations --forget operation-cleanup",
+        ),
+        (
+            DispatchFailure(
+                "operation-unknown",
+                OUTCOME_UNKNOWN,
+                money_may_have_been_spent=True,
+            ),
+            "retry may pay twice",
+        ),
+    ],
+)
+def test_adapter_preserves_each_dispatched_recovery_outcome(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: DispatchFailure,
+    expected_text: str,
+) -> None:
+    adapter, confirmation, _config = _seeded_extraction_confirmation(tmp_path)
+    error = ExtractionDispatchError(
+        JankiError("provider refused"),
+        phase="dispatch",
+        operation_id=failure.operation_id,
+        failure=failure,
+    )
+
+    def refuse(*_args: Any, **_kwargs: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr(assistant_adapter, "dispatch_extraction", refuse)
+
+    with pytest.raises(RevisionRefusal) as caught:
+        adapter.consume_replan_and_extract(
+            confirmation,
+            progress=lambda _label: None,
+        )
+
+    text = str(caught.value).casefold()
+    assert expected_text in text
+    assert failure.operation_id in text
+    assert "may have been billed" in text
+
+
+def test_adapter_preserves_a_dispatch_journal_failure_without_inviting_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter, confirmation, _config = _seeded_extraction_confirmation(tmp_path)
+    error = ExtractionDispatchError(
+        JankiError("provider connection ended"),
+        phase="dispatch",
+        operation_id="operation-journal",
+        journal_error=operations.OperationError("journal unreadable"),
+    )
+
+    def refuse(*_args: Any, **_kwargs: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr(assistant_adapter, "dispatch_extraction", refuse)
+
+    with pytest.raises(RevisionRefusal) as caught:
+        adapter.consume_replan_and_extract(
+            confirmation,
+            progress=lambda _label: None,
+        )
+
+    text = str(caught.value).casefold()
+    assert "operation-journal" in text
+    assert "journal unreadable" in text
+    assert "could not settle" in text
+    assert "do not retry" in text
+
+
+def test_adapter_reports_saved_proposals_after_pattern_store_completion_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter, confirmation, config = _seeded_extraction_confirmation(tmp_path)
+    staging_path = config.staging_dir / "lesson.yaml"
+    cause = ExtractionCompletionError(JankiError("pattern store refused"), staging_path)
+    error = ExtractionDispatchError(
+        cause,
+        phase="completion",
+        operation_id="operation-completion",
+    )
+
+    def refuse(*_args: Any, **_kwargs: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr(assistant_adapter, "dispatch_extraction", refuse)
+
+    with pytest.raises(RevisionRefusal) as caught:
+        adapter.consume_replan_and_extract(
+            confirmation,
+            progress=lambda _label: None,
+        )
+
+    text = str(caught.value)
+    assert str(staging_path) in text
+    assert "proposals are saved" in text
+    assert "do not repeat extraction" in text
+
+
+def test_adapter_refuses_blind_retry_after_final_operation_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter, confirmation, _config = _seeded_extraction_confirmation(tmp_path)
+    error = ExtractionDispatchError(
+        operations.OperationError("final journal save refused"),
+        phase="completion",
+        operation_id="operation-final-save",
+    )
+
+    def refuse(*_args: Any, **_kwargs: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr(assistant_adapter, "dispatch_extraction", refuse)
+
+    with pytest.raises(RevisionRefusal) as caught:
+        adapter.consume_replan_and_extract(
+            confirmation,
+            progress=lambda _label: None,
+        )
+
+    text = str(caught.value).casefold()
+    assert "operation-final-save" in text
+    assert "could not prove" in text
+    assert "do not retry" in text
+    assert "janki operations" in text
+
+
+def test_assistant_page_does_not_render_provider_disclosure(tmp_path: Path) -> None:
     config_path = tmp_path / "janki.toml"
     config_path.write_text(
         "[assistant]\n"
@@ -284,16 +748,6 @@ def test_assistant_page_reloads_provider_disclosure_and_falls_back_safely(
         deck_scope=adapter.deck_scope,
         session_token="assistant-session-token-000000000000",
     )
-    rendered_config = replace(
-        config,
-        assistant_provider="anthropic-api",
-        assistant_model="claude-sonnet-5",
-    )
-    monkeypatch.setattr(
-        assistant_adapter.ProjectConfig,
-        "load",
-        lambda _root: rendered_config,
-    )
     sidecar.start()
     try:
         connection = http.client.HTTPConnection(
@@ -303,37 +757,14 @@ def test_assistant_page_reloads_provider_disclosure_and_falls_back_safely(
         )
         connection.request("GET", sidecar.server.shell_path)
         response = connection.getresponse()
-        fresh_body = response.read().decode("utf-8")
+        body = response.read().decode("utf-8")
         connection.close()
 
         assert response.status == 200
-        assert "anthropic-api" in fresh_body
-        assert "Anthropic API billing" in fresh_body
-        assert "claude-sonnet-5" in fresh_body
-        assert "claude-opus-5" not in fresh_body
-
-        def fail_load(_root: Path) -> ProjectConfig:
-            raise JankiError("the current project configuration is invalid")
-
-        monkeypatch.setattr(
-            assistant_adapter.ProjectConfig,
-            "load",
-            fail_load,
-        )
-        connection = http.client.HTTPConnection(
-            "127.0.0.1",
-            sidecar.server.server_address[1],
-            timeout=3,
-        )
-        connection.request("GET", sidecar.server.shell_path)
-        response = connection.getresponse()
-        fallback_body = response.read().decode("utf-8")
-        connection.close()
-
-        assert response.status == 200
-        assert "provider and model details are unavailable" in fallback_body
-        assert "anthropic-api" not in fallback_body
-        assert "claude-sonnet-5" not in fallback_body
+        assert "Ask uses claude-code" not in body
+        assert "Claude Pro/Max subscription" not in body
+        assert "claude-opus-5" not in body
+        assert "data/assistant" not in body
     finally:
         sidecar.close()
 

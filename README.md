@@ -102,13 +102,24 @@ The first-run guide in the workbench keeps this distinction visible:
 | OpenAI Realtime | Optionally speaks example sentences with a stable per-record voice | Networked, paid API. `OPENAI_API_KEY` is required; ChatGPT billing is separate. |
 | Codex | Alternative `enrich --ai` provider for bare-word cards | Networked; run `codex login` and select `enrich_provider = "codex"`. It is not used to read a PDF or photo. |
 
-The **Ask janki** surface is a real model-backed conversation rendered in
+The **Janki** surface is a real model-backed conversation rendered in
 OpenAI's hosted ChatKit UI and served by janki's custom backend. ChatKit is the
 interface here, not the inference provider: by default each sent message is one
 journaled, non-mutating Claude turn through the logged-in Claude Code Pro/Max
-subscription. It can answer questions from the context the surface discloses,
-but a plain message cannot edit the deck. Only the explicit **Change deck**
-action can prepare a revision plan.
+subscription. It can answer questions from its bounded context, but a plain
+message cannot edit the deck. Only the explicit **Change deck** action can
+prepare a revision plan. The uncluttered routine page does not repeat provider,
+model and context-provenance details; the exact request manifest and operation
+journal retain them.
+
+Attaching one supported source of up to 128 MiB in Janki only saves an immutable
+local copy under `data/inbox/`. Uploading does not add its bytes to the
+conversation or send them to a model, and project-wide intake remains available
+even when no single deck can be selected for conversation or revision.
+Immediately afterward, the same Janki conversation shows the exact extraction
+plan. One plan-bound owner-confirmation click sends the named source; there is no
+second consent page or confirmation chain. “Separate” means separate authority
+from the local upload, not a separate interface.
 
 Conversation and card writing have independent transport settings:
 
@@ -118,7 +129,7 @@ assistant_dir = "data/assistant"  # durable conversational turns
 
 [assistant]
 enabled = true
-provider = "claude-code"          # ordinary Ask turns: local Pro/Max login
+provider = "claude-code"          # ordinary Janki turns: local Pro/Max login
 model = "claude-opus-5"           # pinned; other model ids are refused
 
 [ai]

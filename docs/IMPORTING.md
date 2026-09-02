@@ -200,14 +200,16 @@ janki workbench
 
 The address printed in the terminal is restricted to this computer and carries
 a new key for that workbench session. The authority-bearing workbench page
-loads no remote assets. When `[assistant] enabled = true`, its **Ask janki**
+loads no remote assets. When `[assistant] enabled = true`, its **Janki**
 link opens a separately keyed loopback origin whose ChatKit UI is hosted by
 OpenAI; that origin never receives the workbench URL key or CSRF token. Its
 quick-start guide opens on the first dashboard view of that server session,
 collapses without changing any work, and remains available to reopen. Follow
 the source from top to bottom:
 
-Ask janki's existing-card revision action does not use a separate chat model.
+Janki's project-wide source intake and extraction stay available even when no
+single revision deck can be selected. Its existing-card revision action does
+not use a separate chat model.
 It renders one deterministic application plan, then dispatches the confirmed
 revision through `[ai].revise_provider`: `claude-code` uses the locally logged-in
 Claude Pro/Max subscription, while `anthropic-api` uses
@@ -221,7 +223,10 @@ change OpenAI Realtime audio.
 2. **Read the source.** Open the saved source and use its separate reading
    action. The confirmation page names the exact file, Anthropic provider,
    model, purpose and paid API call. A missing `ANTHROPIC_API_KEY` refuses
-   before the source is sent.
+   before the source is sent. In Janki, attaching and sending a source performs
+   the same local intake and then renders that exact extraction plan in the
+   conversation; one confirmation click dispatches it without another consent
+   page.
 3. **Check the proposals.** Compare the cards with their source evidence. Edit
    or remove a proposal explicitly; checking examples approves only the exact
    Japanese sentences shown. Review the lesson's grammar separately.

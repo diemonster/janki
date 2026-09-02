@@ -76,6 +76,8 @@ __all__ = [
     "DispatchFailure",
     "ExtractionCompletionError",
     "ExtractionConsent",
+    "ExtractionDispatchError",
+    "ExtractionDispatchExpectation",
     "ExtractionOutcome",
     "ExtractionPlan",
     "ExtractionRevision",
@@ -86,6 +88,7 @@ __all__ = [
     "classify_dispatch_failure",
     "complete_extraction",
     "describe_extraction",
+    "dispatch_extraction",
     "durable_inbox_root",
     "extraction_replacement_revision",
     "plan_corpus_extraction",
@@ -134,6 +137,44 @@ class ExtractionRevision:
     pattern_entry_sha256: str | None
     pattern_reviewed: bool | None
     pattern_has_patterns: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionDispatchExpectation:
+    """The exact rendered extraction request one owner confirmed.
+
+    This is deliberately only an expectation, never the plan that will be
+    sent.  A surface binds these immutable values into its one-use consent
+    capability; :func:`dispatch_extraction` re-plans from ``source`` at click
+    time and refuses any difference before authorizing a paid call.
+
+    ``replacement_confirmed`` is the sole source of ``force``.  The presence
+    of ``replacement_revision`` says what the rendered page offered to
+    destroy, not that the owner agreed to destroy it.
+    """
+
+    source: Path
+    model: str
+    mode: str | None
+    source_sha256: str
+    request_fingerprint: str
+    replacement_revision: ExtractionRevision | None
+    replacement_confirmed: bool
+    staging_path: Path
+    patterns_path: Path
+    operations_path: Path
+
+    def __post_init__(self) -> None:
+        # These paths are authority and destination bindings, not display
+        # conveniences. Resolve them when the expectation is minted so a
+        # later config reload cannot redirect the confirmed action through a
+        # different lexical spelling or symlink target.
+        for field_name in ("staging_path", "patterns_path", "operations_path"):
+            object.__setattr__(
+                self,
+                field_name,
+                Path(os.path.realpath(getattr(self, field_name))),
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -442,6 +483,39 @@ class DispatchFailure:
     @property
     def was_paid_for(self) -> bool:
         return self.outcome in (ANSWER_SAVED, ANSWER_EMPTY, ANSWER_UNAVAILABLE)
+
+
+class ExtractionDispatchError(JankiError):
+    """A shared extraction run that could not become staged proposals.
+
+    ``phase`` lets each surface describe the same durable facts in its own
+    presentation without reimplementing the operation.  ``binding``,
+    ``preparation`` and ``authorization`` happen before provider dispatch;
+    ``dispatch`` and ``completion`` happen after it.  A dispatch failure may
+    carry the journal's exact recovery classification, while ``journal_error``
+    records the rarer case where even that classification could not be made.
+    """
+
+    def __init__(
+        self,
+        cause: BaseException,
+        *,
+        phase: str,
+        operation_id: str | None = None,
+        failure: DispatchFailure | None = None,
+        journal_error: JankiError | None = None,
+    ) -> None:
+        self.cause = cause
+        self.phase = phase
+        self.operation_id = operation_id
+        self.failure = failure
+        self.journal_error = journal_error
+        message = str(cause).strip() or f"{type(cause).__name__} failed without details."
+        super().__init__(message)
+
+    @property
+    def provider_dispatched(self) -> bool:
+        return self.phase in {"dispatch", "completion"}
 
 
 def busy_refusal(config: ProjectConfig) -> str:
@@ -1102,3 +1176,211 @@ def complete_extraction(
         kept_reviewed_patterns=kept_reviewed_patterns,
         source=run_patterns.source,
     )
+
+
+def _report_extraction_progress(
+    progress: Callable[[str], None] | None,
+    label: str,
+) -> None:
+    if progress is None:
+        return
+    try:
+        progress(label)
+    except Exception:  # noqa: BLE001 - presentation cannot control a paid transaction
+        # A tab, socket, or event loop can disappear after authority is
+        # journaled. Progress is best-effort display only: allowing its
+        # callback to interrupt here would strand either an unused authority
+        # or an already captured paid answer instead of completing the shared
+        # recovery/staging transaction.
+        return
+
+
+def dispatch_extraction(
+    config: ProjectConfig,
+    expected: ExtractionDispatchExpectation,
+    *,
+    client: Any | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> ExtractionOutcome:
+    """Re-plan and run one exact owner-confirmed corpus extraction.
+
+    This is the shared paid boundary used by every surface.  The expectation
+    is what the owner saw; none of its planned objects is dispatched.  The
+    source, prompts, collection and replacement state are read again, the
+    exact request identity is compared, and only then may the journal's locked
+    authorization gate let a provider call begin.
+
+    The progress callback receives state names only.  Providers do not report
+    percentages, so this service never invents one.
+    """
+    if expected.replacement_revision is not None and not expected.replacement_confirmed:
+        raise ExtractionDispatchError(
+            staging.StagingError(
+                "Confirm that this re-read replaces the review named on the page."
+            ),
+            phase="binding",
+        )
+    if expected.replacement_revision is None and expected.replacement_confirmed:
+        raise ExtractionDispatchError(
+            staging.StagingError(
+                "This extraction confirms a replacement the rendered action did "
+                "not offer."
+            ),
+            phase="binding",
+        )
+
+    # Explicit owner confirmation is the only force authority.  In
+    # particular, a replacement revision is a rendered snapshot, not consent.
+    force = expected.replacement_confirmed
+    try:
+        plan = plan_corpus_extraction(
+            config,
+            expected.source,
+            mode=expected.mode,
+            model=expected.model,
+            force=force,
+        )
+    except JankiError as exc:
+        raise ExtractionDispatchError(exc, phase="binding") from exc
+    if len(plan.targets) != 1:
+        cause = staging.StagingError(
+            "That source no longer makes one extraction request."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
+
+    target = plan.targets[0]
+    fresh_fingerprint = str(target.provenance["request_fingerprint"])
+    if (
+        fresh_fingerprint != expected.request_fingerprint
+        or target.source_sha256 != expected.source_sha256
+    ):
+        cause = staging.StagingError(
+            "The extraction request changed after this page was rendered."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
+
+    fresh_staging_path = Path(os.path.realpath(target.staging_path))
+    if fresh_staging_path != expected.staging_path:
+        cause = staging.StagingError(
+            "The extraction destination changed after this page was rendered."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
+    fresh_patterns_path = Path(os.path.realpath(target.patterns_path))
+    if fresh_patterns_path != expected.patterns_path:
+        cause = staging.StagingError(
+            "The extraction destination changed after this page was rendered."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
+    fresh_operations_path = Path(os.path.realpath(config.operations_file))
+    if fresh_operations_path != expected.operations_path:
+        cause = operations.OperationError(
+            "The extraction destination changed after this page was rendered."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
+
+    try:
+        fresh_revision = extraction_replacement_revision(config, target)
+    except JankiError as exc:
+        raise ExtractionDispatchError(exc, phase="binding") from exc
+    rendered_revision = expected.replacement_revision
+    if fresh_revision is None or rendered_revision is None:
+        if fresh_revision != rendered_revision:
+            cause = staging.StagingError(
+                "The review changed after this page was rendered."
+            )
+            raise ExtractionDispatchError(cause, phase="binding")
+    elif fresh_revision.staging_sha256 != rendered_revision.staging_sha256:
+        cause = staging.StagingError(
+            "The review changed after this page was rendered."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
+    elif (
+        fresh_revision.pattern_entry_sha256
+        != rendered_revision.pattern_entry_sha256
+    ):
+        cause = patterns.PatternError(
+            "The grammar review changed after this page was rendered."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
+
+    if client is None:
+        try:
+            client = claude_client.prepare_paid_client()
+        except JankiError as exc:
+            raise ExtractionDispatchError(exc, phase="preparation") from exc
+
+    try:
+        journal = operations.OperationJournal.load(config.operations_file)
+        # `busy_refusal` is a render-time display.  The real one-call gate is
+        # OperationJournal.authorize inside authorize_dispatch, under its own
+        # file lock, so two stale pages cannot both spend.
+        operation_id = authorize_dispatch(journal, target, model=plan.model)
+    except JankiError as exc:
+        raise ExtractionDispatchError(exc, phase="authorization") from exc
+
+    _report_extraction_progress(progress, "Preparing pages")
+    _report_extraction_progress(progress, "Reading the source")
+    captured = capture_hook(config, journal, operation_id)
+    shape_reported = False
+
+    def capture(response: object) -> None:
+        nonlocal shape_reported
+        captured(response)
+        if not shape_reported:
+            _report_extraction_progress(progress, "Checking the answer's shape")
+            shape_reported = True
+
+    try:
+        result = extract.extract_candidates(
+            target.item,
+            model=plan.model,
+            style_guide=plan.style_guide,
+            system=plan.system,
+            mode=plan.mode,
+            known=plan.skip_list,
+            client=client,
+            capture=capture,
+        )
+    except Exception as exc:  # noqa: BLE001 - settle every dispatched call
+        try:
+            failure = classify_dispatch_failure(config, journal, operation_id, exc)
+        except JankiError as journal_error:
+            raise ExtractionDispatchError(
+                exc,
+                phase="dispatch",
+                operation_id=operation_id,
+                journal_error=journal_error,
+            ) from exc
+        raise ExtractionDispatchError(
+            exc,
+            phase="dispatch",
+            operation_id=operation_id,
+            failure=failure,
+        ) from exc
+
+    # A provider wrapper is required to capture before it returns.  Keep the
+    # user-facing state complete if a test double or future wrapper returns a
+    # parsed result without calling the hook; complete_extraction will still
+    # durably settle that normalized answer before any staging write.
+    if not shape_reported:
+        _report_extraction_progress(progress, "Checking the answer's shape")
+    _report_extraction_progress(progress, "Saving proposals")
+    try:
+        return complete_extraction(
+            config,
+            journal,
+            target,
+            result,
+            operation_id=operation_id,
+            known=plan.known,
+            mode=plan.mode,
+            model=plan.model,
+            force=force,
+            expected_revision=rendered_revision,
+        )
+    except JankiError as exc:
+        raise ExtractionDispatchError(
+            exc,
+            phase="completion",
+            operation_id=operation_id,
+        ) from exc

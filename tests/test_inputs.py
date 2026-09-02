@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -20,6 +21,7 @@ from japanese_anki.inputs import (
     PreparedInput,
     prepare_corpus_input,
     prepare_inputs,
+    receive_upload,
 )
 
 PNG = b"\x89PNG\r\n\x1a\n fake png bytes"
@@ -52,6 +54,68 @@ def write(path: Path, data: bytes) -> Path:
 
 def decoded(item: PreparedInput) -> bytes:
     return base64.standard_b64decode(item.data_b64)
+
+
+def test_concurrent_case_insensitive_uploads_cannot_both_claim_one_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The inbox name check and immutable write are one shared transaction."""
+
+    inbox = tmp_path / "inbox"
+    first_scanned = threading.Event()
+    release_first = threading.Event()
+    second_done = threading.Event()
+    call_lock = threading.Lock()
+    real_namesakes = inputs_module._durable_namesakes
+    calls = 0
+    results: dict[str, object] = {}
+
+    def pause_first_scan(*args: Any, **kwargs: Any):
+        nonlocal calls
+        found = real_namesakes(*args, **kwargs)
+        with call_lock:
+            calls += 1
+            is_first = calls == 1
+        if is_first:
+            first_scanned.set()
+            assert release_first.wait(timeout=2)
+        return found
+
+    def upload(label: str, name: str, data: bytes) -> None:
+        try:
+            results[label] = receive_upload(name, data, inbox_root=inbox)
+        except BaseException as exc:  # pragma: no cover - asserted below
+            results[label] = exc
+        finally:
+            if label == "second":
+                second_done.set()
+
+    monkeypatch.setattr(inputs_module, "_durable_namesakes", pause_first_scan)
+    first = threading.Thread(
+        target=upload,
+        args=("first", "Lesson.pdf", b"%PDF first source"),
+    )
+    second = threading.Thread(
+        target=upload,
+        args=("second", "lesson.pdf", b"%PDF second source"),
+    )
+    first.start()
+    assert first_scanned.wait(timeout=2)
+    second.start()
+    second_finished_before_release = second_done.wait(timeout=0.1)
+    release_first.set()
+    first.join(timeout=2)
+    second.join(timeout=2)
+
+    assert not second_finished_before_release
+    first_result = results["first"]
+    assert isinstance(first_result, inputs_module.Intake)
+    assert first_result.stored is True
+    assert isinstance(results["second"], InputError)
+    assert "different source called lesson.pdf" in str(results["second"])
+    assert (inbox / "Lesson.pdf").read_bytes() == b"%PDF first source"
+    assert [path.name for path in inbox.iterdir()] == ["Lesson.pdf"]
 
 
 # --- formats -----------------------------------------------------------------

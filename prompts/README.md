@@ -19,12 +19,12 @@ of why the asking changed.
 | `extract-prose.md` | `janki extract --mode prose` | system |
 | `enrich-bare-word.md` | `janki enrich --ai` | system |
 | `revise-conjugation-deck.md` | confirmed conjugation-deck `revise` | system |
-| `assistant-chat.md` | ordinary read-only Ask janki conversation | complete system prompt |
+| `assistant-chat.md` | ordinary read-only Janki conversation | complete system prompt |
 | `approve-coverage.md` | `janki promote --accept-coverage` | system |
 
 The coverage check and conversational Assistant do not lead with the style
 guide. Coverage counts whether the page is accounted for rather than judging
-Japanese. The Assistant answers from its disclosed deck scope and bounded
+Japanese. The Assistant answers from its bounded deck scope and bounded
 thread history without writing cards, so a card-writing style guide would give
 it the wrong job.
 

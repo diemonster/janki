@@ -19,7 +19,10 @@ import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Protocol, TypeVar
+
+from japanese_anki.errors import JankiError
 
 __all__ = [
     "AssistantCore",
@@ -31,12 +34,16 @@ __all__ = [
     "RevisionPlan",
     "RevisionRefusal",
     "ScopedMemoryStore",
+    "SourceExtractionConfirmation",
+    "SourceExtractionExecution",
+    "SourceExtractionPlan",
     "create_assistant_core",
 ]
 
 
 _PREPARE_ACTION = "janki.revision.prepare"
 _CONFIRM_ACTION = "janki.revision.confirm"
+_EXTRACT_CONFIRM_ACTION = "janki.extraction.confirm"
 _FINGERPRINT_DISPLAY_CHARS = 32
 _MAX_CHAT_HISTORY_ENTRIES = 12
 _MAX_CHAT_HISTORY_BYTES = 24_000
@@ -50,6 +57,14 @@ _CHAT_PROGRESS_LABELS = frozenset(
 _PROGRESS_LABELS = frozenset(
     {
         "Preparing revision",
+        "Reading the source",
+        "Checking the answer's shape",
+        "Saving proposals",
+    }
+)
+_EXTRACTION_PROGRESS_LABELS = frozenset(
+    {
+        "Preparing pages",
         "Reading the source",
         "Checking the answer's shape",
         "Saving proposals",
@@ -125,6 +140,36 @@ class RevisionExecution:
     review_url: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class SourceExtractionPlan:
+    """Exact read-only extraction facts rendered after local source intake."""
+
+    preparation_id: str
+    source_name: str
+    request_fingerprint: str
+    target: str
+    effects: tuple[str, ...]
+    disclosures: tuple[str, ...]
+    confirm_label: str
+    replaces: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SourceExtractionConfirmation:
+    """One server-held plan binding consumed by the paid extraction click."""
+
+    preparation_id: str
+    source_name: str
+    expected_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class SourceExtractionExecution:
+    """Durable result of a confirmed source extraction."""
+
+    message: str
+
+
 class RevisionRefusal(RuntimeError):
     """A safe refusal that may be shown to the owner without a server error."""
 
@@ -158,11 +203,37 @@ class RevisionCallbacks(Protocol):
     ) -> RevisionExecution | Awaitable[RevisionExecution]:
         """Re-plan, compare, authorize, execute, and durably stage the result."""
 
+    def prepare_source_extraction(
+        self,
+        *,
+        source_path: Path,
+    ) -> SourceExtractionPlan | Awaitable[SourceExtractionPlan]:
+        """Describe one saved source without dispatching a provider call."""
+
+    def consume_replan_and_extract(
+        self,
+        confirmation: SourceExtractionConfirmation,
+        *,
+        progress: Callable[[str], None],
+    ) -> SourceExtractionExecution | Awaitable[SourceExtractionExecution]:
+        """Re-plan, authorize, dispatch, and durably stage one extraction."""
+
+
+class AssistantAttachmentStore(Protocol):
+    """Local intake boundary used by the optional ChatKit attachment path."""
+
+    def assert_ready(self, attachment_id: str) -> None:
+        """Refuse unless the exact registered upload finished successfully."""
+
+    def commit_attachment(self, attachment_id: str) -> Any:
+        """Preserve the uploaded bytes in the immutable source inbox."""
+
 @dataclass(frozen=True, slots=True)
 class AssistantRequestContext:
     """Per-request scope passed through every ChatKit store operation."""
 
     deck_scope: str
+    request_origin: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +243,7 @@ class AssistantCore:
     server: Any
     context: AssistantRequestContext
     store: ScopedMemoryStore
+    attachment_store: AssistantAttachmentStore | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +260,13 @@ class _MessageBinding:
     widget_item_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class _ExtractionBinding:
+    confirmation: SourceExtractionConfirmation
+    thread_id: str
+    widget_item_id: str
+
+
 class ScopedMemoryStore:
     """Small in-memory ChatKit store that refuses cross-deck contexts.
 
@@ -197,12 +276,19 @@ class ScopedMemoryStore:
 
     _SCOPE_KEY = "janki_deck_scope"
 
-    def __init__(self, deck_scope: str) -> None:
+    def __init__(
+        self,
+        deck_scope: str,
+        *,
+        attachment_store: AssistantAttachmentStore | None = None,
+    ) -> None:
         if not deck_scope.strip():
             raise ValueError("deck_scope must not be blank")
         self.deck_scope = deck_scope
         self._threads: dict[str, Any] = {}
         self._items: dict[str, list[Any]] = {}
+        self._attachments: dict[str, Any] = {}
+        self._attachment_store = attachment_store
         self._lock: asyncio.Lock | None = None
 
     def _context_ok(self, context: AssistantRequestContext) -> None:
@@ -443,9 +529,19 @@ class ScopedMemoryStore:
         raise self._not_found(f"Unknown item: {item_id}")
 
     async def save_attachment(self, attachment: Any, context: AssistantRequestContext) -> None:
-        del attachment
         self._context_ok(context)
-        raise PermissionError("Attachments are disabled for the workbench assistant.")
+        if self._attachment_store is None:
+            raise PermissionError("Attachments are disabled for the workbench assistant.")
+        saved = self._copy(attachment)
+        async with self._get_lock():
+            existing = self._attachments.get(saved.id)
+            if (
+                existing is not None
+                and existing.thread_id is not None
+                and saved.thread_id != existing.thread_id
+            ):
+                raise PermissionError("The attachment belongs to another thread.")
+            self._attachments[saved.id] = saved
 
     async def load_attachment(
         self,
@@ -453,16 +549,28 @@ class ScopedMemoryStore:
         context: AssistantRequestContext,
     ) -> Any:
         self._context_ok(context)
-        raise self._not_found(f"Attachments are disabled: {attachment_id}")
+        if self._attachment_store is None:
+            raise self._not_found(f"Attachments are disabled: {attachment_id}")
+        async with self._get_lock():
+            attachment = self._attachments.get(attachment_id)
+            if attachment is None:
+                raise self._not_found(f"Unknown attachment: {attachment_id}")
+            saved = self._copy(attachment)
+        self._attachment_store.assert_ready(attachment_id)
+        return saved
 
     async def delete_attachment(
         self,
         attachment_id: str,
         context: AssistantRequestContext,
     ) -> None:
-        del attachment_id
         self._context_ok(context)
-        raise PermissionError("Attachments are disabled for the workbench assistant.")
+        if self._attachment_store is None:
+            raise PermissionError("Attachments are disabled for the workbench assistant.")
+        async with self._get_lock():
+            if attachment_id not in self._attachments:
+                raise self._not_found(f"Unknown attachment: {attachment_id}")
+            del self._attachments[attachment_id]
 
 
 def _validate_chat_reply(reply: Any) -> ChatReply:
@@ -487,6 +595,27 @@ def _validate_plan(plan: Any) -> RevisionPlan:
     return plan
 
 
+def _validate_source_extraction_plan(plan: Any) -> SourceExtractionPlan:
+    if not isinstance(plan, SourceExtractionPlan):
+        raise TypeError("prepare_source_extraction must return SourceExtractionPlan")
+    required = (
+        plan.preparation_id,
+        plan.source_name,
+        plan.request_fingerprint,
+        plan.target,
+        plan.confirm_label,
+    )
+    if any(not value.strip() for value in required):
+        raise ValueError("The source extraction plan is incomplete.")
+    if not plan.effects or any(not effect.strip() for effect in plan.effects):
+        raise ValueError("The source extraction plan must name every intended effect.")
+    if any(not disclosure.strip() for disclosure in plan.disclosures):
+        raise ValueError("Source extraction disclosures must not be blank.")
+    if plan.replaces and "replace" not in plan.confirm_label.casefold():
+        raise ValueError("A replacement extraction button must name the replacement.")
+    return plan
+
+
 def _validate_execution(result: Any) -> RevisionExecution:
     if not isinstance(result, RevisionExecution):
         raise TypeError("consume_replan_and_execute must return RevisionExecution")
@@ -497,6 +626,14 @@ def _validate_execution(result: Any) -> RevisionExecution:
         )
     if not result.message.strip():
         raise ValueError("The revision result message must not be blank.")
+    return result
+
+
+def _validate_source_extraction_execution(result: Any) -> SourceExtractionExecution:
+    if not isinstance(result, SourceExtractionExecution):
+        raise TypeError("consume_replan_and_extract must return SourceExtractionExecution")
+    if not result.message.strip():
+        raise ValueError("The extraction result message must not be blank.")
     return result
 
 
@@ -713,6 +850,7 @@ def create_assistant_core(
     callbacks: RevisionCallbacks,
     *,
     deck_scope: str,
+    attachment_store: AssistantAttachmentStore | None = None,
 ) -> AssistantCore:
     """Create the scoped deterministic ChatKit server.
 
@@ -733,14 +871,15 @@ def create_assistant_core(
     )
     from chatkit.widgets import DynamicWidgetRoot
 
-    store = ScopedMemoryStore(deck_scope)
+    store = ScopedMemoryStore(deck_scope, attachment_store=attachment_store)
     context = AssistantRequestContext(deck_scope=deck_scope)
 
     class _JankiChatKitServer(ChatKitServer[AssistantRequestContext]):
         def __init__(self) -> None:
-            super().__init__(store=store, attachment_store=None)
+            super().__init__(store=store, attachment_store=attachment_store)
             self._messages: dict[str, _MessageBinding] = {}
             self._plans: dict[str, _PlanBinding] = {}
+            self._extractions: dict[str, _ExtractionBinding] = {}
             self._histories: dict[str, list[tuple[str, str]]] = {}
             self._history_locks: dict[str, asyncio.Lock] = {}
             self._durable_tasks: set[asyncio.Task[Any]] = set()
@@ -760,22 +899,28 @@ def create_assistant_core(
             )
 
         @staticmethod
-        def _message_text(message: Any) -> str:
+        def _message_input(message: Any) -> tuple[str, tuple[Any, ...]]:
             if message is None:
                 raise RevisionRefusal("Send one message to begin.")
-            if message.attachments:
+            attachments = tuple(message.attachments)
+            if len(attachments) > 1:
+                raise RevisionRefusal("Attach one source at a time.")
+            if attachments and attachment_store is None:
                 raise RevisionRefusal("Attachments are disabled on this assistant.")
             if message.quoted_text and message.quoted_text.strip():
                 raise RevisionRefusal("Quoted context is disabled; send one direct message.")
-            if len(message.content) != 1:
-                raise RevisionRefusal("Send exactly one plain-text message.")
-            part = message.content[0]
-            if getattr(part, "type", None) != "input_text":
-                raise RevisionRefusal("Only a plain-text message is accepted.")
-            text = part.text.strip()
-            if not text:
+            content = tuple(message.content)
+            if len(content) > 1:
+                raise RevisionRefusal("Send at most one plain-text message.")
+            text = ""
+            if content:
+                part = content[0]
+                if getattr(part, "type", None) != "input_text":
+                    raise RevisionRefusal("Only a plain-text message is accepted.")
+                text = part.text.strip()
+            if not attachments and not text:
                 raise RevisionRefusal("The message must not be blank.")
-            return text
+            return text, attachments
 
         @staticmethod
         def _plan_widget(
@@ -807,6 +952,47 @@ def create_assistant_core(
                         "label": "Confirm exact revision",
                         "action": {
                             "type": _CONFIRM_ACTION,
+                            "payload": {
+                                "capability": capability,
+                                "request_fingerprint": plan.request_fingerprint,
+                            },
+                            "handler": "server",
+                            "loadingBehavior": "container",
+                            "streaming": True,
+                        },
+                    },
+                }
+            )
+
+        @staticmethod
+        def _source_extraction_widget(
+            plan: SourceExtractionPlan,
+            *,
+            capability: str,
+        ) -> Any:
+            return DynamicWidgetRoot.model_validate(
+                {
+                    "type": "Card",
+                    "size": "full",
+                    "children": [
+                        _confirmation_body(
+                            title="Confirm this exact extraction",
+                            target=plan.target,
+                            effects=plan.effects,
+                            disclosures=plan.disclosures,
+                            fingerprint_label="Request fingerprint",
+                            fingerprint=plan.request_fingerprint,
+                            one_use_note=(
+                                "Confirm is one-use. At the click, janki re-plans "
+                                "from the saved source and refuses if the request "
+                                "or any named replacement changed."
+                            ),
+                        )
+                    ],
+                    "confirm": {
+                        "label": plan.confirm_label,
+                        "action": {
+                            "type": _EXTRACT_CONFIRM_ACTION,
                             "payload": {
                                 "capability": capability,
                                 "request_fingerprint": plan.request_fingerprint,
@@ -860,9 +1046,85 @@ def create_assistant_core(
                 yield ErrorEvent(message="The requested deck scope was refused.", allow_retry=False)
                 return
             try:
-                message = self._message_text(input_user_message)
+                message, attachments = self._message_input(input_user_message)
             except RevisionRefusal as error:
                 yield NoticeEvent(level="warning", message=str(error))
+                return
+
+            if attachments:
+                attachment = attachments[0]
+                try:
+                    intake = await asyncio.to_thread(
+                        attachment_store.commit_attachment,
+                        attachment.id,
+                    )
+                except JankiError as error:
+                    yield NoticeEvent(
+                        level="warning",
+                        title="Source not saved",
+                        message=str(error),
+                    )
+                    return
+                state = "Saved" if intake.stored else "Already present"
+                try:
+                    extraction_plan = _validate_source_extraction_plan(
+                        await _call_callback(
+                            callbacks.prepare_source_extraction,
+                            source_path=intake.path,
+                        )
+                    )
+                except RevisionRefusal as error:
+                    yield self._message_event(
+                        thread,
+                        (
+                            f"{state}: {intake.path.name}. The source stayed local "
+                            "and was not sent to Claude or any other model."
+                        ),
+                    )
+                    yield NoticeEvent(
+                        level="warning",
+                        title="Extraction plan unavailable",
+                        message=str(error),
+                    )
+                    return
+                yield self._message_event(
+                    thread,
+                    (
+                        f"{state}: {intake.path.name}. The source stayed local and "
+                        "was not sent to Claude or any other model. "
+                        + (
+                            "The text accompanying this upload was not used as an "
+                            "extraction instruction. "
+                            if message
+                            else ""
+                        )
+                        + "Review the exact extraction plan below."
+                    ),
+                )
+                capability = secrets.token_urlsafe(32)
+                item_id = store.generate_item_id("message", thread, request_context)
+                confirmation = SourceExtractionConfirmation(
+                    preparation_id=extraction_plan.preparation_id,
+                    source_name=extraction_plan.source_name,
+                    expected_fingerprint=extraction_plan.request_fingerprint,
+                )
+                self._extractions[capability] = _ExtractionBinding(
+                    confirmation=confirmation,
+                    thread_id=thread.id,
+                    widget_item_id=item_id,
+                )
+                yield ThreadItemDoneEvent(
+                    item=WidgetItem(
+                        id=item_id,
+                        thread_id=thread.id,
+                        created_at=datetime.now(),
+                        widget=self._source_extraction_widget(
+                            extraction_plan,
+                            capability=capability,
+                        ),
+                        copy_text=None,
+                    )
+                )
                 return
 
             progress_queue: asyncio.Queue[str] = asyncio.Queue()
@@ -950,6 +1212,96 @@ def create_assistant_core(
             if request_context.deck_scope != deck_scope:
                 yield ErrorEvent(message="That assistant action was refused.", allow_retry=False)
                 return
+            if action.type == _EXTRACT_CONFIRM_ACTION:
+                payload = action.payload
+                if not isinstance(payload, dict) or set(payload) != {
+                    "capability",
+                    "request_fingerprint",
+                }:
+                    yield ErrorEvent(
+                        message="The extraction confirmation payload was refused.",
+                        allow_retry=False,
+                    )
+                    return
+                capability = payload.get("capability")
+                fingerprint = payload.get("request_fingerprint")
+                if not isinstance(capability, str) or not isinstance(fingerprint, str):
+                    yield ErrorEvent(
+                        message="The extraction confirmation payload was refused.",
+                        allow_retry=False,
+                    )
+                    return
+                extraction_binding = self._extractions.pop(capability, None)
+                if (
+                    extraction_binding is None
+                    or extraction_binding.thread_id != thread.id
+                    or sender is None
+                    or sender.id != extraction_binding.widget_item_id
+                    or fingerprint
+                    != extraction_binding.confirmation.expected_fingerprint
+                ):
+                    yield ErrorEvent(
+                        message=(
+                            "This extraction confirmation is missing, stale, already "
+                            "used, or belongs elsewhere."
+                        ),
+                        allow_retry=False,
+                    )
+                    return
+
+                progress_queue: asyncio.Queue[str] = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def report_extraction_progress(label: str) -> None:
+                    normalized = label.strip()
+                    if normalized not in _EXTRACTION_PROGRESS_LABELS:
+                        raise ValueError(
+                            "The extraction service reported an unknown progress state."
+                        )
+                    loop.call_soon_threadsafe(progress_queue.put_nowait, normalized)
+
+                async def execute_extraction() -> SourceExtractionExecution:
+                    result = await _call_callback(
+                        callbacks.consume_replan_and_extract,
+                        extraction_binding.confirmation,
+                        progress=report_extraction_progress,
+                    )
+                    return _validate_source_extraction_execution(result)
+
+                execution_task = asyncio.create_task(execute_extraction())
+                self._durable_tasks.add(execution_task)
+
+                def forget_extraction(done: asyncio.Task[Any]) -> None:
+                    self._durable_tasks.discard(done)
+                    if not done.cancelled():
+                        done.exception()
+
+                execution_task.add_done_callback(forget_extraction)
+                try:
+                    while not execution_task.done():
+                        try:
+                            label = await asyncio.wait_for(
+                                progress_queue.get(), timeout=0.1
+                            )
+                        except TimeoutError:
+                            continue
+                        yield ProgressUpdateEvent(text=label, icon="write")
+                    while not progress_queue.empty():
+                        yield ProgressUpdateEvent(
+                            text=progress_queue.get_nowait(),
+                            icon="write",
+                        )
+                    result = await asyncio.shield(execution_task)
+                except RevisionRefusal as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Extraction refused",
+                        message=str(error),
+                    )
+                    return
+                yield self._message_event(thread, result.message)
+                return
+
             if action.type == _PREPARE_ACTION:
                 payload = action.payload
                 if not isinstance(payload, dict) or set(payload) != {"capability"}:
@@ -1101,4 +1453,9 @@ def create_assistant_core(
             yield self._message_event(thread, result.message)
 
     server = _JankiChatKitServer()
-    return AssistantCore(server=server, context=context, store=store)
+    return AssistantCore(
+        server=server,
+        context=context,
+        store=store,
+        attachment_store=attachment_store,
+    )

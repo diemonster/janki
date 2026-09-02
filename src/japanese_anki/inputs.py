@@ -42,7 +42,7 @@ from typing import Any
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
-from japanese_anki.io import atomic_write_bytes
+from japanese_anki.io import atomic_write_bytes, exclusive_path_lock
 
 __all__ = [
     "DOCUMENT_TYPES",
@@ -275,26 +275,32 @@ def receive_upload(raw_name: str, data: bytes, *, inbox_root: Path) -> Intake:
 
     inbox_root = Path(inbox_root)
     inbox_root.mkdir(parents=True, exist_ok=True)
-    matches, conflicts = _durable_namesakes(name, inbox_root, data)
-    if conflicts:
-        raise InputError(
-            f"A different source called {name} is already in your corpus. "
-            "Rename this file before continuing."
-        )
-    if matches:
-        return Intake(path=matches[0], stored=False)
+    # The namespace is case-insensitive by contract and includes descendants,
+    # so locking only ``target`` would still let Lesson.pdf and lesson.pdf (or
+    # two namesakes in different inbox folders) both pass the scan.  The shared
+    # root lock makes the complete check/write transaction atomic across the
+    # ordinary workbench and the isolated Assistant, and across processes.
+    with exclusive_path_lock(inbox_root):
+        matches, conflicts = _durable_namesakes(name, inbox_root, data)
+        if conflicts:
+            raise InputError(
+                f"A different source called {name} is already in your corpus. "
+                "Rename this file before continuing."
+            )
+        if matches:
+            return Intake(path=matches[0], stored=False)
 
-    target = inbox_root / name
-    if _occupied(target):
-        # Nothing readable matched by name or bytes, yet the path is taken —
-        # a directory, a broken symlink, something not ours. Refuse rather
-        # than write through it.
-        raise InputError(
-            f"{target} already exists and is not a readable source file. "
-            "Move it aside before adding this one."
-        )
-    atomic_write_bytes(target, data)
-    return Intake(path=target, stored=True)
+        target = inbox_root / name
+        if _occupied(target):
+            # Nothing readable matched by name or bytes, yet the path is taken —
+            # a directory, a broken symlink, something not ours. Refuse rather
+            # than write through it.
+            raise InputError(
+                f"{target} already exists and is not a readable source file. "
+                "Move it aside before adding this one."
+            )
+        atomic_write_bytes(target, data)
+        return Intake(path=target, stored=True)
 
 
 def _copy_into_inbox(

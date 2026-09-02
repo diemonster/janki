@@ -11,22 +11,26 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
-import html
 import json
 import queue
 import re
 import secrets
 import threading
-from collections.abc import Callable, Coroutine
-from dataclasses import dataclass, field
+from collections.abc import Coroutine
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
-from japanese_anki.errors import JankiError
 from japanese_anki.localhttp import MAX_BODY_BYTES, LocalOnlyHandler, LocalOnlyServer, bind_loopback
 from japanese_anki.workbench.assistant import (
     AssistantCore,
     RevisionCallbacks,
     create_assistant_core,
+)
+from japanese_anki.workbench.assistant_attachments import (
+    MAX_ASSISTANT_ATTACHMENT_BYTES,
+    AssistantAttachmentError,
+    LocalAssistantAttachmentStore,
 )
 
 __all__ = [
@@ -45,18 +49,8 @@ _CHATKIT_SCRIPT = f"{_CHATKIT_CDN}/deployments/chatkit/chatkit.js"
 # widening the isolated origin to arbitrary inline styles.
 _CHATKIT_STYLE_SOURCE = "'sha256-G2shiuZXM1qoGNHm7OQ6u7Ye45SO8f8LKO17q0kfGvw='"
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{32,}$")
-_DEFAULT_CHAT_DISCLOSURE = (
-    "Each message is one journaled, read-only model call with only the selected "
-    "deck path and that message."
-)
-_UNAVAILABLE_CHAT_DISCLOSURE = (
-    "Current provider and model details are unavailable because janki could not "
-    "load the project configuration. Fix janki.toml and reload before sending."
-)
 _DENIED_OPERATIONS = frozenset(
     {
-        "attachments.create",
-        "attachments.delete",
         "input.transcribe",
         "items.feedback",
         "threads.add_client_tool_output",
@@ -147,7 +141,9 @@ class AssistantHTTPServer(LocalOnlyServer):
     api_path: str
     script_path: str
     style_path: str
-    chat_disclosure: Callable[[], str]
+    upload_path_prefix: str | None
+    attachment_store: LocalAssistantAttachmentStore | None
+    conversation_available: bool
 
 
 class _AssistantHandler(LocalOnlyHandler):
@@ -208,7 +204,8 @@ class _AssistantHandler(LocalOnlyHandler):
         if self.path != self.server.api_path:
             self._error(404, "This assistant route does not exist.")
             return
-        if not self._request_is_local() or not self._has_exact_origin():
+        request_origin = self._exact_origin()
+        if not self._request_is_local() or request_origin is None:
             self._error(403, "The request host or origin was refused.")
             return
         body = self._read_json_body()
@@ -219,7 +216,10 @@ class _AssistantHandler(LocalOnlyHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._error(400, "The ChatKit request was not valid JSON.")
             return
-        refusal = _request_refusal(parsed)
+        refusal = _request_refusal(
+            parsed,
+            attachment_store=self.server.attachment_store,
+        )
         if refusal is not None:
             self._error(400, refusal)
             return
@@ -228,9 +228,15 @@ class _AssistantHandler(LocalOnlyHandler):
             result = self.server.bridge.call(
                 self.server.assistant_core.server.process(
                     body,
-                    self.server.assistant_core.context,
+                    replace(
+                        self.server.assistant_core.context,
+                        request_origin=request_origin,
+                    ),
                 )
             )
+        except AssistantAttachmentError as error:
+            self._error(409, str(error))
+            return
         except Exception:
             self._error(400, "The ChatKit request was refused.")
             return
@@ -245,10 +251,52 @@ class _AssistantHandler(LocalOnlyHandler):
             return
         self._stream_sse(stream)
 
+    def do_PUT(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        prefix = self.server.upload_path_prefix
+        attachment_store = self.server.attachment_store
+        if (
+            prefix is None
+            or attachment_store is None
+            or not self.path.startswith(prefix)
+        ):
+            self._error(404, "This assistant route does not exist.")
+            return
+        if not self._request_is_local() or not self._has_exact_origin():
+            self._error(403, "The request host or origin was refused.")
+            return
+        coordinates = self.path.removeprefix(prefix).split("/")
+        if (
+            len(coordinates) != 2
+            or not coordinates[0]
+            or not coordinates[1]
+            or any(character in coordinates[1] for character in "?#")
+        ):
+            self._error(404, "This assistant route does not exist.")
+            return
+        declared_content_length = self._upload_content_length()
+        if declared_content_length is None:
+            return
+        try:
+            attachment_store.accept_upload_stream(
+                coordinates[0],
+                coordinates[1],
+                self.rfile,
+                declared_content_length=declared_content_length,
+            )
+        except AssistantAttachmentError as error:
+            self._error(409, str(error))
+            return
+        self._start_response(204, content_length=0)
+
     def _has_exact_origin(self) -> bool:
+        return self._exact_origin() is not None
+
+    def _exact_origin(self) -> str | None:
         origins = self.headers.get_all("Origin") or []
         hosts = self.headers.get_all("Host") or []
-        return len(hosts) == 1 and origins == [f"http://{hosts[0]}"]
+        if len(hosts) != 1 or origins != [f"http://{hosts[0]}"]:
+            return None
+        return origins[0]
 
     def _read_json_body(self) -> bytes | None:
         if self.headers.get_all("Transfer-Encoding"):
@@ -282,6 +330,30 @@ class _AssistantHandler(LocalOnlyHandler):
             return None
         return body
 
+    def _upload_content_length(self) -> int | None:
+        if self.headers.get_all("Transfer-Encoding"):
+            self._error(400, "Transfer-encoded uploads are refused.")
+            return None
+        if self.headers.get_all("Content-Encoding"):
+            self._error(400, "Encoded uploads are refused.")
+            return None
+        lengths = self.headers.get_all("Content-Length") or []
+        if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit():
+            self._error(411, "One decimal Content-Length is required.")
+            return None
+        length = int(lengths[0])
+        if length < 1:
+            self._error(400, "The attachment upload is empty.")
+            return None
+        if length > MAX_ASSISTANT_ATTACHMENT_BYTES:
+            limit_mib = MAX_ASSISTANT_ATTACHMENT_BYTES // (1024 * 1024)
+            self._error(
+                413,
+                f"The attachment upload exceeds Janki's {limit_mib} MiB limit.",
+            )
+            return None
+        return length
+
     def _stream_sse(self, stream: Any) -> None:
         chunks: queue.Queue[Any] = queue.Queue()
 
@@ -313,7 +385,11 @@ class _AssistantHandler(LocalOnlyHandler):
                 return
 
 
-def _request_refusal(payload: Any) -> str | None:
+def _request_refusal(
+    payload: Any,
+    *,
+    attachment_store: LocalAssistantAttachmentStore | None = None,
+) -> str | None:
     if not isinstance(payload, dict):
         return "The ChatKit request must be a JSON object."
     operation = payload.get("type")
@@ -321,7 +397,13 @@ def _request_refusal(payload: Any) -> str | None:
         return "The ChatKit request has no operation type."
     if operation in _DENIED_OPERATIONS:
         return "That ChatKit capability is disabled."
+    if operation in {"attachments.create", "attachments.delete"}:
+        if attachment_store is None:
+            return "Attachments are disabled on this assistant."
+        return None
     if operation not in {
+        "attachments.create",
+        "attachments.delete",
         "items.list",
         "threads.add_user_message",
         "threads.create",
@@ -338,21 +420,35 @@ def _request_refusal(payload: Any) -> str | None:
     message = params.get("input") if isinstance(params, dict) else None
     if not isinstance(message, dict):
         return "The ChatKit message shape was refused."
-    if message.get("attachments") != []:
+    attachments = message.get("attachments")
+    if not isinstance(attachments, list):
+        return "The message attachment list was refused."
+    if attachments and attachment_store is None:
         return "Attachments are disabled on this assistant."
+    if len(attachments) > 1 or any(not isinstance(item, str) for item in attachments):
+        return "Attach one registered source at a time."
+    if attachments:
+        try:
+            attachment_store.assert_ready(attachments[0])
+        except AssistantAttachmentError as error:
+            return str(error)
     quoted_text = message.get("quoted_text")
     if quoted_text is not None and quoted_text != "":
         return "Quoted context is disabled on this assistant."
     content = message.get("content")
-    if (
-        not isinstance(content, list)
-        or len(content) != 1
-        or not isinstance(content[0], dict)
-        or content[0].get("type") != "input_text"
-        or not isinstance(content[0].get("text"), str)
-        or not content[0]["text"].strip()
-    ):
-        return "Send exactly one nonblank plain-text message."
+    if not isinstance(content, list) or len(content) > 1:
+        return "Send at most one plain-text message."
+    text = ""
+    if content:
+        if (
+            not isinstance(content[0], dict)
+            or content[0].get("type") != "input_text"
+            or not isinstance(content[0].get("text"), str)
+        ):
+            return "Send at most one plain-text message."
+        text = content[0]["text"].strip()
+    if not attachments and not text:
+        return "Send one nonblank plain-text message."
     inference = message.get("inference_options")
     if not isinstance(inference, dict):
         return "The ChatKit inference options were refused."
@@ -362,22 +458,35 @@ def _request_refusal(payload: Any) -> str | None:
 
 
 def _shell_html(server: AssistantHTTPServer) -> str:
-    disclosure = html.escape(server.chat_disclosure(), quote=True)
+    if server.conversation_available:
+        introduction = (
+            "Ask a question in ordinary language, or attach one PDF or photo to save "
+            "it to your local source inbox. Janki then shows one exact extraction "
+            "plan in this conversation; nothing is sent unless you confirm it. "
+            "Questions are read-only; use the explicit Change this deck action when "
+            "you want the message turned into an exact revision plan."
+        )
+        assistant_label = "janki deck assistant"
+    else:
+        introduction = (
+            "Attach one PDF or photo to save it to your local source inbox. Janki "
+            "then shows one exact extraction plan in this conversation; nothing is "
+            "sent unless you confirm it. Questions and deck changes are unavailable "
+            "until exactly one eligible drill deck is configured."
+        )
+        assistant_label = "janki source intake"
     return (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
-        "<title>Ask janki</title>"
+        "<title>Janki</title>"
         f'<link rel=stylesheet href="{server.style_path}">'
         f'<script src="{_CHATKIT_SCRIPT}" async></script>'
         f'<script src="{server.script_path}" defer></script>'
         "</head><body><main>"
-        "<header><h1>Ask janki</h1><p>Ask a question in ordinary language. "
-        "Conversation is read-only; use the explicit Change this deck action when "
-        "you want the message turned into an exact revision plan.</p>"
-        f"<p class=boundary>{disclosure}</p>"
+        f"<header><h1>Janki</h1><p>{introduction}</p>"
         "<p class=boundary>This isolated page loads OpenAI's hosted ChatKit UI. It does "
         "not receive the main workbench session or its CSRF authority.</p></header>"
-        '<openai-chatkit id="janki-chat" aria-label="janki deck assistant"></openai-chatkit>'
+        f'<openai-chatkit id="janki-chat" aria-label="{assistant_label}"></openai-chatkit>'
         "<noscript>JavaScript is required for the ChatKit interface.</noscript>"
         "</main></body></html>"
     )
@@ -385,19 +494,49 @@ def _shell_html(server: AssistantHTTPServer) -> str:
 
 def _application_javascript(server: AssistantHTTPServer) -> str:
     api_path = json.dumps(server.api_path)
+    upload_path_prefix = json.dumps(server.upload_path_prefix)
+    if server.conversation_available:
+        frame_title = "janki deck assistant"
+        placeholder = "Ask about this deck or attach a source"
+        greeting = "What would you like to know about this deck?"
+    else:
+        frame_title = "janki source intake"
+        placeholder = "Attach a PDF or photo"
+        greeting = "Add a source to Janki"
+    if server.attachment_store is None:
+        attachments = "{ enabled: false }"
+    else:
+        attachments = """{
+        enabled: true,
+        uploadStrategy: { type: "two_phase" },
+        maxSize: 128 * 1024 * 1024,
+        maxCount: 1,
+        accept: {
+          "application/pdf": [".pdf"],
+          "image/jpeg": [".jpg", ".jpeg"],
+          "image/png": [".png"],
+          "image/heic": [".heic"],
+          "image/heif": [".heif"],
+        },
+      }"""
     return f'''"use strict";
 (async () => {{
   await customElements.whenDefined("openai-chatkit");
   const chat = document.getElementById("janki-chat");
   const apiPath = {api_path};
+  const uploadPathPrefix = {upload_path_prefix};
   const apiURL = new URL(apiPath, window.location.origin).href;
   const localFetch = (input, init = {{}}) => {{
-    const raw = input instanceof Request ? input.url : String(input);
+    const isRequest = input instanceof Request;
+    const raw = isRequest ? input.url : String(input);
     const target = new URL(raw, window.location.href);
-    if (target.origin !== window.location.origin || target.pathname !== apiPath) {{
+    const isUpload = uploadPathPrefix !== null &&
+      target.pathname.startsWith(uploadPathPrefix);
+    if (target.origin !== window.location.origin ||
+        (target.pathname !== apiPath && !isUpload)) {{
       throw new Error("ChatKit attempted an unscoped request.");
     }}
-    return window.fetch(target, {{
+    return window.fetch(isRequest ? input : target, {{
       ...init,
       credentials: "omit",
       referrerPolicy: "no-referrer",
@@ -405,7 +544,7 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
   }};
   chat.setOptions({{
     api: {{ url: apiURL, domainKey: "domain_pk_localhost_dev", fetch: localFetch }},
-    frameTitle: "janki deck assistant",
+    frameTitle: {json.dumps(frame_title)},
     header: {{ enabled: false }},
     history: {{ enabled: false }},
     threadItemActions: {{
@@ -413,12 +552,12 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
       retry: false,
     }},
     composer: {{
-      placeholder: "Ask about this deck",
-      attachments: {{ enabled: false }},
+      placeholder: {json.dumps(placeholder)},
+      attachments: {attachments},
       tools: [],
     }},
     startScreen: {{
-      greeting: "What would you like to know about this deck?",
+      greeting: {json.dumps(greeting)},
       prompts: [],
     }},
   }});
@@ -485,6 +624,8 @@ class AssistantSidecar:
             self.thread.join()
         self.server.server_close()
         self.bridge.close()
+        if self.server.attachment_store is not None:
+            self.server.attachment_store.close()
 
     def __enter__(self) -> AssistantSidecar:
         return self if self.thread is not None else self.start()
@@ -499,19 +640,34 @@ def create_assistant_sidecar(
     *,
     deck_scope: str,
     session_token: str | None = None,
+    inbox_root: Path | None = None,
+    conversation_available: bool = True,
 ) -> AssistantSidecar:
-    """Bind a sidecar whose send disclosure is re-read for every shell render."""
+    """Bind one isolated sidecar, optionally with local source intake."""
 
     token = session_token or secrets.token_urlsafe(32)
     if not _TOKEN.fullmatch(token):
         raise ValueError("The assistant session token is not a safe URL segment.")
-    core = create_assistant_core(callbacks, deck_scope=deck_scope)
     bridge = AsyncLoopBridge()
     server: AssistantHTTPServer | None = None
+    attachment_store: LocalAssistantAttachmentStore | None = None
     try:
         server = AssistantHTTPServer(("127.0.0.1", 0), _AssistantHandler)
         bind_loopback(server)
         root = f"/{token}/"
+        upload_path_prefix = f"{root}attachments/" if inbox_root is not None else None
+        if upload_path_prefix is not None:
+            attachment_store = LocalAssistantAttachmentStore(
+                inbox_root=inbox_root,
+                upload_prefix=(
+                    f"http://{server.expected_host}{upload_path_prefix}"
+                ),
+            )
+        core = create_assistant_core(
+            callbacks,
+            deck_scope=deck_scope,
+            attachment_store=attachment_store,
+        )
         server.assistant_core = core
         server.bridge = bridge
         server.session_token = token
@@ -519,21 +675,13 @@ def create_assistant_sidecar(
         server.api_path = f"{root}chatkit"
         server.script_path = f"{root}application.js"
         server.style_path = f"{root}application.css"
-        def current_chat_disclosure() -> str:
-            try:
-                return str(
-                    getattr(
-                        callbacks,
-                        "chat_disclosure",
-                        _DEFAULT_CHAT_DISCLOSURE,
-                    )
-                )
-            except JankiError:
-                return _UNAVAILABLE_CHAT_DISCLOSURE
-
-        server.chat_disclosure = current_chat_disclosure
+        server.upload_path_prefix = upload_path_prefix
+        server.attachment_store = attachment_store
+        server.conversation_available = conversation_available
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:
+        if attachment_store is not None:
+            attachment_store.close()
         if server is not None:
             server.server_close()
         bridge.close()
@@ -545,6 +693,8 @@ def start_assistant_sidecar(
     *,
     deck_scope: str,
     session_token: str | None = None,
+    inbox_root: Path | None = None,
+    conversation_available: bool = True,
 ) -> AssistantSidecar:
     """Bind and start the isolated ChatKit sidecar."""
 
@@ -552,4 +702,6 @@ def start_assistant_sidecar(
         callbacks,
         deck_scope=deck_scope,
         session_token=session_token,
+        inbox_root=inbox_root,
+        conversation_available=conversation_available,
     ).start()

@@ -441,6 +441,8 @@ def test_assistant_link_is_separate_opt_in_origin_and_carries_no_workbench_key()
     assert "referrerpolicy=no-referrer" in enabled
     assistant_section = enabled[enabled.index('<section class="assistant-entry"') :]
     assistant_section = assistant_section[: assistant_section.index("</section>")]
+    assert "<h2>Janki</h2>" in assistant_section
+    assert "Ask janki" not in assistant_section
     assert "workbench-key" not in assistant_section
 
 

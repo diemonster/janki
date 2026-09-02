@@ -604,7 +604,7 @@ def render_dashboard(
     body.append(_dashboard_tour(open_by_default=tour_open))
     if assistant_url:
         body.append(
-            '<section class="assistant-entry"><h2>Ask janki</h2>'
+            '<section class="assistant-entry"><h2>Janki</h2>'
             '<p>Describe a deck change, review the exact plan, and authorize '
             'only the action you intend.</p>'
             f'<p><a class=button href="{html.escape(assistant_url, quote=True)}" '

@@ -224,6 +224,8 @@ def test_assistant_chat_is_conversation_not_an_implicit_revision() -> None:
     assert "never a deck-edit instruction" in text
     assert "explicit revision proposal" in text
     assert "no other conversation history, deck contents, filesystem access, tools" in text
+    assert "one supported pdf or photo" in text.casefold()
+    assert "never supplied to this conversational model" in text.casefold()
 
 
 def test_the_three_extraction_modes_are_three_complete_files() -> None:
