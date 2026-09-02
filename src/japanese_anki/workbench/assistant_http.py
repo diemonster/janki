@@ -505,7 +505,7 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
         {
           label: "Choose active deck",
           prompt: "Choose an active deck",
-          icon: "folder",
+          icon: "notebook",
         },
         {
           label: "What Janki can do",

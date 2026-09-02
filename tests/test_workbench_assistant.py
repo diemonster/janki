@@ -10,6 +10,7 @@ import asyncio
 import http.client
 import io
 import json
+import re
 import threading
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -17,6 +18,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import pytest
+from chatkit.icons import IconName
+from pydantic import TypeAdapter
 
 from japanese_anki.workbench.assistant import (
     AssistantDeckChoice,
@@ -1447,6 +1450,13 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b'icon: "book-open"' in script
         assert b'icon: "write"' in script
         assert b'icon: "document"' in script
+        starter_icons = {
+            value.decode() for value in re.findall(rb'icon:\s*"([^"]+)"', script)
+        }
+        assert len(starter_icons) == 4
+        icon_adapter = TypeAdapter(IconName)
+        for icon in starter_icons:
+            icon_adapter.validate_python(icon)
         assert b"header { width: min(100%, 48rem); margin: 0 auto 1rem; }" in stylesheet
         assert (
             b"threadItemActions: {\n      feedback: false,\n      retry: false,\n    }," in script
