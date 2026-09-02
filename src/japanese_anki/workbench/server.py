@@ -4097,6 +4097,7 @@ def _start_assistant_for(config: ProjectConfig):
         return start_assistant_sidecar(
             adapter,
             deck_scope=adapter.deck_scope,
+            deck_display_name=adapter.deck_display_name,
             inbox_root=config.scan_inbox,
             conversation_available=adapter.conversation_available,
         )

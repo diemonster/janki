@@ -159,6 +159,7 @@ class RevisionAssistantAdapter:
     config: ProjectConfig
     deck_path: Path | None
     record_ids: tuple[str, ...]
+    deck_name: str | None = None
     _plans: dict[str, revision.RevisionPlan] = field(
         default_factory=dict,
         init=False,
@@ -191,6 +192,14 @@ class RevisionAssistantAdapter:
         """Whether this adapter has the exact deck scope conversation requires."""
 
         return self.deck_path is not None
+
+    @property
+    def deck_display_name(self) -> str | None:
+        """Return the selected deck's human label for the local shell only."""
+
+        if self.deck_path is None:
+            return None
+        return self.deck_name or self.deck_path.stem
 
     def _revision_deck(self) -> Path:
         if self.deck_path is None:
@@ -702,7 +711,7 @@ def discover_revision_adapter(
             "extraction remain available; conversation and revision are disabled.",
         )
 
-    candidates: list[Path] = []
+    candidates: list[tuple[Path, str]] = []
     for deck_path in deck_paths:
         try:
             deck_config, _records = resolve_deck_records(deck_path)
@@ -714,17 +723,23 @@ def discover_revision_adapter(
             )
         examples = deck_config.get("drill_examples")
         if str(deck_config.get("kind") or "").strip().lower() == "conjugation" and bool(examples):
-            candidates.append(deck_path)
+            candidates.append(
+                (deck_path, str(deck_config.get("name") or deck_path.stem).strip())
+            )
 
     if len(candidates) != 1:
-        found = "none" if not candidates else ", ".join(path.name for path in candidates)
+        found = (
+            "none"
+            if not candidates
+            else ", ".join(path.name for path, _deck_name in candidates)
+        )
         return project_only, (
             "assistant needs exactly one configured conjugation deck with nonempty "
             f"drill_examples; found {found}. No deck was guessed. Source intake and "
             "extraction remain available; conversation and revision are disabled.",
         )
 
-    deck_path = candidates[0]
+    deck_path, deck_name = candidates[0]
     try:
         content = read_drill_deck_content(deck_path)
     except JankiError as exc:
@@ -743,6 +758,7 @@ def discover_revision_adapter(
             config=config,
             deck_path=deck_path.resolve(),
             record_ids=content.record_ids,
+            deck_name=deck_name,
         ),
         (),
     )

@@ -107,6 +107,26 @@ def _cli_plan(
     return plan, used
 
 
+def _cli_plain_markdown_plan(
+    runner: FakeClaudeRunner | None = None,
+) -> tuple[revision_provider.RevisionProviderPlan, FakeClaudeRunner]:
+    used = runner or FakeClaudeRunner()
+    plan = revision_provider.plan_provider(
+        "claude-code",
+        model=MODEL,
+        style_guide="",
+        task_template="Task\n",
+        system_blocks=BLOCKS,
+        user_turn=USER_TURN,
+        schema=Answer,
+        response_mode="plain-markdown",
+        env={"PATH": "/bin"},
+        runner=used,
+        which=_which,
+    )
+    return plan, used
+
+
 def test_registry_has_only_the_two_revision_transports() -> None:
     assert set(revision_provider.PROVIDERS) == {"anthropic-api", "claude-code"}
     with pytest.raises(revision_provider.RevisionProviderError, match="Unknown"):
@@ -316,6 +336,86 @@ def test_claude_command_has_exact_isolation_and_exact_prompt_channels() -> None:
     assert "shell" not in kwargs
 
 
+def test_claude_plain_markdown_uses_json_envelope_without_response_schema() -> None:
+    reply = json.dumps(
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "result": "## Selected deck\n\n- One clear answer.",
+        }
+    ).encode("utf-8")
+    plan, runner = _cli_plain_markdown_plan(FakeClaudeRunner(reply=reply))
+    provider = revision_provider.provider_for("claude-code")
+    prepared = provider.prepare(
+        plan,
+        env={"PATH": "/bin"},
+        runner=runner,
+        which=_which,
+    )
+    captured: list[bytes] = []
+
+    result = provider.dispatch(prepared, capture=captured.append, runner=runner)
+
+    assert result.parsed == "## Selected deck\n\n- One clear answer."
+    assert captured == [reply]
+    assert plan.transport["response_mode"] == "plain-markdown"
+    command = runner.calls[-1][0]
+    assert command[command.index("--output-format") + 1] == "json"
+    assert "--json-schema" not in command
+    assert "--system-prompt" in command
+
+
+def test_claude_plain_markdown_requires_a_nonblank_result_string() -> None:
+    plan, _ = _cli_plain_markdown_plan()
+    provider = revision_provider.provider_for("claude-code")
+
+    for result in (None, "", "  \n"):
+        raw = json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "result": result,
+            }
+        ).encode("utf-8")
+        with pytest.raises(
+            revision_provider.RevisionProviderError,
+            match="nonblank Markdown",
+        ):
+            provider.recover(plan, raw)
+
+
+def test_claude_plain_markdown_mode_is_bound_and_reconstructed_from_manifest() -> None:
+    plan, _ = _cli_plain_markdown_plan()
+    manifest = plan.persistent_manifest()
+
+    recovered = revision_provider.provider_plan_from_manifest(
+        manifest,
+        model=MODEL,
+        style_guide="",
+        task_template="Task\n",
+        system_blocks=BLOCKS,
+        user_turn=USER_TURN,
+        schema=Answer,
+    )
+
+    assert recovered.transport["response_mode"] == "plain-markdown"
+    assert recovered.request_fingerprint == plan.request_fingerprint
+    changed = json.loads(json.dumps(manifest))
+    changed["transport"].pop("response_mode")
+    with pytest.raises(revision_provider.RevisionProviderError, match="fingerprint"):
+        revision_provider.provider_plan_from_manifest(
+            changed,
+            model=MODEL,
+            style_guide="",
+            task_template="Task\n",
+            system_blocks=BLOCKS,
+            user_turn=USER_TURN,
+            schema=Answer,
+        )
+
+
 def test_claude_captures_nonzero_stdout_before_reporting_failure() -> None:
     raw = b'{"type":"result","subtype":"error","is_error":true}'
     plan, runner = _cli_plan(FakeClaudeRunner(reply=raw, returncode=3))
@@ -364,6 +464,9 @@ def test_claude_success_requires_an_explicit_false_error_flag() -> None:
 
 def test_claude_plan_is_deeply_immutable_and_purely_recoverable() -> None:
     plan, _ = _cli_plan()
+    # Structured Claude manifests predate the explicit plain-Markdown mode;
+    # an already-captured operation must remain exactly reconstructible.
+    assert "response_mode" not in plan.transport
     with pytest.raises(TypeError):
         plan.transport["argv"][0] = "other"  # type: ignore[index]
     with pytest.raises(TypeError):

@@ -216,6 +216,7 @@ def test_enabled_workbench_gives_assistant_the_configured_local_inbox(
     config = _config(tmp_path)
     adapter = SimpleNamespace(
         deck_scope="data/decks/potential.yaml",
+        deck_display_name="Potential Practice",
         conversation_available=True,
     )
     expected_sidecar = object()
@@ -238,6 +239,7 @@ def test_enabled_workbench_gives_assistant_the_configured_local_inbox(
     assert captured == {
         "callbacks": adapter,
         "deck_scope": adapter.deck_scope,
+        "deck_display_name": adapter.deck_display_name,
         "inbox_root": config.scan_inbox,
         "conversation_available": True,
     }
@@ -263,8 +265,43 @@ def test_enabled_workbench_starts_project_intake_without_a_revision_deck(
     assert result is expected_sidecar
     assert captured["callbacks"].deck_path is None
     assert captured["deck_scope"] == "janki-project"
+    assert captured["deck_display_name"] is None
     assert captured["inbox_root"] == config.scan_inbox
     assert captured["conversation_available"] is False
+
+
+def test_discovery_keeps_the_selected_deck_name_for_the_assistant_shell(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "potential.yaml"
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [deck])
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: (
+            {
+                "kind": "conjugation",
+                "name": "Brandon Japanese::Potential Practice",
+                "drill_examples": {"word:one": []},
+            },
+            [],
+        ),
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "read_drill_deck_content",
+        lambda _path: SimpleNamespace(
+            record_ids=("word:one",),
+            drill_examples={"word:one": object()},
+        ),
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    assert warnings == ()
+    assert adapter.deck_scope == "data/decks/potential.yaml"
+    assert adapter.deck_display_name == "Brandon Japanese::Potential Practice"
 
 
 def test_discovery_keeps_project_intake_when_two_revision_decks_are_ambiguous(

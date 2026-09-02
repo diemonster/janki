@@ -431,7 +431,8 @@ def _component_with_id(component: dict[str, Any], component_id: str) -> dict[str
 def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> None:
     sidecar = create_assistant_sidecar(
         _FakeRevisions(),
-        deck_scope="potential-practice",
+        deck_scope="data/decks/potential-practice.yaml",
+        deck_display_name="Brandon Japanese::Potential Practice",
         session_token=SESSION_TOKEN,
     )
     sidecar.start()
@@ -451,6 +452,9 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b"<h1>Janki</h1>" in body
         assert b"Ask janki" not in body
         assert b"Questions are read-only" in body
+        assert b"Selected deck for changes:" in body
+        assert b"Brandon Japanese::Potential Practice" in body
+        assert b"data/decks/potential-practice.yaml" in body
         assert b"main-workbench-secret" not in body
 
         script_status, _script_headers, script = _request(
@@ -472,11 +476,17 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b'credentials: "omit"' in script
         assert b'referrerPolicy: "no-referrer"' in script
         assert b"attachments: { enabled: false }" in script
-        assert b'placeholder: "Ask about this deck or attach a source"' in script
-        assert b'greeting: "What would you like to know about this deck?"' in script
-        assert b'label: "Understand this deck"' in script
-        assert b'label: "Plan a deck change"' in script
+        assert b'placeholder: "Ask Janki or attach a source"' in script
+        assert b'greeting: "What would you like to do?"' in script
+        assert b'label: "What Janki can do"' in script
+        assert b'prompt: "What can Janki help me do here?"' in script
+        assert b'label: "How changes work"' in script
+        assert (
+            b'prompt: "Explain how I can prepare and confirm a change to the selected deck."'
+            in script
+        )
         assert b'label: "Create from a source"' in script
+        assert b"Summarize what this deck is designed to teach." not in script
         assert b'icon: "book-open"' in script
         assert b'icon: "write"' in script
         assert b'icon: "document"' in script
@@ -485,6 +495,26 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
             b"threadItemActions: {\n      feedback: false,\n      retry: false,\n    }," in script
         )
         assert b"onClientTool" not in script
+    finally:
+        sidecar.close()
+
+
+def test_shell_escapes_the_selected_deck_display_name() -> None:
+    sidecar = create_assistant_sidecar(
+        _FakeRevisions(),
+        deck_scope="data/decks/<script>alert(2)</script>.yaml",
+        deck_display_name='<img src=x onerror="alert(1)">',
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        status, _headers, body = _request(sidecar, "GET", sidecar.server.shell_path)
+
+        assert status == 200
+        assert b'<img src=x onerror="alert(1)">' not in body
+        assert b"&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in body
+        assert b"<script>alert(2)</script>" not in body
+        assert b"data/decks/&lt;script&gt;alert(2)&lt;/script&gt;.yaml" in body
     finally:
         sidecar.close()
 
@@ -519,9 +549,9 @@ def test_project_only_shell_names_only_source_intake_and_extraction(
         assert b"Questions are read-only" not in body
         assert b'placeholder: "Attach a PDF or photo"' in script
         assert b'greeting: "Add a source to Janki"' in script
-        assert b"What would you like to know about this deck?" not in script
-        assert b'label: "Understand this deck"' not in script
-        assert b'label: "Plan a deck change"' not in script
+        assert b"What would you like to do?" not in script
+        assert b'label: "What Janki can do"' not in script
+        assert b'label: "How changes work"' not in script
         assert b'label: "Create from a source"' not in script
     finally:
         sidecar.close()

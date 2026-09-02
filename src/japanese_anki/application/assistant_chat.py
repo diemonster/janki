@@ -233,6 +233,11 @@ def _plan_chat(
         system_blocks=system_blocks,
         user_turn=user_turn,
         schema=schema,
+        response_mode=(
+            "plain-markdown"
+            if provider_name == revision_provider.CLAUDE_CODE_PROVIDER
+            else "structured"
+        ),
         env=provider_env,
         runner=provider_runner,
         which=provider_which,
@@ -628,7 +633,10 @@ def _answer_from_result(result: Any, *, model: str, captured: bool) -> str:
             f"{model} returned no complete Assistant answer "
             f"({stop_reason}{detail}).{suffix}"
         )
-    answer = str(getattr(parsed, "answer", "") or "").strip()
+    if isinstance(parsed, str):
+        answer = parsed.strip()
+    else:
+        answer = str(getattr(parsed, "answer", "") or "").strip()
     if not answer:
         suffix = " Its exact reply was captured." if captured else ""
         raise ChatApplicationError(

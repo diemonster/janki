@@ -44,6 +44,16 @@ __all__ = [
 ANTHROPIC_API_PROVIDER = "anthropic-api"
 CLAUDE_CODE_PROVIDER = "claude-code"
 
+_STRUCTURED_RESPONSE_MODE = "structured"
+_PLAIN_MARKDOWN_RESPONSE_MODE = "plain-markdown"
+_PLAIN_MARKDOWN_RESPONSE_CONTRACT = MappingProxyType(
+    {
+        "type": "string",
+        "contentMediaType": "text/markdown",
+        "description": "One nonblank Markdown answer in the Claude JSON result envelope.",
+    }
+)
+
 Runner = Callable[..., subprocess.CompletedProcess[Any]]
 Which = Callable[..., str | None]
 Capture = Callable[[bytes], None]
@@ -280,6 +290,7 @@ class RevisionProvider(Protocol):
         system_blocks: Sequence[Mapping[str, Any]],
         user_turn: str,
         schema: Any,
+        response_mode: str = _STRUCTURED_RESPONSE_MODE,
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
@@ -396,21 +407,45 @@ def _validate_cli_channels(plan: RevisionProviderPlan) -> Mapping[str, Any]:
             )
         return argv[positions[0] + 1]
 
-    try:
-        embedded_schema = json.loads(option("--json-schema"))
-    except json.JSONDecodeError as exc:
-        raise RevisionProviderError("Claude Code plan has an invalid JSON schema.") from exc
+    if "response_mode" not in plan.transport:
+        response_mode = _STRUCTURED_RESPONSE_MODE
+    elif plan.transport.get("response_mode") == _PLAIN_MARKDOWN_RESPONSE_MODE:
+        response_mode = _PLAIN_MARKDOWN_RESPONSE_MODE
+    else:
+        raise RevisionProviderError(
+            "Claude Code plan has an invalid response mode."
+        )
+    invalid_response_contract = False
+    if response_mode == _STRUCTURED_RESPONSE_MODE:
+        try:
+            embedded_schema = json.loads(option("--json-schema"))
+        except json.JSONDecodeError as exc:
+            raise RevisionProviderError(
+                "Claude Code plan has an invalid JSON schema."
+            ) from exc
+        invalid_response_contract = (
+            not isinstance(embedded_schema, Mapping)
+            or prompts.schema_fingerprint(embedded_schema)
+            != plan.response_schema_fingerprint
+        )
+    else:
+        invalid_response_contract = (
+            "--json-schema" in argv
+            or plan.response_schema_fingerprint
+            != prompts.schema_fingerprint(
+                _plain_value(_PLAIN_MARKDOWN_RESPONSE_CONTRACT)
+            )
+        )
     if (
         option("--model") != plan.model
         or option("--system-prompt") != _combined_system_prompt(plan.system_blocks)
         or option("--effort")
         != str(plan.transport["controlled_environment"]["CLAUDE_CODE_EFFORT_LEVEL"])
-        or not isinstance(embedded_schema, Mapping)
-        or prompts.schema_fingerprint(embedded_schema)
-        != plan.response_schema_fingerprint
+        or invalid_response_contract
     ):
         raise RevisionProviderError(
-            "The Claude Code plan's bound model, prompts, or schema do not match."
+            "The Claude Code plan's bound model, prompts, or response contract "
+            "do not match."
         )
     return request
 
@@ -467,11 +502,16 @@ class _AnthropicAPIRevisionProvider:
         system_blocks: Sequence[Mapping[str, Any]],
         user_turn: str,
         schema: Any,
+        response_mode: str = _STRUCTURED_RESPONSE_MODE,
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
     ) -> RevisionProviderPlan:
         del style_guide, task_template, env, runner, which
+        if response_mode != _STRUCTURED_RESPONSE_MODE:
+            raise RevisionProviderError(
+                "Anthropic API revisions require structured responses."
+            )
         _require_supported_model(model)
         wire_schema = claude_client.wire_schema(schema)
         blocks = tuple(_frozen_mapping(block) for block in system_blocks)
@@ -755,9 +795,9 @@ def _combined_system_prompt(blocks: Sequence[Mapping[str, Any]]) -> str:
 
 
 def _cli_argv(
-    *, model: str, system_prompt: str, schema_json: str
+    *, model: str, system_prompt: str, schema_json: str | None
 ) -> tuple[str, ...]:
-    return (
+    argv = (
         "claude",
         "-p",
         "--safe-mode",
@@ -776,8 +816,10 @@ def _cli_argv(
         model,
         "--effort",
         claude_client.DEFAULT_EFFORT,
-        "--json-schema",
-        schema_json,
+    )
+    if schema_json is not None:
+        argv += ("--json-schema", schema_json)
+    return argv + (
         "--system-prompt",
         system_prompt,
     )
@@ -791,27 +833,37 @@ def _claude_code_plan(
     schema: Any,
     auth: Mapping[str, Any],
     version: str,
+    response_mode: str = _STRUCTURED_RESPONSE_MODE,
 ) -> RevisionProviderPlan:
     _require_supported_model(model)
-    wire_schema = _neutral_wire_schema(schema)
-    schema_json = _canonical_json(wire_schema)
+    if response_mode == _STRUCTURED_RESPONSE_MODE:
+        response_contract = _neutral_wire_schema(schema)
+        schema_json: str | None = _canonical_json(response_contract)
+    elif response_mode == _PLAIN_MARKDOWN_RESPONSE_MODE:
+        response_contract = _PLAIN_MARKDOWN_RESPONSE_CONTRACT
+        schema_json = None
+    else:
+        raise RevisionProviderError(
+            f"Unknown Claude Code response mode {response_mode!r}."
+        )
     blocks = tuple(_frozen_mapping(block) for block in system_blocks)
     argv = _cli_argv(
         model=model,
         system_prompt=_combined_system_prompt(blocks),
         schema_json=schema_json,
     )
-    transport = _frozen_mapping(
-        {
-            "kind": "claude-code-cli",
-            "cli": "claude",
-            "cli_version": version,
-            "argv": argv,
-            "cwd": "fresh-empty-temporary-directory",
-            "stdin": "exact-user-turn-utf8",
-            "controlled_environment": _CONTROLLED_CLAUDE_ENV,
-        }
-    )
+    transport_value: dict[str, Any] = {
+        "kind": "claude-code-cli",
+        "cli": "claude",
+        "cli_version": version,
+        "argv": argv,
+        "cwd": "fresh-empty-temporary-directory",
+        "stdin": "exact-user-turn-utf8",
+        "controlled_environment": _CONTROLLED_CLAUDE_ENV,
+    }
+    if response_mode == _PLAIN_MARKDOWN_RESPONSE_MODE:
+        transport_value["response_mode"] = response_mode
+    transport = _frozen_mapping(transport_value)
     request_bytes = _canonical_json(
         {
             "argv": argv,
@@ -822,7 +874,7 @@ def _claude_code_plan(
         }
     ).encode("utf-8")
     billing_class = "claude-subscription"
-    schema_fingerprint = prompts.schema_fingerprint(wire_schema)
+    schema_fingerprint = prompts.schema_fingerprint(_plain_value(response_contract))
     return RevisionProviderPlan(
         provider=CLAUDE_CODE_PROVIDER,
         billing_class=billing_class,
@@ -855,6 +907,14 @@ def _cli_result_from_reply(
     if payload.get("is_error") is not False or payload.get("subtype") != "success":
         reason = str(payload.get("subtype") or "error")
         return claude_client.CallResult(None, reason, None)
+    if plan.transport.get("response_mode") == _PLAIN_MARKDOWN_RESPONSE_MODE:
+        answer = payload.get("result")
+        if not isinstance(answer, str) or not answer.strip():
+            raise RevisionProviderError(
+                "Claude Code finished normally but returned no nonblank Markdown "
+                "result."
+            )
+        return claude_client.CallResult(answer, "end_turn", None)
     if "structured_output" not in payload:
         raise RevisionProviderError(
             "Claude Code finished normally but returned no structured output."
@@ -881,6 +941,7 @@ class _ClaudeCodeRevisionProvider:
         system_blocks: Sequence[Mapping[str, Any]],
         user_turn: str,
         schema: Any,
+        response_mode: str = _STRUCTURED_RESPONSE_MODE,
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
@@ -893,6 +954,7 @@ class _ClaudeCodeRevisionProvider:
             system_blocks=system_blocks,
             user_turn=user_turn,
             schema=schema,
+            response_mode=response_mode,
             auth=auth,
             version=version,
         )

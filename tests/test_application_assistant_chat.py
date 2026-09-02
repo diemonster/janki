@@ -143,6 +143,72 @@ def test_plan_sends_only_selected_scope_and_exact_current_message(
         plan.message = "changed"  # type: ignore[misc]
 
 
+def test_claude_code_chat_plans_plain_markdown_without_changing_api_chat(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    api_plan = assistant_chat.plan_chat(
+        config,
+        deck_scope=DECK_SCOPE,
+        message="Explain the workflow.",
+    )
+    assert "response_mode" not in api_plan.transport
+
+    (tmp_path / "janki.toml").write_text(
+        "[assistant]\n"
+        'enabled = true\n'
+        'provider = "claude-code"\n'
+        'model = "claude-opus-5"\n',
+        encoding="utf-8",
+    )
+    claude_config = ProjectConfig.load(tmp_path)
+
+    def runner(command: list[str], **_kwargs: Any) -> Any:
+        import subprocess
+
+        if "--version" in command:
+            return subprocess.CompletedProcess(command, 0, b"2.1.246\n", b"")
+        assert "auth" in command
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps(
+                {
+                    "loggedIn": True,
+                    "authMethod": "claude.ai",
+                    "apiProvider": "firstParty",
+                    "subscriptionType": "max",
+                    "apiKeySource": None,
+                }
+            ).encode("utf-8"),
+            b"",
+        )
+
+    claude_plan = assistant_chat._plan_chat(
+        claude_config,
+        deck_scope=DECK_SCOPE,
+        message="Explain the workflow.",
+        provider_env={"PATH": "/bin"},
+        provider_runner=runner,
+        provider_which=lambda *_args, **_kwargs: "/private/test/bin/claude",
+    )
+
+    assert claude_plan.transport["response_mode"] == "plain-markdown"
+    assert "--json-schema" not in claude_plan.transport["argv"]
+
+
+def test_plain_markdown_chat_answer_is_trimmed_without_a_json_wrapper() -> None:
+    result = CallResult("  ## Answer\n\n- Useful detail.  \n", "end_turn", None)
+
+    answer = assistant_chat._answer_from_result(
+        result,
+        model="claude-opus-5",
+        captured=True,
+    )
+
+    assert answer == "## Answer\n\n- Useful detail."
+
+
 def test_plan_includes_only_the_exact_bounded_conversation_history(
     tmp_path: Path,
 ) -> None:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
+import html
 import json
 import queue
 import re
@@ -144,6 +145,8 @@ class AssistantHTTPServer(LocalOnlyServer):
     upload_path_prefix: str | None
     attachment_store: LocalAssistantAttachmentStore | None
     conversation_available: bool
+    deck_scope: str
+    deck_display_name: str | None
 
 
 class _AssistantHandler(LocalOnlyHandler):
@@ -467,6 +470,11 @@ def _shell_html(server: AssistantHTTPServer) -> str:
             "you want the message turned into an exact revision plan."
         )
         assistant_label = "janki deck assistant"
+        selected_deck = (
+            '<p class=deck-scope><strong>Selected deck for changes:</strong> '
+            f"{html.escape(server.deck_display_name or server.deck_scope)}<br>"
+            f"<code>{html.escape(server.deck_scope)}</code></p>"
+        )
     else:
         introduction = (
             "Attach one PDF or photo to save it to your local source inbox. Janki "
@@ -475,6 +483,7 @@ def _shell_html(server: AssistantHTTPServer) -> str:
             "until exactly one eligible drill deck is configured."
         )
         assistant_label = "janki source intake"
+        selected_deck = ""
     return (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
@@ -483,7 +492,7 @@ def _shell_html(server: AssistantHTTPServer) -> str:
         f'<script src="{_CHATKIT_SCRIPT}" async></script>'
         f'<script src="{server.script_path}" defer></script>'
         "</head><body><main>"
-        f"<header><h1>Janki</h1><p>{introduction}</p>"
+        f"<header><h1>Janki</h1><p>{introduction}</p>{selected_deck}"
         "<p class=boundary>This isolated page loads OpenAI's hosted ChatKit UI. It does "
         "not receive the main workbench session or its CSRF authority.</p></header>"
         f'<openai-chatkit id="janki-chat" aria-label="{assistant_label}"></openai-chatkit>'
@@ -497,17 +506,17 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
     upload_path_prefix = json.dumps(server.upload_path_prefix)
     if server.conversation_available:
         frame_title = "janki deck assistant"
-        placeholder = "Ask about this deck or attach a source"
-        greeting = "What would you like to know about this deck?"
+        placeholder = "Ask Janki or attach a source"
+        greeting = "What would you like to do?"
         starter_prompts = """[
         {
-          label: "Understand this deck",
-          prompt: "Summarize what this deck is designed to teach.",
+          label: "What Janki can do",
+          prompt: "What can Janki help me do here?",
           icon: "book-open",
         },
         {
-          label: "Plan a deck change",
-          prompt: "Help me plan one focused improvement to this deck.",
+          label: "How changes work",
+          prompt: "Explain how I can prepare and confirm a change to the selected deck.",
           icon: "write",
         },
         {
@@ -600,6 +609,8 @@ header { width: min(100%, 48rem); margin: 0 auto 1rem; }
 h1 { margin-bottom: .35rem; }
 p { margin: .35rem 0; line-height: 1.45; }
 .boundary { color: GrayText; font-size: .875rem; }
+.deck-scope { margin-top: .8rem; }
+.deck-scope code { color: GrayText; font-size: .8rem; overflow-wrap: anywhere; }
 openai-chatkit { display: block; width: 100%; height: min(76vh, 54rem); min-height: 32rem; }
 """.strip()
 
@@ -662,6 +673,7 @@ def create_assistant_sidecar(
     callbacks: RevisionCallbacks,
     *,
     deck_scope: str,
+    deck_display_name: str | None = None,
     session_token: str | None = None,
     inbox_root: Path | None = None,
     conversation_available: bool = True,
@@ -701,6 +713,12 @@ def create_assistant_sidecar(
         server.upload_path_prefix = upload_path_prefix
         server.attachment_store = attachment_store
         server.conversation_available = conversation_available
+        server.deck_scope = deck_scope
+        server.deck_display_name = (
+            deck_display_name.strip()
+            if deck_display_name is not None and deck_display_name.strip()
+            else (deck_scope if conversation_available else None)
+        )
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:
         if attachment_store is not None:
@@ -715,6 +733,7 @@ def start_assistant_sidecar(
     callbacks: RevisionCallbacks,
     *,
     deck_scope: str,
+    deck_display_name: str | None = None,
     session_token: str | None = None,
     inbox_root: Path | None = None,
     conversation_available: bool = True,
@@ -724,6 +743,7 @@ def start_assistant_sidecar(
     return create_assistant_sidecar(
         callbacks,
         deck_scope=deck_scope,
+        deck_display_name=deck_display_name,
         session_token=session_token,
         inbox_root=inbox_root,
         conversation_available=conversation_available,
