@@ -237,6 +237,16 @@ and the logged-in Claude Pro or Max subscription. `anthropic-api` is the
 separately selectable API-billed alternative. These settings do not inherit
 from or silently change `[ai].revise_provider`.
 
+Each ChatKit thread starts with no implicit deck. A local in-conversation
+selector lists the configured decks and requires one explicit owner click
+before deck-scoped conversation or revision. Browser actions carry only an
+opaque startup-catalog id; janki resolves it to an allowlisted repository path
+and revalidates the deck locally without a model call. Switching decks clears
+that thread's bounded deck context and invalidates its older prepare, confirm
+and finish actions. Deck kinds the current revision pass cannot safely write
+remain visible with their limitation, but cannot be selected as though they
+were supported.
+
 Sending an ordinary Janki message authorizes one journaled Assistant turn over
 the message and its bounded context. The routine page need not repeat its
 provider, model or context-provenance prose; the exact request manifest and

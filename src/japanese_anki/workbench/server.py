@@ -4096,10 +4096,8 @@ def _start_assistant_for(config: ProjectConfig):
 
         return start_assistant_sidecar(
             adapter,
-            deck_scope=adapter.deck_scope,
-            deck_display_name=adapter.deck_display_name,
+            deck_choices=adapter.deck_choices,
             inbox_root=config.scan_inbox,
-            conversation_available=adapter.conversation_available,
         )
     except (ImportError, JankiError, OSError, RuntimeError) as exc:
         print(

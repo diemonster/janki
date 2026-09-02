@@ -1,10 +1,10 @@
-"""Bind project source intake and an optional exact deck target to ChatKit.
+"""Bind project source intake and explicitly selected deck targets to ChatKit.
 
 This module is imported only when ``[assistant] enabled = true``. Project-wide
-attachment intake and extraction are always available. Discovery never guesses
-which deck the owner meant: conversation and revision are enabled only when
-exactly one configured conjugation deck carries nonempty rich drill examples,
-and every card in that deck is selected in its stored order.
+attachment intake and extraction are always available. Discovery lists every
+configured deck but never guesses which one the owner meant. Only a conjugation
+deck carrying complete rich drill examples is selectable for conversation and
+revision, and every card in that selected deck is revised in its stored order.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.exporters.pattern_cards import read_drill_deck_content
 from japanese_anki.models import ExampleSentence
 from japanese_anki.workbench.assistant import (
+    AssistantDeckChoice,
     ChatReply,
     RevisionConfirmation,
     RevisionExampleReview,
@@ -58,7 +59,56 @@ __all__ = [
     "discover_revision_adapter",
 ]
 
-_PROJECT_SCOPE = "janki-project"
+_RICH_DRILL_ONLY = "Deck changes currently support rich conjugation practice decks only."
+_DRILL_EXAMPLES_REQUIRED = (
+    "This conjugation deck needs complete rich drill examples before Janki can "
+    "select it for changes."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _RevisionDeckTarget:
+    """One startup-allowlisted deck behind an opaque browser-facing id."""
+
+    choice: AssistantDeckChoice
+    path: Path
+    record_ids: tuple[str, ...] | None
+
+
+def _deck_label(deck_config: object, deck_path: Path) -> str:
+    if isinstance(deck_config, dict):
+        label = str(deck_config.get("name") or "").strip()
+        if label:
+            return label
+    return deck_path.stem
+
+
+def _inspect_deck(
+    deck_path: Path,
+) -> tuple[str, tuple[str, ...] | None, str | None, str | None]:
+    """Return display/support facts using only local deck readers."""
+
+    try:
+        deck_config, _records = resolve_deck_records(deck_path)
+    except (JankiError, OSError) as exc:
+        detail = f"This configured deck could not be read safely: {exc}"
+        return deck_path.stem, None, detail, detail
+
+    label = _deck_label(deck_config, deck_path)
+    kind = str(deck_config.get("kind") or "").strip().lower()
+    if kind != "conjugation":
+        return label, None, _RICH_DRILL_ONLY, None
+    if not deck_config.get("drill_examples"):
+        return label, None, _DRILL_EXAMPLES_REQUIRED, None
+
+    try:
+        content = read_drill_deck_content(deck_path)
+    except (JankiError, OSError) as exc:
+        detail = f"This rich conjugation deck could not be read safely: {exc}"
+        return label, None, detail, detail
+    if not content.record_ids or not content.drill_examples:
+        return label, None, _DRILL_EXAMPLES_REQUIRED, None
+    return label, tuple(content.record_ids), None, None
 
 
 def _extraction_refusal(error: ExtractionDispatchError) -> RevisionRefusal:
@@ -154,12 +204,11 @@ def _extraction_refusal(error: ExtractionDispatchError) -> RevisionRefusal:
 
 @dataclass(slots=True)
 class RevisionAssistantAdapter:
-    """Project intake plus an optional exact revision target behind ChatKit."""
+    """Project intake plus exact allowlisted revision targets behind ChatKit."""
 
     config: ProjectConfig
-    deck_path: Path | None
-    record_ids: tuple[str, ...]
-    deck_name: str | None = None
+    deck_choices: tuple[AssistantDeckChoice, ...]
+    _targets: tuple[_RevisionDeckTarget, ...] = field(repr=False)
     _plans: dict[str, revision.RevisionPlan] = field(
         default_factory=dict,
         init=False,
@@ -181,34 +230,50 @@ class RevisionAssistantAdapter:
         repr=False,
     )
 
-    @property
-    def deck_scope(self) -> str:
-        if self.deck_path is None:
-            return _PROJECT_SCOPE
-        return self.deck_path.resolve().relative_to(self.config.root.resolve()).as_posix()
+    def _target_for_scope(self, deck_scope: str) -> _RevisionDeckTarget:
+        if not isinstance(deck_scope, str) or not deck_scope.strip():
+            raise RevisionRefusal("Choose one supported deck before asking about it.")
+        for target in self._targets:
+            if target.choice.scope != deck_scope:
+                continue
+            if not target.choice.revision_supported or target.record_ids is None:
+                raise RevisionRefusal(
+                    target.choice.unavailable_reason
+                    or "This configured deck is not available for deck changes."
+                )
+            return target
+        raise RevisionRefusal("The requested deck is outside this assistant's allowlist.")
 
-    @property
-    def conversation_available(self) -> bool:
-        """Whether this adapter has the exact deck scope conversation requires."""
+    def resolve_deck_selection(self, deck_id: str) -> AssistantDeckChoice:
+        """Freshly validate one opaque startup choice without probing a provider."""
 
-        return self.deck_path is not None
-
-    @property
-    def deck_display_name(self) -> str | None:
-        """Return the selected deck's human label for the local shell only."""
-
-        if self.deck_path is None:
-            return None
-        return self.deck_name or self.deck_path.stem
-
-    def _revision_deck(self) -> Path:
-        if self.deck_path is None:
+        if not isinstance(deck_id, str) or not deck_id:
+            raise RevisionRefusal("The selected deck id is unknown.")
+        selected: _RevisionDeckTarget | None = None
+        candidate = deck_id.encode("utf-8")
+        for target in self._targets:
+            if secrets.compare_digest(target.choice.deck_id.encode("utf-8"), candidate):
+                selected = target
+                break
+        if selected is None:
+            raise RevisionRefusal("The selected deck id is unknown.")
+        if not selected.choice.revision_supported or selected.record_ids is None:
             raise RevisionRefusal(
-                "Janki has no unique deck selected for conversation or revision. "
-                "Source attachment and extraction remain available; configure exactly "
-                "one eligible drill deck before asking about or changing a deck."
+                selected.choice.unavailable_reason
+                or "This configured deck is not available for deck changes."
             )
-        return self.deck_path
+
+        label, record_ids, reason, _warning = _inspect_deck(selected.path)
+        if reason is not None or record_ids is None:
+            raise RevisionRefusal(
+                reason or "This configured deck is no longer available for deck changes."
+            )
+        if record_ids != selected.record_ids:
+            raise RevisionRefusal(
+                "This deck's revision scope changed after the selector was prepared. "
+                "Restart Janki before selecting it."
+            )
+        return replace(selected.choice, label=label)
 
     def chat(
         self,
@@ -220,9 +285,7 @@ class RevisionAssistantAdapter:
     ) -> ChatReply:
         """Answer one ordinary turn without granting any revision authority."""
 
-        self._revision_deck()
-        if deck_scope != self.deck_scope:
-            raise RevisionRefusal("The requested deck is outside this assistant's scope.")
+        self._target_for_scope(deck_scope)
         try:
             fresh_config = ProjectConfig.load(self.config.root)
             plan = assistant_chat.plan_chat(
@@ -244,15 +307,13 @@ class RevisionAssistantAdapter:
     ) -> AssistantRevisionPlan:
         """Plan the full ordered deck selection without granting authority."""
 
-        deck_path = self._revision_deck()
-        if deck_scope != self.deck_scope:
-            raise RevisionRefusal("The requested deck is outside this assistant's scope.")
+        target = self._target_for_scope(deck_scope)
         try:
             fresh_config = ProjectConfig.load(self.config.root)
             plan = revision.plan_revision(
                 fresh_config,
-                deck_path,
-                self.record_ids,
+                target.path,
+                target.record_ids,
                 instruction,
             )
         except JankiError as exc:
@@ -456,12 +517,11 @@ class RevisionAssistantAdapter:
     ) -> RevisionExecution:
         """Stage unseen content, then prepare its exact aggregate owner review."""
 
-        self._revision_deck()
         with self._plan_lock:
             expected = self._plans.pop(confirmation.expected_fingerprint, None)
         if (
             expected is None
-            or confirmation.deck_scope != self.deck_scope
+            or confirmation.deck_scope != expected.deck_relative_path
             or confirmation.target != expected.deck_relative_path
             or confirmation.instruction != expected.owner_instruction
             or confirmation.expected_fingerprint != expected.plan_fingerprint
@@ -695,70 +755,91 @@ class RevisionAssistantAdapter:
 def discover_revision_adapter(
     config: ProjectConfig,
 ) -> tuple[RevisionAssistantAdapter, tuple[str, ...]]:
-    """Always return project intake, with revision only when its target is unique."""
+    """List every configured deck and allowlist each supported rich drill target."""
 
-    project_only = RevisionAssistantAdapter(
-        config=config,
-        deck_path=None,
-        record_ids=(),
-    )
+    empty = RevisionAssistantAdapter(config=config, deck_choices=(), _targets=())
 
     try:
         deck_paths = status.deck_files(config)
     except JankiError as exc:
-        return project_only, (
+        return empty, (
             f"assistant deck discovery was refused: {exc}. Source intake and "
             "extraction remain available; conversation and revision are disabled.",
         )
 
-    candidates: list[tuple[Path, str]] = []
+    choices: list[AssistantDeckChoice] = []
+    targets: list[_RevisionDeckTarget] = []
+    warnings: list[str] = []
+    used_ids: set[str] = set()
+    used_scopes: set[str] = set()
+    project_root = config.root.resolve()
     for deck_path in deck_paths:
         try:
-            deck_config, _records = resolve_deck_records(deck_path)
-        except JankiError as exc:
-            return project_only, (
-                f"assistant could not safely inspect configured deck {deck_path}: "
-                f"{exc}. Source intake and extraction remain available; conversation "
-                "and revision are disabled.",
+            resolved_deck_path = deck_path.resolve()
+            scope = resolved_deck_path.relative_to(project_root).as_posix()
+        except ValueError:
+            warnings.append(
+                f"assistant configured deck is outside the project root: {deck_path}. "
+                "It was not made selectable."
             )
-        examples = deck_config.get("drill_examples")
-        if str(deck_config.get("kind") or "").strip().lower() == "conjugation" and bool(examples):
-            candidates.append(
-                (deck_path, str(deck_config.get("name") or deck_path.stem).strip())
+            continue
+        if scope in used_scopes:
+            warnings.append(
+                f"assistant configured deck {deck_path} resolves to an already "
+                f"listed deck ({scope}). It was not made selectable."
             )
+            continue
+        used_scopes.add(scope)
+        label, record_ids, reason, warning = _inspect_deck(resolved_deck_path)
+        if warning is not None:
+            warnings.append(f"assistant could not safely inspect {deck_path}: {warning}")
+        if not label.strip():
+            warnings.append(
+                f"assistant configured deck has no display name: {deck_path}. "
+                "It was not made selectable."
+            )
+            continue
+        deck_id = secrets.token_urlsafe(24)
+        while deck_id in used_ids:
+            deck_id = secrets.token_urlsafe(24)
+        used_ids.add(deck_id)
+        choice = AssistantDeckChoice(
+            deck_id=deck_id,
+            label=label,
+            scope=scope,
+            revision_supported=record_ids is not None,
+            unavailable_reason=reason,
+        )
+        choices.append(choice)
+        targets.append(
+            _RevisionDeckTarget(
+                choice=choice,
+                path=resolved_deck_path,
+                record_ids=record_ids,
+            )
+        )
 
-    if len(candidates) != 1:
-        found = (
-            "none"
-            if not candidates
-            else ", ".join(path.name for path, _deck_name in candidates)
-        )
-        return project_only, (
-            "assistant needs exactly one configured conjugation deck with nonempty "
-            f"drill_examples; found {found}. No deck was guessed. Source intake and "
-            "extraction remain available; conversation and revision are disabled.",
-        )
+    duplicate_labels = {
+        choice.label
+        for choice in choices
+        if sum(candidate.label == choice.label for candidate in choices) > 1
+    }
+    if duplicate_labels:
+        for index, (choice, target) in enumerate(zip(choices, targets, strict=True)):
+            if choice.label not in duplicate_labels:
+                continue
+            distinct_choice = replace(
+                choice,
+                label=f"{choice.label} ({Path(choice.scope).name})",
+            )
+            choices[index] = distinct_choice
+            targets[index] = replace(target, choice=distinct_choice)
 
-    deck_path, deck_name = candidates[0]
-    try:
-        content = read_drill_deck_content(deck_path)
-    except JankiError as exc:
-        return project_only, (
-            f"assistant revision deck {deck_path} is not usable: {exc}. Source intake "
-            "and extraction remain available; conversation and revision are disabled.",
-        )
-    if not content.record_ids or not content.drill_examples:
-        return project_only, (
-            f"assistant revision deck {deck_path} has no complete drill scope; "
-            "no deck was guessed. Source intake and extraction remain available; "
-            "conversation and revision are disabled.",
-        )
     return (
         RevisionAssistantAdapter(
             config=config,
-            deck_path=deck_path.resolve(),
-            record_ids=content.record_ids,
-            deck_name=deck_name,
+            deck_choices=tuple(choices),
+            _targets=tuple(targets),
         ),
-        (),
+        tuple(warnings),
     )

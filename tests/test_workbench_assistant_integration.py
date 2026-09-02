@@ -31,6 +31,7 @@ from japanese_anki.models import ExampleSentence
 from japanese_anki.workbench import assistant_adapter, assistant_http
 from japanese_anki.workbench import server as workbench_server
 from japanese_anki.workbench.assistant import (
+    AssistantDeckChoice,
     RevisionConfirmation,
     RevisionFinishConfirmation,
     RevisionRefusal,
@@ -45,6 +46,44 @@ def _config(tmp_path: Path, *, enabled: bool = True) -> ProjectConfig:
         encoding="utf-8",
     )
     return ProjectConfig.load(tmp_path)
+
+
+def _adapter(
+    config: ProjectConfig,
+    deck_path: Path | None = None,
+    *,
+    record_ids: tuple[str, ...] = ("word:one",),
+    label: str = "Potential Practice",
+) -> assistant_adapter.RevisionAssistantAdapter:
+    if deck_path is None:
+        return assistant_adapter.RevisionAssistantAdapter(
+            config=config,
+            deck_choices=(),
+            _targets=(),
+        )
+    scope = deck_path.absolute().relative_to(config.root.absolute()).as_posix()
+    choice = AssistantDeckChoice(
+        deck_id="test-deck-id",
+        label=label,
+        scope=scope,
+        revision_supported=True,
+    )
+    return assistant_adapter.RevisionAssistantAdapter(
+        config=config,
+        deck_choices=(choice,),
+        _targets=(
+            assistant_adapter._RevisionDeckTarget(
+                choice=choice,
+                path=deck_path.absolute(),
+                record_ids=record_ids,
+            ),
+        ),
+    )
+
+
+def _scope(adapter: assistant_adapter.RevisionAssistantAdapter) -> str:
+    assert len(adapter.deck_choices) == 1
+    return adapter.deck_choices[0].scope
 
 
 def _revision_plan(
@@ -159,11 +198,7 @@ def _seeded_extraction_confirmation(
     source = config.scan_inbox / "lesson.pdf"
     source.parent.mkdir(parents=True)
     source.write_bytes(b"%PDF")
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=config.deck_dir / "potential.yaml",
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, config.deck_dir / "potential.yaml")
     preparation_id = "prepared-source"
     expected = ExtractionDispatchExpectation(
         source=source,
@@ -214,10 +249,16 @@ def test_enabled_workbench_gives_assistant_the_configured_local_inbox(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = _config(tmp_path)
+    choices = (
+        AssistantDeckChoice(
+            deck_id="opaque-deck",
+            label="Potential Practice",
+            scope="data/decks/potential.yaml",
+            revision_supported=True,
+        ),
+    )
     adapter = SimpleNamespace(
-        deck_scope="data/decks/potential.yaml",
-        deck_display_name="Potential Practice",
-        conversation_available=True,
+        deck_choices=choices,
     )
     expected_sidecar = object()
     captured: dict[str, Any] = {}
@@ -238,10 +279,8 @@ def test_enabled_workbench_gives_assistant_the_configured_local_inbox(
     assert result is expected_sidecar
     assert captured == {
         "callbacks": adapter,
-        "deck_scope": adapter.deck_scope,
-        "deck_display_name": adapter.deck_display_name,
+        "deck_choices": choices,
         "inbox_root": config.scan_inbox,
-        "conversation_available": True,
     }
 
 
@@ -263,14 +302,12 @@ def test_enabled_workbench_starts_project_intake_without_a_revision_deck(
     result = workbench_server._start_assistant_for(config)
 
     assert result is expected_sidecar
-    assert captured["callbacks"].deck_path is None
-    assert captured["deck_scope"] == "janki-project"
-    assert captured["deck_display_name"] is None
+    assert captured["callbacks"].deck_choices == ()
+    assert captured["deck_choices"] == ()
     assert captured["inbox_root"] == config.scan_inbox
-    assert captured["conversation_available"] is False
 
 
-def test_discovery_keeps_the_selected_deck_name_for_the_assistant_shell(
+def test_discovery_lists_one_supported_deck_without_exposing_its_path_as_the_id(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -297,14 +334,23 @@ def test_discovery_keeps_the_selected_deck_name_for_the_assistant_shell(
         ),
     )
 
+    monkeypatch.setattr(assistant_adapter.secrets, "token_urlsafe", lambda _size: "opaque-deck")
+
     adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
 
     assert warnings == ()
-    assert adapter.deck_scope == "data/decks/potential.yaml"
-    assert adapter.deck_display_name == "Brandon Japanese::Potential Practice"
+    assert adapter.deck_choices == (
+        AssistantDeckChoice(
+            deck_id="opaque-deck",
+            label="Brandon Japanese::Potential Practice",
+            scope="data/decks/potential.yaml",
+            revision_supported=True,
+        ),
+    )
+    assert adapter.resolve_deck_selection("opaque-deck") == adapter.deck_choices[0]
 
 
-def test_discovery_keeps_project_intake_when_two_revision_decks_are_ambiguous(
+def test_discovery_lists_two_supported_decks_without_guessing_an_active_one(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -322,26 +368,363 @@ def test_discovery_keeps_project_intake_when_two_revision_decks_are_ambiguous(
     monkeypatch.setattr(
         assistant_adapter,
         "read_drill_deck_content",
-        lambda _path: pytest.fail("ambiguous discovery must not select a deck"),
+        lambda path: SimpleNamespace(
+            record_ids=(f"word:{path.stem}",),
+            drill_examples={f"word:{path.stem}": object()},
+        ),
+    )
+    opaque_ids = iter(("opaque-potential", "opaque-te-form"))
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: next(opaque_ids),
     )
 
     adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
 
-    assert adapter.deck_path is None
-    assert adapter.deck_scope == "janki-project"
-    assert len(warnings) == 1
-    assert "exactly one" in warnings[0]
-    assert "potential.yaml" in warnings[0]
-    assert "te-form.yaml" in warnings[0]
-    assert "No deck was guessed" in warnings[0]
-    assert "Source intake and extraction remain available" in warnings[0]
+    assert warnings == ()
+    assert [(choice.deck_id, choice.scope) for choice in adapter.deck_choices] == [
+        ("opaque-potential", "data/decks/potential.yaml"),
+        ("opaque-te-form", "data/decks/te-form.yaml"),
+    ]
+    assert all(choice.revision_supported for choice in adapter.deck_choices)
 
-    with pytest.raises(RevisionRefusal, match="no unique deck selected"):
+
+def test_discovery_keeps_every_configured_deck_visible_with_exact_support_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rich = tmp_path / "data" / "decks" / "potential.yaml"
+    plain = tmp_path / "data" / "decks" / "vocabulary.yaml"
+    incomplete = tmp_path / "data" / "decks" / "te-form.yaml"
+    monkeypatch.setattr(
+        assistant_adapter.status,
+        "deck_files",
+        lambda _config: [rich, plain, incomplete],
+    )
+
+    def resolve(path: Path) -> tuple[dict[str, Any], list[Any]]:
+        if path == rich:
+            return (
+                {
+                    "kind": "conjugation",
+                    "name": "Potential Practice",
+                    "drill_examples": {"word:one": []},
+                },
+                [],
+            )
+        if path == incomplete:
+            return (
+                {
+                    "kind": "conjugation",
+                    "name": "Te-form Practice",
+                },
+                [],
+            )
+        return ({"kind": "vocabulary", "name": "Vocabulary"}, [])
+
+    monkeypatch.setattr(assistant_adapter, "resolve_deck_records", resolve)
+    monkeypatch.setattr(
+        assistant_adapter,
+        "read_drill_deck_content",
+        lambda _path: SimpleNamespace(
+            record_ids=("word:one",),
+            drill_examples={"word:one": object()},
+        ),
+    )
+    opaque_ids = iter(("opaque-rich", "opaque-plain", "opaque-incomplete"))
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: next(opaque_ids),
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    assert warnings == ()
+    assert [choice.label for choice in adapter.deck_choices] == [
+        "Potential Practice",
+        "Vocabulary",
+        "Te-form Practice",
+    ]
+    assert [choice.revision_supported for choice in adapter.deck_choices] == [
+        True,
+        False,
+        False,
+    ]
+    assert adapter.deck_choices[0].unavailable_reason is None
+    assert "rich conjugation" in (adapter.deck_choices[1].unavailable_reason or "")
+    assert "drill examples" in (adapter.deck_choices[2].unavailable_reason or "")
+    with pytest.raises(RevisionRefusal, match="rich conjugation"):
+        adapter.resolve_deck_selection("opaque-plain")
+    with pytest.raises(RevisionRefusal, match="unknown"):
+        adapter.resolve_deck_selection("invented")
+    with pytest.raises(RevisionRefusal, match="unknown"):
+        adapter.resolve_deck_selection("未知")
+
+
+def test_discovery_disambiguates_duplicate_visible_deck_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = tmp_path / "data" / "decks" / "first.yaml"
+    second = tmp_path / "data" / "decks" / "second.yaml"
+    monkeypatch.setattr(
+        assistant_adapter.status,
+        "deck_files",
+        lambda _config: [first, second],
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: (
+            {
+                "kind": "conjugation",
+                "name": "Shared Practice",
+                "drill_examples": {"word:one": []},
+            },
+            [],
+        ),
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "read_drill_deck_content",
+        lambda path: SimpleNamespace(
+            record_ids=(f"word:{path.stem}",),
+            drill_examples={f"word:{path.stem}": object()},
+        ),
+    )
+    opaque_ids = iter(("opaque-first", "opaque-second"))
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: next(opaque_ids),
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    assert warnings == ()
+    assert [choice.label for choice in adapter.deck_choices] == [
+        "Shared Practice (first.yaml)",
+        "Shared Practice (second.yaml)",
+    ]
+    assert [target.choice for target in adapter._targets] == list(adapter.deck_choices)
+
+
+def test_discovery_refuses_a_deck_symlink_that_resolves_outside_the_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = tmp_path / "project"
+    deck_dir = project_root / "data" / "decks"
+    deck_dir.mkdir(parents=True)
+    outside = tmp_path / "outside.yaml"
+    outside.write_text("kind: conjugation\n", encoding="utf-8")
+    linked = deck_dir / "linked.yaml"
+    linked.symlink_to(outside)
+    monkeypatch.setattr(
+        assistant_adapter.status,
+        "deck_files",
+        lambda _config: [linked],
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(
+        _config(project_root)
+    )
+
+    assert adapter.deck_choices == ()
+    assert adapter._targets == ()
+    assert len(warnings) == 1
+    assert "outside the project root" in warnings[0]
+
+
+def test_discovery_lists_only_one_name_for_two_paths_to_the_same_deck(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = tmp_path / "project"
+    deck_dir = project_root / "data" / "decks"
+    deck_dir.mkdir(parents=True)
+    real = deck_dir / "potential.yaml"
+    real.write_text("kind: conjugation\n", encoding="utf-8")
+    alias = deck_dir / "alias.yaml"
+    alias.symlink_to(real)
+    monkeypatch.setattr(
+        assistant_adapter.status,
+        "deck_files",
+        lambda _config: [real, alias],
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "_inspect_deck",
+        lambda _path: ("Potential Practice", ("word:one",), None, None),
+    )
+    opaque_ids = iter(("opaque-real", "opaque-alias"))
+    monkeypatch.setattr(
+        assistant_adapter.secrets,
+        "token_urlsafe",
+        lambda _size: next(opaque_ids),
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(
+        _config(project_root)
+    )
+
+    assert [choice.deck_id for choice in adapter.deck_choices] == ["opaque-real"]
+    assert [choice.scope for choice in adapter.deck_choices] == [
+        "data/decks/potential.yaml"
+    ]
+    assert len(warnings) == 1
+    assert "resolves to an already listed deck" in warnings[0]
+
+
+def test_discovery_skips_a_deck_without_a_visible_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "blank.yaml"
+    monkeypatch.setattr(
+        assistant_adapter.status,
+        "deck_files",
+        lambda _config: [deck],
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "_inspect_deck",
+        lambda _path: ("   ", ("word:one",), None, None),
+    )
+
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    assert adapter.deck_choices == ()
+    assert adapter._targets == ()
+    assert len(warnings) == 1
+    assert "has no display name" in warnings[0]
+
+
+def test_selection_freshly_revalidates_the_allowlisted_deck_without_a_provider_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "potential.yaml"
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [deck])
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: (
+            {
+                "kind": "conjugation",
+                "name": "Potential Practice",
+                "drill_examples": {"word:one": []},
+            },
+            [],
+        ),
+    )
+    inspections = 0
+
+    def read(_path: Path) -> Any:
+        nonlocal inspections
+        inspections += 1
+        if inspections == 1:
+            return SimpleNamespace(
+                record_ids=("word:one",),
+                drill_examples={"word:one": object()},
+            )
+        raise JankiError("deck changed after the selector was rendered")
+
+    monkeypatch.setattr(assistant_adapter, "read_drill_deck_content", read)
+    monkeypatch.setattr(assistant_adapter.secrets, "token_urlsafe", lambda _size: "opaque-deck")
+    monkeypatch.setattr(
+        assistant_adapter.assistant_chat,
+        "plan_chat",
+        lambda *_args, **_kwargs: pytest.fail("selection must not plan a model call"),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.revision,
+        "plan_revision",
+        lambda *_args, **_kwargs: pytest.fail("selection must not plan a revision"),
+    )
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    assert warnings == ()
+    with pytest.raises(RevisionRefusal, match="changed after the selector"):
+        adapter.resolve_deck_selection("opaque-deck")
+    assert inspections == 2
+
+
+def test_selection_refuses_a_deck_whose_full_revision_scope_changed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deck = tmp_path / "data" / "decks" / "potential.yaml"
+    monkeypatch.setattr(assistant_adapter.status, "deck_files", lambda _config: [deck])
+    monkeypatch.setattr(
+        assistant_adapter,
+        "resolve_deck_records",
+        lambda _path: (
+            {
+                "kind": "conjugation",
+                "name": "Potential Practice",
+                "drill_examples": {"word:one": []},
+            },
+            [],
+        ),
+    )
+    reads = iter(
+        (
+            SimpleNamespace(
+                record_ids=("word:one",),
+                drill_examples={"word:one": object()},
+            ),
+            SimpleNamespace(
+                record_ids=("word:one", "word:two"),
+                drill_examples={"word:one": object(), "word:two": object()},
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        assistant_adapter,
+        "read_drill_deck_content",
+        lambda _path: next(reads),
+    )
+    monkeypatch.setattr(assistant_adapter.secrets, "token_urlsafe", lambda _size: "opaque-deck")
+    adapter, warnings = assistant_adapter.discover_revision_adapter(_config(tmp_path))
+
+    assert warnings == ()
+    with pytest.raises(RevisionRefusal, match="scope changed"):
+        adapter.resolve_deck_selection("opaque-deck")
+
+
+def test_chat_and_revision_refuse_a_path_that_has_no_startup_choice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = _adapter(
+        _config(tmp_path),
+        tmp_path / "data" / "decks" / "potential.yaml",
+    )
+    monkeypatch.setattr(
+        assistant_adapter.assistant_chat,
+        "plan_chat",
+        lambda *_args, **_kwargs: pytest.fail("an unlisted scope must not plan chat"),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.revision,
+        "plan_revision",
+        lambda *_args, **_kwargs: pytest.fail("an unlisted scope must not plan revision"),
+    )
+
+    with pytest.raises(RevisionRefusal, match="allowlist"):
         adapter.chat(
-            deck_scope=adapter.deck_scope,
+            deck_scope="data/decks/invented.yaml",
             history=(),
             message="Which deck?",
             progress=lambda _label: None,
+        )
+    with pytest.raises(RevisionRefusal, match="allowlist"):
+        adapter.prepare_revision(
+            deck_scope="data/decks/invented.yaml",
+            instruction="Change it.",
         )
 
 
@@ -351,11 +734,7 @@ def test_adapter_plans_the_complete_stored_order_and_displays_application_bindin
 ) -> None:
     deck = tmp_path / "data" / "decks" / "potential.yaml"
     selected = ("word:second", "word:first")
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=selected,
-    )
+    adapter = _adapter(_config(tmp_path), deck, record_ids=selected)
     calls: list[tuple[Path, tuple[str, ...], str]] = []
     application_plan = _revision_plan(
         plan_fingerprint="full-application-plan-fingerprint",
@@ -402,11 +781,7 @@ def test_adapter_routes_an_ordinary_question_only_through_the_chat_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deck = tmp_path / "data" / "decks" / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(_config(tmp_path), deck)
     planned = SimpleNamespace(request_fingerprint="chat-request")
     observed: list[tuple[str, str]] = []
 
@@ -442,7 +817,7 @@ def test_adapter_routes_an_ordinary_question_only_through_the_chat_service(
 
     progress: list[str] = []
     reply = adapter.chat(
-        deck_scope=adapter.deck_scope,
+        deck_scope=_scope(adapter),
         history=(("user", "earlier"), ("assistant", "Earlier answer.")),
         message="which deck?",
         progress=progress.append,
@@ -508,11 +883,7 @@ def test_adapter_prepares_then_dispatches_one_exact_saved_source_only_after_clic
         )
 
     monkeypatch.setattr(assistant_adapter, "dispatch_extraction", dispatch)
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=None,
-        record_ids=(),
-    )
+    adapter = _adapter(config)
 
     plan = adapter.prepare_source_extraction(source_path=source)
 
@@ -612,11 +983,7 @@ def test_adapter_replacement_button_is_the_only_event_that_grants_force(
             or SimpleNamespace(target=config.staging_dir / "lesson.yaml", records=18)
         ),
     )
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, tmp_path / "data" / "decks" / "potential.yaml")
 
     plan = adapter.prepare_source_extraction(source_path=source)
 
@@ -840,14 +1207,10 @@ def test_assistant_page_does_not_render_provider_disclosure(tmp_path: Path) -> N
         encoding="utf-8",
     )
     config = ProjectConfig.load(tmp_path)
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=config.deck_dir / "potential.yaml",
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, config.deck_dir / "potential.yaml")
     sidecar = create_assistant_sidecar(
         adapter,
-        deck_scope=adapter.deck_scope,
+        deck_choices=adapter.deck_choices,
         session_token="assistant-session-token-000000000000",
     )
     sidecar.start()
@@ -876,11 +1239,7 @@ def test_adapter_renders_the_same_confirmation_shape_for_anthropic_api(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deck = tmp_path / "data" / "decks" / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(_config(tmp_path), deck)
     application_plan = _revision_plan(
         provider="anthropic-api",
         billing_display="Anthropic API billing",
@@ -920,11 +1279,7 @@ def test_adapter_reloads_the_on_disk_provider_before_rendering_a_plan(
         encoding="utf-8",
     )
     config = ProjectConfig.load(tmp_path)
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=config.deck_dir / "potential.yaml",
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, config.deck_dir / "potential.yaml")
     config_path.write_text(
         '[ai]\nrevise_provider = "anthropic-api"\nrevise_model = "claude-opus-5"\n',
         encoding="utf-8",
@@ -947,7 +1302,7 @@ def test_adapter_reloads_the_on_disk_provider_before_rendering_a_plan(
     monkeypatch.setattr(assistant_adapter.revision, "plan_revision", fresh_plan)
 
     rendered = adapter.prepare_revision(
-        deck_scope=adapter.deck_scope,
+        deck_scope=_scope(adapter),
         instruction="Add examples.",
     )
 
@@ -962,11 +1317,7 @@ def test_adapter_refuses_a_stale_confirmation_before_run_revision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deck = tmp_path / "data" / "decks" / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(_config(tmp_path), deck)
     application_plan = _revision_plan()
     monkeypatch.setattr(
         assistant_adapter.revision,
@@ -979,7 +1330,7 @@ def test_adapter_refuses_a_stale_confirmation_before_run_revision(
         lambda *_args, **_kwargs: pytest.fail("a stale binding must not execute"),
     )
     adapter.prepare_revision(
-        deck_scope=adapter.deck_scope,
+        deck_scope=_scope(adapter),
         instruction="Add examples.",
     )
 
@@ -987,7 +1338,7 @@ def test_adapter_refuses_a_stale_confirmation_before_run_revision(
         adapter.consume_replan_and_execute(
             RevisionConfirmation(
                 capability="one-use",
-                deck_scope=adapter.deck_scope,
+                deck_scope=_scope(adapter),
                 instruction="Add examples.",
                 expected_fingerprint="different-plan",
                 target="data/decks/potential.yaml",
@@ -1001,11 +1352,7 @@ def test_adapter_delegates_replan_and_dispatch_to_run_revision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deck = tmp_path / "data" / "decks" / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(_config(tmp_path), deck)
     application_plan = _revision_plan()
     monkeypatch.setattr(
         assistant_adapter.revision,
@@ -1033,7 +1380,7 @@ def test_adapter_delegates_replan_and_dispatch_to_run_revision(
         ),
     )
     adapter.prepare_revision(
-        deck_scope=adapter.deck_scope,
+        deck_scope=_scope(adapter),
         instruction="Add examples.",
     )
     progress: list[str] = []
@@ -1041,7 +1388,7 @@ def test_adapter_delegates_replan_and_dispatch_to_run_revision(
     result = adapter.consume_replan_and_execute(
         RevisionConfirmation(
             capability="one-use",
-            deck_scope=adapter.deck_scope,
+            deck_scope=_scope(adapter),
             instruction="Add examples.",
             expected_fingerprint="rendered-plan",
             target="data/decks/potential.yaml",
@@ -1074,11 +1421,7 @@ def test_staged_revision_survives_finish_planning_failure_without_inviting_rebil
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deck = tmp_path / "data" / "decks" / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(_config(tmp_path), deck)
     application_plan = _revision_plan()
     staging_path = tmp_path / "data" / "staging" / "paid-proposal.json"
     monkeypatch.setattr(
@@ -1097,14 +1440,14 @@ def test_staged_revision_survives_finish_planning_failure_without_inviting_rebil
         lambda *_args, **_kwargs: (_ for _ in ()).throw(JankiError("build template is missing")),
     )
     adapter.prepare_revision(
-        deck_scope=adapter.deck_scope,
+        deck_scope=_scope(adapter),
         instruction="Add examples.",
     )
 
     result = adapter.consume_replan_and_execute(
         RevisionConfirmation(
             capability="revision-capability",
-            deck_scope=adapter.deck_scope,
+            deck_scope=_scope(adapter),
             instruction="Add examples.",
             expected_fingerprint="rendered-plan",
             target="data/decks/potential.yaml",
@@ -1126,11 +1469,7 @@ def test_adapter_replans_exact_finish_then_executes_shared_aggregate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = _config(tmp_path)
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=config.deck_dir / "potential.yaml",
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, config.deck_dir / "potential.yaml")
     expected = _finish_plan(tmp_path)
     with adapter._plan_lock:
         adapter._finish_plans["finish-preparation"] = expected
@@ -1202,11 +1541,7 @@ def test_adapter_consumes_finish_plan_and_refuses_staged_or_build_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = _config(tmp_path)
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=config.deck_dir / "potential.yaml",
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, config.deck_dir / "potential.yaml")
     expected = _finish_plan(tmp_path)
     changed = _finish_plan(tmp_path, fingerprint="e" * 64)
     with adapter._plan_lock:
@@ -1248,11 +1583,7 @@ def test_adapter_reports_inspected_recovery_state_after_finish_stops(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = _config(tmp_path)
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=config.deck_dir / "potential.yaml",
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, config.deck_dir / "potential.yaml")
     expected = _finish_plan(tmp_path)
     with adapter._plan_lock:
         adapter._finish_plans["finish-preparation"] = expected
@@ -1312,11 +1643,7 @@ def test_adapter_reloads_the_on_disk_provider_before_confirmation_dispatch(
     )
     config = ProjectConfig.load(tmp_path)
     deck = config.deck_dir / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=config,
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(config, deck)
     application_plan = _revision_plan(provider="claude-code")
     monkeypatch.setattr(
         assistant_adapter.revision,
@@ -1324,7 +1651,7 @@ def test_adapter_reloads_the_on_disk_provider_before_confirmation_dispatch(
         lambda *_args, **_kwargs: application_plan,
     )
     adapter.prepare_revision(
-        deck_scope=adapter.deck_scope,
+        deck_scope=_scope(adapter),
         instruction="Add examples.",
     )
     config_path.write_text(
@@ -1354,7 +1681,7 @@ def test_adapter_reloads_the_on_disk_provider_before_confirmation_dispatch(
         adapter.consume_replan_and_execute(
             RevisionConfirmation(
                 capability="one-use",
-                deck_scope=adapter.deck_scope,
+                deck_scope=_scope(adapter),
                 instruction="Add examples.",
                 expected_fingerprint="rendered-plan",
                 target="data/decks/potential.yaml",
@@ -1427,10 +1754,9 @@ def test_expected_application_refusal_becomes_chatkit_refusal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
-        record_ids=("word:one",),
+    adapter = _adapter(
+        _config(tmp_path),
+        tmp_path / "data" / "decks" / "potential.yaml",
     )
     monkeypatch.setattr(
         assistant_adapter.revision,
@@ -1442,7 +1768,7 @@ def test_expected_application_refusal_becomes_chatkit_refusal(
 
     with pytest.raises(RevisionRefusal, match="nothing was sent"):
         adapter.prepare_revision(
-            deck_scope=adapter.deck_scope,
+            deck_scope=_scope(adapter),
             instruction="Add examples.",
         )
 
@@ -1451,10 +1777,9 @@ def test_prepare_revision_surfaces_any_local_janki_refusal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=tmp_path / "data" / "decks" / "potential.yaml",
-        record_ids=("word:one",),
+    adapter = _adapter(
+        _config(tmp_path),
+        tmp_path / "data" / "decks" / "potential.yaml",
     )
     monkeypatch.setattr(
         assistant_adapter.revision,
@@ -1466,7 +1791,7 @@ def test_prepare_revision_surfaces_any_local_janki_refusal(
 
     with pytest.raises(RevisionRefusal, match="no provider was contacted"):
         adapter.prepare_revision(
-            deck_scope=adapter.deck_scope,
+            deck_scope=_scope(adapter),
             instruction="Add examples.",
         )
 
@@ -1476,11 +1801,7 @@ def test_execute_revision_surfaces_any_local_janki_refusal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deck = tmp_path / "data" / "decks" / "potential.yaml"
-    adapter = assistant_adapter.RevisionAssistantAdapter(
-        config=_config(tmp_path),
-        deck_path=deck,
-        record_ids=("word:one",),
-    )
+    adapter = _adapter(_config(tmp_path), deck)
     application_plan = _revision_plan()
     monkeypatch.setattr(
         assistant_adapter.revision,
@@ -1495,7 +1816,7 @@ def test_execute_revision_surfaces_any_local_janki_refusal(
         ),
     )
     adapter.prepare_revision(
-        deck_scope=adapter.deck_scope,
+        deck_scope=_scope(adapter),
         instruction="Add examples.",
     )
 
@@ -1503,7 +1824,7 @@ def test_execute_revision_surfaces_any_local_janki_refusal(
         adapter.consume_replan_and_execute(
             RevisionConfirmation(
                 capability="one-use",
-                deck_scope=adapter.deck_scope,
+                deck_scope=_scope(adapter),
                 instruction="Add examples.",
                 expected_fingerprint="rendered-plan",
                 target="data/decks/potential.yaml",

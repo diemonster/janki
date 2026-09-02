@@ -1,9 +1,10 @@
 """Isolated loopback HTTP origin for the workbench ChatKit surface.
 
 The hosted ChatKit JavaScript never runs in the main workbench authority
-origin. This sidecar has its own random path token, one deck-scoped in-memory
-store, and no access to the workbench session or CSRF secrets. Its own narrow
-capabilities authorize one conversational turn or one exact revision plan.
+origin. This sidecar has its own random path token, one project-scoped
+in-memory store with thread-local deck selection, and no access to the
+workbench session or CSRF secrets. Its own narrow capabilities authorize one
+conversational turn or one exact revision plan.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
-import html
 import json
 import queue
 import re
@@ -25,6 +25,7 @@ from typing import Any
 from japanese_anki.localhttp import MAX_BODY_BYTES, LocalOnlyHandler, LocalOnlyServer, bind_loopback
 from japanese_anki.workbench.assistant import (
     AssistantCore,
+    AssistantDeckChoice,
     RevisionCallbacks,
     create_assistant_core,
 )
@@ -145,8 +146,7 @@ class AssistantHTTPServer(LocalOnlyServer):
     upload_path_prefix: str | None
     attachment_store: LocalAssistantAttachmentStore | None
     conversation_available: bool
-    deck_scope: str
-    deck_display_name: str | None
+    deck_choices: tuple[AssistantDeckChoice, ...]
 
 
 class _AssistantHandler(LocalOnlyHandler):
@@ -463,27 +463,20 @@ def _request_refusal(
 def _shell_html(server: AssistantHTTPServer) -> str:
     if server.conversation_available:
         introduction = (
-            "Ask a question in ordinary language, or attach one PDF or photo to save "
-            "it to your local source inbox. Janki then shows one exact extraction "
-            "plan in this conversation; nothing is sent unless you confirm it. "
-            "Questions are read-only; use the explicit Change this deck action when "
-            "you want the message turned into an exact revision plan."
+            "Choose the active deck inside this chat, ask a question in ordinary "
+            "language, or attach one PDF or photo for local source intake. Questions "
+            "are read-only; use the explicit deck-change action when you want one "
+            "exact revision plan."
         )
         assistant_label = "janki deck assistant"
-        selected_deck = (
-            '<p class=deck-scope><strong>Selected deck for changes:</strong> '
-            f"{html.escape(server.deck_display_name or server.deck_scope)}<br>"
-            f"<code>{html.escape(server.deck_scope)}</code></p>"
-        )
     else:
         introduction = (
             "Attach one PDF or photo to save it to your local source inbox. Janki "
             "then shows one exact extraction plan in this conversation; nothing is "
             "sent unless you confirm it. Questions and deck changes are unavailable "
-            "until exactly one eligible drill deck is configured."
+            "until a supported rich drill deck is configured."
         )
         assistant_label = "janki source intake"
-        selected_deck = ""
     return (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
@@ -492,7 +485,7 @@ def _shell_html(server: AssistantHTTPServer) -> str:
         f'<script src="{_CHATKIT_SCRIPT}" async></script>'
         f'<script src="{server.script_path}" defer></script>'
         "</head><body><main>"
-        f"<header><h1>Janki</h1><p>{introduction}</p>{selected_deck}"
+        f"<header><h1>Janki</h1><p>{introduction}</p>"
         "<p class=boundary>This isolated page loads OpenAI's hosted ChatKit UI. It does "
         "not receive the main workbench session or its CSRF authority.</p></header>"
         f'<openai-chatkit id="janki-chat" aria-label="{assistant_label}"></openai-chatkit>'
@@ -510,13 +503,18 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
         greeting = "What would you like to do?"
         starter_prompts = """[
         {
+          label: "Choose active deck",
+          prompt: "Choose an active deck",
+          icon: "folder",
+        },
+        {
           label: "What Janki can do",
           prompt: "What can Janki help me do here?",
           icon: "book-open",
         },
         {
           label: "How changes work",
-          prompt: "Explain how I can prepare and confirm a change to the selected deck.",
+          prompt: "Explain how I can prepare and confirm a deck change.",
           icon: "write",
         },
         {
@@ -672,11 +670,9 @@ class AssistantSidecar:
 def create_assistant_sidecar(
     callbacks: RevisionCallbacks,
     *,
-    deck_scope: str,
-    deck_display_name: str | None = None,
+    deck_choices: tuple[AssistantDeckChoice, ...],
     session_token: str | None = None,
     inbox_root: Path | None = None,
-    conversation_available: bool = True,
 ) -> AssistantSidecar:
     """Bind one isolated sidecar, optionally with local source intake."""
 
@@ -700,7 +696,7 @@ def create_assistant_sidecar(
             )
         core = create_assistant_core(
             callbacks,
-            deck_scope=deck_scope,
+            deck_choices=deck_choices,
             attachment_store=attachment_store,
         )
         server.assistant_core = core
@@ -712,12 +708,9 @@ def create_assistant_sidecar(
         server.style_path = f"{root}application.css"
         server.upload_path_prefix = upload_path_prefix
         server.attachment_store = attachment_store
-        server.conversation_available = conversation_available
-        server.deck_scope = deck_scope
-        server.deck_display_name = (
-            deck_display_name.strip()
-            if deck_display_name is not None and deck_display_name.strip()
-            else (deck_scope if conversation_available else None)
+        server.deck_choices = tuple(deck_choices)
+        server.conversation_available = any(
+            choice.revision_supported for choice in server.deck_choices
         )
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:
@@ -732,19 +725,15 @@ def create_assistant_sidecar(
 def start_assistant_sidecar(
     callbacks: RevisionCallbacks,
     *,
-    deck_scope: str,
-    deck_display_name: str | None = None,
+    deck_choices: tuple[AssistantDeckChoice, ...],
     session_token: str | None = None,
     inbox_root: Path | None = None,
-    conversation_available: bool = True,
 ) -> AssistantSidecar:
     """Bind and start the isolated ChatKit sidecar."""
 
     return create_assistant_sidecar(
         callbacks,
-        deck_scope=deck_scope,
-        deck_display_name=deck_display_name,
+        deck_choices=deck_choices,
         session_token=session_token,
         inbox_root=inbox_root,
-        conversation_available=conversation_available,
     ).start()

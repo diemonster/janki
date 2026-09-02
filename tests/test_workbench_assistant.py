@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from japanese_anki.workbench.assistant import (
+    AssistantDeckChoice,
     AssistantRequestContext,
     ChatReply,
     RevisionConfirmation,
@@ -29,12 +30,15 @@ from japanese_anki.workbench.assistant import (
     RevisionFinishReview,
     RevisionPlan,
     RevisionRecordReview,
+    RevisionRefusal,
     ScopedMemoryStore,
     SourceExtractionConfirmation,
     SourceExtractionExecution,
     SourceExtractionPlan,
 )
-from japanese_anki.workbench.assistant_http import create_assistant_sidecar
+from japanese_anki.workbench.assistant_http import (
+    create_assistant_sidecar as _create_assistant_sidecar,
+)
 
 SESSION_TOKEN = "assistant-session-token-000000000000"
 REQUEST_FINGERPRINT = "0123456789abcdef" * 4
@@ -42,7 +46,7 @@ FINISH_FINGERPRINT = "fedcba9876543210" * 4
 PACKAGE_FINGERPRINT = "abcdef0123456789" * 4
 
 
-def _finish_review() -> RevisionFinishReview:
+def _finish_review(*, target: str = "data/decks/potential.yaml") -> RevisionFinishReview:
     current = (
         RevisionExampleReview(
             register="polite",
@@ -74,7 +78,7 @@ def _finish_review() -> RevisionFinishReview:
     return RevisionFinishReview(
         preparation_id="finish-preparation-1",
         request_fingerprint=FINISH_FINGERPRINT,
-        target="data/decks/potential.yaml",
+        target=target,
         current_form_note="Old potential note.",
         proposed_form_note="Potential expresses ability or possibility.",
         records=(
@@ -98,6 +102,7 @@ def _finish_review() -> RevisionFinishReview:
 
 @dataclass
 class _FakeRevisions:
+    resolved: list[str] = field(default_factory=list)
     chatted: list[tuple[str, str]] = field(default_factory=list)
     chat_histories: list[tuple[tuple[str, str], ...]] = field(default_factory=list)
     prepared: list[tuple[str, str]] = field(default_factory=list)
@@ -114,6 +119,22 @@ class _FakeRevisions:
     finish_entered: threading.Event | None = None
     finish_release: threading.Event | None = None
     finish_finished: threading.Event | None = None
+    resolve_block_for: str | None = None
+    resolve_entered: threading.Event | None = None
+    resolve_release: threading.Event | None = None
+    resolve_refusal: str | None = None
+    deck_choices: tuple[AssistantDeckChoice, ...] = ()
+
+    def resolve_deck_selection(self, deck_id: str) -> AssistantDeckChoice:
+        self.resolved.append(deck_id)
+        if deck_id == self.resolve_block_for:
+            if self.resolve_entered is not None:
+                self.resolve_entered.set()
+            if self.resolve_release is not None and not self.resolve_release.wait(3):
+                raise AssertionError("the test never released deck resolution")
+        if self.resolve_refusal is not None:
+            raise RevisionRefusal(self.resolve_refusal)
+        return next(choice for choice in self.deck_choices if choice.deck_id == deck_id)
 
     def chat(
         self,
@@ -140,7 +161,7 @@ class _FakeRevisions:
         self.prepared.append((deck_scope, instruction))
         return RevisionPlan(
             request_fingerprint=REQUEST_FINGERPRINT,
-            target="Potential Practice",
+            target=deck_scope,
             effects=(
                 "propose one polite and one casual example per selected card",
                 "stage the proposal without changing the deck",
@@ -166,7 +187,7 @@ class _FakeRevisions:
             self.finished.set()
         return RevisionExecution(
             message=("The revision proposal is staged. Nothing has been accepted or applied."),
-            finish=_finish_review(),
+            finish=_finish_review(target=confirmation.deck_scope),
         )
 
     def consume_replan_and_finish(
@@ -229,6 +250,38 @@ class _FakeRevisions:
         return SourceExtractionExecution(
             message="Extraction staged 12 card proposals for owner review."
         )
+
+
+def create_assistant_sidecar(
+    callbacks: _FakeRevisions,
+    *,
+    deck_choices: tuple[AssistantDeckChoice, ...] | None = None,
+    deck_scope: str | None = None,
+    deck_display_name: str | None = None,
+    conversation_available: bool = True,
+    **kwargs: Any,
+) -> Any:
+    """Compact test fixture adapter for the selector's project-scoped API."""
+
+    if deck_choices is None:
+        if conversation_available:
+            assert deck_scope is not None
+            deck_choices = (
+                AssistantDeckChoice(
+                    deck_id="fixture-deck",
+                    label=deck_display_name or deck_scope,
+                    scope=deck_scope,
+                    revision_supported=True,
+                ),
+            )
+        else:
+            deck_choices = ()
+    callbacks.deck_choices = deck_choices
+    return _create_assistant_sidecar(
+        callbacks,
+        deck_choices=deck_choices,
+        **kwargs,
+    )
 
 
 def _message_request(message: str = "Add polite and casual examples") -> dict[str, Any]:
@@ -342,17 +395,32 @@ def _create_chat(
     sidecar: Any,
     message: str = "Add polite and casual examples",
 ) -> tuple[str, dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
-    status, _headers, body = _post(sidecar, _message_request(message))
+    thread_id, selector, _selector_events = _start_deck_selector(sidecar)
+    selectable = next(
+        choice for choice in sidecar.server.deck_choices if choice.revision_supported
+    )
+    select_status, _select_headers, _select_body = _post(
+        sidecar,
+        _action_request(
+            thread_id,
+            selector,
+            _deck_selector_action(selector, selectable.deck_id),
+        ),
+    )
+    assert select_status == 200
+    status, _headers, body = _post(
+        sidecar,
+        _followup_message_request(thread_id, message),
+    )
     assert status == 200
     events = _events(body)
-    created = next(event for event in events if event["type"] == "thread.created")
     assistant = next(
         event["item"]
         for event in events
         if event["type"] == "thread.item.done" and event["item"]["type"] == "assistant_message"
     )
     widget = _widget_items(events)[0]
-    return created["thread"]["id"], assistant, widget, events
+    return thread_id, assistant, widget, events
 
 
 def _create_plan(
@@ -388,6 +456,7 @@ def _create_source_extraction_plan(
     source: bytes,
     *,
     caption: str = "Create card proposals from this source",
+    thread_id: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     status, _headers, body = _post(
         sidecar,
@@ -406,12 +475,21 @@ def _create_source_extraction_plan(
         )[0]
         == 204
     )
-    message = _message_request(caption)
+    message = (
+        _message_request(caption)
+        if thread_id is None
+        else _followup_message_request(thread_id, caption)
+    )
     message["params"]["input"]["attachments"] = [attachment["id"]]
     send_status, _send_headers, send_body = _post(sidecar, message)
     assert send_status == 200
     events = _events(send_body)
-    thread_id = next(event["thread"]["id"] for event in events if event["type"] == "thread.created")
+    if thread_id is None:
+        thread_id = next(
+            event["thread"]["id"]
+            for event in events
+            if event["type"] == "thread.created"
+        )
     return thread_id, _widget_items(events)[0]
 
 
@@ -426,6 +504,882 @@ def _component_with_id(component: dict[str, Any], component_id: str) -> dict[str
         if found:
             return found
     return {}
+
+
+def _assistant_deck_choices() -> tuple[AssistantDeckChoice, ...]:
+    return (
+        AssistantDeckChoice(
+            deck_id="potential",
+            label="Brandon Japanese::Genki II::Lesson 13::Potential Practice",
+            scope="data/decks/potential-practice.yaml",
+            revision_supported=True,
+        ),
+        AssistantDeckChoice(
+            deck_id="te-form",
+            label="Brandon Japanese::Te-form Practice",
+            scope="data/decks/teform-drill.yaml",
+            revision_supported=True,
+        ),
+        AssistantDeckChoice(
+            deck_id="lesson-vocabulary",
+            label="Brandon Japanese::Genki II::Lesson 13::Vocabulary",
+            scope="data/decks/lesson-13-vocabulary.yaml",
+            revision_supported=False,
+            unavailable_reason=(
+                "Deck revision currently requires a rich conjugation practice deck."
+            ),
+        ),
+    )
+
+
+def _start_deck_selector(
+    sidecar: Any,
+) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    status, _headers, body = _post(
+        sidecar,
+        _message_request("Choose an active deck"),
+    )
+    assert status == 200
+    events = _events(body)
+    thread_id = next(event["thread"]["id"] for event in events if event["type"] == "thread.created")
+    widgets = _widget_items(events)
+    assert len(widgets) == 1
+    return thread_id, widgets[0], events
+
+
+def _deck_selector_action(widget: dict[str, Any], deck_id: str) -> dict[str, Any]:
+    actions = [
+        child.get("onClickAction")
+        for child in widget["widget"]["children"]
+        if child["type"] == "ListViewItem"
+    ]
+    return next(
+        action
+        for action in actions
+        if action is not None and action["payload"]["deck_id"] == deck_id
+    )
+
+
+def test_local_deck_starter_renders_one_use_selector_without_chat_callback() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        _thread_id, selector, events = _start_deck_selector(sidecar)
+
+        assert revisions.chatted == []
+        assert revisions.chat_histories == []
+        assert revisions.prepared == []
+        assert revisions.executed == []
+        assert [event for event in events if event["type"] == "progress_update"] == []
+        assert [event for event in events if event["type"] == "notice"] == []
+
+        root = selector["widget"]
+        assert root["type"] == "ListView"
+        assert root["status"]["text"] == "Choose the active deck"
+        assert [child["type"] for child in root["children"]] == [
+            "ListViewItem",
+            "ListViewItem",
+            "ListViewItem",
+        ]
+        wire = json.dumps(root, ensure_ascii=False)
+        for choice in _assistant_deck_choices():
+            assert choice.label in wire
+            assert choice.scope not in wire
+        assert _assistant_deck_choices()[-1].unavailable_reason in wire
+
+        actions = []
+        for choice, row in zip(_assistant_deck_choices(), root["children"], strict=True):
+            if choice.revision_supported:
+                actions.append(_deck_selector_action(selector, choice.deck_id))
+            else:
+                assert "onClickAction" not in row
+        assert {action["type"] for action in actions} == {"janki.deck.select"}
+        assert {action["handler"] for action in actions} == {"server"}
+        assert {action["loadingBehavior"] for action in actions} == {"container"}
+        assert {action["streaming"] for action in actions} == {True}
+        assert all(set(action["payload"]) == {"capability", "deck_id"} for action in actions)
+        capabilities = {action["payload"]["capability"] for action in actions}
+        assert len(capabilities) == 1
+        assert len(capabilities.pop()) >= 32
+    finally:
+        sidecar.close()
+
+
+def test_unselected_new_thread_does_not_guess_a_deck_or_call_chat() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        status, _headers, body = _post(
+            sidecar,
+            _message_request("What does this deck teach?"),
+        )
+
+        assert status == 200
+        assert revisions.chatted == []
+        assert revisions.chat_histories == []
+        assert revisions.prepared == []
+        events = _events(body)
+        assert len(_widget_items(events)) == 1
+        assert "Choose the active deck" in json.dumps(events, ensure_ascii=False)
+    finally:
+        sidecar.close()
+
+
+def test_supported_deck_selection_routes_next_message_with_empty_history() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, selector, _events_before = _start_deck_selector(sidecar)
+        selection = _action_request(
+            thread_id,
+            selector,
+            _deck_selector_action(selector, "potential"),
+        )
+
+        selected_events = _events(_post(sidecar, selection)[2])
+
+        assert revisions.chatted == []
+        assert revisions.resolved == ["potential"]
+        assert "Brandon Japanese::Genki II::Lesson 13::Potential Practice" in json.dumps(
+            selected_events,
+            ensure_ascii=False,
+        )
+
+        replay = _events(_post(sidecar, selection)[2])
+        assert any(
+            event["type"] == "error"
+            and ("stale" in event["message"] or "already used" in event["message"])
+            for event in replay
+        )
+
+        status, _headers, body = _post(
+            sidecar,
+            _followup_message_request(thread_id, "How can I improve this deck?"),
+        )
+
+        assert status == 200
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "How can I improve this deck?")
+        ]
+        assert revisions.chat_histories == [()]
+        assert len(_widget_items(_events(body))) == 1
+    finally:
+        sidecar.close()
+
+
+def test_switching_decks_clears_history_and_invalidates_old_change_bindings() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, first_selector, _events_before = _start_deck_selector(sidecar)
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )
+        first_chat_events = _events(
+            _post(
+                sidecar,
+                _followup_message_request(thread_id, "Improve the first deck"),
+            )[2]
+        )
+        old_prepare_widget = _widget_items(first_chat_events)[0]
+
+        second_selector_events = _events(
+            _post(
+                sidecar,
+                _followup_message_request(thread_id, "Choose an active deck"),
+            )[2]
+        )
+        second_selector = _widget_items(second_selector_events)[0]
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                second_selector,
+                _deck_selector_action(second_selector, "te-form"),
+            ),
+        )
+
+        stale_prepare = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    old_prepare_widget,
+                    _prepare_action(old_prepare_widget),
+                ),
+            )[2]
+        )
+        assert revisions.prepared == []
+        assert any(
+            event["type"] == "error"
+            and ("stale" in event["message"] or "belongs elsewhere" in event["message"])
+            for event in stale_prepare
+        )
+
+        second_chat_events = _events(
+            _post(
+                sidecar,
+                _followup_message_request(thread_id, "Improve the second deck"),
+            )[2]
+        )
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "Improve the first deck"),
+            ("data/decks/teform-drill.yaml", "Improve the second deck"),
+        ]
+        assert revisions.chat_histories == [(), ()]
+        second_prepare_widget = _widget_items(second_chat_events)[0]
+        plan_events = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    second_prepare_widget,
+                    _prepare_action(second_prepare_widget),
+                ),
+            )[2]
+        )
+        plan_widget = _widget_items(plan_events)[0]
+        assert revisions.prepared == [("data/decks/teform-drill.yaml", "Improve the second deck")]
+
+        third_selector = _widget_items(
+            _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose an active deck"),
+                )[2]
+            )
+        )[0]
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                third_selector,
+                _deck_selector_action(third_selector, "potential"),
+            ),
+        )
+        stale_confirmation = _events(
+            _post(sidecar, _confirmation_request(thread_id, plan_widget))[2]
+        )
+
+        assert revisions.executed == []
+        assert any(
+            event["type"] == "error"
+            and ("stale" in event["message"] or "belongs elsewhere" in event["message"])
+            for event in stale_confirmation
+        )
+    finally:
+        sidecar.close()
+
+
+def test_selector_refuses_tampering_and_renders_unsupported_decks_inert() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        first_thread, first_selector, _events_before = _start_deck_selector(sidecar)
+        tampered_action = json.loads(json.dumps(_deck_selector_action(first_selector, "potential")))
+        tampered_action["payload"]["deck_id"] = "not-a-configured-deck"
+        tampered = _events(
+            _post(
+                sidecar,
+                _action_request(first_thread, first_selector, tampered_action),
+            )[2]
+        )
+        assert any(event["type"] == "error" for event in tampered)
+
+        second_thread, second_selector, _events_before = _start_deck_selector(sidecar)
+        unsupported_row = next(
+            row
+            for row in second_selector["widget"]["children"]
+            if "Lesson 13::Vocabulary" in json.dumps(row, ensure_ascii=False)
+        )
+        assert "onClickAction" not in unsupported_row
+        assert "rich conjugation practice deck" in json.dumps(
+            unsupported_row,
+            ensure_ascii=False,
+        )
+        selected = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    second_thread,
+                    second_selector,
+                    _deck_selector_action(second_selector, "potential"),
+                ),
+            )[2]
+        )
+        assert not any(event["type"] == "error" for event in selected)
+
+        third_thread, third_selector, _events_before = _start_deck_selector(sidecar)
+        forged_unsupported = json.loads(
+            json.dumps(_deck_selector_action(third_selector, "potential"))
+        )
+        forged_unsupported["payload"]["deck_id"] = "lesson-vocabulary"
+        refused_unsupported = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    third_thread,
+                    third_selector,
+                    forged_unsupported,
+                ),
+            )[2]
+        )
+        assert any(
+            event["type"] == "error"
+            and ("tampered" in event["message"] or "stale" in event["message"])
+            for event in refused_unsupported
+        )
+        assert revisions.resolved == ["potential"]
+        assert revisions.chatted == []
+        assert revisions.chat_histories == []
+        assert revisions.prepared == []
+        assert revisions.executed == []
+    finally:
+        sidecar.close()
+
+
+def test_deck_selection_revalidation_refusal_preserves_the_active_deck() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, first_selector, _ = _start_deck_selector(sidecar)
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )
+        second_selector = _widget_items(
+            _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose an active deck"),
+                )[2]
+            )
+        )[0]
+        revisions.resolve_refusal = "the deck changed on disk"
+
+        refused = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    second_selector,
+                    _deck_selector_action(second_selector, "te-form"),
+                ),
+            )[2]
+        )
+
+        assert revisions.resolved == ["potential", "te-form"]
+        assert any(
+            event["type"] == "error"
+            and "no longer available" in event["message"]
+            and "changed on disk" in event["message"]
+            for event in refused
+        )
+
+        _post(sidecar, _followup_message_request(thread_id, "Which deck is active?"))
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "Which deck is active?")
+        ]
+    finally:
+        sidecar.close()
+
+
+def test_selector_recovers_a_thread_with_stale_active_deck_metadata() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, first_selector, _ = _start_deck_selector(sidecar)
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )
+        old_chat_events = _events(
+            _post(
+                sidecar,
+                _followup_message_request(thread_id, "Old request for deck A"),
+            )[2]
+        )
+        old_prepare_widget = _widget_items(old_chat_events)[0]
+        saved_thread = sidecar.server.assistant_core.store._threads[thread_id]
+        saved_thread.metadata["janki_active_deck_id"] = "removed-deck"
+
+        recovery_events = _events(
+            _post(
+                sidecar,
+                _followup_message_request(thread_id, "What does this deck teach?"),
+            )[2]
+        )
+
+        assert not any(event["type"] == "error" for event in recovery_events)
+        assert any(
+            event["type"] == "notice" and "no longer available" in event["message"]
+            for event in recovery_events
+        )
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "Old request for deck A")
+        ]
+        recovery_selector = _widget_items(recovery_events)[0]
+        selected = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    recovery_selector,
+                    _deck_selector_action(recovery_selector, "potential"),
+                ),
+            )[2]
+        )
+        assert not any(event["type"] == "error" for event in selected)
+        assert revisions.resolved == ["potential", "potential"]
+
+        stale = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    old_prepare_widget,
+                    _prepare_action(old_prepare_widget),
+                ),
+            )[2]
+        )
+        assert revisions.prepared == []
+        assert any(
+            event["type"] == "error"
+            and ("stale" in event["message"] or "already used" in event["message"])
+            for event in stale
+        )
+
+        _post(sidecar, _followup_message_request(thread_id, "Question for recovered deck"))
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "Old request for deck A"),
+            ("data/decks/potential-practice.yaml", "Question for recovered deck"),
+        ]
+        assert revisions.chat_histories == [(), ()]
+    finally:
+        sidecar.close()
+
+
+def test_switching_a_b_a_does_not_revive_an_old_finish_capability() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, finish_widget, _events_before = _create_finish_review(sidecar)
+        finish_action = finish_widget["widget"]["confirm"]["action"]
+        capability = finish_action["payload"]["capability"]
+        old_binding = sidecar.server.assistant_core.server._finishes[capability]
+
+        for deck_id in ("te-form", "potential"):
+            selector_events = _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose an active deck"),
+                )[2]
+            )
+            selector = _widget_items(selector_events)[0]
+            selected = _events(
+                _post(
+                    sidecar,
+                    _action_request(
+                        thread_id,
+                        selector,
+                        _deck_selector_action(selector, deck_id),
+                    ),
+                )[2]
+            )
+            assert not any(event["type"] == "error" for event in selected)
+
+        # Reinsert the old binding to prove the monotonically increasing epoch,
+        # independently from the switch's ordinary capability cleanup.
+        sidecar.server.assistant_core.server._finishes[capability] = old_binding
+
+        stale = _events(
+            _post(sidecar, _confirmation_request(thread_id, finish_widget))[2]
+        )
+
+        assert revisions.finish_executed == []
+        assert any(
+            event["type"] == "error"
+            and ("stale" in event["message"] or "already used" in event["message"])
+            for event in stale
+        )
+    finally:
+        sidecar.close()
+
+
+def test_two_threads_keep_independent_active_decks_and_histories() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        first_thread, first_selector, _ = _start_deck_selector(sidecar)
+        second_thread, second_selector, _ = _start_deck_selector(sidecar)
+        for thread_id, selector, deck_id in (
+            (first_thread, first_selector, "potential"),
+            (second_thread, second_selector, "te-form"),
+        ):
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    selector,
+                    _deck_selector_action(selector, deck_id),
+                ),
+            )
+
+        _post(sidecar, _followup_message_request(first_thread, "First question"))
+        _post(sidecar, _followup_message_request(second_thread, "Second question"))
+        _post(sidecar, _followup_message_request(first_thread, "First follow-up"))
+
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "First question"),
+            ("data/decks/teform-drill.yaml", "Second question"),
+            ("data/decks/potential-practice.yaml", "First follow-up"),
+        ]
+        assert revisions.chat_histories == [
+            (),
+            (),
+            (
+                ("user", "First question"),
+                (
+                    "assistant",
+                    "Answer about data/decks/potential-practice.yaml: First question",
+                ),
+            ),
+        ]
+    finally:
+        sidecar.close()
+
+
+def test_active_deck_cannot_switch_during_an_in_flight_chat_turn() -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    revisions = _FakeRevisions(chat_entered=entered, chat_release=release)
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    sender: threading.Thread | None = None
+    try:
+        thread_id, first_selector, _ = _start_deck_selector(sidecar)
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )
+        switch_selector = _widget_items(
+            _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose an active deck"),
+                )[2]
+            )
+        )[0]
+        response: list[tuple[int, dict[str, str], bytes]] = []
+        sender = threading.Thread(
+            target=lambda: response.append(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "A question for deck A"),
+                )
+            )
+        )
+        sender.start()
+        assert entered.wait(3)
+
+        refused = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    switch_selector,
+                    _deck_selector_action(switch_selector, "te-form"),
+                ),
+            )[2]
+        )
+
+        assert any(
+            event["type"] == "error" and "still running" in event["message"]
+            for event in refused
+        )
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "A question for deck A")
+        ]
+    finally:
+        release.set()
+        if sender is not None:
+            sender.join(3)
+        sidecar.close()
+    assert response and response[0][0] == 200
+
+
+def test_deck_switch_rechecks_for_a_chat_started_during_resolution() -> None:
+    resolve_entered = threading.Event()
+    resolve_release = threading.Event()
+    chat_entered = threading.Event()
+    chat_release = threading.Event()
+    revisions = _FakeRevisions(
+        resolve_block_for="te-form",
+        resolve_entered=resolve_entered,
+        resolve_release=resolve_release,
+        chat_entered=chat_entered,
+        chat_release=chat_release,
+    )
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    switcher: threading.Thread | None = None
+    chatter: threading.Thread | None = None
+    switch_response: list[tuple[int, dict[str, str], bytes]] = []
+    chat_response: list[tuple[int, dict[str, str], bytes]] = []
+    try:
+        thread_id, first_selector, _ = _start_deck_selector(sidecar)
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )
+        switch_selector = _widget_items(
+            _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose an active deck"),
+                )[2]
+            )
+        )[0]
+
+        switcher = threading.Thread(
+            target=lambda: switch_response.append(
+                _post(
+                    sidecar,
+                    _action_request(
+                        thread_id,
+                        switch_selector,
+                        _deck_selector_action(switch_selector, "te-form"),
+                    ),
+                )
+            )
+        )
+        switcher.start()
+        assert resolve_entered.wait(3)
+
+        chatter = threading.Thread(
+            target=lambda: chat_response.append(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "A question for deck A"),
+                )
+            )
+        )
+        chatter.start()
+        assert chat_entered.wait(3)
+
+        resolve_release.set()
+        switcher.join(3)
+        assert switch_response and switch_response[0][0] == 200
+        refused = _events(switch_response[0][2])
+        assert any(
+            event["type"] == "error" and "still running" in event["message"]
+            for event in refused
+        )
+        assert revisions.resolved == ["potential", "te-form"]
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "A question for deck A")
+        ]
+
+        chat_release.set()
+        chatter.join(3)
+        assert chat_response and chat_response[0][0] == 200
+        _post(sidecar, _followup_message_request(thread_id, "Follow up on deck A"))
+        assert revisions.chatted == [
+            ("data/decks/potential-practice.yaml", "A question for deck A"),
+            ("data/decks/potential-practice.yaml", "Follow up on deck A"),
+        ]
+        assert revisions.chat_histories[-1] == (
+            ("user", "A question for deck A"),
+            (
+                "assistant",
+                "Answer about data/decks/potential-practice.yaml: A question for deck A",
+            ),
+        )
+    finally:
+        resolve_release.set()
+        chat_release.set()
+        if switcher is not None:
+            switcher.join(3)
+        if chatter is not None:
+            chatter.join(3)
+        sidecar.close()
+    assert chat_response and chat_response[0][0] == 200
+
+
+def test_thread_stays_busy_until_chat_plan_and_finish_bindings_are_installed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    server = sidecar.server.assistant_core.server
+    sidecar.start()
+    try:
+        thread_id, selector, _ = _start_deck_selector(sidecar)
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                selector,
+                _deck_selector_action(selector, "potential"),
+            ),
+        )
+
+        original_prepare_widget = type(server)._prepare_widget
+        chat_binding_checks: list[bool] = []
+
+        def guarded_prepare_widget(*, capability: str) -> Any:
+            chat_binding_checks.append(thread_id in server._busy_threads)
+            return original_prepare_widget(capability=capability)
+
+        monkeypatch.setattr(
+            type(server),
+            "_prepare_widget",
+            staticmethod(guarded_prepare_widget),
+        )
+        chat_events = _events(
+            _post(sidecar, _followup_message_request(thread_id, "Prepare a change"))[2]
+        )
+        prepare_widget = _widget_items(chat_events)[0]
+        assert chat_binding_checks == [True]
+        assert thread_id not in server._busy_threads
+
+        original_plan_widget = type(server)._plan_widget
+        plan_binding_checks: list[bool] = []
+
+        def guarded_plan_widget(
+            plan: RevisionPlan,
+            *,
+            instruction: str,
+            capability: str,
+        ) -> Any:
+            plan_binding_checks.append(thread_id in server._busy_threads)
+            return original_plan_widget(
+                plan,
+                instruction=instruction,
+                capability=capability,
+            )
+
+        monkeypatch.setattr(
+            type(server),
+            "_plan_widget",
+            staticmethod(guarded_plan_widget),
+        )
+        plan_events = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    prepare_widget,
+                    _prepare_action(prepare_widget),
+                ),
+            )[2]
+        )
+        plan_widget = _widget_items(plan_events)[0]
+        assert plan_binding_checks == [True]
+        assert thread_id not in server._busy_threads
+
+        original_finish_widget = type(server)._finish_widget
+        finish_binding_checks: list[bool] = []
+
+        def guarded_finish_widget(
+            review: RevisionFinishReview,
+            *,
+            capability: str,
+        ) -> Any:
+            finish_binding_checks.append(thread_id in server._busy_threads)
+            return original_finish_widget(review, capability=capability)
+
+        monkeypatch.setattr(
+            type(server),
+            "_finish_widget",
+            staticmethod(guarded_finish_widget),
+        )
+        finish_events = _events(
+            _post(sidecar, _confirmation_request(thread_id, plan_widget))[2]
+        )
+        assert len(_widget_items(finish_events)) == 1
+        assert finish_binding_checks == [True]
+        assert thread_id not in server._busy_threads
+    finally:
+        sidecar.close()
 
 
 def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> None:
@@ -452,9 +1406,10 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b"<h1>Janki</h1>" in body
         assert b"Ask janki" not in body
         assert b"Questions are read-only" in body
-        assert b"Selected deck for changes:" in body
-        assert b"Brandon Japanese::Potential Practice" in body
-        assert b"data/decks/potential-practice.yaml" in body
+        assert b"Choose the active deck inside this chat" in body
+        assert b"Selected deck for changes:" not in body
+        assert b"Brandon Japanese::Potential Practice" not in body
+        assert b"data/decks/potential-practice.yaml" not in body
         assert b"main-workbench-secret" not in body
 
         script_status, _script_headers, script = _request(
@@ -478,11 +1433,13 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b"attachments: { enabled: false }" in script
         assert b'placeholder: "Ask Janki or attach a source"' in script
         assert b'greeting: "What would you like to do?"' in script
+        assert b'label: "Choose active deck"' in script
+        assert b'prompt: "Choose an active deck"' in script
         assert b'label: "What Janki can do"' in script
         assert b'prompt: "What can Janki help me do here?"' in script
         assert b'label: "How changes work"' in script
         assert (
-            b'prompt: "Explain how I can prepare and confirm a change to the selected deck."'
+            b'prompt: "Explain how I can prepare and confirm a deck change."'
             in script
         )
         assert b'label: "Create from a source"' in script
@@ -499,7 +1456,7 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         sidecar.close()
 
 
-def test_shell_escapes_the_selected_deck_display_name() -> None:
+def test_shell_does_not_embed_deck_catalog_names_or_scopes() -> None:
     sidecar = create_assistant_sidecar(
         _FakeRevisions(),
         deck_scope="data/decks/<script>alert(2)</script>.yaml",
@@ -512,9 +1469,9 @@ def test_shell_escapes_the_selected_deck_display_name() -> None:
 
         assert status == 200
         assert b'<img src=x onerror="alert(1)">' not in body
-        assert b"&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in body
+        assert b"&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" not in body
         assert b"<script>alert(2)</script>" not in body
-        assert b"data/decks/&lt;script&gt;alert(2)&lt;/script&gt;.yaml" in body
+        assert b"data/decks/&lt;script&gt;alert(2)&lt;/script&gt;.yaml" not in body
     finally:
         sidecar.close()
 
@@ -768,6 +1725,68 @@ def test_attachment_can_be_sent_without_a_caption(tmp_path: Path) -> None:
         assert revisions.chatted == []
         assert revisions.extraction_prepared == [inbox / "lesson.pdf"]
         assert (inbox / "lesson.pdf").read_bytes() == source
+    finally:
+        sidecar.close()
+
+
+def test_switching_decks_preserves_project_scoped_extraction_confirmation(
+    tmp_path: Path,
+) -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+        inbox_root=tmp_path / "data" / "inbox",
+    )
+    sidecar.start()
+    try:
+        thread_id, first_selector, _ = _start_deck_selector(sidecar)
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )
+        thread_id, extraction_widget = _create_source_extraction_plan(
+            sidecar,
+            b"%PDF-1.7\nproject-scoped source\n",
+            thread_id=thread_id,
+        )
+        selector = _widget_items(
+            _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose an active deck"),
+                )[2]
+            )
+        )[0]
+        selected = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    selector,
+                    _deck_selector_action(selector, "te-form"),
+                ),
+            )[2]
+        )
+        assert not any(event["type"] == "error" for event in selected)
+
+        confirmed = _events(
+            _post(sidecar, _confirmation_request(thread_id, extraction_widget))[2]
+        )
+
+        assert not any(event["type"] == "error" for event in confirmed)
+        assert revisions.extracted == [
+            SourceExtractionConfirmation(
+                preparation_id="prepared-extraction-1",
+                source_name="lesson.pdf",
+                expected_fingerprint=REQUEST_FINGERPRINT,
+            )
+        ]
     finally:
         sidecar.close()
 
@@ -1306,7 +2325,7 @@ def test_only_the_explicit_one_use_prepare_action_renders_the_exact_plan() -> No
         assert revisions.executed == []
         widget = _widget_items(events)[0]
         wire = json.dumps(widget, ensure_ascii=False)
-        assert "Potential Practice" in wire
+        assert "potential-practice" in wire
         assert "Add polite and casual examples" in wire
         assert REQUEST_FINGERPRINT in wire
         root = widget["widget"]
@@ -1638,7 +2657,7 @@ def test_apply_and_finish_is_one_action_with_only_shared_named_progress() -> Non
             RevisionFinishConfirmation(
                 preparation_id="finish-preparation-1",
                 expected_fingerprint=FINISH_FINGERPRINT,
-                target="data/decks/potential.yaml",
+                target="potential-practice",
             )
         ]
 
@@ -1706,6 +2725,8 @@ def test_finish_capability_is_consumed_on_cross_thread_use() -> None:
             confirmation=first_binding.confirmation,
             thread_id=first_binding.thread_id,
             widget_item_id=second_widget["id"],
+            deck_id=first_binding.deck_id,
+            selection_epoch=first_binding.selection_epoch,
         )
 
         refused = _events(
@@ -1904,7 +2925,19 @@ def test_browser_disconnect_does_not_cancel_a_dispatched_chat_turn() -> None:
     )
     sidecar.start()
     try:
-        payload = json.dumps(_message_request("which deck?")).encode()
+        thread_id, selector, _events_before = _start_deck_selector(sidecar)
+        selected = next(
+            choice for choice in sidecar.server.deck_choices if choice.revision_supported
+        )
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                selector,
+                _deck_selector_action(selector, selected.deck_id),
+            ),
+        )
+        payload = json.dumps(_followup_message_request(thread_id, "which deck?")).encode()
         connection = http.client.HTTPConnection(
             "127.0.0.1",
             sidecar.server.server_address[1],

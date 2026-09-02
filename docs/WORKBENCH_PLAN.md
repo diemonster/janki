@@ -1053,6 +1053,15 @@ Missing or changed disposable packages rebuild from the same receipt without
 repeating audio. The milestone remains partial only until the owner completes
 the real-browser acceptance journey.*
 
+*Progress 2026-09-02. Deck scope is now selected inside each ChatKit thread,
+not inferred once for the whole Assistant sidecar. The local selector lists
+every configured deck behind opaque ids, makes no provider call, and clears
+deck-specific history and stale action capabilities whenever the owner
+switches. Potential Practice is currently the sole enabled choice because the
+implemented `revise` contract is intentionally limited to conjugation decks
+with complete rich drill examples; other deck kinds remain visible with that
+limitation rather than being misrouted through the wrong card-writing schema.*
+
 Surface ChatKit in the ordinary workbench using its custom-server integration
 and janki's own server-side agent; do not build new work on the retiring Agent
 Builder path. The workbench remains useful with ChatKit disabled, and its off
