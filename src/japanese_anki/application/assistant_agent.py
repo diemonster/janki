@@ -13,6 +13,7 @@ package, or make an owner-only decision.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
 import json
@@ -53,6 +54,25 @@ __all__ = [
 
 class AgentApplicationError(JankiError):
     """A repository-aware Assistant turn could not complete safely."""
+
+
+class AgentUnansweredError(AgentApplicationError):
+    """The provider returned no Assistant answer at all.
+
+    This is separate from every other refusal because it decides who settles
+    the turn. A reply that carries no answer holds nothing an owner could act
+    on, so its exact bytes and this message are the whole truth and janki
+    records them itself. Every other failure leaves an answer somebody could
+    still read — an intent naming a resource the turn never disclosed, or a
+    `RevisionProviderError` for structured output that finished normally and
+    only failed schema validation — and retiring one of those would spend the
+    owner's decision for them.
+
+    Both providers reach this the same way: an incomplete stop reason or an
+    error envelope decodes to a result with no parsed answer, never to a
+    provider error. A `RevisionProviderError` therefore always means a reply
+    janki could not read, not a reply that said nothing.
+    """
 
 
 class AgentRunError(AgentApplicationError):
@@ -159,6 +179,18 @@ _COMPLETE_MANIFEST_KEYS = _REQUEST_MANIFEST_KEYS | {
     "action_intents",
     "provenance",
 }
+_FAILED_MANIFEST_KEYS = _REQUEST_MANIFEST_KEYS | {
+    "failure",
+    "provenance",
+}
+_FAILURE_KEYS = frozenset(
+    {
+        "message",
+        "provider_reply_base64",
+        "provider_reply_bytes",
+        "provider_reply_sha256",
+    }
+)
 _CONTEXT_MANIFEST_KEYS = frozenset(
     {
         "wire",
@@ -522,13 +554,13 @@ def _decode_answer(
     if parsed is None:
         stop_reason = str(getattr(result, "stop_reason", "") or "unknown")
         suffix = " Its exact reply was captured." if captured else ""
-        raise AgentApplicationError(
+        raise AgentUnansweredError(
             f"{model} returned no complete Assistant answer ({stop_reason}).{suffix}"
         )
     answer = str(getattr(parsed, "answer", "") or "").strip()
     if not answer:
         suffix = " Its exact reply was captured." if captured else ""
-        raise AgentApplicationError(f"{model} returned an empty Assistant answer.{suffix}")
+        raise AgentUnansweredError(f"{model} returned an empty Assistant answer.{suffix}")
     raw_intents = getattr(parsed, "action_intents", None)
     if not isinstance(raw_intents, list):
         raise AgentApplicationError("Assistant answer has no valid action_intents list.")
@@ -643,13 +675,126 @@ def _complete_manifest(
     value["state"] = "complete"
     value["answer"] = answer
     value["action_intents"] = _intent_wire(action_intents)
-    value["provenance"] = {
+    value["provenance"] = _provenance(plan)
+    return _canonical_json(value, pretty=True) + "\n"
+
+
+def _provenance(plan: AgentPlan) -> dict[str, str]:
+    return {
         "provider": plan.provider,
         "billing_class": plan.billing_class,
         "model": plan.model,
         "request_fingerprint": plan.request_fingerprint,
     }
+
+
+def _failed_manifest(
+    request_manifest: Mapping[str, Any],
+    plan: AgentPlan,
+    *,
+    message: str,
+    provider_reply: bytes,
+) -> str:
+    value = dict(request_manifest)
+    value["state"] = "failed"
+    value["failure"] = {
+        "message": message,
+        "provider_reply_base64": base64.b64encode(provider_reply).decode("ascii"),
+        "provider_reply_bytes": len(provider_reply),
+        "provider_reply_sha256": _sha256(provider_reply),
+    }
+    value["provenance"] = _provenance(plan)
     return _canonical_json(value, pretty=True) + "\n"
+
+
+def _failed_manifest_message(
+    manifest: Mapping[str, Any],
+    plan: AgentPlan,
+    *,
+    provider_reply: bytes,
+) -> str:
+    failure = _require_exact_keys(
+        manifest.get("failure"),
+        _FAILURE_KEYS,
+        label="failure",
+    )
+    message = failure["message"]
+    encoded = failure["provider_reply_base64"]
+    byte_count = failure["provider_reply_bytes"]
+    digest = failure["provider_reply_sha256"]
+    if (
+        not isinstance(message, str)
+        or not message
+        or not isinstance(encoded, str)
+        or isinstance(byte_count, bool)
+        or not isinstance(byte_count, int)
+        or byte_count < 0
+        or not _is_sha256(digest)
+    ):
+        raise AgentApplicationError(
+            "Captured Assistant failure manifest has invalid field types."
+        )
+    try:
+        decoded = base64.b64decode(encoded.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, ValueError) as exc:
+        raise AgentApplicationError(
+            "Captured Assistant failure reply is not canonical base64."
+        ) from exc
+    if (
+        base64.b64encode(decoded).decode("ascii") != encoded
+        or len(decoded) != byte_count
+        or _sha256(decoded) != digest
+        or decoded != provider_reply
+    ):
+        raise AgentApplicationError(
+            "Captured Assistant failure reply differs from its exact provider bytes."
+        )
+    if manifest.get("provenance") != _provenance(plan):
+        raise AgentApplicationError(
+            "Captured Assistant failure provenance differs from its request."
+        )
+    return message
+
+
+def _commit_captured_failure(
+    config: ProjectConfig,
+    plan: AgentPlan,
+    *,
+    operation_id: str,
+    manifest_path: Path,
+    request_manifest: Mapping[str, Any],
+    manifest_revision: str,
+    error: BaseException,
+) -> bool:
+    """Commit a captured ordinary-turn failure without discarding its reply.
+
+    Ordinary Assistant output has no canonical-content authority. Once its exact
+    provider bytes and the failure that prevented an answer are both durable in
+    the Assistant manifest, leaving the operation live would protect no missing
+    output; it would only wedge later conversation.
+    """
+
+    journal = operations.OperationJournal.load(config.operations_file)
+    held = journal.operations.get(operation_id)
+    if held is None or held.state != "result_captured" or held.artifact is None:
+        return False
+    reply = journal.read_reply(operation_id)
+    rendered = _failed_manifest(
+        request_manifest,
+        plan,
+        message=str(error),
+        provider_reply=reply,
+    )
+    with exclusive_path_lock(manifest_path):
+        journal.commit_result(
+            operation_id,
+            lambda: atomic_write_text_bound(
+                manifest_path,
+                rendered,
+                expected_revision=manifest_revision,
+            ),
+        )
+    return True
 
 
 def run_agent(
@@ -764,21 +909,20 @@ def run_agent(
             provider_dispatched=False,
         ) from exc
 
+    def capture_reply(raw_reply: bytes) -> None:
+        if not isinstance(raw_reply, bytes):
+            raise operations.OperationError(
+                "Assistant provider capture must supply exact response bytes."
+            )
+        journal.capture_result(
+            operation_id,
+            lambda: operations.capture_artifact(
+                config.operations_file, operation_id, raw_reply
+            ),
+        )
+
     try:
         _report_progress(progress, "Writing answer")
-
-        def capture_reply(raw_reply: bytes) -> None:
-            if not isinstance(raw_reply, bytes):
-                raise operations.OperationError(
-                    "Assistant provider capture must supply exact response bytes."
-                )
-            journal.capture_result(
-                operation_id,
-                lambda: operations.capture_artifact(
-                    config.operations_file, operation_id, raw_reply
-                ),
-            )
-
         result = provider.dispatch(
             prepared_provider,
             capture=capture_reply,
@@ -799,6 +943,38 @@ def run_agent(
             captured=True,
             context=fresh.context,
         )
+    except Exception as exc:  # noqa: BLE001 - settle every post-dispatch failure
+        try:
+            committed_failure = False
+            if isinstance(exc, AgentUnansweredError):
+                _report_progress(progress, "Saving answer")
+                committed_failure = _commit_captured_failure(
+                    config,
+                    fresh,
+                    operation_id=operation_id,
+                    manifest_path=manifest_path,
+                    request_manifest=request_manifest,
+                    manifest_revision=request_revision,
+                    error=exc,
+                )
+            if not committed_failure:
+                classify_dispatch_failure(config, journal, operation_id, exc)
+        except (JankiError, OSError) as journal_error:
+            raise AgentRunError(
+                f"Assistant turn {operation_id} failed after dispatch: {exc} Janki "
+                f"could not settle its journal entry: {journal_error}. This call may "
+                "have consumed allowance or been billed; do not retry until you "
+                "inspect janki operations.",
+                operation_id=operation_id,
+                provider_dispatched=True,
+            ) from exc
+        raise AgentRunError(
+            f"Assistant turn {operation_id} failed after dispatch: {exc}",
+            operation_id=operation_id,
+            provider_dispatched=True,
+        ) from exc
+
+    try:
         rendered = _complete_manifest(
             request_manifest,
             fresh,
@@ -815,7 +991,7 @@ def run_agent(
                     expected_revision=request_revision,
                 ),
             )
-    except Exception as exc:  # noqa: BLE001 - settle every post-dispatch failure
+    except Exception as exc:  # noqa: BLE001 - preserve a captured valid answer
         try:
             classify_dispatch_failure(config, journal, operation_id, exc)
         except JankiError as journal_error:
@@ -887,17 +1063,24 @@ def recover_agent(
             f"Assistant manifest {manifest_path} must contain one JSON object."
         )
     manifest_state = manifest.get("state")
+    manifest_keys = {
+        "request": _REQUEST_MANIFEST_KEYS,
+        "complete": _COMPLETE_MANIFEST_KEYS,
+        "failed": _FAILED_MANIFEST_KEYS,
+    }.get(manifest_state)
+    if manifest_keys is None:
+        raise AgentApplicationError(
+            f"Assistant manifest {manifest_path} has an unknown state."
+        )
     _require_exact_keys(
         manifest,
-        _COMPLETE_MANIFEST_KEYS
-        if manifest_state == "complete"
-        else _REQUEST_MANIFEST_KEYS,
+        manifest_keys,
         label="top-level",
     )
     if (
         manifest.get("schema_version") != 1
         or manifest.get("kind") != "assistant_agent"
-        or manifest_state not in {"request", "complete"}
+        or manifest_state not in {"request", "complete", "failed"}
         or manifest.get("operation_id") != operation_id
     ):
         raise AgentApplicationError(
@@ -1018,19 +1201,68 @@ def recover_agent(
     reply = journal.read_reply(operation_id)
     if _sha256(reply) != held.artifact.content_sha256:
         raise AgentApplicationError("Captured Assistant reply differs from its receipt.")
+    revision = _sha256(manifest_bytes)
+    if manifest_state == "failed":
+        failure_message = _failed_manifest_message(
+            manifest,
+            plan,
+            provider_reply=reply,
+        )
+        _report_progress(progress, "Saving answer")
+
+        def preserve_failed_manifest() -> None:
+            if _sha256(read_bytes_bound(manifest_path)) != revision:
+                raise AgentApplicationError(
+                    "Captured Assistant failure manifest changed during recovery."
+                )
+
+        with exclusive_path_lock(manifest_path):
+            journal.commit_result(operation_id, preserve_failed_manifest)
+        return AgentRunResult(
+            answer=f"The earlier Assistant turn failed: {failure_message}",
+            action_intents=(),
+            operation_id=operation_id,
+            manifest_path=manifest_path,
+            request_fingerprint=held.request_fp,
+        )
     _report_progress(progress, "Writing answer")
     try:
         result = revision_provider.provider_for(plan.provider).recover(provider_plan, reply)
+        answer, intents = _decode_answer(
+            result,
+            model=plan.model,
+            captured=True,
+            context=plan.context,
+        )
     except JankiError as exc:
-        raise AgentApplicationError(
-            f"Captured Assistant reply for {operation_id} could not be decoded: {exc}"
-        ) from exc
-    answer, intents = _decode_answer(
-        result,
-        model=plan.model,
-        captured=True,
-        context=plan.context,
-    )
+        if manifest_state != "request" or not isinstance(exc, AgentUnansweredError):
+            raise AgentApplicationError(
+                f"Captured Assistant reply for {operation_id} could not be decoded: "
+                f"{exc}"
+            ) from exc
+        request_manifest = {key: manifest[key] for key in _REQUEST_MANIFEST_KEYS}
+        request_manifest["state"] = "request"
+        _report_progress(progress, "Saving answer")
+        if not _commit_captured_failure(
+            config,
+            plan,
+            operation_id=operation_id,
+            manifest_path=manifest_path,
+            request_manifest=request_manifest,
+            manifest_revision=revision,
+            error=exc,
+        ):
+            raise AgentApplicationError(
+                f"Captured Assistant failure for {operation_id} changed during "
+                "recovery."
+            ) from exc
+        return AgentRunResult(
+            answer=f"The earlier Assistant turn failed: {exc}",
+            action_intents=(),
+            operation_id=operation_id,
+            manifest_path=manifest_path,
+            request_fingerprint=held.request_fp,
+        )
     request_manifest = {key: manifest[key] for key in _REQUEST_MANIFEST_KEYS}
     request_manifest["state"] = "request"
     rendered = _complete_manifest(
@@ -1047,7 +1279,6 @@ def recover_agent(
             "exact captured answer, intents, and provenance."
         )
     _report_progress(progress, "Saving answer")
-    revision = _sha256(manifest_bytes)
     with exclusive_path_lock(manifest_path):
         journal.commit_result(
             operation_id,

@@ -6,6 +6,7 @@ loopback HTTP boundary without contacting OpenAI or another provider.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import http.client
 import io
@@ -22,6 +23,7 @@ from chatkit.icons import IconName
 from pydantic import TypeAdapter
 
 from japanese_anki.workbench import assistant as assistant_module
+from japanese_anki.workbench import assistant_adapter
 from japanese_anki.workbench.assistant import (
     AssistantDeckChoice,
     AssistantRequestContext,
@@ -191,7 +193,7 @@ class _FakeRevisions:
             text=f"Prepared {action} for {operation_id}.",
             action=_action_plan(
                 target=f"Paid operation {operation_id}",
-                progress_label="Checking paid operation",
+                progress_label="Checking an earlier model call",
             ),
             action_instruction=f"{action} paid operation {operation_id}",
         )
@@ -677,7 +679,7 @@ def _blocking_operation_choice() -> OperationChoice:
             ),
             OperationActionChoice(
                 action="forget",
-                label="Discard paid reply and forget",
+                label="Discard captured reply and forget",
                 accept_paid_output_loss=True,
             ),
         ),
@@ -852,6 +854,31 @@ def test_non_navigation_study_content_question_still_uses_chat() -> None:
         sidecar.close()
 
 
+def test_every_adapter_progress_label_is_one_the_validator_accepts() -> None:
+    """A progress label the validator rejects wedges the action that emits it.
+
+    `_validate_plan` refuses an unknown label, so a literal here that drifts
+    from `_PROGRESS_LABELS` does not degrade — it fails every use of that
+    action. Renaming one of these is exactly when the two fall out of step, so
+    the pairing is checked rather than remembered.
+    """
+
+    source = Path(assistant_adapter.__file__).read_text(encoding="utf-8")
+    emitted = {
+        keyword.value.value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        for keyword in node.keywords
+        if keyword.arg == "progress_label"
+        and isinstance(keyword.value, ast.Constant)
+        and isinstance(keyword.value.value, str)
+    }
+
+    assert emitted, "no literal progress labels found; the scan stopped working"
+    accepted = assistant_module._PROGRESS_LABELS
+    assert emitted <= accepted, sorted(emitted - accepted)
+
+
 def test_blocking_paid_operation_renders_local_recovery_without_chat() -> None:
     revisions = _FakeRevisions(operation_choices=(_blocking_operation_choice(),))
     sidecar = create_assistant_sidecar(
@@ -867,15 +894,16 @@ def test_blocking_paid_operation_renders_local_recovery_without_chat() -> None:
 
         [manager] = _widget_items(events)
         wire = json.dumps(manager["widget"], ensure_ascii=False)
-        assert manager["widget"]["status"]["text"] == "Paid operations"
+        assert manager["widget"]["status"]["text"] == "Model-call recovery"
         assert "captured-op" in wire
         assert "Show exact recovery reply" in wire
-        assert "Discard paid reply and forget" in wire
+        assert "Discard captured reply and forget" in wire
         assert revisions.chatted == []
         assert [event for event in events if event["type"] == "progress_update"] == []
         assert any(
             event["type"] == "notice"
-            and event.get("title") == "Paid call needs your decision"
+            and event.get("title") == "Earlier model call needs attention"
+            and "not a confirmation for each question" in event["message"]
             for event in events
         )
     finally:
@@ -922,7 +950,7 @@ def test_unavailable_paid_operation_status_refuses_before_chat() -> None:
         assert revisions.chatted == []
         assert any(
             event["type"] == "notice"
-            and event.get("title") == "Paid operations unavailable"
+            and event.get("title") == "Model-call recovery unavailable"
             and "did not make a model call" in event["message"]
             for event in events
         )
@@ -958,7 +986,7 @@ def test_chat_authorization_race_refreshes_blocking_operation_actions() -> None:
         events = _events(_post(sidecar, _message_request(message))[2])
 
         [manager] = _widget_items(events)
-        assert manager["widget"]["status"]["text"] == "Paid operations"
+        assert manager["widget"]["status"]["text"] == "Model-call recovery"
         assert revisions.chatted == [("", message)]
         assert any(
             event["type"] == "notice"
@@ -967,7 +995,7 @@ def test_chat_authorization_race_refreshes_blocking_operation_actions() -> None:
         )
         assert any(
             event["type"] == "notice"
-            and event.get("title") == "Paid call needs your decision"
+            and event.get("title") == "Earlier model call needs attention"
             and "blocks further model calls" in event["message"]
             for event in events
         )
@@ -1001,7 +1029,7 @@ def test_local_operation_manager_prepares_exact_actions_without_a_model_turn() -
                     ),
                     OperationActionChoice(
                         action="forget",
-                        label="Discard paid reply and forget",
+                        label="Discard captured reply and forget",
                         accept_paid_output_loss=True,
                     ),
                 ),
@@ -1024,7 +1052,7 @@ def test_local_operation_manager_prepares_exact_actions_without_a_model_turn() -
     try:
         status, _headers, body = _post(
             sidecar,
-            _message_request("Manage paid operations"),
+            _message_request("Manage model calls"),
         )
         assert status == 200
         events = _events(body)
@@ -1039,7 +1067,7 @@ def test_local_operation_manager_prepares_exact_actions_without_a_model_turn() -
         assert "result_captured" in wire
         assert "Recover captured result" in wire
         assert "Show exact recovery reply" in wire
-        assert "Discard paid reply and forget" in wire
+        assert "Discard captured reply and forget" in wire
         assert revisions.chatted == []
 
         recover_action = next(
@@ -1111,7 +1139,7 @@ def test_paid_operation_selector_refuses_a_widened_action_as_one_use() -> None:
     sidecar.start()
     try:
         events = _events(
-            _post(sidecar, _message_request("Manage paid operations"))[2]
+            _post(sidecar, _message_request("Manage model calls"))[2]
         )
         thread_id = next(
             event["thread"]["id"]
@@ -2244,8 +2272,8 @@ def test_shell_is_a_separate_tokenized_origin_with_only_the_chatkit_cdn() -> Non
         assert b'prompt: "Choose a deck to focus on"' in script
         assert b'label: "Add study material"' in script
         assert b'prompt: "How do I add study material?"' in script
-        assert b'label: "Manage paid operations"' in script
-        assert b'prompt: "Manage paid operations"' in script
+        assert b'label: "Manage model calls"' in script
+        assert b'prompt: "Manage model calls"' in script
         assert b'label: "How changes work"' not in script
         assert b"janki.revision.prepare" not in script
         assert b"Summarize what this deck is designed to teach." not in script
@@ -2325,7 +2353,7 @@ def test_shell_keeps_repository_conversation_available_without_decks(
         assert b'label: "Explore my library"' in script
         assert b'label: "Focus on a deck"' in script
         assert b'label: "Add study material"' in script
-        assert b'label: "Manage paid operations"' in script
+        assert b'label: "Manage model calls"' in script
         assert b'label: "How changes work"' not in script
     finally:
         sidecar.close()
@@ -2423,7 +2451,7 @@ def test_shell_does_not_classify_a_readable_deck_by_revision_support() -> None:
         assert b'label: "Explore my library"' in script
         assert b'label: "Focus on a deck"' in script
         assert b'label: "Add study material"' in script
-        assert b'label: "Manage paid operations"' in script
+        assert b'label: "Manage model calls"' in script
         assert b'label: "How changes work"' not in script
         assert b"Chat only" not in script
         assert b"Chat + changes" not in script

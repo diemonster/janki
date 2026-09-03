@@ -698,7 +698,7 @@ class AssistantContextBroker:
             )
 
         self._register("status", "Project status", "project-status")
-        self._register("operations", "Paid operations", "paid-operations")
+        self._register("operations", "Model-call operations", "model-call-operations")
         self._register("patterns", "Grammar pattern store", "pattern-store")
         self._register("kanji", "Kanji reference store", "kanji-store")
         self._register("artifacts", "Media and packages", "artifact-inventory")

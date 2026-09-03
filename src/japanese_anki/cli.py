@@ -4322,7 +4322,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     operations_parser = subparsers.add_parser(
         "operations",
-        help="Show paid model calls that block spending or need cleanup",
+        help="Show model calls that block spending or need cleanup",
     )
     operations_parser.add_argument(
         "--show-reply",

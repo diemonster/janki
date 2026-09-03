@@ -585,7 +585,7 @@ class RevisionAssistantAdapter:
                 effects=effects,
                 disclosures=disclosures,
                 confirm_label=confirm_label,
-                progress_label="Checking paid operation",
+                progress_label="Checking an earlier model call",
             ),
             action_instruction=instruction,
         )
@@ -1956,7 +1956,7 @@ class RevisionAssistantAdapter:
                     effects=effects,
                     disclosures=disclosures,
                     confirm_label=confirm_label,
-                    progress_label="Checking paid operation",
+                    progress_label="Checking an earlier model call",
                 ),
                 action_instruction=intent.instruction,
             )
@@ -2112,7 +2112,7 @@ class RevisionAssistantAdapter:
                     "This is destructive and cannot be undone. The confirmation "
                     "does not authorize another paid call.",
                 ),
-                "Discard paid output and forget",
+                "Discard the captured reply and forget",
             )
         return (
             (*facts, "Forget this finished journal entry and its bound cleanup evidence"),

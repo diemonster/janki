@@ -252,7 +252,7 @@ def _action_options(
             OperationActionOption(
                 action="forget",
                 label=(
-                    "Discard paid reply and forget"
+                    "Discard captured reply and forget"
                     if loses_paid_output
                     else "Forget this finished operation"
                 ),
@@ -409,7 +409,7 @@ def _recovery_binding(
 ) -> _RecoveryBinding:
     if operation.state != "result_captured" or operation.artifact is None:
         raise AssistantOperationError(
-            f"Paid operation {operation.operation_id!r} has no captured result to recover."
+            f"Operation {operation.operation_id!r} has no captured result to recover."
         )
     if operation.kind == "assistant_agent":
         manifest = config.assistant_dir / f"{operation.operation_id}.json"
@@ -417,7 +417,7 @@ def _recovery_binding(
             manifest,
             operation_id=operation.operation_id,
             expected_kind="assistant_agent",
-            states={"request", "complete"},
+            states={"request", "complete", "failed"},
             recovery_kind="assistant_agent",
             result_paths=(manifest,),
         )

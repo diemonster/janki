@@ -515,7 +515,7 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
           icon: "document",
         }},
         {{
-          label: "Manage paid operations",
+          label: "Manage model calls",
           prompt: {json.dumps(MANAGE_OPERATIONS_MESSAGE)},
           icon: "keys",
         }},

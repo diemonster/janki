@@ -46,9 +46,10 @@ enrich_reasoning_effort = "ultra"
 # Opens a second, separately keyed loopback origin for ChatKit. The main
 # workbench never loads third-party JavaScript or shares its session/CSRF
 # secrets with the assistant origin. OpenAI hosts the ChatKit UI, while janki's
-# custom backend sends each ordinary Ask message through this configured Claude
-# transport as one journaled, non-mutating turn. Only the explicit Change deck
-# action can prepare a revision plan.
+# custom backend sends each ordinary Janki message through this configured
+# Claude transport as one journaled turn over bounded repository context. A
+# closed typed intent may prepare an exact local action plan, but the model
+# cannot execute or confirm it.
 enabled = true
 provider = "claude-code"          # local Claude Code Pro/Max subscription login
 model = "claude-opus-5"           # pinned; unsupported model ids are refused

@@ -64,7 +64,7 @@ _ALL_LIBRARY_DECK_ID = "janki:all-library"
 SHOW_DECKS_MESSAGE = "Choose a deck to focus on"
 CAPABILITIES_MESSAGE = "Show me what I can do with my Japanese library"
 SOURCE_HELP_MESSAGE = "How do I add study material?"
-MANAGE_OPERATIONS_MESSAGE = "Manage paid operations"
+MANAGE_OPERATIONS_MESSAGE = "Manage model calls"
 _ASSISTANT_SCOPE = "janki-project"
 _ACTIVE_DECK_ID_KEY = "janki_active_deck_id"
 _ACTIVE_DECK_SCOPE_KEY = "janki_active_deck_scope"
@@ -125,7 +125,7 @@ _PROGRESS_LABELS = frozenset(
         "Checking the reviewed proposal",
         "Checking readings",
         "Saving reviewed cards",
-        "Checking paid operation",
+        "Checking an earlier model call",
         "Deleting canonical cards",
         "Deleting deck definition",
         "Preparing finish",
@@ -2013,7 +2013,7 @@ def create_assistant_core(
         ) -> Any:
             rows: list[dict[str, Any]] = []
             for choice in operation_choices:
-                status = "Blocks new paid calls" if choice.blocks_spending else "Recovery only"
+                status = "Blocks new model calls" if choice.blocks_spending else "Recovery only"
                 evidence = []
                 if choice.has_captured_reply:
                     evidence.append("captured reply")
@@ -2094,7 +2094,7 @@ def create_assistant_core(
                     "type": "ListView",
                     "limit": "auto",
                     "status": {
-                        "text": "Paid operations",
+                        "text": "Model-call recovery",
                         "icon": "keys",
                     },
                     "children": rows,
@@ -2445,22 +2445,22 @@ def create_assistant_core(
                 except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
                     yield NoticeEvent(
                         level="danger",
-                        title="Paid operations unavailable",
+                        title="Model-call recovery unavailable",
                         message=str(error),
                     )
                     return
                 if not operation_choices:
                     yield self._message_event(
                         thread,
-                        "No paid operation is blocking spending or waiting for recovery.",
+                        "No earlier model call is blocking spending or waiting for recovery.",
                     )
                     return
                 yield self._message_event(
                     thread,
                     (
-                        "Choose one exact paid-operation action below. Janki plans "
-                        "it locally, so this status and recovery surface does not "
-                        "make another model call."
+                        "Choose one exact recovery action below. Janki plans it "
+                        "locally, so this status and recovery surface does not make "
+                        "another model call."
                     ),
                 )
                 yield self._current_operation_selector_event(
@@ -2480,10 +2480,10 @@ def create_assistant_core(
             except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
                 yield NoticeEvent(
                     level="danger",
-                    title="Paid operations unavailable",
+                    title="Model-call recovery unavailable",
                     message=(
-                        "Janki did not make a model call because its paid-operation "
-                        f"status could not be checked safely: {error}"
+                        "Janki did not make a model call because the status of its "
+                        f"earlier model calls could not be checked safely: {error}"
                     ),
                 )
                 return
@@ -2513,11 +2513,13 @@ def create_assistant_core(
             if blocking_operations:
                 yield NoticeEvent(
                     level="warning",
-                    title="Paid call needs your decision",
+                    title="Earlier model call needs attention",
                     message=(
-                        "Janki did not make a new model call. An earlier paid operation "
-                        "needs your decision first. Choose one exact action below; "
-                        "local deck selection remains available."
+                        "Janki did not make a new model call. An earlier model call "
+                        "left an unsettled result that needs your decision first. "
+                        "Choose one exact action below; local deck selection remains "
+                        "available. This settles that one earlier call and is not a "
+                        "confirmation for each question."
                     ),
                 )
                 yield self._current_operation_selector_event(
@@ -2613,9 +2615,9 @@ def create_assistant_core(
                     if blocking_operations:
                         yield NoticeEvent(
                             level="warning",
-                            title="Paid call needs your decision",
+                            title="Earlier model call needs attention",
                             message=(
-                                "An earlier or just-started paid operation now blocks "
+                                "An earlier or just-started model call now blocks "
                                 "further model calls. Choose one exact action below; "
                                 "Janki will not recover, end, or discard it without "
                                 "your confirmation."

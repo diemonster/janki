@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from dataclasses import replace
@@ -93,6 +94,26 @@ def _api_response(
                 ),
             }
         ],
+    }
+
+
+def _unanswered_api_response() -> dict[str, Any]:
+    """A reply the provider completes but that carries no answer.
+
+    An incomplete stop reason is how both providers really report this; a
+    provider error means a reply janki could not read, which is a different
+    outcome with a different owner.
+    """
+
+    return {"stop_reason": "max_tokens", "content": []}
+
+
+def _unreadable_api_response() -> dict[str, Any]:
+    """A reply that finished normally but does not match the schema."""
+
+    return {
+        "stop_reason": "end_turn",
+        "content": [{"type": "text", "text": "Not structured output at all."}],
     }
 
 
@@ -517,6 +538,201 @@ def test_run_accepts_only_targets_in_exact_disclosed_context(tmp_path: Path) -> 
     )
 
 
+def test_captured_provider_failure_is_committed_as_a_durable_failed_turn(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    context = _context(focused=False, editable=False)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=context,
+        message="Summarize this library.",
+    )
+    response = _unanswered_api_response()
+    fail_after_capture = _api_call(response)
+
+    with pytest.raises(
+        assistant_agent.AgentRunError,
+        match="returned no complete Assistant answer",
+    ) as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            context_loader=lambda: context,
+            client=object(),
+            api_call=fail_after_capture,
+        )
+
+    operation_id = raised.value.operation_id
+    held = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert held.state == "committed"
+    assert held.blocks_spending is False
+    raw_reply = operations.serialize_response(response)
+    manifest = json.loads(
+        (config.assistant_dir / f"{operation_id}.json").read_text(encoding="utf-8")
+    )
+    assert manifest["state"] == "failed"
+    assert manifest["failure"] == {
+        "message": (
+            "claude-opus-5 returned no complete Assistant answer (max_tokens). "
+            "Its exact reply was captured."
+        ),
+        "provider_reply_base64": base64.b64encode(raw_reply).decode("ascii"),
+        "provider_reply_bytes": len(raw_reply),
+        "provider_reply_sha256": hashlib.sha256(raw_reply).hexdigest(),
+    }
+    assert manifest["provenance"] == {
+        "provider": plan.provider,
+        "billing_class": plan.billing_class,
+        "model": plan.model,
+        "request_fingerprint": plan.request_fingerprint,
+    }
+
+    retry = assistant_agent.plan_agent(
+        config,
+        context=context,
+        message="Try a different question.",
+    )
+    result = assistant_agent.run_agent(
+        config,
+        retry,
+        context_loader=lambda: context,
+        client=object(),
+        api_call=_api_call(_api_response("This answer succeeded.")),
+    )
+
+    assert result.answer == "This answer succeeded."
+
+
+def test_recovery_finishes_a_failed_manifest_without_calling_the_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _project(tmp_path)
+    context = _context(focused=False, editable=False)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=context,
+        message="Summarize this library.",
+    )
+    response = _unanswered_api_response()
+    fail_after_capture = _api_call(response)
+
+    real_commit = operations.OperationJournal.commit_result
+
+    def persist_then_fail(
+        self: operations.OperationJournal,
+        operation_id: str,
+        persist: Any,
+    ) -> Any:
+        persist()
+        raise operations.OperationError("simulated journal commit failure")
+
+    monkeypatch.setattr(
+        operations.OperationJournal,
+        "commit_result",
+        persist_then_fail,
+    )
+    with pytest.raises(assistant_agent.AgentRunError) as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            context_loader=lambda: context,
+            client=object(),
+            api_call=fail_after_capture,
+        )
+    monkeypatch.setattr(
+        operations.OperationJournal,
+        "commit_result",
+        real_commit,
+    )
+    monkeypatch.setattr(
+        assistant_agent.revision_provider,
+        "provider_for",
+        lambda _name: pytest.fail("failed-manifest recovery must not call a provider"),
+    )
+
+    operation_id = raised.value.operation_id
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "result_captured"
+    )
+    result = assistant_agent.recover_agent(config, operation_id)
+
+    assert result.answer == (
+        "The earlier Assistant turn failed: claude-opus-5 returned no complete "
+        "Assistant answer (max_tokens). Its exact reply was captured."
+    )
+    assert result.action_intents == ()
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "committed"
+    )
+
+
+def test_recovery_persists_a_captured_provider_error_from_a_request_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _project(tmp_path)
+    context = _context(focused=False, editable=False)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=context,
+        message="Summarize this library.",
+    )
+    response = _unanswered_api_response()
+    fail_after_capture = _api_call(response)
+
+    real_write = assistant_agent.atomic_write_text_bound
+
+    def fail_failed_manifest(path: Path, text: str, **kwargs: Any) -> Any:
+        if json.loads(text).get("state") == "failed":
+            raise OSError("simulated failed-manifest write failure")
+        return real_write(path, text, **kwargs)
+
+    monkeypatch.setattr(
+        assistant_agent,
+        "atomic_write_text_bound",
+        fail_failed_manifest,
+    )
+    with pytest.raises(assistant_agent.AgentRunError) as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            context_loader=lambda: context,
+            client=object(),
+            api_call=fail_after_capture,
+        )
+    monkeypatch.setattr(
+        assistant_agent,
+        "atomic_write_text_bound",
+        real_write,
+    )
+
+    operation_id = raised.value.operation_id
+    manifest_path = config.assistant_dir / f"{operation_id}.json"
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["state"] == "request"
+
+    result = assistant_agent.recover_agent(config, operation_id)
+
+    assert "returned no complete Assistant answer" in result.answer
+    assert result.action_intents == ()
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["state"] == "failed"
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "committed"
+    )
+
+
 def test_invented_resource_target_is_refused_after_exact_reply_capture(
     tmp_path: Path,
 ) -> None:
@@ -556,6 +772,137 @@ def test_invented_resource_target_is_refused_after_exact_reply_capture(
     )
     assert manifest["state"] == "request"
     assert "answer" not in manifest
+
+
+def test_a_failing_progress_callback_still_settles_the_turn(tmp_path: Path) -> None:
+    """A caller that goes away mid-turn must not strand the operation.
+
+    The progress callback runs after the dispatch boundary is recorded, so if
+    it escapes uncaught the entry stays mid-flight and keeps blocking spending
+    with no typed error to act on. A disconnecting client is exactly when this
+    happens, so the failure has to settle like any other.
+    """
+
+    config = _project(tmp_path)
+    context = _context(focused=False, editable=False)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=context,
+        message="Summarize this library.",
+    )
+
+    def failing_progress(label: str) -> None:
+        if label == "Writing answer":
+            raise RuntimeError("the caller's event loop is closed")
+
+    with pytest.raises(assistant_agent.AgentRunError) as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            context_loader=lambda: context,
+            client=object(),
+            api_call=_api_call(_api_response("This answer never arrives.")),
+            progress=failing_progress,
+        )
+
+    assert raised.value.operation_id
+    held = operations.OperationJournal.load(config.operations_file).operations[
+        raised.value.operation_id
+    ]
+    assert held.state not in {"authorized", "dispatching"}
+
+
+def test_unreadable_provider_reply_is_left_for_the_owner_to_settle(
+    tmp_path: Path,
+) -> None:
+    """A reply janki cannot read is not a reply that said nothing.
+
+    Structured output that finishes normally and only fails schema validation
+    still holds whatever the model wrote. Filing it away as a failure would
+    retire the operation and spend the owner's decision for them, so only a
+    genuinely unanswered reply may settle itself.
+    """
+
+    config = _project(tmp_path)
+    context = _context(focused=False, editable=False)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=context,
+        message="Summarize this library.",
+    )
+
+    with pytest.raises(assistant_agent.AgentRunError, match="schema") as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            context_loader=lambda: context,
+            client=object(),
+            api_call=_api_call(_unreadable_api_response()),
+        )
+
+    operation_id = raised.value.operation_id
+    held = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert held.state == "result_captured"
+    manifest = json.loads(
+        (config.assistant_dir / f"{operation_id}.json").read_text(encoding="utf-8")
+    )
+    assert manifest["state"] == "request"
+    assert "failure" not in manifest
+
+
+def test_recovery_leaves_a_refused_answer_for_the_owner_to_settle(
+    tmp_path: Path,
+) -> None:
+    """A refused answer is not a missing one, and janki must not file it away.
+
+    The failed-manifest path exists for a reply that holds no answer at all.
+    This reply holds one: janki refused it only because an intent named a
+    resource the turn never disclosed. Writing that off as a failure would
+    retire the operation and discard the owner's chance to read what the model
+    actually said.
+    """
+
+    config = _project(tmp_path)
+    context = _context()
+    plan = assistant_agent.plan_agent(
+        config,
+        context=context,
+        message="Change one card.",
+    )
+    intent = {
+        "kind": "revise_cards",
+        "resource_ids": ["resource_invented"],
+        "record_ids": [_record().id],
+        "instruction": "Change the exact selected card.",
+    }
+
+    with pytest.raises(assistant_agent.AgentRunError, match="absent.*context") as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            context_loader=lambda: context,
+            client=object(),
+            api_call=_api_call(_api_response("I prepared it.", intents=[intent])),
+        )
+
+    operation_id = raised.value.operation_id
+    manifest_path = config.assistant_dir / f"{operation_id}.json"
+
+    with pytest.raises(
+        assistant_agent.AgentApplicationError,
+        match="could not be decoded",
+    ):
+        assistant_agent.recover_agent(config, operation_id)
+
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["state"] == "request"
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "result_captured"
+    )
 
 
 def test_record_ids_are_forwarded_to_the_resource_specific_planner(

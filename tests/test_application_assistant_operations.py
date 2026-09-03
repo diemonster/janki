@@ -356,6 +356,40 @@ def test_captured_assistant_agent_can_recover_its_exact_manifest_without_reply_b
     assert payload not in b"\n".join(name.encode() for name in result.result_names)
 
 
+@pytest.mark.parametrize("manifest_state", ["request", "complete", "failed"])
+def test_every_durable_agent_manifest_state_can_still_be_recovered(
+    tmp_path: Path,
+    manifest_state: str,
+) -> None:
+    """A durable manifest state the owner cannot act on is a dead end.
+
+    `recover_agent` settles a `failed` manifest without another model call, but
+    that branch is only reachable if the recovery binding accepts the state.
+    Leaving one out silently reduces the owner's choices to discarding the
+    reply, which is the opposite of what the failed state is for.
+    """
+
+    config = _config(tmp_path)
+    operation_id = "22222222-2222-4222-8222-222222222222"
+    _captured_operation(
+        config,
+        operation_id=operation_id,
+        kind="assistant_agent",
+        source_file="resource_deck",
+    )
+    _manifest(
+        config.assistant_dir / f"{operation_id}.json",
+        kind="assistant_agent",
+        state=manifest_state,
+        operation_id=operation_id,
+    )
+
+    choices = assistant_operations.list_operation_choices(config)
+    choice = next(item for item in choices if item.operation_id == operation_id)
+
+    assert "recover" in [action.action for action in choice.actions]
+
+
 def test_captured_generic_card_revision_routes_to_its_existing_recovery_service(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

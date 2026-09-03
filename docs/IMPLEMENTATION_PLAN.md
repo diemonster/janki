@@ -4433,3 +4433,500 @@ Files: `README.md`, `docs/QUALITY.md`, `docs/IMPORTING.md`,
   review; and every enabled automatic repair is idempotent with zero known false
   positives. These are the evidence that the loop works. More total cards, by
   itself, is not.
+
+---
+
+## Milestone 9 — Pinned kanji mnemonics
+
+*Planned 2026-08-29. This is an implementation milestone, not a workbench
+stage: it changes the shared kanji store and the existing `KanjiInfo` card
+block, and nothing in the contract requires a browser surface. It is independent
+of the open real-source work in M8.5 and the owner gates in W6.*
+
+The first sizing pass counted the 155 entries currently in `data/kanji.json`.
+That is the stale reference store, not the collection's need. The canonical
+collection currently has 277 records and 234 distinct code points that
+`contains_kanji` treats as Han for identity, versus 436 when example sentences
+are incorrectly included. One of the 234 is `々` in `元々`: U+3005 is an
+iteration mark that identity must continue treating as kanji, but it has no
+independent KANJIDIC entry and kanjiapi returns 404. The mnemonic-bearing scope
+is therefore **233 reference characters**, of which 155 are stored and **78 are
+missing**. The store is a strict subset; none of its 155 entries is unused by an
+expression. These numbers are a dated measurement, not the algorithm: the
+lasting invariant is every KANJIDIC-backed character in a current canonical
+expression, never characters found only in examples.
+
+At this size the expected first mnemonic pass is about **$3**, not the earlier
+$2 estimate. That is an estimate, not a cap. Before live use, the command must
+name its exact call count and pass-specific token ceiling, and the owner first
+authorizes one character so actual usage can price the remaining scope. It must
+not inherit the general 64,000-token extraction ceiling for hundreds of tiny
+answers.
+
+Seven architectural decisions are recorded here so implementation cannot
+choose them by accident. The humour register is an eighth, explicit owner
+decision; M9.0 remains unclaimable until the owner confirms or replaces the
+recommendation below:
+
+1. **M9, not W.** Mnemonics ride in shared enrichment and the existing Anki
+   field; the free workbench kanji action does not quietly become paid.
+2. **Expression scope only.** The current scope is 233 KANJIDIC-backed
+   expression characters, not 155 stored entries, 234 identity-Han code points,
+   or 436 expression-plus-example code points. `々` and `〻` remain Han for
+   identity but are not independent reference or mnemonic targets.
+3. **English enrichment, not a third Japanese writer.** `extract` and
+   `enrich --ai` remain the only model paths that author Japanese card content.
+   This optional pass writes an English component explanation and English
+   memory story; it neither authors nor judges Japanese.
+4. **Owner decision — recommended adult/irreverent register.** The proposed
+   boundary allows mild profanity, gross-out humour, and consensual adult
+   innuendo when they make the visual story memorable. It prohibits explicit
+   sex, coercion, sexual violence, minors, hate or slurs, protected-trait
+   humiliation, graphic cruelty, and self-harm. This is a recommendation, not
+   authority inferred from a broad request to continue. Once the owner chooses
+   a boundary, the entire choice lives in one prompt file. A future clean or
+   differently crude register would be another complete prompt, never a config
+   branch.
+5. **The explanation makes the joke accountable.** The answer has a separate
+   plain-English `components` value stating what visible parts the story used,
+   plus a mnemonic of at most two sentences. The prompt forbids a pun on the
+   English gloss alone, an “imagine…” opener, and explaining why the joke is
+   funny. janki checks identity and shape, not whether the decomposition or
+   Japanese is correct.
+6. **Presence is the pin.** One optional nested mnemonic bundle carries the
+   components, story, and complete provider/request provenance. There is no
+   `reviewed` boolean. Default generation fills only an absent bundle; only
+   repeatable, exact `--only 前` selects named absent bundles, and only
+   repeatable, exact `--redo 前` authority may replace existing bundles.
+7. **Synchronous and journaled, one character per call.** Completed characters
+   become durable immediately, a failure is local, and redo stays local. Do not
+   use Anthropic's Message Batches API: its discount does not justify adding an
+   unjournaled 24-hour job lifecycle with submit, polling, expiry, partial
+   results, and recovery states the operation journal does not have.
+8. **Do not block on the separate `enrich --ai` journal gap.** M9 uses the
+   existing synchronous write-ahead journal correctly from its first call and
+   does not copy either enrich path. Closing immediate and Batch enrichment's
+   distinct recovery gaps remains separate work; claiming only half of that
+   lifecycle here would make neither path safe.
+
+Lane map: M9.0 → {M9.1A, M9.1B} → M9.2 → M9.3. M9.1A and M9.1B are both
+free, independent implementation tasks and may land in either order.
+
+### [ ] M9.0 Authority, scope and prompt contract
+
+Amend the authority before adding a third model-authored, card-visible path.
+In `docs/DESIGN.md` pipeline §2 and `AGENTS.md`'s prompt rules, retain the two
+Japanese/card-writing calls and name the separate optional English-only kanji
+mnemonic enrichment. In DESIGN's enrichment section, say that the model reports
+its visible components and memory story, while janki performs no Japanese or
+component-correctness audit. In both files' `data/kanji.json` lifecycle text,
+replace “only upstream reference data” with the exact split: KANJIDIC/KanjiVG
+facts may refresh, while the pinned model bundle is preserved and may be
+replaced only by named owner authority. Update the matching contracts in
+`README.md`, `docs/ENRICHMENT.md`, and `kanji.py`'s module description. The
+renderer attribution must continue crediting KANJIDIC and KanjiVG for their
+facts and must separately attribute the mnemonic's recorded provider/model.
+
+Generalize the paid-operation wording in DESIGN, AGENTS, and the operation
+module documentation at the same authority boundary. `committed` means the
+exact paid answer has reached the operation kind's declared durable
+destination; extraction's destination is staging, coverage's is its recorded
+decision, and a mnemonic's is the strict kanji-store bundle. Staging remains
+the only destination for card-writing answers. Automatic successful cleanup of
+a new mnemonic operation may retire its receipt only after that destination
+contains both result provenance and the provider usage/cost evidence required
+below. This does not change owner-directed disposition of existing extraction
+or coverage operations, whose durable schemas and forget contract remain as
+they are.
+
+After the owner explicitly confirms or replaces the recommended register, add
+`prompts/kanji-mnemonic.md`. It is the byte-for-byte system prompt, re-read on
+every call and fingerprinted. It contains that one chosen register and the
+load-bearing content rules: visually grounded components in their own field;
+one memorable story of no more than two sentences; no gloss-only pun; no
+“imagine…” opener; no explanation of the joke. It receives **no**
+`style-guide.md`: that guide controls Japanese card register such as writing
+verbs as “to …”, which is the opposite of this pass's job. The data turn and
+terse response-schema descriptions remain the only generated prompt pieces.
+
+The response is one exact character, one nonblank component explanation, and
+one nonblank story. Echoing the requested character and requiring exact
+equality is artifact identity, not reading Japanese. Sentence count and humour
+quality stay prompt responsibilities; do not build punctuation counting,
+radical recognition, semantic comparison, or a banned-word validator.
+
+Depends on: M8.1–M8.4, W3's completed operation journal.
+Files: `docs/DESIGN.md`, `AGENTS.md`, `README.md`, `docs/ENRICHMENT.md`,
+`src/japanese_anki/kanji.py`, `src/japanese_anki/operations.py`,
+`prompts/kanji-mnemonic.md`, prompt-contract tests. This stage cannot be
+claimed until the owner has made the register decision above.
+
+Tests and individual mutations: the new authority text continues to say there
+are only two Japanese-writing calls; the mnemonic prompt is loaded byte for
+byte and re-read; style-guide bytes do not enter its request or fingerprint;
+each load-bearing prompt clause and the exact-character schema assertion has a
+test that fails when that one clause or comparison is removed.
+
+### [ ] M9.1A Strict, pinned store and the existing card block
+
+First separate “Han for stable identity” from “independent KANJIDIC reference
+character.” Keep `contains_kanji("々")` and `contains_kanji("〻")` true, but make
+the kanji reference selector iterate the NFKC-normalized expression and omit
+both iteration marks from that normalized result. `janki kanji`, targeted finish
+enrichment, store lookup for rendering, and mnemonic planning share that
+selector. This keeps a compatibility or Kangxi-radical spelling from being
+identified as one character but fetched and stored under its raw lookalike. The
+real-corpus assertion is 233 current reference characters and 78 missing before
+backfill. Do not silently intersect a mnemonic plan with whatever happens to be
+in the stale store, and do not invent a fake KANJIDIC entry for an iteration
+mark.
+
+Make `data/kanji.json` safe to extend before extending it. `KanjiInfo.from_dict`
+currently ignores unknown keys, and the next successful save rewrites the
+whole store without them. Refuse unknown keys at every rewritten object level:
+the character entry, each reading, each reading example, and the new mnemonic
+bundle. The store wire is keyed by character and therefore forbids an inner
+`character` key outright, even when its value happens to match the map key; the
+loader supplies identity exactly once from that key. This is a strict schema
+change against a currently clean store, not a compatibility path.
+
+Add one optional all-or-nothing `KanjiMnemonic` bundle to `KanjiInfo`:
+`components`, `story`, provider, exact model id, prompt/schema/request
+fingerprints, consent fingerprint, operation id, and generation time. Its
+strict `price_basis` and consent evidence record the currency, per-million rate
+for every token class, official pricing source and as-of date, deterministic
+per-request input-token estimates, expected cost, and conservative exposure
+estimate that were displayed before dispatch. Its separate `actual_usage`
+records the exact provider-returned `input_tokens`, `output_tokens`,
+`cache_creation_input_tokens`, and `cache_read_input_tokens`; `actual_cost` is
+calculated from those counters using the exact consented price basis. Adding a
+provider usage class requires an explicit strict-schema update rather than
+silently undercounting it. Every value is present and valid and the bundle is
+either wholly present or absent. Sparse old entries omit it; an ordinary save
+must not spray null placeholders through the file. The provider request
+fingerprint binds the exact character, meanings and readings sent, prompt,
+schema, model, effort, and pass-specific max-token value; the separate consent
+fingerprint binds the whole paid plan and cost evidence defined in M9.2. Both
+become durable in the same atomic save as the story before operation cleanup
+can erase its write-ahead reply.
+
+An ordinary `janki kanji --refresh` replaces KANJIDIC/KanjiVG facts, but must
+carry the old mnemonic bundle across as one unchanged value. Fresh upstream
+`KanjiInfo` has no mnemonic, so merely adding a formal field is not enough: the
+current whole-entry replacement would still erase everything generated. A
+targeted reference addition and an unrelated concurrent save likewise preserve
+every existing bundle.
+
+Render escaped components and story inside the existing `KanjiInfo` HTML
+block, with the recorded provider/model attribution. `FIELD_NAMES` already
+contains `KanjiInfo`; append no Anki field, change no note type, and require no
+one-way Anki migration. Empty legacy bundles render nothing.
+
+Depends on: M9.0.
+Files: `src/japanese_anki/identifiers.py`, `src/japanese_anki/kanji.py`,
+`src/japanese_anki/application/kanji_addition.py`,
+`src/japanese_anki/exporters/anki.py`, the existing card CSS/templates,
+`docs/DATA_MODEL.md`, and kanji/application/exporter/template tests.
+
+Tests and individual mutations: both iteration marks stay identity-Han but
+never cause a reference fetch or card sub-block; normalized compatibility and
+Kangxi-radical spellings select their normalized reference character; current
+expressions yield 233 targets while example-only characters do not; each
+unknown-key level refuses and a real rewrite-path test proves the unknown data
+cannot be silently dropped; any inner `character` key refuses; partial mnemonic
+bundles refuse; complete content, usage and pricing bundles round-trip; an
+ordinary reference refresh preserves the exact bundle; an unrelated concurrent
+addition survives; the renderer includes and escapes both values and
+attribution; removing any one guard makes its named test fail.
+
+### [ ] M9.1B Shared paid-operation lifecycle and successful cleanup
+
+Move the generic synchronous helpers for capture-before-parse, settlement, and
+failure classification out of `application/extraction.py` into one paid-model
+operation service used by extraction, coverage, and mnemonics. Keep
+extraction's target/output authorization and `complete_extraction` in its own
+application service. Delete the superseded imports and helper copies in the
+same change; no legacy shim.
+
+Close the successful-operation cleanup gap before multiplying it by 233 calls.
+After a mnemonic bundle is durably stored and `commit_result` has recorded that
+fact, including exact provider usage and cost evidence, retire the exact
+committed operation and bound pending reply through the journal's ordinary
+non-force forget transaction. This milestone deliberately does **not** prune
+existing extraction or coverage receipts: their current staging/decision
+schemas do not retain usage and cost evidence, and expanding those durable
+schemas is separate work. Moving shared dispatch helpers must leave their
+cleanup behavior unchanged. A mnemonic cleanup failure leaves its durable,
+retryable nonblocking tombstone discoverable through `janki operations`; it
+never causes a second provider call and nobody deletes `.pending` by hand.
+
+Depends on: M9.0.
+Files: `src/japanese_anki/application/` shared paid-operation service,
+`src/japanese_anki/application/extraction.py`,
+`src/japanese_anki/application/coverage.py`, `src/japanese_anki/operations.py`,
+DESIGN/AGENTS/operation lifecycle documentation, status/CLI operation
+reporting, and operation/application tests.
+
+Tests and individual mutations: authorization remains under the journal lock;
+exact provider bytes land before parsing and before the journal claims capture;
+an unknown outcome never redispatches; a durable successful output precedes
+commit and cleanup; exact committed replies and entries disappear on success;
+injected mnemonic cleanup failure leaves a nonblocking retryable intent;
+extraction and coverage retain both their existing recovery and no-cleanup
+behavior after the move; every ordering test is mutation-proved at the
+production line it names.
+
+### [ ] M9.2 Exact journaled mnemonic service and CLI
+
+Add `janki kanji-mnemonics`. With no options it plans every current reference
+character whose mnemonic bundle is absent. Repeatable `--only 前` selects an
+exact named subset of absent bundles, which is how the first paid canary is
+possible; it refuses a present bundle. Repeatable `--redo 前` names the only
+existing bundles the owner authorizes replacing. The two selectors are mutually
+exclusive, and each refuses a character outside the current expression scope,
+without reference facts, or named twice; `--redo` additionally refuses an
+absent bundle. There is no all/bulk redo and no mnemonic `--refresh`. The
+ordinary KANJIDIC `janki kanji --refresh` remains a different, free operation
+and preserves the bundle as M9.1A requires.
+
+Offline target and request planning is free and complete before credentials,
+authority, or dispatch. It loads one canonical snapshot, derives the exact
+reference-character scope, requires every target to exist in the strict kanji
+store, reads the prompt and schema, resolves the explicit Opus 5 model and
+project-default effort, chooses a fingerprinted mnemonic-specific max-token
+ceiling, and builds the exact per-character data turns and complete requests.
+It must not inherit extraction's 64,000-token ceiling, but it also must not
+repeat the paid no-answer defect from
+the recorded 16,000-token xhigh run. The initial one-character canary uses a
+reviewed, explicitly named 32,000-token ceiling. That is an owner-visible
+maximum-risk choice for one call, not evidence that xhigh will finish within it;
+the hard output-token ceiling and displayed conservative total exposure
+estimate are the authority boundary. If the canary completes using at most
+16,000 output tokens, a reviewed free change sets
+the remaining ceiling to
+`min(32000, ceil_to_1000(max(4000, 2 * canary_output_tokens)))`. If it uses more
+or does not complete, bulk remains disabled until the prompt or plan is revised
+and separately authorized; there is no automatic retry. One sample does not
+prove the distribution—the deterministic two-times margin, hard ceiling,
+stop-on-first-incomplete rule, and separately displayed bulk exposure estimate
+are the chosen risk bounds. If any current reference character is missing,
+refuse the whole paid plan and direct the owner to `janki kanji`; do not spend
+on the stored subset. If default mode has nothing to fill, exit without constructing a
+client or contacting a provider **only after** the mnemonic recovery scan below
+finds nothing to reconcile. A healthy zero-work run makes no write; a recovery
+run may be required to finish an already-paid store commit or journal cleanup.
+
+After that offline plan—and before the healthy zero-work return—prepare and
+bind the local journal/recovery store and output directories, then perform
+cleanup/recovery discovery as specified below; this makes no provider contact.
+An exact captured or committed operation recovers from its durable consent
+evidence with no new count call or consent; an `authorized` or uncertain-send
+state follows the explicit refusal rules below. Once mnemonic recovery is settled,
+apply the journal's read-only busy display and refuse on any unrelated blocking
+operation before disclosing requests to token counting. This early check saves
+needless external contact; `OperationJournal.authorize` under its lock remains
+the authoritative race-time gate.
+
+With no recoverable operation or blocker, print a separate pre-count disclosure
+**before any Anthropic contact**. It names Anthropic, the system prompt and
+response schema, the exact characters plus stored meanings and readings that
+will leave the repository, the worst-case count-call total
+(one initial count for every request plus one fresh recount before every
+authorization), the purpose, and the facts that token counting creates no
+Message and is free but still external disclosure. Stop-on-first-incomplete may
+reduce the actual recounts but never increase that displayed total. An
+interactive owner must confirm it; a non-TTY refuses unless `--yes` explicitly
+grants this advance disclosure authority. Declining makes zero provider
+requests.
+
+Only then prepare provider credentials/client and call Anthropic's
+non-generative token-count endpoint for each exact request. Its result is an
+estimate, so define the deterministic conservative input estimate as
+`max(counted_input_tokens + 256, 2 * canonical_request_utf8_bytes)` for each
+request. The canonical wire, formula version, returned count, and resulting
+estimate are plan data. Tests cover Japanese, astral Unicode, escaping, the
+full JSON schema, and request-structure changes. A count failure refuses before
+journal authority; never substitute a guessed character/token ratio.
+
+Before consent, print the exact model, purpose, character/call count, list of
+named fills and redos, pass-specific token ceiling, and two dollar figures. The
+expected figure uses the measured canary counters when they exist (and is
+labelled an estimate for the canary itself). The conservative exposure estimate
+prices every request's input estimate at the highest input/cache-write rate its
+exact request can incur and every allowed output token at the output rate. The
+output portion is a hard ceiling; Anthropic documents preflight input counts as
+estimates, so total dollars are explicitly **not** presented as an absolute cap
+and actual cost may differ slightly. Both
+calculations record their currency, per-token-class rates, official pricing
+source, and as-of date; a basis more than seven days old or missing a possible
+token class refuses rather than printing reassuring fiction. A non-TTY refuses
+unless `--yes` supplies that exact advance consent.
+
+Fingerprint the complete consent plan separately from each provider request.
+It binds the command mode and selectors, ordered character/call list and count,
+every complete request fingerprint, token-count result, input-estimate
+formula/version/value, full price basis, expected amount, and conservative
+exposure estimate. Immediately before every new authorization, re-read the
+price basis and re-plan the fresh exact target, then compare the immutable consent snapshot
+and that target's current facts with what the owner saw; any difference refuses
+without a send. Prior characters completed by this same consented run are the
+only expected state changes and cannot widen or reprice its remaining list.
+Bulk consent is process-local and forward-only: only the character about to be
+sent receives durable one-use journal authority. A clean exit or crash between
+characters discards authority for every future call; a restart skips completed
+bundles, re-plans the remaining set, repeats both disclosures, and asks again.
+Never treat a consent snapshot copied into a completed bundle as authority for
+another provider call.
+
+Give mnemonic operations stable journal identities. `kind` is
+`kanji-mnemonic`, `source_file` is `kanji:<character>`, `source_sha256` is the
+SHA-256 of canonical JSON containing the exact character plus stored meanings
+and readings sent, and `request_fp` is the complete provider request
+fingerprint. Extend the strict operation wire with the mnemonic's complete
+consent snapshot—consent fingerprint, price basis, counts/estimates, expected
+and exposure-estimate amounts, selectors, and ordered call list—so a crash
+recovery never reconstructs old authority using today's rates or code.
+`authorize` persists it
+under the same journal lock as the ordinary one-use authority.
+
+Before new authorization, retry **any** existing cleanup intent through its
+ordinary exact forget transaction, regardless of request match, then reload and
+re-plan. After cleanup intents are gone, discover non-cleanup operations for
+that source and exact request/model identity, before either a token-count or
+Message call:
+
+- `authorized` proves nothing was sent. Do not spend from stale process state;
+  refuse and direct the owner to end it as canceled-before-send through the
+  ordinary operations command, then re-plan and re-consent.
+- `dispatching`, `running`, and `outcome_unknown` may have reached the provider
+  without captured evidence. Never resend; require ordinary owner settlement.
+- Exactly one matching `result_captured` operation is read only through its
+  still-bound journal artifact. Validate its exact bytes and hash before
+  provider-shape parsing, then follow the ordinary store CAS and cleanup without
+  a send, using the consent evidence already in that operation.
+- A matching `committed` operation is cleanable only when the bundle already
+  carries its operation/request provenance; otherwise refuse the inconsistency.
+
+More than one match or a mismatched non-cleanup operation for the same character
+also refuses for explicit owner disposition. After these state-specific checks,
+an unrelated unfinished paid operation triggers the early read-only busy refusal
+above; mnemonics still rely on the later locked authorization gate for races and
+get no bypass.
+
+Execute synchronously, one character at a time, and stop on the first
+incomplete result. Before each authorization, re-plan that exact character and
+compare it with the consented target: canonical scope, current reference facts,
+old absent/present mnemonic revision, prompt, schema, model, effort, max tokens,
+complete request, fresh free token count/estimate, price basis, cost arithmetic,
+and consent fingerprint must still match. Never widen a run to a character
+added after consent. Authorize one `kanji-mnemonic` operation under the journal
+lock, persisting its complete consent evidence, mark dispatching, capture the
+exact provider response before parsing, and require the returned character to
+equal the request. Provider/schema/truncation failure leaves the captured answer
+or unknown outcome truthful and stops; it does not retry automatically. On a
+complete answer, the provider boundary also extracts the exact
+input/output/cache usage counters from those captured bytes; missing or newly
+unrecognized billable counters refuse before cleanup rather than understate
+cost.
+
+Commit under the existing canonical → kanji lock order. Re-read both scope and
+strict store, refuse if any target input changed, preserve unrelated concurrent
+entries, and in fill mode refuse if another writer supplied a bundle while the
+call ran. Redo replaces only the exact old bundle fingerprint the owner saw.
+Write the complete bundle atomically, then mark the operation committed and run
+M9.1B's ordinary cleanup. A crash after capture reuses only a matching bound
+reply and never dispatches; a crash after the atomic store write recognizes the
+same operation/request provenance already landed, finishes journal cleanup, and
+does not rewrite or pay again. A mismatched captured operation remains for
+`janki operations --show-reply` and explicit owner disposition.
+
+Send only the character plus its stored meanings and readings. Do not send SVG
+stroke paths, word examples, canonical source provenance, example sentences,
+or `style-guide.md`. The model supplies components and story; janki never
+derives radicals, checks the decomposition, compares meanings, repairs a joke,
+or reads Japanese.
+
+Depends on: M9.1A, M9.1B.
+Files: `src/japanese_anki/application/kanji_mnemonics.py` (new),
+`src/japanese_anki/kanji_mnemonics.py` (new provider/schema boundary),
+`src/japanese_anki/claude_client.py`, `src/japanese_anki/cli.py`,
+`src/japanese_anki/operations.py`, `prompts/kanji-mnemonic.md`, README/command
+docs, and focused CLI/application/provider tests.
+
+Tests and individual mutations: expression-only and complete-reference
+planning; existing-bundle skip; exact absent-only `--only`; exact existing-only
+`--redo`; mutual-exclusion, duplicate, unknown, absent/present and out-of-scope
+selector refusals; zero-work makes zero client/journal/store calls; non-TTY
+consent; declined pre-count disclosure makes zero external calls; its non-TTY
+advance authority is explicit; provider construction before authority; free
+count-token calls create no journal entry; count failure prevents paid
+consent/authority; adversarial input-estimate arithmetic; every provider-request
+and consent-fingerprint input; expected and exposure-estimate arithmetic with a
+dated price basis;
+price/count/cost drift at click; per-character re-plan; stable journal source
+fields and durable consent snapshot; cleanup intent first; zero/one/many and
+mismatched recovery
+discovery; bound-byte validation; journal authorization before dispatch; exact
+capture before parse; response-character equality; complete usage and actual
+cost capture; stop-on-first failure; stale scope, reference and old-bundle
+refusals; unrelated concurrent-store preservation;
+fill-vs-concurrent-writer refusal; redo replaces only the named exact revision;
+restart after one completed character requires fresh authority for the rest;
+capture recovery and post-store crash recovery without redispatch; committed
+cleanup; canary and calibrated max-token ceilings; no style guide, strokes,
+examples, or private source data in the request. Break each named production
+claim separately and prove its test fails.
+
+### [ ] M9.3 Free backfill and owner-authorized rollout
+
+No paid rollout begins until M9.0–M9.2 are reviewed, mutation-proved, and
+`make gates` is green. First run ordinary `janki kanji`: after the iteration-mark
+boundary lands, it should add the 78 currently missing reference entries and
+leave a complete 233-character expression scope. This is the free KANJIDIC/
+KanjiVG prerequisite. Inspect and commit that reference diff before asking a
+model anything. If the measured target count changes with the collection,
+record the new dynamic facts rather than editing code to force 233.
+
+Then use `--only` to show the owner the exact one-character plan and request
+separate authority for that paid canary. Inspect its stored components, story,
+provenance, exact provider usage counters, recorded price basis, actual cost,
+and consented conservative exposure estimate. A weak or wrongly toned answer
+changes `prompts/kanji-mnemonic.md`; a structural machinery defect gets a
+failing test. Neither result authorizes an automatic retry. Before any remaining
+call, use
+that receipt to land and review the free calibrated-ceiling change described in
+M9.2, run the gates again, and show the owner the remaining exact character
+list, measured estimate, and conservative exposure estimate. Only separate
+authority for that complete display permits the remaining run. The expected total at this
+snapshot is about $3, but it is not a cap: the measured canary, current dated
+price basis, and displayed exposure estimate replace that estimate as the
+honest budget evidence.
+
+Review the resulting `data/kanji.json` diff, rebuild the real decks, and inspect
+the existing `KanjiInfo` block on desktop/mobile and in dark mode. A default
+rerun must make zero calls and zero writes. Exercise one explicitly named redo
+and prove every other bundle stays byte-for-byte equal. Exercise an ordinary
+KANJIDIC refresh with fake/reference fixtures and prove the pinned bundle stays
+equal; do not pay to refresh reference data merely for this acceptance.
+
+Depends on: M9.2 and exact owner authority for each live paid scope.
+Files: the 78 free reference additions and then the generated mnemonic bundles
+in `data/kanji.json`, plus the deck artifacts under `dist/` for inspection only.
+
+**Ships when:** every current mnemonic-bearing character in a canonical
+expression has a stored reference entry and one complete pinned mnemonic bundle
+with exact provider/model/prompt/schema/request/operation, usage, and dated cost
+provenance (233 at the 2026-08-29 snapshot); default rerun performs no provider
+call or write; named fill/redo changes only named bundles; ordinary reference
+refresh preserves every bundle; no unknown store key can be silently erased;
+no committed `kanji-mnemonic` reply blob or tombstone remains except a retryable
+failed cleanup intent; the existing Anki field renders escaped components,
+story, and attribution; the owner has
+inspected the canary and completed corpus result; and `make gates` passes.
+
+**Must not be built:** a workbench surface; a Batch lifecycle; a bulk mnemonic
+refresh/redo; a `reviewed` flag; a tone config key; style-guide inclusion; a
+Japanese, radical, component, humour, or gloss-correctness validator; a code
+repair for weak model prose; a new Anki field or note-type migration; an
+unjournaled send; an automatic retry; or a compatibility shim for unknown store
+keys.
