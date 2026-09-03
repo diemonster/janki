@@ -25,6 +25,10 @@ from typing import Any
 
 from japanese_anki.localhttp import MAX_BODY_BYTES, LocalOnlyHandler, LocalOnlyServer, bind_loopback
 from japanese_anki.workbench.assistant import (
+    CAPABILITIES_MESSAGE,
+    MANAGE_OPERATIONS_MESSAGE,
+    SHOW_DECKS_MESSAGE,
+    SOURCE_HELP_MESSAGE,
     AssistantCore,
     AssistantDeckChoice,
     RevisionCallbacks,
@@ -494,27 +498,27 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
     frame_title = "janki Japanese-library assistant"
     placeholder = "Ask Janki or attach a source"
     greeting = "What would you like to do?"
-    starter_prompts = """[
-        {
+    starter_prompts = f"""[
+        {{
           label: "Explore my library",
-          prompt: "Show me what I can do with my Japanese library",
+          prompt: {json.dumps(CAPABILITIES_MESSAGE)},
           icon: "book-open",
-        },
-        {
+        }},
+        {{
           label: "Focus on a deck",
-          prompt: "Choose a deck to focus on",
+          prompt: {json.dumps(SHOW_DECKS_MESSAGE)},
           icon: "notebook",
-        },
-        {
+        }},
+        {{
           label: "Add study material",
-          prompt: "How do I add study material?",
+          prompt: {json.dumps(SOURCE_HELP_MESSAGE)},
           icon: "document",
-        },
-        {
+        }},
+        {{
           label: "Manage paid operations",
-          prompt: "Manage paid operations",
+          prompt: {json.dumps(MANAGE_OPERATIONS_MESSAGE)},
           icon: "keys",
-        },
+        }},
       ]"""
     if server.attachment_store is None:
         attachments = "{ enabled: false }"

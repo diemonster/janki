@@ -141,6 +141,8 @@ class _FakeRevisions:
     chat_entered: threading.Event | None = None
     chat_release: threading.Event | None = None
     chat_finished: threading.Event | None = None
+    operation_entered: threading.Event | None = None
+    operation_release: threading.Event | None = None
     finish_entered: threading.Event | None = None
     finish_release: threading.Event | None = None
     finish_finished: threading.Event | None = None
@@ -168,6 +170,10 @@ class _FakeRevisions:
     finish_result: RevisionFinishExecution | None = None
 
     def list_operation_choices(self) -> tuple[OperationChoice, ...]:
+        if self.operation_entered is not None:
+            self.operation_entered.set()
+        if self.operation_release is not None and not self.operation_release.wait(3):
+            raise AssertionError("the test never released operation status")
         return self.operation_choices
 
     def prepare_operation_action(
@@ -651,6 +657,33 @@ def _assistant_deck_choices() -> tuple[AssistantDeckChoice, ...]:
     )
 
 
+def _blocking_operation_choice() -> OperationChoice:
+    return OperationChoice(
+        operation_id="captured-op",
+        kind="assistant_chat",
+        state="result_captured",
+        source_name="request.json",
+        model="claude-opus-5",
+        authorized_at="2026-09-02T00:00:00+00:00",
+        blocks_spending=True,
+        money_may_have_been_spent=True,
+        has_captured_reply=True,
+        has_response_spool=False,
+        cleanup_pending=False,
+        actions=(
+            OperationActionChoice(
+                action="show_reply",
+                label="Show exact recovery reply",
+            ),
+            OperationActionChoice(
+                action="forget",
+                label="Discard paid reply and forget",
+                accept_paid_output_loss=True,
+            ),
+        ),
+    )
+
+
 def _start_deck_selector(
     sidecar: Any,
 ) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
@@ -755,6 +788,193 @@ def test_local_deck_starter_renders_one_use_selector_without_chat_callback() -> 
         sidecar.close()
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "let's pick new study content",
+        "Let’s pick new study content!",
+        "switch to a different deck",
+        "Choose an active deck.",
+    ],
+)
+def test_natural_deck_switch_request_renders_local_selector_without_paid_chat(
+    message: str,
+) -> None:
+    revisions = _FakeRevisions(operation_choices=(_blocking_operation_choice(),))
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, first_selector, _events_before = _start_deck_selector(sidecar)
+        assert _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )[0] == 200
+
+        events = _events(
+            _post(sidecar, _followup_message_request(thread_id, message))[2]
+        )
+
+        [selector] = _widget_items(events)
+        assert selector["widget"]["status"]["text"] == "Optional deck focus"
+        assert revisions.chatted == []
+        assert [event for event in events if event["type"] == "progress_update"] == []
+        assert not any(
+            event["type"] == "notice" and event.get("level") == "danger"
+            for event in events
+        )
+    finally:
+        sidecar.close()
+
+
+def test_non_navigation_study_content_question_still_uses_chat() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        message = "What new study content is in this deck?"
+        events = _events(_post(sidecar, _message_request(message))[2])
+
+        assert revisions.chatted == [("", message)]
+        assert _widget_items(events) == []
+    finally:
+        sidecar.close()
+
+
+def test_blocking_paid_operation_renders_local_recovery_without_chat() -> None:
+    revisions = _FakeRevisions(operation_choices=(_blocking_operation_choice(),))
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        events = _events(
+            _post(sidecar, _message_request("Tell me about my Japanese library"))[2]
+        )
+
+        [manager] = _widget_items(events)
+        wire = json.dumps(manager["widget"], ensure_ascii=False)
+        assert manager["widget"]["status"]["text"] == "Paid operations"
+        assert "captured-op" in wire
+        assert "Show exact recovery reply" in wire
+        assert "Discard paid reply and forget" in wire
+        assert revisions.chatted == []
+        assert [event for event in events if event["type"] == "progress_update"] == []
+        assert any(
+            event["type"] == "notice"
+            and event.get("title") == "Paid call needs your decision"
+            for event in events
+        )
+    finally:
+        sidecar.close()
+
+
+def test_recovery_only_paid_operation_does_not_preempt_chat() -> None:
+    recovery_only = replace(_blocking_operation_choice(), blocks_spending=False)
+    revisions = _FakeRevisions(operation_choices=(recovery_only,))
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        message = "Tell me about my Japanese library"
+        events = _events(_post(sidecar, _message_request(message))[2])
+
+        assert revisions.chatted == [("", message)]
+        assert _widget_items(events) == []
+    finally:
+        sidecar.close()
+
+
+def test_unavailable_paid_operation_status_refuses_before_chat() -> None:
+    revisions = _FakeRevisions()
+
+    def refuse_status() -> tuple[OperationChoice, ...]:
+        raise RevisionRefusal("Operation status is unreadable.")
+
+    revisions.list_operation_choices = refuse_status  # type: ignore[method-assign]
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        events = _events(
+            _post(sidecar, _message_request("Tell me about my Japanese library"))[2]
+        )
+
+        assert revisions.chatted == []
+        assert any(
+            event["type"] == "notice"
+            and event.get("title") == "Paid operations unavailable"
+            and "did not make a model call" in event["message"]
+            for event in events
+        )
+    finally:
+        sidecar.close()
+
+
+def test_chat_authorization_race_refreshes_blocking_operation_actions() -> None:
+    revisions = _FakeRevisions()
+    operation_checks = iter(((), (_blocking_operation_choice(),)))
+    revisions.list_operation_choices = lambda: next(operation_checks)  # type: ignore[method-assign]
+
+    def refuse_chat(
+        *,
+        deck_scope: str,
+        history: tuple[tuple[str, str], ...],
+        message: str,
+        progress: Any,
+    ) -> ChatReply:
+        del history, progress
+        revisions.chatted.append((deck_scope, message))
+        raise RevisionRefusal("A paid operation began before authorization.")
+
+    revisions.chat = refuse_chat  # type: ignore[method-assign]
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        message = "Tell me about my Japanese library"
+        events = _events(_post(sidecar, _message_request(message))[2])
+
+        [manager] = _widget_items(events)
+        assert manager["widget"]["status"]["text"] == "Paid operations"
+        assert revisions.chatted == [("", message)]
+        assert any(
+            event["type"] == "notice"
+            and event.get("title") == "Answer refused"
+            for event in events
+        )
+        assert any(
+            event["type"] == "notice"
+            and event.get("title") == "Paid call needs your decision"
+            and "blocks further model calls" in event["message"]
+            for event in events
+        )
+    finally:
+        sidecar.close()
+
+
 def test_local_operation_manager_prepares_exact_actions_without_a_model_turn() -> None:
     revisions = _FakeRevisions(
         operation_choices=(
@@ -852,6 +1072,7 @@ def test_local_operation_manager_prepares_exact_actions_without_a_model_turn() -
             completed, ensure_ascii=False
         )
 
+        revisions.operation_choices = ()
         _post(sidecar, _followup_message_request(thread_id, "What is available?"))
         assert revisions.chat_histories[-1] == ()
     finally:
@@ -949,6 +1170,38 @@ def test_unfocused_new_thread_calls_chat_with_empty_deck_scope() -> None:
         assert "Answer about : What does this deck teach?" in json.dumps(
             events, ensure_ascii=False
         )
+    finally:
+        sidecar.close()
+
+
+def test_first_chat_turn_preserves_thread_metadata_store_contract() -> None:
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        events = _events(
+            _post(sidecar, _message_request("Tell me about my Japanese library"))[2]
+        )
+        thread_id = next(
+            event["thread"]["id"]
+            for event in events
+            if event["type"] == "thread.created"
+        )
+
+        status, _headers, body = _post(
+            sidecar,
+            {
+                "type": "threads.get_by_id",
+                "params": {"thread_id": thread_id},
+            },
+        )
+
+        assert status == 200
+        assert json.loads(body)["id"] == thread_id
     finally:
         sidecar.close()
 
@@ -1571,7 +1824,168 @@ def test_active_deck_cannot_switch_during_an_in_flight_chat_turn() -> None:
     assert response and response[0][0] == 200
 
 
-def test_deck_switch_rechecks_for_a_chat_started_during_resolution() -> None:
+def test_chat_reads_fresh_deck_focus_after_paid_operation_preflight() -> None:
+    operation_entered = threading.Event()
+    operation_release = threading.Event()
+    revisions = _FakeRevisions(
+        operation_entered=operation_entered,
+        operation_release=operation_release,
+    )
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    chatter: threading.Thread | None = None
+    chat_response: list[tuple[int, dict[str, str], bytes]] = []
+    try:
+        thread_id, first_selector, _ = _start_deck_selector(sidecar)
+        assert _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )[0] == 200
+        switch_selector = _widget_items(
+            _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose a deck to focus on"),
+                )[2]
+            )
+        )[0]
+
+        chatter = threading.Thread(
+            target=lambda: chat_response.append(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Which deck is in focus?"),
+                )
+            )
+        )
+        chatter.start()
+        assert operation_entered.wait(3)
+
+        switched = _events(
+            _post(
+                sidecar,
+                _action_request(
+                    thread_id,
+                    switch_selector,
+                    _deck_selector_action(switch_selector, "te-form"),
+                ),
+            )[2]
+        )
+        assert not any(event["type"] == "error" for event in switched)
+
+        operation_release.set()
+        chatter.join(3)
+        assert chat_response and chat_response[0][0] == 200
+        assert revisions.chatted == [
+            ("data/decks/teform-drill.yaml", "Which deck is in focus?")
+        ]
+    finally:
+        operation_release.set()
+        if chatter is not None:
+            chatter.join(3)
+        sidecar.close()
+
+
+def test_chat_waits_for_in_progress_deck_focus_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_entered = threading.Event()
+    save_release = threading.Event()
+    chat_entered = threading.Event()
+    revisions = _FakeRevisions(chat_entered=chat_entered)
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    store = sidecar.server.assistant_core.store
+    original_save_thread = store.save_thread
+
+    async def delayed_save_thread(thread: Any, context: Any) -> None:
+        if thread.metadata.get("janki_active_deck_id") == "te-form":
+            save_entered.set()
+            released = await asyncio.to_thread(save_release.wait, 3)
+            if not released:
+                raise AssertionError("the test never released deck-focus persistence")
+        await original_save_thread(thread, context)
+
+    monkeypatch.setattr(store, "save_thread", delayed_save_thread)
+    sidecar.start()
+    switcher: threading.Thread | None = None
+    chatter: threading.Thread | None = None
+    switch_response: list[tuple[int, dict[str, str], bytes]] = []
+    chat_response: list[tuple[int, dict[str, str], bytes]] = []
+    try:
+        thread_id, first_selector, _ = _start_deck_selector(sidecar)
+        assert _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                first_selector,
+                _deck_selector_action(first_selector, "potential"),
+            ),
+        )[0] == 200
+        switch_selector = _widget_items(
+            _events(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Choose a deck to focus on"),
+                )[2]
+            )
+        )[0]
+
+        switcher = threading.Thread(
+            target=lambda: switch_response.append(
+                _post(
+                    sidecar,
+                    _action_request(
+                        thread_id,
+                        switch_selector,
+                        _deck_selector_action(switch_selector, "te-form"),
+                    ),
+                )
+            )
+        )
+        switcher.start()
+        assert save_entered.wait(3)
+
+        chatter = threading.Thread(
+            target=lambda: chat_response.append(
+                _post(
+                    sidecar,
+                    _followup_message_request(thread_id, "Which deck is in focus?"),
+                )
+            )
+        )
+        chatter.start()
+        assert not chat_entered.wait(0.2)
+
+        save_release.set()
+        switcher.join(3)
+        chatter.join(3)
+        assert switch_response and switch_response[0][0] == 200
+        assert chat_response and chat_response[0][0] == 200
+        assert revisions.chatted == [
+            ("data/decks/teform-drill.yaml", "Which deck is in focus?")
+        ]
+    finally:
+        save_release.set()
+        if switcher is not None:
+            switcher.join(3)
+        if chatter is not None:
+            chatter.join(3)
+        sidecar.close()
+
+
+def test_chat_waits_for_deck_resolution_and_uses_resolved_focus() -> None:
     resolve_entered = threading.Event()
     resolve_release = threading.Event()
     chat_entered = threading.Event()
@@ -1636,34 +2050,34 @@ def test_deck_switch_rechecks_for_a_chat_started_during_resolution() -> None:
             )
         )
         chatter.start()
-        assert chat_entered.wait(3)
+        assert not chat_entered.wait(0.2)
 
         resolve_release.set()
         switcher.join(3)
         assert switch_response and switch_response[0][0] == 200
-        refused = _events(switch_response[0][2])
-        assert any(
-            event["type"] == "error" and "still running" in event["message"]
-            for event in refused
+        assert not any(
+            event["type"] == "error"
+            for event in _events(switch_response[0][2])
         )
+        assert chat_entered.wait(3)
         assert revisions.resolved == ["potential", "te-form"]
         assert revisions.chatted == [
-            ("data/decks/potential-practice.yaml", "A question for deck A")
+            ("data/decks/teform-drill.yaml", "A question for deck A")
         ]
 
         chat_release.set()
         chatter.join(3)
         assert chat_response and chat_response[0][0] == 200
-        _post(sidecar, _followup_message_request(thread_id, "Follow up on deck A"))
+        _post(sidecar, _followup_message_request(thread_id, "Follow up on deck B"))
         assert revisions.chatted == [
-            ("data/decks/potential-practice.yaml", "A question for deck A"),
-            ("data/decks/potential-practice.yaml", "Follow up on deck A"),
+            ("data/decks/teform-drill.yaml", "A question for deck A"),
+            ("data/decks/teform-drill.yaml", "Follow up on deck B"),
         ]
         assert revisions.chat_histories[-1] == (
             ("user", "A question for deck A"),
             (
                 "assistant",
-                "Answer about data/decks/potential-practice.yaml: A question for deck A",
+                "Answer about data/decks/teform-drill.yaml: A question for deck A",
             ),
         )
     finally:
@@ -2078,6 +2492,13 @@ def test_revision_support_flag_does_not_intercept_an_ordinary_focused_message() 
 
 def test_capabilities_help_is_repository_wide_and_does_not_select_a_deck() -> None:
     revisions = _FakeRevisions()
+
+    def unexpected_operation_status() -> tuple[OperationChoice, ...]:
+        raise AssertionError("local help must not inspect paid operations")
+
+    revisions.list_operation_choices = (  # type: ignore[method-assign]
+        unexpected_operation_status
+    )
     sidecar = create_assistant_sidecar(
         revisions,
         deck_choices=(

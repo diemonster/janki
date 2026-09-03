@@ -26,6 +26,10 @@ from typing import Any, Literal, Protocol, TypeVar
 from japanese_anki.errors import JankiError
 
 __all__ = [
+    "CAPABILITIES_MESSAGE",
+    "MANAGE_OPERATIONS_MESSAGE",
+    "SHOW_DECKS_MESSAGE",
+    "SOURCE_HELP_MESSAGE",
     "AssistantDeckChoice",
     "AssistantCore",
     "AssistantRequestContext",
@@ -57,10 +61,10 @@ _EXTRACT_CONFIRM_ACTION = "janki.extraction.confirm"
 _SELECT_DECK_ACTION = "janki.deck.select"
 _PREPARE_OPERATION_ACTION = "janki.operation.prepare"
 _ALL_LIBRARY_DECK_ID = "janki:all-library"
-_SHOW_DECKS_MESSAGE = "Choose a deck to focus on"
-_CAPABILITIES_MESSAGE = "Show me what I can do with my Japanese library"
-_SOURCE_HELP_MESSAGE = "How do I add study material?"
-_MANAGE_OPERATIONS_MESSAGE = "Manage paid operations"
+SHOW_DECKS_MESSAGE = "Choose a deck to focus on"
+CAPABILITIES_MESSAGE = "Show me what I can do with my Japanese library"
+SOURCE_HELP_MESSAGE = "How do I add study material?"
+MANAGE_OPERATIONS_MESSAGE = "Manage paid operations"
 _ASSISTANT_SCOPE = "janki-project"
 _ACTIVE_DECK_ID_KEY = "janki_active_deck_id"
 _ACTIVE_DECK_SCOPE_KEY = "janki_active_deck_scope"
@@ -68,6 +72,30 @@ _SELECTION_EPOCH_KEY = "janki_deck_selection_epoch"
 _FINGERPRINT_DISPLAY_CHARS = 32
 _MAX_CHAT_HISTORY_ENTRIES = 12
 _MAX_CHAT_HISTORY_BYTES = 24_000
+_DECK_SELECTOR_MESSAGES = frozenset(
+    {
+        "change active deck",
+        "change the active deck",
+        "choose a deck",
+        "choose a deck to focus on",
+        "choose an active deck",
+        "choose new study content",
+        "i want to work on a different deck",
+        "let's pick new study content",
+        "let's work on a different deck",
+        "pick a deck",
+        "pick a new deck",
+        "pick new study content",
+        "select a deck",
+        "select the active deck",
+        "switch deck",
+        "switch decks",
+        "switch to a different deck",
+        "switch to a new deck",
+        "switch to another deck",
+        "work on a different deck",
+    }
+)
 _CHAT_PROGRESS_LABELS = frozenset(
     {
         "Preparing answer",
@@ -127,6 +155,13 @@ _EXTRACTION_PROGRESS_LABELS = frozenset(
     }
 )
 _T = TypeVar("_T")
+
+
+def _is_deck_selector_message(message: str) -> bool:
+    normalized = " ".join(
+        message.translate(str.maketrans({"‘": "'", "’": "'"})).casefold().split()
+    ).rstrip(".!?")
+    return normalized in _DECK_SELECTOR_MESSAGES
 
 
 def _bounded_chat_history(
@@ -1766,7 +1801,7 @@ def create_assistant_core(
 
         @staticmethod
         def _local_help(message: str) -> str | None:
-            if message == _CAPABILITIES_MESSAGE:
+            if message == CAPABILITIES_MESSAGE:
                 return (
                     "You can use Janki across the whole Japanese library; choosing a "
                     "deck only gives the conversation a convenient focus.\n\n"
@@ -1784,7 +1819,7 @@ def create_assistant_core(
                     "Janki uses bounded application actions rather than giving the model a "
                     "raw shell, arbitrary filesystem, Git, or network access."
                 )
-            if message == _SOURCE_HELP_MESSAGE:
+            if message == SOURCE_HELP_MESSAGE:
                 return (
                     "Use the attachment button to add one PDF or photo. Janki saves "
                     "it locally first, then shows a separate exact extraction plan; "
@@ -2104,6 +2139,31 @@ def create_assistant_core(
                 )
             )
 
+        async def _list_operation_choices(self) -> tuple[OperationChoice, ...]:
+            return _validate_operation_choices(
+                await _call_callback(callbacks.list_operation_choices)
+            )
+
+        def _current_operation_selector_event(
+            self,
+            thread: Any,
+            request_context: AssistantRequestContext,
+            operation_choices: tuple[OperationChoice, ...],
+        ) -> Any:
+            try:
+                return self._operation_selector_event(
+                    thread,
+                    request_context,
+                    operation_choices,
+                )
+            except RevisionRefusal:
+                self._clear_focus(thread)
+                return self._operation_selector_event(
+                    thread,
+                    request_context,
+                    operation_choices,
+                )
+
         def get_stream_options(self, thread: Any, request_context: Any) -> Any:
             del thread, request_context
             return StreamOptions(allow_cancel=False)
@@ -2364,7 +2424,7 @@ def create_assistant_core(
                 )
                 return
 
-            if message == _SHOW_DECKS_MESSAGE:
+            if _is_deck_selector_message(message):
                 if not choices:
                     yield NoticeEvent(
                         level="info",
@@ -2379,11 +2439,9 @@ def create_assistant_core(
                 yield self._selector_event(thread, request_context)
                 return
 
-            if message == _MANAGE_OPERATIONS_MESSAGE:
+            if message == MANAGE_OPERATIONS_MESSAGE:
                 try:
-                    operation_choices = _validate_operation_choices(
-                        await _call_callback(callbacks.list_operation_choices)
-                    )
+                    operation_choices = await self._list_operation_choices()
                 except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
                     yield NoticeEvent(
                         level="danger",
@@ -2397,19 +2455,6 @@ def create_assistant_core(
                         "No paid operation is blocking spending or waiting for recovery.",
                     )
                     return
-                try:
-                    event = self._operation_selector_event(
-                        thread,
-                        request_context,
-                        operation_choices,
-                    )
-                except RevisionRefusal:
-                    self._clear_focus(thread)
-                    event = self._operation_selector_event(
-                        thread,
-                        request_context,
-                        operation_choices,
-                    )
                 yield self._message_event(
                     thread,
                     (
@@ -2418,12 +2463,68 @@ def create_assistant_core(
                         "make another model call."
                     ),
                 )
-                yield event
+                yield self._current_operation_selector_event(
+                    thread,
+                    request_context,
+                    operation_choices,
+                )
                 return
 
             local_help = self._local_help(message)
             if local_help is not None:
                 yield self._message_event(thread, local_help)
+                return
+
+            try:
+                operation_choices = await self._list_operation_choices()
+            except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
+                yield NoticeEvent(
+                    level="danger",
+                    title="Paid operations unavailable",
+                    message=(
+                        "Janki did not make a model call because its paid-operation "
+                        f"status could not be checked safely: {error}"
+                    ),
+                )
+                return
+            selection_lock = self._selection_locks.setdefault(
+                thread.id,
+                asyncio.Lock(),
+            )
+            async with selection_lock:
+                fresh_metadata = (
+                    await store.load_thread(thread.id, request_context)
+                ).metadata
+                current_metadata = dict(thread.metadata)
+                for key in (
+                    _ACTIVE_DECK_ID_KEY,
+                    _ACTIVE_DECK_SCOPE_KEY,
+                    _SELECTION_EPOCH_KEY,
+                ):
+                    if key in fresh_metadata:
+                        current_metadata[key] = fresh_metadata[key]
+                    else:
+                        current_metadata.pop(key, None)
+                if current_metadata != thread.metadata:
+                    thread.metadata = current_metadata
+            blocking_operations = tuple(
+                choice for choice in operation_choices if choice.blocks_spending
+            )
+            if blocking_operations:
+                yield NoticeEvent(
+                    level="warning",
+                    title="Paid call needs your decision",
+                    message=(
+                        "Janki did not make a new model call. An earlier paid operation "
+                        "needs your decision first. Choose one exact action below; "
+                        "local deck selection remains available."
+                    ),
+                )
+                yield self._current_operation_selector_event(
+                    thread,
+                    request_context,
+                    blocking_operations,
+                )
                 return
 
             try:
@@ -2494,6 +2595,37 @@ def create_assistant_core(
                     yield NoticeEvent(
                         level="danger", title="Answer refused", message=str(error)
                     )
+                    try:
+                        operation_choices = await self._list_operation_choices()
+                    except (
+                        JankiError,
+                        RevisionRefusal,
+                        OSError,
+                        TypeError,
+                        ValueError,
+                    ):
+                        return
+                    blocking_operations = tuple(
+                        choice
+                        for choice in operation_choices
+                        if choice.blocks_spending
+                    )
+                    if blocking_operations:
+                        yield NoticeEvent(
+                            level="warning",
+                            title="Paid call needs your decision",
+                            message=(
+                                "An earlier or just-started paid operation now blocks "
+                                "further model calls. Choose one exact action below; "
+                                "Janki will not recover, end, or discard it without "
+                                "your confirmation."
+                            ),
+                        )
+                        yield self._current_operation_selector_event(
+                            thread,
+                            request_context,
+                            blocking_operations,
+                        )
                     return
 
                 yield self._message_event(thread, reply.text)
