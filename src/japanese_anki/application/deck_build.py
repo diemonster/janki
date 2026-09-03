@@ -5,8 +5,9 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePath
 
 from japanese_anki import ledger, status
@@ -20,6 +21,7 @@ from japanese_anki.io import (
     exclusive_path_lock,
     load_records_snapshot,
     read_bytes_bound,
+    read_bytes_bound_snapshot,
     records_revision,
 )
 from japanese_anki.models import VocabularyRecord
@@ -72,7 +74,10 @@ class ConjugationDeckBuildPlan:
     deck_name: str
     form: str
     card_count: int
+    record_ids: tuple[str, ...]
     records: tuple[VocabularyRecord, ...]
+    output_revision: str | None
+    output_identity: tuple[int, int] | None
     fingerprint: str
 
 
@@ -99,6 +104,20 @@ def _fingerprint(value: object) -> str:
             allow_nan=False,
         ).encode("utf-8")
     )
+
+
+def _output_binding(path: Path) -> tuple[str | None, tuple[int, int] | None]:
+    """Bind either exact existing output bytes and inode, or exact absence."""
+
+    try:
+        state, revision, _payload = read_bytes_bound_snapshot(path)
+    except FileNotFoundError:
+        return None, None
+    except (DataError, OSError) as exc:
+        raise DeckBuildError(
+            f"Conjugation deck output must be absent or a direct regular file: {path}: {exc}"
+        ) from exc
+    return revision, state[:2]
 
 
 def _template_paths(config: ProjectConfig) -> tuple[Path, ...]:
@@ -222,7 +241,7 @@ def _output_path(config: ProjectConfig, section: Mapping[str, object], deck: Pat
             "A workbench conjugation build requires one direct .apkg filename "
             "under the configured dist directory."
         )
-    return (config.dist_dir / name).resolve()
+    return Path(os.path.abspath(os.fspath(config.dist_dir / name)))
 
 
 def _revision_inputs(
@@ -271,6 +290,7 @@ def _plan_revision_locked(
     if not cards:
         raise DeckBuildError(f"Conjugation deck would build no cards: {deck}")
     output = _output_path(config, section, deck)
+    output_revision, output_identity = _output_binding(output)
     deck_sha = _sha(deck_wire)
     source_sha = _sha(source_wire)
     template_inputs = _template_inputs(config)
@@ -290,13 +310,20 @@ def _plan_revision_locked(
         raise DeckBuildError("Conjugation build inputs must stay inside the repository.") from exc
     fingerprint = _fingerprint(
         {
-            "version": 3,
+            "version": 4,
             "deck": {"path": deck_relative, "sha256": deck_sha},
             "source": {"path": source_relative, "sha256": source_sha},
-            "output": output_relative,
+            "output": {
+                "path": output_relative,
+                "sha256": output_revision,
+                "identity": (
+                    None if output_identity is None else list(output_identity)
+                ),
+            },
             "name": name,
             "form": form,
             "card_count": len(cards),
+            "record_ids": [record.id for record in shipping],
             "templates": [
                 {
                     "path": _fingerprint_path(config, item.path),
@@ -334,7 +361,10 @@ def _plan_revision_locked(
         deck_name=name,
         form=form,
         card_count=len(cards),
+        record_ids=tuple(record.id for record in shipping),
         records=tuple(records),
+        output_revision=output_revision,
+        output_identity=output_identity,
         fingerprint=fingerprint,
     )
 
@@ -492,6 +522,9 @@ def execute_conjugation_deck_build_locked(
                 config,
                 fresh.records,
                 fresh.output_path,
+                output_expected_revision=fresh.output_revision,
+                output_expected_identity=fresh.output_identity,
+                output_expected_absent=fresh.output_revision is None,
             )
             package = read_bytes_bound(target)
         except (JankiError, OSError) as exc:
@@ -508,7 +541,13 @@ def execute_conjugation_deck_build_locked(
             source,
             configured_revision,
         )
-        if after != expected:
+        normalized_after = replace(
+            after,
+            output_revision=expected.output_revision,
+            output_identity=expected.output_identity,
+            fingerprint=expected.fingerprint,
+        )
+        if normalized_after != expected:
             raise DeckBuildError(
                 "Conjugation build inputs changed during package generation; "
                 "the generated package was not accepted."

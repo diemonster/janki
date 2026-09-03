@@ -28,8 +28,8 @@ SHIPPED = (
     "extract-prose",
     "enrich-bare-word",
     "revise-conjugation-deck",
-    "assistant-chat",
-    "assistant-chat-only",
+    "revise-cards",
+    "assistant-agent",
     "approve-coverage",
 )
 
@@ -43,7 +43,11 @@ RICH_TEMPLATES = (
     "enrich-bare-word",
 )
 
-CARD_WRITING_TEMPLATES = (*RICH_TEMPLATES, "revise-conjugation-deck")
+CARD_WRITING_TEMPLATES = (
+    *RICH_TEMPLATES,
+    "revise-conjugation-deck",
+    "revise-cards",
+)
 
 
 # --- the loader ---------------------------------------------------------------
@@ -206,43 +210,44 @@ def test_the_directory_holds_no_file_nothing_sends() -> None:
     assert on_disk == {*SHIPPED, "README"}
 
 
-def test_card_writing_has_exactly_five_task_templates() -> None:
-    """Three source shapes, bare-record enrichment, and deck revision."""
+def test_card_writing_has_exactly_six_task_templates() -> None:
+    """Three source shapes, enrichment, and the two explicit revision shapes."""
     assert set(SHIPPED) - {
         "style-guide",
-        "assistant-chat",
-        "assistant-chat-only",
+        "assistant-agent",
         "approve-coverage",
     } == set(
         CARD_WRITING_TEMPLATES
     )
-    assert len(CARD_WRITING_TEMPLATES) == 5
+    assert len(CARD_WRITING_TEMPLATES) == 6
 
 
-def test_assistant_chat_is_conversation_not_an_implicit_revision() -> None:
-    text = " ".join(prompts.load(REPO_ROOT, "assistant-chat").split())
+def test_repository_agent_returns_only_prose_and_one_closed_intent() -> None:
+    text = " ".join(prompts.load(REPO_ROOT, "assistant-agent").split())
 
-    assert "bounded transcript" in text
-    assert "never a deck-edit instruction" in text
-    assert "explicit revision proposal" in text
-    assert "no other conversation history, deck contents, filesystem access, tools" in text
-    assert "one supported pdf or photo" in text.casefold()
-    assert "never supplied to this conversational model" in text.casefold()
-
-
-def test_chat_only_assistant_never_promises_an_unavailable_revision_action() -> None:
-    text = " ".join(prompts.load(REPO_ROOT, "assistant-chat-only").split())
-    folded = text.casefold()
-
-    assert "bounded transcript" in text
-    assert "no other conversation history, deck contents, filesystem access, tools" in text
-    assert "one supported pdf or photo" in folded
-    assert "never supplied to this conversational model" in folded
-    assert "this selected deck is **chat only**" in folded
-    assert "conversation cannot prepare a revision" in folded
-    assert "do not direct the owner to a revision action" in folded
-    assert "write a proposal in this answer" in folded
-    assert "merely asking authorized a change" in folded
+    assert "at most one closed `action_intent`" in text
+    assert "active deck is only a focus" in text
+    assert "`revise_cards` changes canonical vocabulary-card fields" in text
+    assert "vocabulary, kanji-review, and other decks" in text
+    assert "`revise_deck` is only for specialized" in text
+    assert "rich conjugation-practice deck" in text
+    assert "`enrich_cards` fills missing rich fields" in text
+    assert "Unfocused enrichment must include one exact opaque deck resource" in text
+    assert "stops every unseen answer in ai-enrichment staging" in text
+    assert "`canonical_cards` needs matching exact card resources and record ids" in text
+    assert "`deck` needs one exact deck resource and no record ids" in text
+    assert "`staged_cards` needs one exact staging-proposal resource" in text
+    assert "generated packages, ledger history, and media are retained" in text
+    assert "both `audio_words` and `audio_examples`" in text
+    assert "leave both absent" in text
+    assert "owner's current message explicitly requests" in text
+    assert "repository-wide deletion of unreferenced janki-generated audio" in text
+    assert "never infer `audio_force` or `audio_prune`" in text.casefold()
+    assert "must literally say `prune` for `audio_prune`" in text
+    assert "`recover` reuses an already-captured result without another provider call" in text
+    assert "never reconstruct recovery from the current deck focus" in text.casefold()
+    assert "never execution, Japanese-content authorship, or approval" in text
+    assert "`extract`, `enrich --ai`, or `revise`" in text
 
 
 def test_the_three_extraction_modes_are_three_complete_files() -> None:

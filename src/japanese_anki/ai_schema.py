@@ -1,4 +1,4 @@
-"""Shared structured-output shapes for the three card-writing AI paths.
+"""Shared structured-output shapes for janki's model-backed passes.
 
 ``extract`` reads source material and ``enrich --ai`` reads a bare vocabulary
 record. ``revise`` reads an explicitly selected existing card or deck and the
@@ -24,7 +24,8 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 __all__ = [
-    "assistant_chat_schema",
+    "assistant_agent_schema",
+    "card_revision_schema",
     "conjugation_deck_revision_schema",
     "generated_example_schema",
     "adapt_rich_card",
@@ -46,20 +47,225 @@ class RichCardContent:
 
 
 @functools.cache
-def assistant_chat_schema() -> Any:
-    """One ordinary Assistant answer, with no mutation or tool channel."""
+def assistant_agent_schema() -> Any:
+    """Repository-aware Assistant prose plus closed application intents."""
     from typing import Annotated
 
     from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
     NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
-    class AssistantChatAnswer(BaseModel):
+    class AssistantActionOptions(BaseModel):
+        """Closed scalar choices needed by action-specific local planners."""
+
         model_config = ConfigDict(extra="forbid")
 
-        answer: NonBlank = Field(description="Markdown answer to the user.")
+        deck_name: NonBlank | None = Field(
+            default=None,
+            description="Exact learner-facing name for create_deck only.",
+        )
+        card_directions: list[
+            Literal["recognition", "production", "reading"]
+        ] = Field(
+            default_factory=list,
+            description=(
+                "Explicit owner-selected directions for create_deck; never infer "
+                "an omitted direction."
+            ),
+        )
+        review_patterns: bool | None = Field(
+            default=None,
+            description=(
+                "Explicit owner choice for source-extraction review_staging; false "
+                "or null for card-revision staging, which has no pattern review."
+            ),
+        )
+        destination_resource_id: NonBlank | None = Field(
+            default=None,
+            description="Exact destination deck resource for assign_cards only.",
+        )
+        audio_words: Literal[True, False] | None = Field(
+            default=None,
+            description=(
+                "Explicit word-clip choice for generate_audio. Supply together with "
+                "audio_examples when the owner names clip classes; otherwise null."
+            ),
+        )
+        audio_examples: Literal[True, False] | None = Field(
+            default=None,
+            description=(
+                "Explicit example-clip choice for generate_audio. Supply together "
+                "with audio_words when the owner names clip classes; otherwise null."
+            ),
+        )
+        audio_force: Literal[True, False] | None = Field(
+            default=None,
+            description=(
+                "True only when the owner's current message explicitly requests "
+                "regeneration of selected audio; never infer it."
+            ),
+        )
+        audio_prune: Literal[True, False] | None = Field(
+            default=None,
+            description=(
+                "True only when the owner's current message explicitly requests "
+                "repository-wide deletion of unreferenced janki audio; never infer it."
+            ),
+        )
+        operation_action: Literal[
+            "recover", "show_reply", "end", "forget"
+        ] | None = Field(
+            default=None,
+            description="Explicit manage_operation sub-action.",
+        )
+        operation_id: NonBlank | None = Field(
+            default=None,
+            description="Exact disclosed paid-operation id for manage_operation only.",
+        )
+        accept_paid_output_loss: bool | None = Field(
+            default=None,
+            description=(
+                "Explicit owner acceptance for a forced operation forget; null "
+                "when not stated."
+            ),
+        )
+        deletion_kind: Literal["staged_cards", "canonical_cards", "deck"] | None = (
+            Field(
+                default=None,
+                description="Exact delete_content class; never infer from a target.",
+            )
+        )
+        new_expression: NonBlank | None = Field(
+            default=None,
+            description=(
+                "Exact owner-supplied expression for reidentify_staged_card only."
+            ),
+        )
+        new_reading: NonBlank | None = Field(
+            default=None,
+            description=(
+                "Exact owner-supplied reading for reidentify_staged_card only."
+            ),
+        )
+        coverage_reason: NonBlank | None = Field(
+            default=None,
+            description=(
+                "Owner's explicit reason for approve_coverage; never generate one."
+            ),
+        )
+        search_literal: NonBlank | None = Field(
+            default=None,
+            description="Exact case-sensitive literal for search_cards only.",
+        )
+        search_limit: int | None = Field(
+            default=None,
+            ge=1,
+            le=20,
+            description="Maximum search_cards results; null uses Janki's default.",
+        )
 
-    return AssistantChatAnswer
+    class AssistantActionIntent(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        kind: Literal[
+            "enrich_cards",
+            "revise_cards",
+            "revise_deck",
+            "create_deck",
+            "assign_cards",
+            "review_staging",
+            "reidentify_staged_card",
+            "approve_coverage",
+            "promote_staging",
+            "generate_audio",
+            "build_deck",
+            "extract_source",
+            "delete_content",
+            "manage_operation",
+            "inspect_resources",
+            "search_cards",
+        ] = Field(description="One closed Janki application operation to plan.")
+        resource_ids: list[NonBlank] = Field(
+            description="Exact opaque repository resource ids needed by the operation."
+        )
+        record_ids: list[NonBlank] = Field(
+            description="Exact canonical record ids needed by the operation."
+        )
+        instruction: NonBlank = Field(
+            description="The owner's requested outcome, without invented approval."
+        )
+        options: AssistantActionOptions = Field(
+            default_factory=AssistantActionOptions,
+            description="Closed action-specific owner choices; empty when unused.",
+        )
+
+    class AssistantAgentAnswer(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        answer: NonBlank = Field(description="Concise Markdown answer to the owner.")
+        action_intents: list[AssistantActionIntent] = Field(
+            max_length=1,
+            description=(
+                "At most one typed application plan explicitly requested by the "
+                "owner; empty for questions or unavailable exact targets."
+            )
+        )
+
+    return AssistantAgentAnswer
+
+
+@functools.cache
+def card_revision_schema() -> Any:
+    """Complete field replacements for one explicit existing-card revision."""
+    from typing import Annotated
+
+    from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+    NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+    class CardFieldUpdate(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        field: Literal[
+            "furigana",
+            "romaji",
+            "meanings",
+            "part_of_speech",
+            "verb_group",
+            "transitivity",
+            "examples",
+            "conjugations",
+            "usage_notes",
+            "audio",
+            "image",
+            "pitch_accent",
+            "audio_accent",
+            "frequency_rank",
+        ] = Field(description="One non-identity canonical card field.")
+        value_json: NonBlank = Field(
+            description="JSON for the complete proposed canonical field value."
+        )
+
+    class CardChange(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        record_id: NonBlank = Field(description="Exact selected canonical record id.")
+        reason: NonBlank = Field(description="Short owner-facing reason for the change.")
+        updates: list[CardFieldUpdate] = Field(
+            min_length=1,
+            description="Complete replacement values for changed fields only.",
+        )
+
+    class CardRevisionAnswer(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        summary: NonBlank = Field(description="Concise summary for owner review.")
+        card_changes: list[CardChange] = Field(
+            min_length=1,
+            description="One or more explicit existing-card field changes.",
+        )
+
+    return CardRevisionAnswer
 
 
 def adapt_rich_card(value: Any) -> RichCardContent:

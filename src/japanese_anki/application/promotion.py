@@ -26,8 +26,11 @@ Nothing in `plan_promotion` writes.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import uuid
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -41,6 +44,7 @@ from japanese_anki.application.assignment import (
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
+    MERGEABLE_FIELDS,
     DataError,
     MergeOutcome,
     RecordsRevision,
@@ -50,7 +54,11 @@ from japanese_anki.io import (
     read_bytes_bound,
     save_records_json,
 )
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.models import (
+    EXAMPLE_AUTHORITY_KEY,
+    VocabularyRecord,
+    set_example_flags,
+)
 from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
     STAGING_SUFFIXES,
@@ -83,8 +91,11 @@ __all__ = [
     "plan_promotion",
     "promotion_batches",
     "project_promotion",
+    "project_ai_enrichment_review_promotion",
+    "project_card_revision_review_promotion",
     "unreadable_deck_warning",
     "staged_ai_enrichment",
+    "staged_card_revision",
     "validate_record_archive",
 ]
 
@@ -104,7 +115,13 @@ def archive_run_provenance(meta: Mapping[str, Any]) -> dict[str, Any]:
     retry behavior through the explicit ``legacy`` identity.
     """
     run_id = review_run_id(meta)
-    if staging.AI_ENRICHMENT_KEY in meta:
+    if staging.CARD_REVISION_KEY in meta:
+        identity = {
+            "kind": "card_revision",
+            staging.CARD_REVISION_KEY: meta.get(staging.CARD_REVISION_KEY),
+            "field_replacements": meta.get("field_replacements"),
+        }
+    elif staging.AI_ENRICHMENT_KEY in meta:
         identity = {
             "kind": "ai",
             staging.AI_ENRICHMENT_KEY: meta.get(staging.AI_ENRICHMENT_KEY),
@@ -144,6 +161,7 @@ def _select_archive_for_run(
     base: Path, meta: Mapping[str, Any], *, bind_read: bool
 ) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None, bytes | None]:
     """Choose this run's deterministic archive and any partial rows already there."""
+
     def read(path: Path) -> tuple[bytes | None, list[VocabularyRecord], dict[str, Any]]:
         if bind_read:
             return record_review_snapshot(path)
@@ -186,7 +204,6 @@ def archive_for_run(
         base, meta, bind_read=False
     )
     return selected, records, archived_meta
-
 
 
 def inside_archive(path: Path, archive_dir: Path) -> bool:
@@ -396,8 +413,7 @@ def promotion_batches(
             )
         if batch_archive_file != archive_file:
             raise PromoteError(
-                f"[promotion-batches-invalid] batch {position} names a different "
-                "done archive file"
+                f"[promotion-batches-invalid] batch {position} names a different done archive file"
             )
         if parsed and batch_archive_file != parsed[0].archive_file:
             raise PromoteError(
@@ -425,8 +441,7 @@ def promotion_batches(
             )
         if not isinstance(source_file, str) or not source_file.strip():
             raise PromoteError(
-                f"[promotion-batches-invalid] batch {position} source_file must be "
-                "nonblank text"
+                f"[promotion-batches-invalid] batch {position} source_file must be nonblank text"
             )
         if batch_run_id is not None:
             try:
@@ -463,8 +478,7 @@ def promotion_batches(
             for record_id in ids
         ):
             raise PromoteError(
-                f"[promotion-batches-invalid] batch {position} owner stems must "
-                "be nonblank text"
+                f"[promotion-batches-invalid] batch {position} owner stems must be nonblank text"
             )
         if receipt != _promotion_receipt_id(
             batch_archive_file,
@@ -505,8 +519,7 @@ def promotion_batches(
     archived_order = tuple(record.id for record in archived)
     if len(set(archived_order)) != len(archived_order):
         raise PromoteError(
-            "[promotion-batches-invalid] the cumulative archive must contain "
-            "unique record ids"
+            "[promotion-batches-invalid] the cumulative archive must contain unique record ids"
         )
     batch_order = tuple(
         record_id for batch in parsed for record_id in batch.promoted_ids
@@ -552,8 +565,7 @@ def _new_promotion_batch(
     raw_source = meta.get("source_file") if "source_file" in meta else source
     if not isinstance(raw_source, str) or not raw_source.strip():
         raise PromoteError(
-            "[promotion-batches-invalid] a promotion receipt needs a canonical "
-            "source_file"
+            "[promotion-batches-invalid] a promotion receipt needs a canonical source_file"
         )
     source_file = raw_source.strip()
     run_id = review_run_id(meta)
@@ -561,8 +573,7 @@ def _new_promotion_batch(
     promoted_ids = tuple(record.id for record in promoted)
     if not promoted_ids or len(set(promoted_ids)) != len(promoted_ids):
         raise PromoteError(
-            "[promotion-batches-invalid] a promotion receipt needs nonempty, "
-            "unique promoted ids"
+            "[promotion-batches-invalid] a promotion receipt needs nonempty, unique promoted ids"
         )
     by_id = {item.record_id: item for item in ownership}
     if set(by_id) != set(promoted_ids):
@@ -575,8 +586,7 @@ def _new_promotion_batch(
         stems = by_id[record_id].owner_stems
         if by_id[record_id].state != "exactly_one" or len(stems) != 1:
             raise PromoteError(
-                f"[promotion-batches-invalid] {record_id} has no single re-proved "
-                "study-deck owner"
+                f"[promotion-batches-invalid] {record_id} has no single re-proved study-deck owner"
             )
         stem = stems[0]
         if not isinstance(stem, str) or not stem.strip():
@@ -640,9 +650,7 @@ def validate_record_archive(
     promote.check_candidate_accounting(
         live_meta, (), archived, archived_meta=archived_meta
     )
-    promotion_batches(
-        archived_meta, archived=archived, archive_file=archive_file
-    )
+    promotion_batches(archived_meta, archived=archived, archive_file=archive_file)
 
     live_core = {
         key: value for key, value in live_meta.items() if key != "review_notes"
@@ -654,8 +662,7 @@ def validate_record_archive(
     }
     if archive_core != live_core:
         raise PromoteError(
-            "[record-archive-divergent] the same-run archive metadata differs "
-            "from the live review"
+            "[record-archive-divergent] the same-run archive metadata differs from the live review"
         )
     note = archived_meta.get("review_notes")
     suffix = f"Promoted {len(archived)} record(s) from this file."
@@ -672,12 +679,234 @@ class _AiLedgerHandoffIncomplete(Exception):
     """Keep the live review after records landed but AI attribution did not."""
 
 
+def staged_card_revision(
+    meta: Mapping[str, Any],
+    records: Sequence[VocabularyRecord | str],
+    *,
+    archived_ids: Sequence[str] = (),
+    archived_records: Sequence[VocabularyRecord] = (),
+    require_owner_review: bool = True,
+) -> tuple[str, str, dict[str, tuple[str, tuple[str, ...]]]] | None:
+    """Validate provenance for a paid revision of canonical cards.
+
+    The ordinary AI-enrichment pass may author only three prose fields.  An
+    explicitly requested ``revise`` pass may author any mergeable card field,
+    so it has a distinct metadata block while returning the same narrow facts
+    the canonical promotion writer needs for ledger attribution.
+    """
+
+    raw = meta.get(staging.CARD_REVISION_KEY)
+    if raw is None:
+        return None
+    if staging.AI_ENRICHMENT_KEY in meta:
+        raise PromoteError(
+            "A staging file cannot claim both ai_enrichment and "
+            "card_revision provenance. Nothing was promoted."
+        )
+    required = {
+        "version",
+        "operation_id",
+        "request_fingerprint",
+        "provider",
+        "attribution_provider",
+        "model",
+        "input_fingerprints",
+        "fields",
+    }
+    allowed = required | {"focus_resource_id"}
+    if (
+        not isinstance(raw, Mapping)
+        or not required.issubset(raw)
+        or not set(raw) <= allowed
+    ):
+        raise PromoteError(
+            "card_revision has invalid provenance fields. Nothing was promoted."
+        )
+    version = raw.get("version")
+    if isinstance(version, bool) or not isinstance(version, int) or version != 1:
+        raise PromoteError("card_revision must be a version 1 metadata block")
+    operation_id = raw.get("operation_id")
+    try:
+        canonical_operation_id = str(uuid.UUID(operation_id))
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise PromoteError(
+            "card_revision operation_id must be a canonical UUIDv4"
+        ) from exc
+    if (
+        not isinstance(operation_id, str)
+        or canonical_operation_id != operation_id
+        or uuid.UUID(operation_id).version != 4
+    ):
+        raise PromoteError("card_revision operation_id must be a canonical UUIDv4")
+    request_fp = raw.get("request_fingerprint")
+    if (
+        not isinstance(request_fp, str)
+        or len(request_fp) != 64
+        or any(character not in "0123456789abcdef" for character in request_fp)
+    ):
+        raise PromoteError(
+            "card_revision request_fingerprint must be a lowercase SHA-256"
+        )
+    transport = raw.get("provider")
+    attribution = raw.get("attribution_provider")
+    expected_attribution = {
+        "anthropic-api": "anthropic",
+        "claude-code": "anthropic",
+    }.get(transport)
+    if expected_attribution is None or attribution != expected_attribution:
+        raise PromoteError("card_revision has an invalid provider attribution")
+    if attribution not in ledger.AI_PROVIDERS:
+        raise PromoteError("card_revision has an unsupported provider attribution")
+    model = raw.get("model")
+    if not isinstance(model, str) or not model.strip():
+        raise PromoteError("card_revision needs a nonblank model")
+    focused = raw.get("focus_resource_id")
+    if "focus_resource_id" in raw and (
+        not isinstance(focused, str) or not focused.strip()
+    ):
+        raise PromoteError("card_revision focus_resource_id must be nonblank text")
+    inputs = raw.get("input_fingerprints")
+    fields = raw.get("fields")
+    replacement_block = meta.get(staging.FIELD_REPLACEMENTS_KEY)
+    replacements = (
+        replacement_block.get("records")
+        if isinstance(replacement_block, Mapping)
+        else None
+    )
+    if not all(isinstance(value, Mapping) for value in (inputs, fields, replacements)):
+        raise PromoteError(
+            "card_revision needs input, field, and replacement maps. Nothing was promoted."
+        )
+    assert isinstance(inputs, Mapping)
+    assert isinstance(fields, Mapping)
+    assert isinstance(replacements, Mapping)
+    id_sets = [set(values) for values in (inputs, fields, replacements)]
+    if any(
+        any(not isinstance(record_id, str) or not record_id for record_id in values)
+        for values in (inputs, fields, replacements)
+    ) or any(ids != id_sets[0] for ids in id_sets[1:]):
+        raise PromoteError(
+            "card_revision input, field, and replacement maps must name "
+            "identical record ids. Nothing was promoted."
+        )
+    provenance_ids = id_sets[0]
+    current_ids = {
+        record.id if isinstance(record, VocabularyRecord) else str(record)
+        for record in records
+    }
+    known_ids = current_ids | {str(record_id) for record_id in archived_ids}
+    missing = sorted(current_ids - provenance_ids)
+    unknown = sorted(provenance_ids - known_ids)
+    if missing or unknown:
+        details = []
+        if missing:
+            details.append("missing current " + ", ".join(missing))
+        if unknown:
+            details.append("unknown " + ", ".join(unknown))
+        raise PromoteError(
+            "card_revision provenance does not match this staging file "
+            "or its done archive: " + "; ".join(details) + ". Nothing was promoted."
+        )
+
+    proven: dict[str, tuple[str, tuple[str, ...]]] = {}
+    for record_id in sorted(provenance_ids):
+        input_fp = inputs.get(record_id)
+        raw_fields = fields.get(record_id)
+        replacement_fields = replacements.get(record_id)
+        if (
+            not isinstance(input_fp, str)
+            or len(input_fp) != 64
+            or any(character not in "0123456789abcdef" for character in input_fp)
+            or not isinstance(raw_fields, list)
+            or not raw_fields
+            or any(not isinstance(name, str) for name in raw_fields)
+            or any(name not in MERGEABLE_FIELDS for name in raw_fields)
+            or len(set(raw_fields)) != len(raw_fields)
+            or not isinstance(replacement_fields, Mapping)
+            or any(not isinstance(name, str) for name in replacement_fields)
+            or set(raw_fields) != set(replacement_fields)
+        ):
+            raise PromoteError(
+                f"card_revision has incomplete provenance for {record_id}"
+            )
+        proven[record_id] = (request_fp, tuple(raw_fields))
+    if not require_owner_review:
+        return str(attribution), model.strip(), proven
+    review = meta.get(staging.CARD_REVISION_REVIEW_KEY)
+    if not isinstance(review, Mapping) or set(review) != {
+        "version",
+        "authority",
+        "accepted_record_ids",
+        "content_fingerprint",
+    }:
+        raise PromoteError(
+            "card_revision has no exact durable owner review. Nothing was promoted."
+        )
+    accepted = review.get("accepted_record_ids")
+    review_fp = review.get("content_fingerprint")
+    if (
+        review.get("version") != staging.CARD_REVISION_REVIEW_VERSION
+        or review.get("authority") != "repository-owner"
+        or not isinstance(accepted, list)
+        or any(not isinstance(item, str) for item in accepted)
+        or len(accepted) != len(set(accepted))
+        or set(accepted) != provenance_ids
+        or not isinstance(review_fp, str)
+    ):
+        raise PromoteError(
+            "card_revision has invalid durable owner review. Nothing was promoted."
+        )
+    review_records = [record for record in records if isinstance(record, VocabularyRecord)]
+    archive_ids = {str(record_id) for record_id in archived_ids}
+    archived_record_ids = {record.id for record in archived_records}
+    if (
+        len(review_records) != len(records)
+        or archived_record_ids != archive_ids
+        or len(archived_record_ids) != len(archived_records)
+        or current_ids != set(accepted) - archive_ids
+    ):
+        raise PromoteError(
+            "card_revision durable owner review cannot be revalidated against its "
+            "exact live and archived rows. Nothing was promoted."
+        )
+    for record in [*review_records, *archived_records]:
+        reviewed_fields = fields.get(record.id)
+        if not isinstance(reviewed_fields, list) or "examples" not in reviewed_fields:
+            continue
+        expected = set_example_flags(
+            record,
+            EXAMPLE_AUTHORITY_KEY,
+            (
+                example.japanese
+                for example in record.examples
+                if record.source.type == "extract" and example.japanese
+            ),
+        ).source.raw_fields.get(EXAMPLE_AUTHORITY_KEY)
+        if record.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY) != expected:
+            raise PromoteError(
+                "card_revision exact example authority changed after owner review. "
+                "Nothing was promoted."
+            )
+    try:
+        actual_review_fp = staging.card_revision_review_fingerprint(
+            meta, [*review_records, *archived_records]
+        )
+    except JankiError as exc:
+        raise PromoteError(str(exc)) from exc
+    if not hmac.compare_digest(review_fp, actual_review_fp):
+        raise PromoteError(
+            "card_revision changed after owner review. Nothing was promoted."
+        )
+    return str(attribution), model.strip(), proven
+
 
 def staged_ai_enrichment(
     meta: Mapping[str, Any],
-    record_ids: Sequence[str],
+    records: Sequence[VocabularyRecord | str],
     *,
     archived_ids: Sequence[str] = (),
+    archived_records: Sequence[VocabularyRecord] = (),
+    require_owner_review: bool = False,
 ) -> tuple[str, str, dict[str, tuple[str, tuple[str, ...]]]] | None:
     """Validate AI provenance before a staged review can write anything.
 
@@ -687,6 +916,14 @@ def staged_ai_enrichment(
     already in the archive.  An older, completed run under the same basename is
     the opposite shape: archive-only ids need not appear in this run's maps.
     """
+    revision = staged_card_revision(
+        meta,
+        records,
+        archived_ids=archived_ids,
+        archived_records=archived_records,
+    )
+    if revision is not None:
+        return revision
     raw = meta.get(staging.AI_ENRICHMENT_KEY)
     if raw is None:
         if "field_replacements" in meta:
@@ -707,6 +944,11 @@ def staged_ai_enrichment(
     model = raw_model.strip() if isinstance(raw_model, str) else ""
     raw_provider = raw.get("provider")
     provider = raw_provider.strip() if isinstance(raw_provider, str) else ""
+    focused = raw.get("focus_resource_id")
+    if "focus_resource_id" in raw and (
+        not isinstance(focused, str) or not focused.strip()
+    ):
+        raise PromoteError("ai_enrichment focus_resource_id must be nonblank text")
     requests = raw.get("request_fingerprints")
     inputs = raw.get("input_fingerprints")
     fields = raw.get("fields")
@@ -726,8 +968,7 @@ def staged_ai_enrichment(
     )
     if not isinstance(replacement_records, Mapping):
         raise PromoteError(
-            "ai_enrichment needs its field_replacements record map. Nothing "
-            "was promoted."
+            "ai_enrichment needs its field_replacements record map. Nothing was promoted."
         )
 
     maps = {
@@ -748,7 +989,10 @@ def staged_ai_enrichment(
             "name identical record ids. Nothing was promoted."
         )
 
-    current_ids = {str(record_id) for record_id in record_ids}
+    current_ids = {
+        record.id if isinstance(record, VocabularyRecord) else str(record)
+        for record in records
+    }
     known_ids = current_ids | {str(record_id) for record_id in archived_ids}
     missing = sorted(current_ids - provenance_ids)
     unknown = sorted(provenance_ids - known_ids)
@@ -792,7 +1036,72 @@ def staged_ai_enrichment(
             request_fp,
             tuple(dict.fromkeys(str(name) for name in raw_fields)),
         )
+    if not require_owner_review:
+        return provider, model, proven
+    review = meta.get(staging.AI_ENRICHMENT_REVIEW_KEY)
+    if not isinstance(review, Mapping) or set(review) != {
+        "version",
+        "authority",
+        "accepted_record_ids",
+        "content_fingerprint",
+    }:
+        raise PromoteError(
+            "ai_enrichment has no exact durable owner review. Nothing was promoted."
+        )
+    accepted = review.get("accepted_record_ids")
+    review_fp = review.get("content_fingerprint")
+    if (
+        review.get("version") != staging.AI_ENRICHMENT_REVIEW_VERSION
+        or review.get("authority") != "repository-owner"
+        or not isinstance(accepted, list)
+        or any(not isinstance(item, str) for item in accepted)
+        or len(accepted) != len(set(accepted))
+        or set(accepted) != provenance_ids
+        or not isinstance(review_fp, str)
+    ):
+        raise PromoteError(
+            "ai_enrichment has invalid durable owner review. Nothing was promoted."
+        )
+    review_records = [record for record in records if isinstance(record, VocabularyRecord)]
+    archive_ids = {str(record_id) for record_id in archived_ids}
+    archived_record_ids = {record.id for record in archived_records}
+    if (
+        len(review_records) != len(records)
+        or archived_record_ids != archive_ids
+        or len(archived_record_ids) != len(archived_records)
+        or current_ids != set(accepted) - archive_ids
+    ):
+        raise PromoteError(
+            "ai_enrichment durable owner review cannot be revalidated against its "
+            "exact live and archived rows. Nothing was promoted."
+        )
+    for record in [*review_records, *archived_records]:
+        expected = set_example_flags(
+            record,
+            EXAMPLE_AUTHORITY_KEY,
+            (
+                example.japanese
+                for example in record.examples
+                if record.source.type == "extract" and example.japanese
+            ),
+        ).source.raw_fields.get(EXAMPLE_AUTHORITY_KEY)
+        if record.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY) != expected:
+            raise PromoteError(
+                "ai_enrichment exact example authority changed after owner review. "
+                "Nothing was promoted."
+            )
+    try:
+        actual_review_fp = staging.ai_enrichment_review_fingerprint(
+            meta, [*review_records, *archived_records]
+        )
+    except JankiError as exc:
+        raise PromoteError(str(exc)) from exc
+    if not hmac.compare_digest(review_fp, actual_review_fp):
+        raise PromoteError(
+            "ai_enrichment changed after owner review. Nothing was promoted."
+        )
     return provider, model, proven
+
 
 @dataclass(frozen=True, slots=True)
 class LandingCard:
@@ -988,7 +1297,11 @@ def _complete_pattern_only_review(
     with exclusive_path_lock(path):
         current_wire = staging_wire(path)
         records, meta = read_staging(path)
-        if current_wire != expected_wire or records or dict(meta) != dict(expected_meta):
+        if (
+            current_wire != expected_wire
+            or records
+            or dict(meta) != dict(expected_meta)
+        ):
             raise PromoteError(
                 "[staging-review-stale] the live staging file changed while its "
                 "pattern review was being completed. The replacement was kept; "
@@ -1001,14 +1314,15 @@ def _complete_pattern_only_review(
         promote.check_coverage(meta)
         if rich_extraction_review_run_id(meta) != run_id:
             raise PromoteError(
-                "[staging-review-stale] the rich extraction run changed. "
-                "Nothing was archived."
+                "[staging-review-stale] the rich extraction run changed. Nothing was archived."
             )
 
         source = meta.get("source_file")
         raw_pattern_set = meta.get("pattern_set")
-        if not isinstance(source, str) or not source.strip() or not isinstance(
-            raw_pattern_set, Mapping
+        if (
+            not isinstance(source, str)
+            or not source.strip()
+            or not isinstance(raw_pattern_set, Mapping)
         ):
             raise PromoteError(
                 "[pattern-review-invalid] a rich pattern-only extraction needs "
@@ -1116,13 +1430,11 @@ def _finish_record_review(
     """
     if len(keep) - sum(keep) != len(promoted) + len(retry_records):
         raise PromoteError(
-            "[record-promotion-invalid] row disposition does not match the "
-            "archive transaction"
+            "[record-promotion-invalid] row disposition does not match the archive transaction"
         )
     if sum(keep) != len(held):
         raise PromoteError(
-            "[record-promotion-invalid] held rows do not match the live "
-            "staging remainder"
+            "[record-promotion-invalid] held rows do not match the live staging remainder"
         )
 
     with exclusive_path_lock(path):
@@ -1132,7 +1444,9 @@ def _finish_record_review(
                 "promotion was completing. The replacement was kept."
             )
         current_records, current_meta = read_staging(path)
-        if dict(current_meta) != dict(expected_meta) or len(current_records) != len(keep):
+        if dict(current_meta) != dict(expected_meta) or len(current_records) != len(
+            keep
+        ):
             raise PromoteError(
                 "[staging-review-stale] the live staging review no longer "
                 "matches the validated snapshot. The replacement was kept."
@@ -1148,14 +1462,15 @@ def _finish_record_review(
                 )
                 if confirmed != selected:
                     continue
-                if _file_revision(confirmed) != expected_archive_revision or (
-                    list(archived) != list(expected_archived)
-                ) or (
-                    None if archived_meta is None else dict(archived_meta)
-                ) != (
-                    None
-                    if expected_archived_meta is None
-                    else dict(expected_archived_meta)
+                if (
+                    _file_revision(confirmed) != expected_archive_revision
+                    or (list(archived) != list(expected_archived))
+                    or (None if archived_meta is None else dict(archived_meta))
+                    != (
+                        None
+                        if expected_archived_meta is None
+                        else dict(expected_archived_meta)
+                    )
                 ):
                     raise PromoteError(
                         "[record-archive-stale] the done archive changed while "
@@ -1187,8 +1502,7 @@ def _finish_record_review(
                     )
                 ):
                     raise PromoteError(
-                        "[archive-retry-divergent] a pending row already exists "
-                        "in the done archive"
+                        "[archive-retry-divergent] a pending row already exists in the done archive"
                     )
 
                 prior_batches = promotion_batches(
@@ -1534,10 +1848,7 @@ class PromotionExecutionResult:
             )
         if self.receipt_id is not None and (
             len(self.receipt_id) != 64
-            or any(
-                character not in "0123456789abcdef"
-                for character in self.receipt_id
-            )
+            or any(character not in "0123456789abcdef" for character in self.receipt_id)
         ):
             raise ValueError("Promotion receipt ids must be lowercase SHA-256 text")
 
@@ -1553,7 +1864,6 @@ def staging_wire(path: Path) -> bytes:
         ) from exc
 
 
-
 def record_review_snapshot(
     path: Path,
 ) -> tuple[bytes, list[VocabularyRecord], dict[str, Any]]:
@@ -1567,6 +1877,299 @@ def record_review_snapshot(
         records, meta = staging.read_staging_text(text, source=str(path))
     return wire, records, meta
 
+
+def project_ai_enrichment_review_promotion(
+    config: ProjectConfig,
+    staging_path: Path,
+    record_ids: Sequence[str],
+    *,
+    expected_revision: str,
+) -> PromotionDecision:
+    """Project ordinary promotion after one exact pending enrichment review."""
+
+    path = staging_path.resolve()
+    wire, records, meta = record_review_snapshot(path)
+    if hashlib.sha256(wire).hexdigest() != expected_revision:
+        raise PromoteError(
+            "[ai-enrichment-review-stale] the proposal changed while its "
+            "aggregate finish was planned"
+        )
+    if staging.AI_ENRICHMENT_REVIEW_KEY in meta:
+        raise PromoteError(
+            "[ai-enrichment-review-invalid] this proposal already records owner review"
+        )
+    selected = tuple(record_ids)
+    if (
+        not selected
+        or len(selected) != len(set(selected))
+        or any(not isinstance(item, str) or not item for item in selected)
+    ):
+        raise PromoteError(
+            "[ai-enrichment-review-invalid] accepted record ids must be nonempty "
+            "and unique"
+        )
+    by_id = {record.id: record for record in records}
+    if len(by_id) != len(records) or any(item not in by_id for item in selected):
+        raise PromoteError(
+            "[ai-enrichment-review-invalid] accepted record ids must identify "
+            "unique proposal rows"
+        )
+    staged_ai_enrichment(meta, records)
+    selected_set = set(selected)
+    chosen = [record for record in records if record.id in selected_set]
+    reviewed = [
+        set_example_flags(
+            record,
+            EXAMPLE_AUTHORITY_KEY,
+            (
+                example.japanese
+                for example in record.examples
+                if record.source.type == "extract" and example.japanese
+            ),
+        )
+        for record in chosen
+    ]
+    projected = deepcopy(meta)
+    enrichment = projected.get(staging.AI_ENRICHMENT_KEY)
+    replacements = projected.get(staging.FIELD_REPLACEMENTS_KEY)
+    if not isinstance(enrichment, dict) or not isinstance(replacements, dict):
+        raise PromoteError(
+            "[ai-enrichment-review-invalid] proposal metadata is not projectable"
+        )
+    for key in ("request_fingerprints", "input_fingerprints", "fields"):
+        values = enrichment.get(key)
+        if not isinstance(values, dict):
+            raise PromoteError(
+                f"[ai-enrichment-review-invalid] ai_enrichment.{key} is not projectable"
+            )
+        enrichment[key] = {
+            record_id: value
+            for record_id, value in values.items()
+            if record_id in selected_set
+        }
+    replacement_records = replacements.get("records")
+    if not isinstance(replacement_records, dict):
+        raise PromoteError(
+            "[ai-enrichment-review-invalid] field replacements are not projectable"
+        )
+    replacements["records"] = {
+        record_id: value
+        for record_id, value in replacement_records.items()
+        if record_id in selected_set
+    }
+    projected[staging.AI_ENRICHMENT_REVIEW_KEY] = {
+        "version": staging.AI_ENRICHMENT_REVIEW_VERSION,
+        "authority": "repository-owner",
+        "accepted_record_ids": [record.id for record in chosen],
+        "content_fingerprint": staging.ai_enrichment_review_fingerprint(
+            meta, chosen
+        ),
+    }
+    source = projected.get("source_file")
+    return decide_promotion(
+        config,
+        path,
+        source=source if isinstance(source, str) else "",
+        _record_snapshot=(wire, reviewed, projected),
+    )
+
+
+def project_card_revision_review_promotion(
+    config: ProjectConfig,
+    staging_path: Path,
+    record_ids: Sequence[str],
+    *,
+    expected_revision: str,
+) -> PromotionDecision:
+    """Project promotion after one exact pending card-revision review.
+
+    The owner needs to see review, promotion, audio, and package effects before
+    a single confirmation.  This applies the review writer's deterministic
+    selection and marker to an in-memory snapshot, then runs the ordinary
+    promotion planner over that projected document.  Execution still invokes
+    the real review writer and replans promotion from disk before anything
+    canonical lands.
+    """
+
+    path = staging_path.resolve()
+    wire, records, meta = record_review_snapshot(path)
+    if hashlib.sha256(wire).hexdigest() != expected_revision:
+        raise PromoteError(
+            "[card-revision-review-stale] the proposal changed while its "
+            "aggregate finish was planned"
+        )
+    if staging.CARD_REVISION_REVIEW_KEY in meta:
+        raise PromoteError(
+            "[card-revision-review-invalid] this proposal already records owner review"
+        )
+    selected = tuple(record_ids)
+    if (
+        not selected
+        or len(selected) != len(set(selected))
+        or any(not isinstance(item, str) or not item for item in selected)
+    ):
+        raise PromoteError(
+            "[card-revision-review-invalid] accepted record ids must be nonempty "
+            "and unique"
+        )
+    by_id = {record.id: record for record in records}
+    if len(by_id) != len(records) or any(item not in by_id for item in selected):
+        raise PromoteError(
+            "[card-revision-review-invalid] accepted record ids must identify "
+            "unique proposal rows"
+        )
+    staged_card_revision(meta, records, require_owner_review=False)
+    selected_set = set(selected)
+    chosen = [record for record in records if record.id in selected_set]
+    raw_revision = meta.get(staging.CARD_REVISION_KEY)
+    declared = (
+        raw_revision.get("fields") if isinstance(raw_revision, Mapping) else None
+    )
+    if not isinstance(declared, Mapping):
+        raise PromoteError(
+            "[card-revision-review-invalid] proposal fields are not projectable"
+        )
+    reviewed = [
+        (
+            set_example_flags(
+                record,
+                EXAMPLE_AUTHORITY_KEY,
+                (
+                    example.japanese
+                    for example in record.examples
+                    if record.source.type == "extract" and example.japanese
+                ),
+            )
+            if isinstance(declared.get(record.id), list)
+            and "examples" in declared[record.id]
+            else record
+        )
+        for record in chosen
+    ]
+    projected = deepcopy(meta)
+    revision = projected.get(staging.CARD_REVISION_KEY)
+    replacements = projected.get(staging.FIELD_REPLACEMENTS_KEY)
+    if not isinstance(revision, dict) or not isinstance(replacements, dict):
+        raise PromoteError(
+            "[card-revision-review-invalid] proposal metadata is not projectable"
+        )
+    for key in ("input_fingerprints", "fields"):
+        values = revision.get(key)
+        if not isinstance(values, dict):
+            raise PromoteError(
+                f"[card-revision-review-invalid] card_revision.{key} is not projectable"
+            )
+        revision[key] = {
+            record_id: value
+            for record_id, value in values.items()
+            if record_id in selected_set
+        }
+    replacement_records = replacements.get("records")
+    if not isinstance(replacement_records, dict):
+        raise PromoteError(
+            "[card-revision-review-invalid] field replacements are not projectable"
+        )
+    replacements["records"] = {
+        record_id: value
+        for record_id, value in replacement_records.items()
+        if record_id in selected_set
+    }
+    projected[staging.CARD_REVISION_REVIEW_KEY] = {
+        "version": staging.CARD_REVISION_REVIEW_VERSION,
+        "authority": "repository-owner",
+        "accepted_record_ids": [record.id for record in reviewed],
+        "content_fingerprint": staging.card_revision_review_fingerprint(
+            meta, reviewed
+        ),
+    }
+    source = projected.get("source_file")
+    return decide_promotion(
+        config,
+        path,
+        source=source if isinstance(source, str) else "",
+        _record_snapshot=(wire, reviewed, projected),
+    )
+
+
+def _require_exact_review_landing(
+    meta: Mapping[str, Any],
+    existing: Sequence[VocabularyRecord],
+    incoming: Sequence[VocabularyRecord],
+    merged: Sequence[VocabularyRecord],
+) -> None:
+    """Refuse an Assistant-reviewed landing that changes undisplayed fields."""
+
+    reviews_all_examples = staging.AI_ENRICHMENT_REVIEW_KEY in meta
+    if staging.CARD_REVISION_REVIEW_KEY in meta:
+        marker = meta.get(staging.CARD_REVISION_REVIEW_KEY)
+        provenance = meta.get(staging.CARD_REVISION_KEY)
+    elif staging.AI_ENRICHMENT_REVIEW_KEY in meta:
+        marker = meta.get(staging.AI_ENRICHMENT_REVIEW_KEY)
+        provenance = meta.get(staging.AI_ENRICHMENT_KEY)
+    else:
+        return
+    fields = provenance.get("fields") if isinstance(provenance, Mapping) else None
+    accepted = (
+        marker.get("accepted_record_ids") if isinstance(marker, Mapping) else None
+    )
+    if not isinstance(fields, Mapping) or not isinstance(accepted, list):
+        raise PromoteError(
+            "[assistant-review-hidden-landing] exact review provenance is incomplete"
+        )
+    accepted_ids = set(accepted)
+    before = {record.id: record for record in existing}
+    after = {record.id: record for record in merged}
+    for proposed in incoming:
+        if proposed.id not in accepted_ids:
+            raise PromoteError(
+                "[assistant-review-hidden-landing] promotion selected a card outside "
+                "the exact owner review"
+            )
+        current = before.get(proposed.id)
+        landing = after.get(proposed.id)
+        names = fields.get(proposed.id)
+        if current is None or landing is None or not isinstance(names, list):
+            raise PromoteError(
+                "[assistant-review-hidden-landing] reviewed card identity changed "
+                f"for {proposed.id}"
+            )
+        old_wire = current.to_dict()
+        new_wire = landing.to_dict()
+        hidden = sorted(
+            name
+            for name in old_wire
+            if name != "source"
+            and old_wire[name] != new_wire[name]
+            and name not in names
+        )
+        old_source = dict(old_wire["source"])
+        new_source = dict(new_wire["source"])
+        old_raw = dict(old_source.pop("raw_fields", {}))
+        new_raw = dict(new_source.pop("raw_fields", {}))
+        old_authority = old_raw.pop(EXAMPLE_AUTHORITY_KEY, None)
+        new_authority = new_raw.pop(EXAMPLE_AUTHORITY_KEY, None)
+        examples_reviewed = reviews_all_examples or "examples" in names
+        if old_authority != new_authority and not examples_reviewed:
+            hidden.append("source.example_authority")
+        if examples_reviewed:
+            exact = set_example_flags(
+                proposed,
+                EXAMPLE_AUTHORITY_KEY,
+                (
+                    example.japanese
+                    for example in proposed.examples
+                    if proposed.source.type == "extract" and example.japanese
+                ),
+            ).source.raw_fields.get(EXAMPLE_AUTHORITY_KEY)
+            if proposed.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY) != exact:
+                hidden.append("source.example_authority")
+        if old_source != new_source or old_raw != new_raw:
+            hidden.append("source")
+        if hidden:
+            raise PromoteError(
+                "[assistant-review-hidden-landing] exact owner review did not display "
+                f"landing changes to {proposed.id}: {', '.join(hidden)}"
+            )
 
 
 def _unrewritable(path: Path) -> str:
@@ -1584,6 +2187,12 @@ def decide_promotion(
     source: str = "",
     client: jpdb.JpdbClient | None = None,
     skip_reading_check: bool | None = None,
+    _record_snapshot: tuple[
+        bytes,
+        Sequence[VocabularyRecord],
+        Mapping[str, Any],
+    ]
+    | None = None,
 ) -> PromotionDecision:
     """Work out everything `janki promote` decides, and write nothing.
 
@@ -1642,9 +2251,13 @@ def decide_promotion(
         # state was invisible until Step 2 dispatched on it.
         assert state in DECISION_STATES, state
         return PromotionDecision(
-            source=name, staging_path=staging_path, state=state,
-            repository=repository, reading_check=reading_check,
-            consulted=consulted, **fields,
+            source=name,
+            staging_path=staging_path,
+            state=state,
+            repository=repository,
+            reading_check=reading_check,
+            consulted=consulted,
+            **fields,
         )
 
     def blocked(reason: JankiError, gate: str) -> PromotionDecision:
@@ -1673,7 +2286,12 @@ def decide_promotion(
         # a `JankiError` and sailed straight out of this function — so a
         # staging file deleted between listing a page and previewing it
         # produced a traceback where the old code returned a refusal.
-        wire, records, meta = record_review_snapshot(staging_path)
+        if _record_snapshot is None:
+            wire, records, meta = record_review_snapshot(staging_path)
+        else:
+            wire, supplied_records, supplied_meta = _record_snapshot
+            records = list(supplied_records)
+            meta = dict(supplied_meta)
         snapshot.update(wire=wire, records=tuple(records), meta=meta)
         if staging.PROMOTION_BATCHES_KEY in meta:
             raise PromoteError(
@@ -1681,16 +2299,14 @@ def decide_promotion(
                 "review cannot claim that rows were promoted"
             )
         if "source_file" in meta and (
-            not isinstance(meta["source_file"], str)
-            or not meta["source_file"].strip()
+            not isinstance(meta["source_file"], str) or not meta["source_file"].strip()
         ):
             raise PromoteError(
-                "[promotion-source-invalid] source_file must be nonblank text "
-                "when present"
+                "[promotion-source-invalid] source_file must be nonblank text when present"
             )
         promote.check_coverage_facts(meta)
-        done, archived, archived_meta, archive_revision = (
-            _archive_for_run_snapshot(archive_base, meta)
+        done, archived, archived_meta, archive_revision = _archive_for_run_snapshot(
+            archive_base, meta
         )
         snapshot.update(
             done=done,
@@ -1722,8 +2338,12 @@ def decide_promotion(
         coverage_error = exc
 
     common = {
-        "wire": wire, "meta": meta, "records": tuple(records),
-        "done": done, "archived": tuple(archived), "archived_meta": archived_meta,
+        "wire": wire,
+        "meta": meta,
+        "records": tuple(records),
+        "done": done,
+        "archived": tuple(archived),
+        "archived_meta": archived_meta,
         "archive_revision": archive_revision,
         "retry_flags": tuple(retry_flags),
         "already_archived": (
@@ -1793,8 +2413,9 @@ def decide_promotion(
         # check never reads `ai_enrichment`, so nothing downstream catches it.
         ai_provenance = staged_ai_enrichment(
             meta,
-            [record.id for record in work],
+            work,
             archived_ids=[record.id for record in archived],
+            archived_records=archived,
         )
         output_path = config.normalized_file.resolve()
         # One bound read supplies both the parsed collection and its CAS token.
@@ -1818,8 +2439,10 @@ def decide_promotion(
         remint_blocked=bool(unreadable),
     )
     common |= {
-        "work": tuple(work), "readings": readings,
-        "existing": tuple(existing), "output_path": output_path,
+        "work": tuple(work),
+        "readings": readings,
+        "existing": tuple(existing),
+        "output_path": output_path,
         "output_revision": output_revision,
         "stored_ids": frozenset(stored_ids),
         "deck_revision": deck_revision,
@@ -1873,15 +2496,19 @@ def decide_promotion(
             # refuses the whole merge.
             validate_incoming=work,
         )
+        _require_exact_review_landing(
+            meta,
+            existing,
+            readings.promoted,
+            merged,
+        )
     except JankiError as exc:
         return blocked(exc, "merge")
     snapshot.update(merged=tuple(merged), outcomes=outcomes)
     try:
         newly_landing = [
             record
-            for record, is_retry in zip(
-                readings.promoted, promoted_retry, strict=True
-            )
+            for record, is_retry in zip(readings.promoted, promoted_retry, strict=True)
             if not is_retry
         ]
         _require_deck_inputs(
@@ -1891,9 +2518,7 @@ def decide_promotion(
             unreadable_decks=unreadable,
             deck_revision=deck_revision,
         )
-        deck_ownership = require_exact_deck_ownership(
-            config, newly_landing, merged
-        )
+        deck_ownership = require_exact_deck_ownership(config, newly_landing, merged)
         _require_deck_inputs(
             config,
             existing,
@@ -2027,9 +2652,7 @@ def execute_promotion(
             removed=removed,
             empty_live_retry=empty_live,
             receipt_id=(
-                recovered_batch.receipt_id
-                if recovered_batch is not None
-                else None
+                recovered_batch.receipt_id if recovered_batch is not None else None
             ),
         )
 
@@ -2075,17 +2698,14 @@ def execute_promotion(
         if is_retry
     )
     promoted_flags = iter(exact_promoted)
-    retry_by_work = [
-        False if stays else next(promoted_flags) for stays in result.keep
-    ]
+    retry_by_work = [False if stays else next(promoted_flags) for stays in result.keep]
     work_keep = [
         stays and not is_retry
         for stays, is_retry in zip(result.keep, retry_by_work, strict=True)
     ]
     work_keep_iter = iter(work_keep)
     keep = [
-        False if is_retry else next(work_keep_iter)
-        for is_retry in raw_archive_retry
+        False if is_retry else next(work_keep_iter) for is_retry in raw_archive_retry
     ]
     pending_records = [
         record
@@ -2135,9 +2755,7 @@ def execute_promotion(
             retry_records=tuple(retry_records),
             removed=removed,
             receipt_id=(
-                recovered_batch.receipt_id
-                if recovered_batch is not None
-                else None
+                recovered_batch.receipt_id if recovered_batch is not None else None
             ),
         )
 
@@ -2313,7 +2931,10 @@ def plan_promotion(
     check without handing over a client. See `decide_promotion`.
     """
     decision = decide_promotion(
-        config, staging_path, source=source, client=client,
+        config,
+        staging_path,
+        source=source,
+        client=client,
         skip_reading_check=skip_reading_check,
     )
     return project_promotion(decision)
@@ -2365,9 +2986,7 @@ def project_promotion(decision: PromotionDecision) -> PromotionPlan:
                 existing=by_id.get(transformed.id),
                 # `check_readings` already decided this and says so; deriving
                 # it again from the ids is a second copy of the same rule.
-                reminted_from=(
-                    original.id if original.id in readings.reminted else ""
-                ),
+                reminted_from=(original.id if original.id in readings.reminted else ""),
             )
         )
     return PromotionPlan(

@@ -1,9 +1,10 @@
-"""ChatKit controller for explicitly selected, thread-local deck work.
+"""ChatKit controller for repository-wide Japanese-library conversation.
 
 This module deliberately contains no model client. Every composer message goes
-only to the injected read-only chat callback. A separate one-use action may turn
-that exact message into a revision plan, whose confirmation remains bound to a
-fresh application-side re-plan and ``request_fingerprint`` comparison.
+only to the injected chat callback. A selected deck is optional thread-local
+focus, not authority: an unfocused callback receives an empty ``deck_scope``.
+Every mutation arrives as a typed action attached to the ordinary reply; there
+is no second "turn this message into a change" route.
 
 ``chatkit`` is imported only by :func:`create_assistant_core`.  Importing the
 ordinary workbench therefore does not make ChatKit a runtime requirement when
@@ -20,7 +21,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 
 from japanese_anki.errors import JankiError
 
@@ -29,6 +30,8 @@ __all__ = [
     "AssistantCore",
     "AssistantRequestContext",
     "ChatReply",
+    "OperationActionChoice",
+    "OperationChoice",
     "RevisionCallbacks",
     "RevisionConfirmation",
     "RevisionExecution",
@@ -36,6 +39,7 @@ __all__ = [
     "RevisionFinishConfirmation",
     "RevisionFinishExecution",
     "RevisionFinishReview",
+    "StagedContentFinishReview",
     "RevisionRecordReview",
     "RevisionPlan",
     "RevisionRefusal",
@@ -47,15 +51,16 @@ __all__ = [
 ]
 
 
-_PREPARE_ACTION = "janki.revision.prepare"
 _CONFIRM_ACTION = "janki.revision.confirm"
 _FINISH_ACTION = "janki.revision.finish"
 _EXTRACT_CONFIRM_ACTION = "janki.extraction.confirm"
 _SELECT_DECK_ACTION = "janki.deck.select"
-_SHOW_DECKS_MESSAGE = "Choose an active deck"
-_CAPABILITIES_MESSAGE = "What can Janki help me do here?"
-_CHANGES_HELP_MESSAGE = "Explain how I can prepare and confirm a deck change."
-_SOURCE_HELP_MESSAGE = "Explain how to make cards here from an attached PDF or photo."
+_PREPARE_OPERATION_ACTION = "janki.operation.prepare"
+_ALL_LIBRARY_DECK_ID = "janki:all-library"
+_SHOW_DECKS_MESSAGE = "Choose a deck to focus on"
+_CAPABILITIES_MESSAGE = "Show me what I can do with my Japanese library"
+_SOURCE_HELP_MESSAGE = "How do I add study material?"
+_MANAGE_OPERATIONS_MESSAGE = "Manage paid operations"
 _ASSISTANT_SCOPE = "janki-project"
 _ACTIVE_DECK_ID_KEY = "janki_active_deck_id"
 _ACTIVE_DECK_SCOPE_KEY = "janki_active_deck_scope"
@@ -67,6 +72,7 @@ _CHAT_PROGRESS_LABELS = frozenset(
     {
         "Preparing answer",
         "Writing answer",
+        "Staging proposed changes",
         "Saving answer",
     }
 )
@@ -76,13 +82,38 @@ _PROGRESS_LABELS = frozenset(
         "Reading the source",
         "Checking the answer's shape",
         "Saving proposals",
+        "Preparing audio",
+        "Creating audio",
+        "Saving audio",
+        "Cleaning up audio",
+        "Preparing build",
+        "Preparing deck",
+        "Preparing pages",
+        "Saving review",
+        "Saving deck assignments",
+        "Removing staged cards",
+        "Saving staged identity",
+        "Saving coverage approval",
+        "Checking the reviewed proposal",
+        "Checking readings",
+        "Saving reviewed cards",
+        "Checking paid operation",
+        "Deleting canonical cards",
+        "Deleting deck definition",
+        "Preparing finish",
+        "Applying reviewed cards",
+        "Creating card audio",
+        "Building Anki package",
+        "Saving finish receipt",
     }
 )
 _FINISH_PROGRESS_LABELS = frozenset(
     {
         "Preparing finish",
         "Applying reviewed revision",
+        "Applying reviewed cards",
         "Creating example audio",
+        "Creating card audio",
         "Building Anki package",
         "Saving finish receipt",
     }
@@ -121,20 +152,30 @@ def _bounded_chat_history(
 
 @dataclass(frozen=True, slots=True)
 class ChatReply:
-    """One non-mutating assistant answer rendered as ordinary prose."""
+    """One Assistant answer and, when requested, one exact protected plan.
+
+    The ordinary provider call may describe a closed action intent, but only
+    the local application adapter can turn that intent into ``action``.  The
+    controller renders that already-planned action directly; it never treats
+    arbitrary prose as an instruction or grants the model a capability.
+    """
 
     text: str
+    action: RevisionPlan | None = None
+    action_instruction: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class AssistantDeckChoice:
-    """One server-discovered deck shown in the thread-local selector.
+    """One server-discovered deck shown in the optional-focus selector.
 
     ``deck_id`` is the only target value accepted from the browser. ``scope``
     stays server-side and is passed to application callbacks only after the
-    opaque id has been resolved through the immutable startup catalog. Chat
-    selection and revision are separate capabilities: every revision target
-    is chat-supported, while a safely readable deck may be chat-only.
+    opaque id has been resolved through the immutable startup catalog.
+    ``revision_supported`` describes only the specialized rich-conjugation
+    whole-deck pass. Generic canonical-card revision is resolved separately
+    for every readable vocabulary-backed deck, so this flag does not create a
+    presentation capability class.
     """
 
     deck_id: str
@@ -146,6 +187,33 @@ class AssistantDeckChoice:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationActionChoice:
+    """One exact operation-journal action offered by the local application."""
+
+    action: Literal["recover", "show_reply", "end", "forget"]
+    label: str
+    accept_paid_output_loss: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class OperationChoice:
+    """Safe operation facts rendered without asking the conversation model."""
+
+    operation_id: str
+    kind: str
+    state: str
+    source_name: str
+    model: str
+    authorized_at: str
+    blocks_spending: bool
+    money_may_have_been_spent: bool
+    has_captured_reply: bool
+    has_response_spool: bool
+    cleanup_pending: bool
+    actions: tuple[OperationActionChoice, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RevisionPlan:
     """Exact, side-effect-free revision plan rendered before owner consent."""
 
@@ -153,6 +221,8 @@ class RevisionPlan:
     target: str
     effects: tuple[str, ...]
     disclosures: tuple[str, ...] = ()
+    confirm_label: str = "Confirm exact action"
+    progress_label: str = "Preparing revision"
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,12 +283,27 @@ class RevisionFinishReview:
 
 
 @dataclass(frozen=True, slots=True)
+class StagedContentFinishReview:
+    """One exact generic staging review and all post-review consequences."""
+
+    preparation_id: str
+    request_fingerprint: str
+    target: str
+    effects: tuple[str, ...]
+    disclosures: tuple[str, ...]
+    confirm_label: str = "Apply and finish"
+
+
+@dataclass(frozen=True, slots=True)
 class RevisionExecution:
     """Durable staged proposal plus its fresh exact finish review."""
 
     message: str
-    finish: RevisionFinishReview | None
+    finish: RevisionFinishReview | StagedContentFinishReview | None
     finish_unavailable: str | None = None
+    review_required: str | None = None
+    complete: bool = False
+    remember_in_chat_context: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,6 +368,19 @@ class RevisionCallbacks(Protocol):
     def resolve_deck_selection(self, deck_id: str) -> AssistantDeckChoice:
         """Freshly validate one opaque startup-catalog choice without inference."""
 
+    def list_operation_choices(self) -> tuple[OperationChoice, ...]:
+        """Return current blocking and recovery-bearing paid operations."""
+
+    def prepare_operation_action(
+        self,
+        *,
+        operation_id: str,
+        action: str,
+        accept_paid_output_loss: bool,
+        deck_scope: str,
+    ) -> ChatReply | Awaitable[ChatReply]:
+        """Freshly plan one owner-selected journal action without a model call."""
+
     def chat(
         self,
         *,
@@ -292,14 +390,6 @@ class RevisionCallbacks(Protocol):
         progress: Callable[[str], None],
     ) -> ChatReply | Awaitable[ChatReply]:
         """Answer one message without planning or mutating a deck."""
-
-    def prepare_revision(
-        self,
-        *,
-        deck_scope: str,
-        instruction: str,
-    ) -> RevisionPlan | Awaitable[RevisionPlan]:
-        """Return a fresh, read-only plan for the exact instruction."""
 
     def consume_replan_and_execute(
         self,
@@ -366,18 +456,9 @@ class _PlanBinding:
     confirmation: RevisionConfirmation
     thread_id: str
     widget_item_id: str
-    deck_id: str
+    deck_id: str | None
     selection_epoch: int
-
-
-@dataclass(frozen=True, slots=True)
-class _MessageBinding:
-    message: str
-    thread_id: str
-    widget_item_id: str
-    deck_id: str
-    deck_scope: str
-    selection_epoch: int
+    progress_label: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -392,7 +473,7 @@ class _FinishBinding:
     confirmation: RevisionFinishConfirmation
     thread_id: str
     widget_item_id: str
-    deck_id: str
+    deck_id: str | None
     selection_epoch: int
 
 
@@ -402,6 +483,15 @@ class _SelectorBinding:
     widget_item_id: str
     selection_epoch: int
     deck_ids: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class _OperationSelectorBinding:
+    thread_id: str
+    widget_item_id: str
+    deck_id: str | None
+    selection_epoch: int
+    actions: frozenset[tuple[str, str, bool]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -721,12 +811,69 @@ def _validate_chat_reply(reply: Any) -> ChatReply:
         raise TypeError("chat must return ChatReply")
     if not reply.text.strip():
         raise ValueError("The chat reply must not be blank.")
+    if reply.action is None:
+        if reply.action_instruction is not None:
+            raise ValueError(
+                "A chat reply without an action cannot carry an action instruction."
+            )
+    else:
+        _validate_plan(reply.action)
+        if (
+            not isinstance(reply.action_instruction, str)
+            or not reply.action_instruction.strip()
+        ):
+            raise ValueError("A planned Assistant action needs its exact instruction.")
     return reply
+
+
+def _validate_operation_choices(value: Any) -> tuple[OperationChoice, ...]:
+    if not isinstance(value, tuple) or any(
+        not isinstance(choice, OperationChoice) for choice in value
+    ):
+        raise TypeError("list_operation_choices must return OperationChoice values")
+    operation_ids: set[str] = set()
+    for choice in value:
+        required = (
+            choice.operation_id,
+            choice.kind,
+            choice.state,
+            choice.source_name,
+            choice.model,
+            choice.authorized_at,
+        )
+        if any(not item.strip() for item in required):
+            raise ValueError("Every paid-operation choice must be complete.")
+        if choice.operation_id in operation_ids:
+            raise ValueError("Paid-operation choices must have unique ids.")
+        operation_ids.add(choice.operation_id)
+        if any(
+            not isinstance(flag, bool)
+            for flag in (
+                choice.blocks_spending,
+                choice.money_may_have_been_spent,
+                choice.has_captured_reply,
+                choice.has_response_spool,
+                choice.cleanup_pending,
+            )
+        ):
+            raise ValueError("Paid-operation status flags must be true or false.")
+        seen_actions: set[str] = set()
+        for action in choice.actions:
+            if (
+                not isinstance(action, OperationActionChoice)
+                or action.action not in {"recover", "show_reply", "end", "forget"}
+                or not action.label.strip()
+                or not isinstance(action.accept_paid_output_loss, bool)
+                or action.action in seen_actions
+            ):
+                raise ValueError("Every paid-operation action must be valid and unique.")
+            seen_actions.add(action.action)
+    return value
 
 
 def _validate_plan(plan: Any) -> RevisionPlan:
     if not isinstance(plan, RevisionPlan):
-        raise TypeError("prepare_revision must return RevisionPlan")
+        raise TypeError("A planned Assistant reply must carry RevisionPlan")
     if not plan.request_fingerprint.strip():
         raise ValueError("The revision plan has no request fingerprint.")
     if not plan.target.strip():
@@ -735,6 +882,10 @@ def _validate_plan(plan: Any) -> RevisionPlan:
         raise ValueError("The revision plan must name every intended effect.")
     if any(not disclosure.strip() for disclosure in plan.disclosures):
         raise ValueError("Revision-plan disclosures must not be blank.")
+    if not plan.confirm_label.strip():
+        raise ValueError("The action plan must have a confirmation label.")
+    if plan.progress_label not in _PROGRESS_LABELS:
+        raise ValueError("The action plan has an unknown progress state.")
     return plan
 
 
@@ -764,13 +915,35 @@ def _validate_execution(result: Any) -> RevisionExecution:
         raise TypeError("consume_replan_and_execute must return RevisionExecution")
     if not result.message.strip():
         raise ValueError("The revision result message must not be blank.")
+    if not isinstance(result.remember_in_chat_context, bool):
+        raise ValueError("The revision result context choice must be true or false.")
     if result.finish is None:
-        if result.finish_unavailable is None or not result.finish_unavailable.strip():
-            raise ValueError("A staged revision without a finish review must explain why.")
+        explanations = tuple(
+            value
+            for value in (result.finish_unavailable, result.review_required)
+            if value is not None and value.strip()
+        )
+        expected_explanations = 0 if result.complete else 1
+        if len(explanations) != expected_explanations:
+            raise ValueError(
+                "An unfinished action without a finish review must carry exactly "
+                "one unavailability or review-required explanation; a completed "
+                "action must carry neither."
+            )
     else:
-        if result.finish_unavailable is not None:
-            raise ValueError("A staged revision cannot be both reviewable and unavailable.")
-        _validate_finish_review(result.finish)
+        if (
+            result.finish_unavailable is not None
+            or result.review_required is not None
+            or result.complete
+        ):
+            raise ValueError(
+                "An action with a follow-up finish review cannot also be complete "
+                "or unavailable."
+            )
+        if isinstance(result.finish, RevisionFinishReview):
+            _validate_finish_review(result.finish)
+        else:
+            _validate_staged_content_finish_review(result.finish)
     return result
 
 
@@ -859,6 +1032,38 @@ def _validate_finish_review(review: Any) -> RevisionFinishReview:
     return review
 
 
+def _validate_staged_content_finish_review(
+    review: Any,
+) -> StagedContentFinishReview:
+    if not isinstance(review, StagedContentFinishReview):
+        raise TypeError(
+            "The staged action must include a supported exact finish review."
+        )
+    if any(
+        not value.strip()
+        for value in (
+            review.preparation_id,
+            review.request_fingerprint,
+            review.target,
+            review.confirm_label,
+        )
+    ):
+        raise ValueError("The staged content finish review is incomplete.")
+    if not _is_lower_sha256(review.request_fingerprint):
+        raise ValueError("The staged content finish fingerprint is malformed.")
+    if not review.effects or any(not value.strip() for value in review.effects):
+        raise ValueError(
+            "The staged content finish must render every exact consequence."
+        )
+    if any(not value.strip() for value in review.disclosures):
+        raise ValueError("Staged content finish disclosures must not be blank.")
+    if review.confirm_label != "Apply and finish":
+        raise ValueError(
+            "A staged content aggregate must name its one Apply and finish action."
+        )
+    return review
+
+
 def _validate_finish_execution(result: Any) -> RevisionFinishExecution:
     if not isinstance(result, RevisionFinishExecution):
         raise TypeError("consume_replan_and_finish must return RevisionFinishExecution")
@@ -878,6 +1083,7 @@ def _validate_finish_execution(result: Any) -> RevisionFinishExecution:
     if result.state not in {
         "authorized",
         "revision_applied",
+        "promoted",
         "audio_complete",
         "complete",
     }:
@@ -1425,20 +1631,14 @@ def create_assistant_core(
         raise ValueError("Every assistant deck choice must be complete.")
     if len({choice.deck_id for choice in choices}) != len(choices):
         raise ValueError("Assistant deck choice ids must be unique.")
+    if any(choice.deck_id == _ALL_LIBRARY_DECK_ID for choice in choices):
+        raise ValueError("Assistant deck choice ids cannot use the all-library id.")
     if len({choice.scope for choice in choices}) != len(choices):
         raise ValueError("Assistant deck choice scopes must be unique.")
-    if any(choice.revision_supported and not choice.chat_supported for choice in choices):
-        raise ValueError("Every revision-supported deck must also support chat.")
-    if any(
-        choice.revision_supported == bool(choice.unavailable_reason)
-        for choice in choices
-    ):
+    if any(not choice.chat_supported and not choice.unavailable_reason for choice in choices):
         raise ValueError(
-            "Supported decks cannot have an unavailable reason, and unsupported "
-            "decks must have one."
+            "Every unreadable deck choice must explain why focus is unavailable."
         )
-    conversation_available = any(choice.chat_supported for choice in choices)
-    revision_available = any(choice.revision_supported for choice in choices)
     choices_by_id = {choice.deck_id: choice for choice in choices}
 
     store = ScopedMemoryStore(_ASSISTANT_SCOPE, attachment_store=attachment_store)
@@ -1448,7 +1648,7 @@ def create_assistant_core(
         def __init__(self) -> None:
             super().__init__(store=store, attachment_store=attachment_store)
             self._selectors: dict[str, _SelectorBinding] = {}
-            self._messages: dict[str, _MessageBinding] = {}
+            self._operation_selectors: dict[str, _OperationSelectorBinding] = {}
             self._plans: dict[str, _PlanBinding] = {}
             self._finishes: dict[str, _FinishBinding] = {}
             self._extractions: dict[str, _ExtractionBinding] = {}
@@ -1488,6 +1688,16 @@ def create_assistant_core(
 
             return release_response
 
+        async def _remember_assistant_result(self, thread_id: str, message: str) -> None:
+            """Keep a completed application action visible to the next model turn."""
+
+            history_lock = self._history_locks.setdefault(thread_id, asyncio.Lock())
+            async with history_lock:
+                history = _bounded_chat_history(self._histories.get(thread_id, ()))
+                self._histories[thread_id] = list(
+                    _bounded_chat_history([*history, ("assistant", message)])
+                )
+
         @staticmethod
         def _selection(thread: Any) -> _ThreadSelection | None:
             metadata = getattr(thread, "metadata", {})
@@ -1503,23 +1713,25 @@ def create_assistant_core(
                 or not isinstance(epoch, int)
                 or epoch < 1
             ):
-                raise RevisionRefusal("This thread's active-deck state is invalid.")
+                raise RevisionRefusal("This thread's deck-focus state is invalid.")
             choice = choices_by_id.get(deck_id)
             if (
                 choice is None
                 or not choice.chat_supported
                 or choice.scope != deck_scope
             ):
-                raise RevisionRefusal("This thread's active deck is no longer available.")
+                raise RevisionRefusal("This thread's deck focus is no longer available.")
             return _ThreadSelection(choice=choice, epoch=epoch)
 
         @staticmethod
         def _binding_is_current(
             selection: _ThreadSelection | None,
             *,
-            deck_id: str,
+            deck_id: str | None,
             selection_epoch: int,
         ) -> bool:
+            if deck_id is None:
+                return selection is None and selection_epoch == 0
             return (
                 selection is not None
                 and selection.choice.deck_id == deck_id
@@ -1530,7 +1742,7 @@ def create_assistant_core(
             self._histories.pop(thread_id, None)
             for bindings in (
                 self._selectors,
-                self._messages,
+                self._operation_selectors,
                 self._plans,
                 self._finishes,
             ):
@@ -1542,40 +1754,35 @@ def create_assistant_core(
                 for capability in stale:
                     del bindings[capability]
 
+        def _clear_focus(self, thread: Any) -> None:
+            """Clear stale focus plus every context/action derived from it."""
+
+            self._invalidate_thread_state(thread.id)
+            metadata = dict(getattr(thread, "metadata", {}))
+            metadata.pop(_ACTIVE_DECK_ID_KEY, None)
+            metadata.pop(_ACTIVE_DECK_SCOPE_KEY, None)
+            metadata.pop(_SELECTION_EPOCH_KEY, None)
+            thread.metadata = metadata
+
         @staticmethod
         def _local_help(message: str) -> str | None:
-            if (
-                not conversation_available
-                and message in {_CAPABILITIES_MESSAGE, _CHANGES_HELP_MESSAGE}
-            ):
-                return (
-                    "No readable deck is available for questions or deck changes. "
-                    "Configure or repair a deck first; local PDF or photo intake "
-                    "remains available."
-                )
             if message == _CAPABILITIES_MESSAGE:
-                if not revision_available:
-                    return (
-                        "Choose an active deck, ask read-only questions, or attach one "
-                        "PDF or photo for local source intake. This project has no "
-                        "Chat + changes deck, so deck changes are unavailable."
-                    )
                 return (
-                    "Choose an active deck, ask read-only questions, or attach one "
-                    "PDF or photo for local source intake. A Chat + changes deck can "
-                    "also turn an exact message into a reviewed change proposal."
-                )
-            if message == _CHANGES_HELP_MESSAGE:
-                if not revision_available:
-                    return (
-                        "This project has no Chat + changes deck. Choose a readable "
-                        "deck for read-only questions; deck changes remain unavailable "
-                        "until a supported rich drill deck is configured."
-                    )
-                return (
-                    "Choose a Chat + changes deck, send the requested change, then "
-                    "use the explicit deck-change action under Janki's answer. Janki "
-                    "shows one exact plan before any revision is sent."
+                    "You can use Janki across the whole Japanese library; choosing a "
+                    "deck only gives the conversation a convenient focus.\n\n"
+                    "- **Read and find:** inspect configured decks, canonical cards, "
+                    "preserved sources, staging proposals, patterns, kanji, operation "
+                    "status, media, and built packages.\n\n"
+                    "- **Change study content:** revise selected canonical cards in any "
+                    "readable vocabulary-backed deck. Rich conjugation decks also support "
+                    "their specialized whole-deck teaching-content revision. Model-written "
+                    "Japanese always stops in staging for your review.\n\n"
+                    "- **Run the deck workflow:** create a deck; attach one PDF or photo "
+                    "for local intake; extract it; review or organize staged cards; "
+                    "promote reviewed proposals; generate audio; and build Anki packages "
+                    "through exact action plans.\n\n"
+                    "Janki uses bounded application actions rather than giving the model a "
+                    "raw shell, arbitrary filesystem, Git, or network access."
                 )
             if message == _SOURCE_HELP_MESSAGE:
                 return (
@@ -1591,7 +1798,61 @@ def create_assistant_core(
             capability: str,
             active: _ThreadSelection | None,
         ) -> Any:
-            rows: list[dict[str, Any]] = []
+            all_library_details: list[dict[str, Any]] = [
+                {
+                    "type": "Text",
+                    "value": "All library",
+                    "weight": "semibold",
+                    "width": "100%",
+                },
+                {
+                    "type": "Text",
+                    "value": (
+                        "Clear the active deck focus"
+                        if active is not None
+                        else "No deck focus; use the whole Japanese library"
+                    ),
+                    "size": "sm",
+                    "color": "secondary",
+                    "width": "100%",
+                },
+            ]
+            if active is None:
+                all_library_details.append(
+                    {
+                        "type": "Badge",
+                        "label": "Focused",
+                        "color": "success",
+                        "variant": "soft",
+                    }
+                )
+            all_library_row: dict[str, Any] = {
+                "type": "ListViewItem",
+                "gap": 3,
+                "align": "center",
+                "children": [
+                    {
+                        "type": "Box",
+                        "direction": "column",
+                        "gap": 1,
+                        "flex": 1,
+                        "minWidth": 0,
+                        "children": all_library_details,
+                    }
+                ],
+            }
+            if active is not None:
+                all_library_row["onClickAction"] = {
+                    "type": _SELECT_DECK_ACTION,
+                    "payload": {
+                        "capability": capability,
+                        "deck_id": _ALL_LIBRARY_DECK_ID,
+                    },
+                    "handler": "server",
+                    "loadingBehavior": "container",
+                    "streaming": True,
+                }
+            rows: list[dict[str, Any]] = [all_library_row]
             for choice in choices:
                 is_active = (
                     active is not None and active.choice.deck_id == choice.deck_id
@@ -1599,24 +1860,12 @@ def create_assistant_core(
                 if is_active:
                     badge = {
                         "type": "Badge",
-                        "label": "Active",
+                        "label": "Focused",
                         "color": "success",
                         "variant": "soft",
                     }
-                elif choice.revision_supported:
-                    badge = {
-                        "type": "Badge",
-                        "label": "Chat + changes",
-                        "color": "info",
-                        "variant": "soft",
-                    }
                 elif choice.chat_supported:
-                    badge = {
-                        "type": "Badge",
-                        "label": "Chat only",
-                        "color": "secondary",
-                        "variant": "soft",
-                    }
+                    badge = None
                 else:
                     badge = {
                         "type": "Badge",
@@ -1624,16 +1873,17 @@ def create_assistant_core(
                         "color": "secondary",
                         "variant": "soft",
                     }
-                details = [
+                details: list[dict[str, Any]] = [
                     {
                         "type": "Text",
                         "value": choice.label,
                         "weight": "semibold",
                         "width": "100%",
-                    },
-                    badge,
+                    }
                 ]
-                if choice.unavailable_reason:
+                if badge is not None:
+                    details.append(badge)
+                if not choice.chat_supported and choice.unavailable_reason:
                     details.append(
                         {
                             "type": "Text",
@@ -1675,7 +1925,7 @@ def create_assistant_core(
                     "type": "ListView",
                     "limit": "auto",
                     "status": {
-                        "text": "Choose the active deck",
+                        "text": "Optional deck focus",
                         "icon": "book-open",
                     },
                     "children": rows,
@@ -1690,15 +1940,9 @@ def create_assistant_core(
             try:
                 active = self._selection(thread)
             except RevisionRefusal:
-                # A selector is the recovery surface for stale catalog metadata.
-                # Old deck actions are unusable while this state is unselected;
-                # the next valid selection invalidates them before resetting its
-                # epoch. Project-scoped extraction remains independent.
-                metadata = dict(getattr(thread, "metadata", {}))
-                metadata.pop(_ACTIVE_DECK_ID_KEY, None)
-                metadata.pop(_ACTIVE_DECK_SCOPE_KEY, None)
-                metadata.pop(_SELECTION_EPOCH_KEY, None)
-                thread.metadata = metadata
+                # A selector is the recovery surface for stale focus metadata.
+                # Project-scoped extraction remains independent.
+                self._clear_focus(thread)
                 active = None
             capability = secrets.token_urlsafe(32)
             item_id = store.generate_item_id("message", thread, request_context)
@@ -1707,7 +1951,10 @@ def create_assistant_core(
                 widget_item_id=item_id,
                 selection_epoch=active.epoch if active is not None else 0,
                 deck_ids=frozenset(
-                    choice.deck_id for choice in choices if choice.chat_supported
+                    {
+                        _ALL_LIBRARY_DECK_ID,
+                        *(choice.deck_id for choice in choices if choice.chat_supported),
+                    }
                 ),
             )
             return ThreadItemDoneEvent(
@@ -1718,6 +1965,140 @@ def create_assistant_core(
                     widget=self._selector_widget(
                         capability=capability,
                         active=active,
+                    ),
+                    copy_text=None,
+                )
+            )
+
+        @staticmethod
+        def _operation_selector_widget(
+            operation_choices: tuple[OperationChoice, ...],
+            *,
+            capability: str,
+        ) -> Any:
+            rows: list[dict[str, Any]] = []
+            for choice in operation_choices:
+                status = "Blocks new paid calls" if choice.blocks_spending else "Recovery only"
+                evidence = []
+                if choice.has_captured_reply:
+                    evidence.append("captured reply")
+                if choice.has_response_spool:
+                    evidence.append("response frames")
+                if choice.cleanup_pending:
+                    evidence.append("cleanup pending")
+                details = (
+                    f"{choice.kind} · {choice.state} · {choice.source_name} · "
+                    f"{choice.model} · {status}"
+                )
+                if evidence:
+                    details += " · " + ", ".join(evidence)
+                rows.append(
+                    {
+                        "type": "ListViewItem",
+                        "gap": 2,
+                        "children": [
+                            {
+                                "type": "Box",
+                                "direction": "column",
+                                "gap": 1,
+                                "minWidth": 0,
+                                "children": [
+                                    {
+                                        "type": "Text",
+                                        "value": choice.operation_id,
+                                        "weight": "semibold",
+                                        "width": "100%",
+                                    },
+                                    {
+                                        "type": "Text",
+                                        "value": details,
+                                        "size": "sm",
+                                        "color": "secondary",
+                                        "width": "100%",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                )
+                for option in choice.actions:
+                    rows.append(
+                        {
+                            "type": "ListViewItem",
+                            "gap": 2,
+                            "children": [
+                                {
+                                    "type": "Text",
+                                    "value": option.label,
+                                    "width": "100%",
+                                    "color": (
+                                        "danger"
+                                        if option.accept_paid_output_loss
+                                        else "primary"
+                                    ),
+                                }
+                            ],
+                            "onClickAction": {
+                                "type": _PREPARE_OPERATION_ACTION,
+                                "payload": {
+                                    "capability": capability,
+                                    "operation_id": choice.operation_id,
+                                    "action": option.action,
+                                    "accept_paid_output_loss": (
+                                        option.accept_paid_output_loss
+                                    ),
+                                },
+                                "handler": "server",
+                                "loadingBehavior": "container",
+                                "streaming": True,
+                            },
+                        }
+                    )
+            return DynamicWidgetRoot.model_validate(
+                {
+                    "type": "ListView",
+                    "limit": "auto",
+                    "status": {
+                        "text": "Paid operations",
+                        "icon": "keys",
+                    },
+                    "children": rows,
+                }
+            )
+
+        def _operation_selector_event(
+            self,
+            thread: Any,
+            request_context: AssistantRequestContext,
+            operation_choices: tuple[OperationChoice, ...],
+        ) -> Any:
+            selection = self._selection(thread)
+            capability = secrets.token_urlsafe(32)
+            item_id = store.generate_item_id("message", thread, request_context)
+            allowed = frozenset(
+                (
+                    choice.operation_id,
+                    option.action,
+                    option.accept_paid_output_loss,
+                )
+                for choice in operation_choices
+                for option in choice.actions
+            )
+            self._operation_selectors[capability] = _OperationSelectorBinding(
+                thread_id=thread.id,
+                widget_item_id=item_id,
+                deck_id=selection.choice.deck_id if selection is not None else None,
+                selection_epoch=selection.epoch if selection is not None else 0,
+                actions=allowed,
+            )
+            return ThreadItemDoneEvent(
+                item=WidgetItem(
+                    id=item_id,
+                    thread_id=thread.id,
+                    created_at=datetime.now(),
+                    widget=self._operation_selector_widget(
+                        operation_choices,
+                        capability=capability,
                     ),
                     copy_text=None,
                 )
@@ -1774,7 +2155,7 @@ def create_assistant_core(
                     "size": "full",
                     "children": [
                         _confirmation_body(
-                            title="Confirm this exact revision",
+                            title="Confirm this exact action",
                             target=plan.target,
                             instruction=instruction,
                             effects=plan.effects,
@@ -1788,7 +2169,7 @@ def create_assistant_core(
                         )
                     ],
                     "confirm": {
-                        "label": "Confirm exact revision",
+                        "label": plan.confirm_label,
                         "action": {
                             "type": _CONFIRM_ACTION,
                             "payload": {
@@ -1846,17 +2227,35 @@ def create_assistant_core(
 
         @staticmethod
         def _finish_widget(
-            review: RevisionFinishReview,
+            review: RevisionFinishReview | StagedContentFinishReview,
             *,
             capability: str,
         ) -> Any:
+            if isinstance(review, StagedContentFinishReview):
+                body = _confirmation_body(
+                    title="Review this exact content and finish",
+                    target=review.target,
+                    effects=review.effects,
+                    disclosures=review.disclosures,
+                    fingerprint_label="Finish fingerprint",
+                    fingerprint=review.request_fingerprint,
+                    one_use_note=(
+                        "Apply and finish is one-use. At the click, Janki re-plans "
+                        "and refuses if the reviewed proposal, audio, or build "
+                        "inputs changed."
+                    ),
+                )
+                confirm_label = review.confirm_label
+            else:
+                body = _finish_review_body(review)
+                confirm_label = "Apply and finish"
             return DynamicWidgetRoot.model_validate(
                 {
                     "type": "Card",
                     "size": "full",
-                    "children": [_finish_review_body(review)],
+                    "children": [body],
                     "confirm": {
-                        "label": "Apply and finish",
+                        "label": confirm_label,
                         "action": {
                             "type": _FINISH_ACTION,
                             "payload": {
@@ -1868,37 +2267,6 @@ def create_assistant_core(
                             "streaming": True,
                         },
                     },
-                }
-            )
-
-        @staticmethod
-        def _prepare_widget(*, capability: str) -> Any:
-            return DynamicWidgetRoot.model_validate(
-                {
-                    "type": "Card",
-                    "size": "full",
-                    "children": [
-                        {
-                            "type": "Text",
-                            "value": (
-                                "This answer is read-only. Use this action only if "
-                                "you want the exact message above treated as a deck "
-                                "revision instruction."
-                            ),
-                            "color": "secondary",
-                        },
-                        {
-                            "type": "Button",
-                            "label": "Prepare this message as a deck change",
-                            "onClickAction": {
-                                "type": _PREPARE_ACTION,
-                                "payload": {"capability": capability},
-                                "handler": "server",
-                                "loadingBehavior": "container",
-                                "streaming": True,
-                            },
-                        },
-                    ],
                 }
             )
 
@@ -1999,53 +2367,75 @@ def create_assistant_core(
             if message == _SHOW_DECKS_MESSAGE:
                 if not choices:
                     yield NoticeEvent(
-                        level="warning",
-                        title="No configured deck available",
+                        level="info",
+                        title="No deck available to focus",
                         message=(
-                            "No configured deck is available to select. Configure "
-                            "a readable deck first; local source intake remains "
-                            "available."
+                            "No readable deck is available to focus right now. You "
+                            "can still ask about the Japanese library or attach a "
+                            "source."
                         ),
                     )
                     return
                 yield self._selector_event(thread, request_context)
                 return
 
+            if message == _MANAGE_OPERATIONS_MESSAGE:
+                try:
+                    operation_choices = _validate_operation_choices(
+                        await _call_callback(callbacks.list_operation_choices)
+                    )
+                except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Paid operations unavailable",
+                        message=str(error),
+                    )
+                    return
+                if not operation_choices:
+                    yield self._message_event(
+                        thread,
+                        "No paid operation is blocking spending or waiting for recovery.",
+                    )
+                    return
+                try:
+                    event = self._operation_selector_event(
+                        thread,
+                        request_context,
+                        operation_choices,
+                    )
+                except RevisionRefusal:
+                    self._clear_focus(thread)
+                    event = self._operation_selector_event(
+                        thread,
+                        request_context,
+                        operation_choices,
+                    )
+                yield self._message_event(
+                    thread,
+                    (
+                        "Choose one exact paid-operation action below. Janki plans "
+                        "it locally, so this status and recovery surface does not "
+                        "make another model call."
+                    ),
+                )
+                yield event
+                return
+
             local_help = self._local_help(message)
             if local_help is not None:
                 yield self._message_event(thread, local_help)
-                if choices:
-                    yield self._selector_event(thread, request_context)
                 return
 
             try:
                 selection = self._selection(thread)
             except RevisionRefusal as error:
-                yield NoticeEvent(level="warning", message=str(error))
-                yield self._selector_event(thread, request_context)
-                return
-            if selection is None:
-                if conversation_available:
-                    title = "Choose an active deck"
-                    message = (
-                        "Janki did not send this message to a model. Choose a "
-                        "deck below, then send the question again."
-                    )
-                else:
-                    title = "No readable deck available"
-                    message = (
-                        "Janki did not send this message to a model. No readable "
-                        "deck is available; configure or repair one before asking "
-                        "deck questions. Local source intake remains available."
-                    )
+                self._clear_focus(thread)
                 yield NoticeEvent(
-                    level="warning",
-                    title=title,
-                    message=message,
+                    level="info",
+                    title="Deck focus cleared",
+                    message=f"{error} Janki continued without a deck focus.",
                 )
-                if choices:
-                    yield self._selector_event(thread, request_context)
-                return
+                selection = None
             if thread.id in self._busy_threads:
                 yield NoticeEvent(
                     level="warning",
@@ -2069,7 +2459,7 @@ def create_assistant_core(
                     reply = _validate_chat_reply(
                         await _call_callback(
                             callbacks.chat,
-                            deck_scope=selection.choice.scope,
+                            deck_scope=(selection.choice.scope if selection else ""),
                             history=history,
                             message=message,
                             progress=report_progress,
@@ -2107,27 +2497,41 @@ def create_assistant_core(
                     return
 
                 yield self._message_event(thread, reply.text)
-                if not selection.choice.revision_supported:
-                    return
-                capability = secrets.token_urlsafe(32)
-                item_id = store.generate_item_id("message", thread, request_context)
-                self._messages[capability] = _MessageBinding(
-                    message=message,
-                    thread_id=thread.id,
-                    widget_item_id=item_id,
-                    deck_id=selection.choice.deck_id,
-                    deck_scope=selection.choice.scope,
-                    selection_epoch=selection.epoch,
-                )
-                yield ThreadItemDoneEvent(
-                    item=WidgetItem(
-                        id=item_id,
-                        thread_id=thread.id,
-                        created_at=datetime.now(),
-                        widget=self._prepare_widget(capability=capability),
-                        copy_text=None,
+                plan = reply.action
+                if plan is not None:
+                    instruction = reply.action_instruction
+                    if instruction is None:  # guarded by _validate_chat_reply
+                        raise AssertionError("validated planned replies carry an instruction")
+                    capability = secrets.token_urlsafe(32)
+                    item_id = store.generate_item_id("message", thread, request_context)
+                    confirmation = RevisionConfirmation(
+                        capability=capability,
+                        deck_scope=(selection.choice.scope if selection else ""),
+                        instruction=instruction,
+                        expected_fingerprint=plan.request_fingerprint,
+                        target=plan.target,
                     )
-                )
+                    self._plans[capability] = _PlanBinding(
+                        confirmation=confirmation,
+                        thread_id=thread.id,
+                        widget_item_id=item_id,
+                        deck_id=(selection.choice.deck_id if selection else None),
+                        selection_epoch=(selection.epoch if selection else 0),
+                        progress_label=plan.progress_label,
+                    )
+                    yield ThreadItemDoneEvent(
+                        item=WidgetItem(
+                            id=item_id,
+                            thread_id=thread.id,
+                            created_at=datetime.now(),
+                            widget=self._plan_widget(
+                                plan,
+                                instruction=instruction,
+                                capability=capability,
+                            ),
+                            copy_text=None,
+                        )
+                    )
             finally:
                 release_busy()
 
@@ -2140,6 +2544,134 @@ def create_assistant_core(
         ) -> Any:
             if request_context.deck_scope != _ASSISTANT_SCOPE:
                 yield ErrorEvent(message="That assistant action was refused.", allow_retry=False)
+                return
+            if action.type == _PREPARE_OPERATION_ACTION:
+                payload = action.payload
+                if not isinstance(payload, dict) or set(payload) != {
+                    "capability",
+                    "operation_id",
+                    "action",
+                    "accept_paid_output_loss",
+                }:
+                    yield ErrorEvent(
+                        message="The paid-operation action was refused.",
+                        allow_retry=False,
+                    )
+                    return
+                capability = payload.get("capability")
+                operation_id = payload.get("operation_id")
+                operation_action = payload.get("action")
+                accept_loss = payload.get("accept_paid_output_loss")
+                binding = (
+                    self._operation_selectors.get(capability)
+                    if isinstance(capability, str)
+                    else None
+                )
+                try:
+                    current_selection = self._selection(thread)
+                except RevisionRefusal:
+                    current_selection = None
+                requested = (operation_id, operation_action, accept_loss)
+                if (
+                    not isinstance(operation_id, str)
+                    or operation_action
+                    not in {"recover", "show_reply", "end", "forget"}
+                    or not isinstance(accept_loss, bool)
+                    or binding is None
+                    or binding.thread_id != thread.id
+                    or sender is None
+                    or sender.id != binding.widget_item_id
+                    or requested not in binding.actions
+                    or not self._binding_is_current(
+                        current_selection,
+                        deck_id=binding.deck_id,
+                        selection_epoch=binding.selection_epoch,
+                    )
+                ):
+                    if isinstance(capability, str):
+                        self._operation_selectors.pop(capability, None)
+                    yield ErrorEvent(
+                        message=(
+                            "This paid-operation selector is missing, stale, "
+                            "already used, tampered with, or belongs elsewhere."
+                        ),
+                        allow_retry=False,
+                    )
+                    return
+                if thread.id in self._busy_threads:
+                    yield ErrorEvent(
+                        message="Wait for this thread's current operation to finish.",
+                        allow_retry=False,
+                    )
+                    return
+                self._operation_selectors.pop(capability, None)
+                deck_scope = (
+                    current_selection.choice.scope
+                    if current_selection is not None
+                    else ""
+                )
+                try:
+                    reply = _validate_chat_reply(
+                        await _call_callback(
+                            callbacks.prepare_operation_action,
+                            operation_id=operation_id,
+                            action=operation_action,
+                            accept_paid_output_loss=accept_loss,
+                            deck_scope=deck_scope,
+                        )
+                    )
+                except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Paid-operation action unavailable",
+                        message=str(error),
+                    )
+                    return
+                plan = reply.action
+                instruction = reply.action_instruction
+                if plan is None or instruction is None:
+                    yield ErrorEvent(
+                        message="The local paid-operation planner returned no exact action.",
+                        allow_retry=False,
+                    )
+                    return
+                yield self._message_event(thread, reply.text)
+                confirm_capability = secrets.token_urlsafe(32)
+                item_id = store.generate_item_id("message", thread, request_context)
+                confirmation = RevisionConfirmation(
+                    capability=confirm_capability,
+                    deck_scope=deck_scope,
+                    instruction=instruction,
+                    expected_fingerprint=plan.request_fingerprint,
+                    target=plan.target,
+                )
+                self._plans[confirm_capability] = _PlanBinding(
+                    confirmation=confirmation,
+                    thread_id=thread.id,
+                    widget_item_id=item_id,
+                    deck_id=(
+                        current_selection.choice.deck_id
+                        if current_selection is not None
+                        else None
+                    ),
+                    selection_epoch=(
+                        current_selection.epoch if current_selection is not None else 0
+                    ),
+                    progress_label=plan.progress_label,
+                )
+                yield ThreadItemDoneEvent(
+                    item=WidgetItem(
+                        id=item_id,
+                        thread_id=thread.id,
+                        created_at=datetime.now(),
+                        widget=self._plan_widget(
+                            plan,
+                            instruction=instruction,
+                            capability=confirm_capability,
+                        ),
+                        copy_text=None,
+                    )
+                )
                 return
             if action.type == _SELECT_DECK_ACTION:
                 payload = action.payload
@@ -2177,7 +2709,7 @@ def create_assistant_core(
                     if thread.id in self._busy_threads:
                         yield ErrorEvent(
                             message=(
-                                "The active deck cannot change while this thread's "
+                                "The deck focus cannot change while this thread's "
                                 "current operation is still running."
                             ),
                             allow_retry=False,
@@ -2194,6 +2726,24 @@ def create_assistant_core(
                             message="This deck selector is stale or belongs elsewhere.",
                             allow_retry=False,
                         )
+                        return
+                    if deck_id == _ALL_LIBRARY_DECK_ID:
+                        if current is None:
+                            yield ErrorEvent(
+                                message="All library is already active in this thread.",
+                                allow_retry=False,
+                            )
+                            return
+                        self._clear_focus(thread)
+                        yield self._message_event(
+                            thread,
+                            (
+                                "Continuing with all library. Deck-focused conversation "
+                                "context and older focus-specific action cards in this "
+                                "thread were cleared."
+                            ),
+                        )
+                        yield self._selector_event(thread, request_context)
                         return
                     choice = choices_by_id[deck_id]
                     if current is not None and current.choice.deck_id == deck_id:
@@ -2225,7 +2775,6 @@ def create_assistant_core(
                         or fresh_choice.deck_id != choice.deck_id
                         or fresh_choice.scope != choice.scope
                         or fresh_choice.chat_supported != choice.chat_supported
-                        or fresh_choice.revision_supported != choice.revision_supported
                     ):
                         yield ErrorEvent(
                             message="That deck changed after the selector was rendered.",
@@ -2235,7 +2784,7 @@ def create_assistant_core(
                     if thread.id in self._busy_threads:
                         yield ErrorEvent(
                             message=(
-                                "The active deck cannot change while this thread's "
+                                "The deck focus cannot change while this thread's "
                                 "current operation is still running."
                             ),
                             allow_retry=False,
@@ -2252,8 +2801,8 @@ def create_assistant_core(
                     yield self._message_event(
                         thread,
                         (
-                            f"Active deck: {choice.label}. Deck-specific conversation "
-                            "context and older deck-specific action cards in this "
+                            f"Focused on: {choice.label}. Focus-specific conversation "
+                            "context and older focus-specific action cards in this "
                             "thread were cleared."
                         ),
                     )
@@ -2279,7 +2828,7 @@ def create_assistant_core(
                         allow_retry=False,
                     )
                     return
-                extraction_binding = self._extractions.pop(capability, None)
+                extraction_binding = self._extractions.get(capability)
                 if (
                     extraction_binding is None
                     or extraction_binding.thread_id != thread.id
@@ -2287,6 +2836,7 @@ def create_assistant_core(
                     or sender.id != extraction_binding.widget_item_id
                     or fingerprint != extraction_binding.confirmation.expected_fingerprint
                 ):
+                    self._extractions.pop(capability, None)
                     yield ErrorEvent(
                         message=(
                             "This extraction confirmation is missing, stale, already "
@@ -2301,6 +2851,7 @@ def create_assistant_core(
                         allow_retry=False,
                     )
                     return
+                self._extractions.pop(capability, None)
 
                 progress_queue: asyncio.Queue[str] = asyncio.Queue()
                 loop = asyncio.get_running_loop()
@@ -2319,7 +2870,9 @@ def create_assistant_core(
                         extraction_binding.confirmation,
                         progress=report_extraction_progress,
                     )
-                    return _validate_source_extraction_execution(result)
+                    checked = _validate_source_extraction_execution(result)
+                    await self._remember_assistant_result(thread.id, checked.message)
+                    return checked
 
                 execution_task = asyncio.create_task(execute_extraction())
                 release_busy = self._track_durable_task(thread.id, execution_task)
@@ -2370,7 +2923,7 @@ def create_assistant_core(
                 # A recognizable capability is consumed before any binding or
                 # fingerprint check. A tampered click can never be repaired and
                 # replayed into the authority the owner originally saw.
-                finish_binding = self._finishes.pop(capability, None)
+                finish_binding = self._finishes.get(capability)
                 fingerprint = payload.get("request_fingerprint")
                 try:
                     current_selection = self._selection(thread)
@@ -2389,9 +2942,8 @@ def create_assistant_core(
                         deck_id=finish_binding.deck_id,
                         selection_epoch=finish_binding.selection_epoch,
                     )
-                    or finish_binding.confirmation.target
-                    != current_selection.choice.scope
                 ):
+                    self._finishes.pop(capability, None)
                     yield ErrorEvent(
                         message=(
                             "This Apply and finish action is missing, stale, already "
@@ -2406,6 +2958,7 @@ def create_assistant_core(
                         allow_retry=False,
                     )
                     return
+                self._finishes.pop(capability, None)
 
                 progress_queue: asyncio.Queue[str] = asyncio.Queue()
                 loop = asyncio.get_running_loop()
@@ -2424,7 +2977,9 @@ def create_assistant_core(
                         finish_binding.confirmation,
                         progress=report_finish_progress,
                     )
-                    return _validate_finish_execution(result)
+                    checked = _validate_finish_execution(result)
+                    await self._remember_assistant_result(thread.id, checked.message)
+                    return checked
 
                 execution_task = asyncio.create_task(execute_finish())
                 release_busy = self._track_durable_task(thread.id, execution_task)
@@ -2456,106 +3011,6 @@ def create_assistant_core(
                     release_busy()
                 return
 
-            if action.type == _PREPARE_ACTION:
-                payload = action.payload
-                if not isinstance(payload, dict) or set(payload) != {"capability"}:
-                    yield ErrorEvent(
-                        message="The prepare-action payload was refused.",
-                        allow_retry=False,
-                    )
-                    return
-                capability = payload.get("capability")
-                if not isinstance(capability, str):
-                    yield ErrorEvent(
-                        message="The prepare-action payload was refused.",
-                        allow_retry=False,
-                    )
-                    return
-                message_binding = self._messages.pop(capability, None)
-                try:
-                    current_selection = self._selection(thread)
-                except RevisionRefusal:
-                    current_selection = None
-                if (
-                    message_binding is None
-                    or message_binding.thread_id != thread.id
-                    or sender is None
-                    or sender.id != message_binding.widget_item_id
-                    or not self._binding_is_current(
-                        current_selection,
-                        deck_id=message_binding.deck_id,
-                        selection_epoch=message_binding.selection_epoch,
-                    )
-                    or message_binding.deck_scope
-                    != current_selection.choice.scope
-                    or not current_selection.choice.revision_supported
-                ):
-                    yield ErrorEvent(
-                        message=(
-                            "This prepare action is missing, stale, already used, "
-                            "or belongs elsewhere."
-                        ),
-                        allow_retry=False,
-                    )
-                    return
-                if thread.id in self._busy_threads:
-                    yield ErrorEvent(
-                        message="Wait for this thread's current operation to finish.",
-                        allow_retry=False,
-                    )
-                    return
-                self._busy_threads.add(thread.id)
-                try:
-                    try:
-                        plan = _validate_plan(
-                            await _call_callback(
-                                callbacks.prepare_revision,
-                                deck_scope=message_binding.deck_scope,
-                                instruction=message_binding.message,
-                            )
-                        )
-                    except RevisionRefusal as error:
-                        yield NoticeEvent(level="warning", message=str(error))
-                        return
-                    if plan.target != message_binding.deck_scope:
-                        yield ErrorEvent(
-                            message="The revision plan targeted a different deck.",
-                            allow_retry=False,
-                        )
-                        return
-                    capability = secrets.token_urlsafe(32)
-                    item_id = store.generate_item_id("message", thread, request_context)
-                    confirmation = RevisionConfirmation(
-                        capability=capability,
-                        deck_scope=message_binding.deck_scope,
-                        instruction=message_binding.message,
-                        expected_fingerprint=plan.request_fingerprint,
-                        target=plan.target,
-                    )
-                    self._plans[capability] = _PlanBinding(
-                        confirmation=confirmation,
-                        thread_id=thread.id,
-                        widget_item_id=item_id,
-                        deck_id=message_binding.deck_id,
-                        selection_epoch=message_binding.selection_epoch,
-                    )
-                    yield ThreadItemDoneEvent(
-                        item=WidgetItem(
-                            id=item_id,
-                            thread_id=thread.id,
-                            created_at=datetime.now(),
-                            widget=self._plan_widget(
-                                plan,
-                                instruction=message_binding.message,
-                                capability=capability,
-                            ),
-                            copy_text=None,
-                        )
-                    )
-                    return
-                finally:
-                    self._busy_threads.discard(thread.id)
-
             if action.type != _CONFIRM_ACTION:
                 yield ErrorEvent(message="That assistant action was refused.", allow_retry=False)
                 return
@@ -2572,11 +3027,14 @@ def create_assistant_core(
                 yield ErrorEvent(message="The confirmation payload was refused.", allow_retry=False)
                 return
 
-            binding = self._plans.pop(capability, None)
+            binding = self._plans.get(capability)
             try:
                 current_selection = self._selection(thread)
             except RevisionRefusal:
                 current_selection = None
+            current_scope = (
+                current_selection.choice.scope if current_selection is not None else ""
+            )
             if (
                 binding is None
                 or binding.thread_id != thread.id
@@ -2588,9 +3046,9 @@ def create_assistant_core(
                     deck_id=binding.deck_id,
                     selection_epoch=binding.selection_epoch,
                 )
-                or binding.confirmation.deck_scope != current_selection.choice.scope
-                or binding.confirmation.target != current_selection.choice.scope
+                or binding.confirmation.deck_scope != current_scope
             ):
+                self._plans.pop(capability, None)
                 yield ErrorEvent(
                     message=(
                         "This confirmation is missing, stale, already used, or belongs elsewhere."
@@ -2604,6 +3062,7 @@ def create_assistant_core(
                     allow_retry=False,
                 )
                 return
+            self._plans.pop(capability, None)
 
             progress_queue: asyncio.Queue[str] = asyncio.Queue()
             loop = asyncio.get_running_loop()
@@ -2621,7 +3080,7 @@ def create_assistant_core(
                     progress=report_progress,
                 )
                 try:
-                    return _validate_execution(result)
+                    checked = _validate_execution(result)
                 except RevisionRefusal:
                     raise
                 except Exception as error:
@@ -2631,16 +3090,19 @@ def create_assistant_core(
                         or not result.message.strip()
                     ):
                         raise
-                    return RevisionExecution(
+                    checked = RevisionExecution(
                         message=result.message,
                         finish=None,
                         finish_unavailable=_staged_finish_unavailable(error),
                     )
+                if checked.remember_in_chat_context:
+                    await self._remember_assistant_result(thread.id, checked.message)
+                return checked
 
             execution_task = asyncio.create_task(execute())
             release_busy = self._track_durable_task(thread.id, execution_task)
             try:
-                yield ProgressUpdateEvent(text="Preparing revision", icon="write")
+                yield ProgressUpdateEvent(text=binding.progress_label, icon="write")
 
                 try:
                     while not execution_task.done():
@@ -2665,6 +3127,15 @@ def create_assistant_core(
                 yield self._message_event(thread, result.message)
                 finish = result.finish
                 if finish is None:
+                    if result.complete:
+                        return
+                    if result.review_required is not None:
+                        yield NoticeEvent(
+                            level="info",
+                            title="Review the proposed card changes",
+                            message=result.review_required,
+                        )
+                        return
                     yield NoticeEvent(
                         level="warning",
                         title="Apply and finish review unavailable",

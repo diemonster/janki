@@ -413,47 +413,66 @@ class ReviewPanel:
             pattern_path, "The pattern store", absent_ok=True
         )
         with _sorted_path_locks((active_path, pattern_path)):
-            # Recheck after acquiring the lock: a cooperating writer may have
-            # replaced the file while this process was waiting.
-            _active_staging_path(active_path, staging_dir)
-            _require_regular_non_symlink(
-                pattern_path, "The pattern store", absent_ok=True
+            return cls.open_under_lock(
+                active_path,
+                staging_dir=staging_dir,
+                patterns_path=pattern_path,
+                collection_name=collection_name,
             )
-            staging_bytes = _capture_regular_bytes(active_path, "The active staging file")
-            # An absent store captures as an empty document rather than
-            # refusing: there is nothing to compare-and-swap against, and
-            # pattern review is unavailable for such a project anyway.
-            patterns_bytes = _capture_regular_bytes(
-                pattern_path,
-                "The pattern store",
-                absent_ok=True,
+
+    @classmethod
+    def open_under_lock(
+        cls,
+        staging_path: Path,
+        *,
+        staging_dir: Path,
+        patterns_path: Path,
+        collection_name: str = "",
+    ) -> ReviewPanel:
+        """Capture a panel while the caller owns its staging and pattern locks."""
+
+        # Recheck after acquiring the locks: a cooperating writer may have
+        # replaced either file while this process was waiting.
+        active_path = _active_staging_path(staging_path, staging_dir)
+        pattern_path = _absolute(patterns_path)
+        _require_regular_non_symlink(
+            pattern_path, "The pattern store", absent_ok=True
+        )
+        staging_bytes = _capture_regular_bytes(active_path, "The active staging file")
+        # An absent store captures as an empty document rather than refusing:
+        # there is nothing to compare-and-swap against, and pattern review is
+        # unavailable for such a project anyway.
+        patterns_bytes = _capture_regular_bytes(
+            pattern_path,
+            "The pattern store",
+            absent_ok=True,
+        )
+        try:
+            staging_text = staging_bytes.decode("utf-8", errors="strict")
+            patterns_text = patterns_bytes.decode("utf-8", errors="strict")
+            records, meta = staging.read_staging_text(
+                staging_text,
+                source=str(active_path),
             )
-            try:
-                staging_text = staging_bytes.decode("utf-8", errors="strict")
-                patterns_text = patterns_bytes.decode("utf-8", errors="strict")
-                records, meta = staging.read_staging_text(
-                    staging_text,
-                    source=str(active_path),
-                )
-                store = patterns.load_store_text(
-                    patterns_text,
-                    source=str(pattern_path),
-                )
-                source, run_id, provenance, staged_pattern_set = _staged_lineage(
-                    records,
-                    meta,
-                )
-            except (UnicodeError, JankiError) as exc:
-                if isinstance(exc, ReviewPanelError):
-                    raise
-                raise ReviewPanelError(f"Could not open the review snapshot: {exc}") from exc
-            pattern_set = store.get(source)
-            pattern_warning = _pattern_warning(
-                pattern_set,
-                source=source,
-                run_id=run_id,
-                provenance=provenance,
+            store = patterns.load_store_text(
+                patterns_text,
+                source=str(pattern_path),
             )
+            source, run_id, provenance, staged_pattern_set = _staged_lineage(
+                records,
+                meta,
+            )
+        except (UnicodeError, JankiError) as exc:
+            if isinstance(exc, ReviewPanelError):
+                raise
+            raise ReviewPanelError(f"Could not open the review snapshot: {exc}") from exc
+        pattern_set = store.get(source)
+        pattern_warning = _pattern_warning(
+            pattern_set,
+            source=source,
+            run_id=run_id,
+            provenance=provenance,
+        )
         return cls(
             staging_path=active_path,
             staging_dir=_absolute(staging_dir),
@@ -567,8 +586,23 @@ class ReviewPanel:
             raise PanelRequestError("The pattern set is already reviewed and display-only")
         return selected
 
+    def validate_actions(
+        self, record_ids: Sequence[str], review_patterns: bool
+    ) -> tuple[str, ...]:
+        """Validate one exact review selection without writing it.
+
+        The browser used to be the only caller that needed this distinction:
+        it rendered checkboxes and later called :meth:`submit`.  An Assistant
+        confirmation has the same two phases, so its application-layer plan
+        must be able to prove that the exact selected rows and pattern action
+        are currently offerable without manufacturing approval merely by
+        planning them.
+        """
+
+        return self._validate_actions(record_ids, review_patterns)
+
     def submit(self, *, record_ids: Sequence[str], review_patterns: bool) -> ReviewOutcome:
-        selected = self._validate_actions(record_ids, review_patterns)
+        selected = self.validate_actions(record_ids, review_patterns)
         if not selected and not review_patterns:
             return ReviewOutcome()
         with self._submission_lock, _sorted_path_locks((self.staging_path, self.patterns_path)):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import os
 import re
+import tempfile
 import unicodedata
 import urllib.parse
 from collections.abc import Container, Sequence
@@ -19,7 +20,14 @@ except ImportError:  # pragma: no cover - exercised by the bootstrap environment
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.io import DataError, RecordsRevision, load_records, load_structured
+from japanese_anki.io import (
+    DataError,
+    RecordsRevision,
+    atomic_write_bytes_bound,
+    load_records,
+    load_structured,
+    read_bytes_bound,
+)
 from japanese_anki.kanji import load_store as load_kanji_store
 from japanese_anki.kanji import render_kanji_html
 from japanese_anki.models import ModelError, VocabularyRecord
@@ -351,6 +359,7 @@ def _field_values(
     drawn_fields: frozenset[str],
     max_meanings: int = 0,
     kanji_html: str = "",
+    allowed_missing_media: frozenset[Path] = frozenset(),
 ) -> list[str]:
     """One note's fields, with media resolved against ``media_dir``.
 
@@ -380,6 +389,7 @@ def _field_values(
             record.audio, media_dir=media_dir, deck_dir=deck_dir,
             record_id=record.id, label="Audio",
             media_files=media_files, warnings=warnings, claimed=claimed,
+            allowed_missing=allowed_missing_media,
         )
         audio_field = f"[sound:{found.name}]" if found else record.audio
 
@@ -412,6 +422,7 @@ def _field_values(
             example.audio, media_dir=media_dir, deck_dir=deck_dir,
             record_id=record.id, label="Example audio",
             media_files=media_files, warnings=warnings, claimed=claimed,
+            allowed_missing=allowed_missing_media,
         )
         example_audio_field = f"[sound:{found.name}]" if found else example.audio
 
@@ -420,6 +431,7 @@ def _field_values(
             casual.audio, media_dir=media_dir, deck_dir=deck_dir,
             record_id=record.id, label="Casual example audio",
             media_files=media_files, warnings=warnings, claimed=claimed,
+            allowed_missing=allowed_missing_media,
         )
         casual_audio_field = f"[sound:{found.name}]" if found else casual.audio
 
@@ -430,6 +442,7 @@ def _field_values(
             record_id=record.id, label="Image",
             media_files=media_files, warnings=warnings, claimed=claimed,
             sound_tags=False,
+            allowed_missing=allowed_missing_media,
         )
         image_field = (
             f'<img src="{html.escape(found.name)}">' if found else record.image
@@ -988,17 +1001,143 @@ def resolve_deck_output_path(
 ) -> Path:
     """Return the absolute package path configured for a vocabulary deck."""
     filename = str(deck_config.get("output", f"{deck_path.stem}.apkg"))
-    return (project_config.dist_dir / filename).resolve()
+    return Path(os.path.abspath(os.fspath(project_config.dist_dir / filename)))
 
 
-def _write_package_atomic(package: Any, output_path: Path) -> None:
-    """Publish a complete package without exposing an interrupted ZIP."""
-    scratch = output_path.with_name(f".{output_path.name}.partial")
-    try:
+def resolve_deck_media_paths(
+    deck_path: Path,
+    project_config: ProjectConfig,
+) -> tuple[Path, ...]:
+    """Return every existing file an ordinary deck package will consume.
+
+    This is intentionally derived by calling the same field renderer as
+    :func:`build_deck`.  The renderer owns which example slots reach cards,
+    how media-dir and deck-relative paths are resolved, and Anki's flattened
+    basename collision rule.  A plan-bound caller can therefore fingerprint
+    exact media bytes without maintaining a second list of media-bearing
+    fields that would drift when the notetype grows.
+    """
+
+    target = deck_path.resolve()
+    deck_config, records = resolve_deck_records(target)
+    return _media_paths_for_records(target, project_config, deck_config, records)
+
+
+def project_deck_media_paths(
+    deck_path: Path,
+    project_config: ProjectConfig,
+    source_path: Path,
+    source_records: Sequence[VocabularyRecord],
+    *,
+    allowed_missing_media: frozenset[Path] = frozenset(),
+) -> tuple[Path, ...]:
+    """Return media a prospective canonical collection would make the deck use.
+
+    This is the media counterpart to :func:`project_deck_records`.  A
+    receipt-backed finish can therefore bind the exact future package before
+    paid audio exists, while allowing only the explicitly planned audio paths
+    to be absent.  Rendering stays in the same function the real builder uses;
+    no second list of media-bearing fields is introduced.
+    """
+
+    target = deck_path.resolve()
+    deck_config, records = project_deck_records(
+        target,
+        source_path,
+        source_records,
+    )
+    return _media_paths_for_records(
+        target,
+        project_config,
+        deck_config,
+        records,
+        allowed_missing_media=allowed_missing_media,
+    )
+
+
+def _media_paths_for_records(
+    target: Path,
+    project_config: ProjectConfig,
+    deck_config: dict[str, Any],
+    records: Sequence[VocabularyRecord],
+    *,
+    allowed_missing_media: frozenset[Path] = frozenset(),
+) -> tuple[Path, ...]:
+    """Run the ordinary field renderer over one already-resolved record set."""
+
+    card_types = resolve_card_types(deck_config, project_config)
+    templates = []
+    for card_type in card_types:
+        front_file, back_file, _display_name = CARD_FILES[card_type]
+        templates.append(
+            _read_text(project_config.template_dir / front_file)
+            + _read_text(project_config.template_dir / back_file)
+        )
+    drawn_fields = frozenset(
+        re.findall(
+            r"\{\{[#^/]?(?:furigana:)?([A-Za-z]+)\}\}",
+            "".join(templates),
+        )
+    )
+    deck_max_meanings = deck_config.get("max_meanings")
+    if deck_max_meanings is None:
+        deck_max_meanings = project_config.max_meanings
+    kanji_store = load_kanji_store(project_config.kanji_file)
+    media_files: list[str] = []
+    warnings: list[str] = []
+    claimed: dict[str, tuple[str, str]] = {}
+    for record in records:
+        values = _field_values(
+            record,
+            project_config.media_dir.resolve(),
+            target.parent,
+            media_files,
+            warnings,
+            claimed,
+            drawn_fields,
+            deck_max_meanings,
+            render_kanji_html(
+                kanji_store.for_text(record.expression),
+                record_expression=record.expression,
+                record_reading=record.reading,
+            ),
+            allowed_missing_media,
+        )
+        fault = field_separator_fault(FIELD_NAMES, values)
+        if fault is not None:
+            raise AnkiBuildError(
+                f"{record.id}: the {fault} field contains U+001F, the "
+                "separator Anki joins a note's fields with. Writing it would "
+                "shift every later field out of place."
+            )
+    return tuple(sorted({Path(value).resolve() for value in media_files}, key=str))
+
+
+def _write_package_atomic(
+    package: Any,
+    output_path: Path,
+    *,
+    expected_revision: str | None = None,
+    expected_identity: tuple[int, int] | None = None,
+    expected_absent: bool = False,
+) -> None:
+    """Publish a complete package without following a replaced output name."""
+    target = Path(os.path.abspath(os.fspath(output_path)))
+    with tempfile.TemporaryDirectory(prefix="janki-package-") as temporary:
+        scratch = Path(temporary).resolve() / target.name
         package.write_to_file(str(scratch))
-        os.replace(scratch, output_path)
-    finally:
-        scratch.unlink(missing_ok=True)
+        try:
+            atomic_write_bytes_bound(
+                target,
+                read_bytes_bound(scratch),
+                expected_revision=expected_revision,
+                expected_identity=expected_identity,
+                expected_absent=expected_absent,
+            )
+        except (DataError, OSError) as exc:
+            raise AnkiBuildError(
+                f"Could not safely publish package {target}: {exc}"
+            ) from exc
 
 
 def build_deck(
@@ -1006,6 +1145,10 @@ def build_deck(
     project_config: ProjectConfig,
     output_path: Path | None = None,
     include_ids: Container[str] | None = None,
+    *,
+    output_expected_revision: str | None = None,
+    output_expected_identity: tuple[int, int] | None = None,
+    output_expected_absent: bool = False,
 ) -> BuildResult:
     """Build one deck package.
 
@@ -1127,8 +1270,10 @@ def build_deck(
         output_path = resolve_deck_output_path(
             deck_path, deck_config, project_config
         )
-    output_path = output_path.resolve()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Keep the confirmed directory entry lexical.  Resolving here would follow
+    # a symlink introduced after a package plan was rendered and hand the
+    # outside target to the no-follow publisher, defeating its boundary.
+    output_path = Path(os.path.abspath(os.fspath(output_path)))
 
     package = genanki.Package(deck)
     package.media_files = sorted(set(media_files))
@@ -1139,7 +1284,13 @@ def build_deck(
     # look broken until Anki refuses it. `os.replace` is atomic within a
     # directory, so the previous package survives intact until the new one is
     # whole.
-    _write_package_atomic(package, output_path)
+    _write_package_atomic(
+        package,
+        output_path,
+        expected_revision=output_expected_revision,
+        expected_identity=output_expected_identity,
+        expected_absent=output_expected_absent,
+    )
     return BuildResult(
         output_path=output_path,
         deck_name=deck_name,

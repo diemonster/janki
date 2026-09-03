@@ -292,6 +292,41 @@ def _validate_bound_directory(binding: _DirectoryBinding) -> None:
         raise DataError(f"Bound target directory changed: {binding.path}: {exc}") from exc
 
 
+def _canonical_macos_root_alias(directory: Path) -> Path:
+    """Use the real root for macOS's fixed ``/var`` and ``/tmp`` aliases.
+
+    Python may spell its temporary directory through ``/var`` even though that
+    root entry is the system-owned ``/var -> private/var`` symlink.  The bound
+    writer must still reject arbitrary symlinked ancestors, so only these two
+    fixed aliases are accepted, after proving that the alias currently reaches
+    the expected real directory.  The returned path is then opened component by
+    component without following links as usual.
+    """
+
+    if sys.platform != "darwin" or len(directory.parts) < 2:
+        return directory
+    name = directory.parts[1]
+    if name not in {"tmp", "var"}:
+        return directory
+    alias = Path("/") / name
+    real = Path("/private") / name
+    try:
+        alias_entry = os.lstat(alias)
+        alias_target = os.readlink(alias)
+        followed = os.stat(alias)
+        real_entry = os.stat(real, follow_symlinks=False)
+    except OSError:
+        return directory
+    if (
+        not stat.S_ISLNK(alias_entry.st_mode)
+        or alias_target != f"private/{name}"
+        or not stat.S_ISDIR(real_entry.st_mode)
+        or _directory_identity(followed) != _directory_identity(real_entry)
+    ):
+        return directory
+    return real.joinpath(*directory.parts[2:])
+
+
 @contextlib.contextmanager
 def _open_bound_directory(
     path: Path,
@@ -299,7 +334,7 @@ def _open_bound_directory(
     create: bool,
 ) -> Iterator[_DirectoryBinding]:
     """Open a lexical directory one no-follow component at a time."""
-    directory = Path(path).absolute()
+    directory = _canonical_macos_root_alias(Path(path).absolute())
     if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
         raise DataError(
             f"This platform cannot safely bind target directory {directory}"
@@ -3694,6 +3729,8 @@ def atomic_write_bytes_bound(
     path: Path,
     data: bytes,
     *,
+    expected_revision: str | None = None,
+    expected_identity: tuple[int, int] | None = None,
     expected_absent: bool = False,
     expected_directory_identity: tuple[int, int] | None = None,
 ) -> None:
@@ -3703,12 +3740,18 @@ def atomic_write_bytes_bound(
     the ordinary writer's symlink-through behavior: a malicious or accidental
     symlink would otherwise overwrite a different live clip. The directory
     descriptor also binds the temp and replace operations to the same real
-    directory entry. ``expected_absent`` makes a recovery artifact write-once:
+    directory entry. ``expected_revision`` and ``expected_identity`` bind an
+    existing target selected by an earlier plan. ``expected_absent`` makes a
+    recovery artifact write-once:
     a reply already captured under that operation ID is evidence, never a
     target for a later callback to replace. ``expected_directory_identity``
     refuses before recovery or temporary allocation unless the opened parent
     is the directory an earlier plan bound.
     """
+    if expected_absent and (
+        expected_revision is not None or expected_identity is not None
+    ):
+        raise DataError("A bound write cannot expect content and absence together")
     target = Path(path).absolute()
     temporary_name = ""
     temporary_identity: tuple[int, int] | None = None
@@ -3765,6 +3808,20 @@ def atomic_write_bytes_bound(
                         f"Bound target changed before replace: {target}"
                     )
                 bound_state = _entry_state(before)
+                if (
+                    expected_identity is not None
+                    and bound_state[:2] != expected_identity
+                ):
+                    raise DataError(f"Bound target changed identity: {target}")
+                if expected_revision is not None:
+                    current_state, current_revision, _payload = _read_bound_bytes(
+                        directory_fd, target.name
+                    )
+                    if (
+                        current_state != bound_state
+                        or current_revision != expected_revision
+                    ):
+                        raise DataError(f"Bound target changed content: {target}")
                 mode = stat.S_IMODE(before.st_mode)
             descriptor, temporary_name, temporary_identity = (
                 _allocate_bound_temporary(binding, target.name, mode)
@@ -3792,8 +3849,8 @@ def atomic_write_bytes_bound(
                 commit_name,
                 target,
                 bound_state=bound_state,
-                expected_revision=None,
-                expected_identity=None,
+                expected_revision=expected_revision,
+                expected_identity=expected_identity,
                 expected_absent=expected_absent,
                 prepared_marker=prepared_marker,
             )
@@ -3965,7 +4022,7 @@ def load_structured(
     yaml_loader: type[yaml.SafeLoader] = yaml.SafeLoader,
 ) -> Any:
     try:
-        text = path.read_text(encoding="utf-8")
+        text = read_text_bound(path)
     except FileNotFoundError as exc:
         raise DataError(f"File not found: {path}") from exc
     except OSError as exc:

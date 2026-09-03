@@ -95,7 +95,7 @@ The first-run guide in the workbench keeps this distinction visible:
 
 | Service | What it does | Connection and cost |
 | --- | --- | --- |
-| Anthropic Claude | Reads PDFs and photos, checks a table's completeness when asked, and is the default `enrich --ai` provider for bare-word cards | Networked, paid API. `ANTHROPIC_API_KEY` is required. Claude Max is a separate subscription. |
+| Anthropic Claude | Reads PDFs and photos, checks a table's completeness when asked, and is the default `enrich --ai` provider for bare-word cards | Networked, paid API. `ANTHROPIC_API_KEY` is required. Claude Pro/Max is a separate subscription. |
 | jpdb | Supplies dictionary facts and witnesses readings | Networked account API, not a model call. `JPDB_API_KEY` is required. |
 | KANJIDIC / KanjiVG | Supplies kanji facts and stroke diagrams | Networked reference sources; no account or API key. |
 | VOICEVOX | Speaks words and, by default, examples | Local service on your computer; no API key or per-call bill. Voice terms still apply. |
@@ -105,12 +105,14 @@ The first-run guide in the workbench keeps this distinction visible:
 The **Janki** surface is a real model-backed conversation rendered in
 OpenAI's hosted ChatKit UI and served by janki's custom backend. ChatKit is the
 interface here, not the inference provider: by default each sent message is one
-journaled, non-mutating Claude turn through the logged-in Claude Code Pro/Max
-subscription. It can answer questions from its bounded context, but a plain
-message cannot edit the deck. Only the explicit **Change deck** action can
-prepare a revision plan. The uncluttered routine page does not repeat provider,
-model and context-provenance details; the exact request manifest and operation
-journal retain them.
+journaled Claude turn through the logged-in Claude Code Pro/Max subscription.
+It can inspect bounded repository projections and turn an explicit owner
+instruction into one closed, exact application plan. The model cannot execute
+or confirm that plan, write Japanese directly, or use raw shell, filesystem,
+Git, or network tools. An active deck is optional conversational focus; it does
+not limit which supported library action Janki can plan. The uncluttered routine
+page does not repeat provider, model and context-provenance details; the exact
+request manifest and operation journal retain them.
 
 Attaching one supported source of up to 128 MiB in Janki only saves an immutable
 local copy under `data/inbox/`. Uploading does not add its bytes to the
@@ -151,6 +153,16 @@ is explicit content authority over the visible proposal, not an automatic
 unseen apply or a sequence of separate apply/audio/build confirmations. OpenAI
 Realtime audio remains API-backed regardless of either Claude transport
 setting.
+
+The Assistant's selected-card **enrich missing fields** action is narrower: it
+currently uses the Anthropic API because that transport can durably capture the
+exact raw reply before parsing. It refuses the Codex enrichment transport until
+that path offers the same recovery seam. The confirmation says this explicitly,
+and every answer stops in staging for owner review. Once its exact old and new
+fields and examples are visible, one **Apply and finish** confirmation records
+that review, promotes the selected cards, generates their selected audio, and
+builds the persisted focused vocabulary deck. Ordinary Janki conversation and
+`revise` can still use the Claude Pro/Max subscription as configured above.
 
 Provider credentials are environment variables:
 

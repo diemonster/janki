@@ -38,6 +38,19 @@ def test_atomic_write_creates_parents_and_leaves_no_temp_file(tmp_path: Path) ->
     assert _no_temp_files(tmp_path)
 
 
+def test_bound_write_accepts_the_standard_macos_private_var_alias(
+    tmp_path: Path,
+) -> None:
+    private = tmp_path.absolute()
+    if private.parts[1:3] != ("private", "var"):
+        pytest.skip("this platform does not expose temporary files through /private/var")
+    alias = Path("/var").joinpath(*private.parts[3:]) / "bound.bin"
+
+    io.atomic_write_bytes_bound(alias, b"answer", expected_absent=True)
+
+    assert (private / "bound.bin").read_bytes() == b"answer"
+
+
 def test_atomic_write_failure_mid_write_keeps_previous_contents(tmp_path: Path) -> None:
     # A lone surrogate cannot be encoded as UTF-8, so the failure happens
     # inside handle.write() — genuinely mid-write, with the temp file open.

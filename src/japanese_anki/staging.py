@@ -46,7 +46,11 @@ from japanese_anki.io import (
     read_text_bound,
     validate_prefer_incoming,
 )
-from japanese_anki.models import EXAMPLE_AUTHORITY_KEY, VocabularyRecord
+from japanese_anki.models import (
+    EXAMPLE_AUTHORITY_KEY,
+    VocabularyRecord,
+    set_example_flags,
+)
 
 
 class StagingError(JankiError):
@@ -112,6 +116,15 @@ PROMOTION_BATCHES_KEY = "promotion_batches"
 #: whether its rows may be re-identified and whether they are evidence about
 #: any source.
 AI_ENRICHMENT_KEY = "ai_enrichment"
+AI_ENRICHMENT_REVIEW_KEY = "ai_enrichment_review"
+
+#: A model-authored proposal about exact canonical cards, captured through the
+#: ordinary revision operation journal.  It is deliberately distinct from
+#: ``ai_enrichment``: that pass writes only meanings/examples/usage notes,
+#: while an owner may ask ``revise`` to change any non-identity card field.
+#: Both remain model passes over records the collection already held.
+CARD_REVISION_KEY = "card_revision"
+CARD_REVISION_REVIEW_KEY = "card_revision_review"
 
 META_KEYS: tuple[str, ...] = (
     "source_file",
@@ -125,6 +138,9 @@ META_KEYS: tuple[str, ...] = (
     "pattern_set",
     "reviewed_pattern_set",
     AI_ENRICHMENT_KEY,
+    AI_ENRICHMENT_REVIEW_KEY,
+    CARD_REVISION_KEY,
+    CARD_REVISION_REVIEW_KEY,
     "field_replacements",
     CANDIDATE_ACCOUNTING_KEY,
     PROMOTION_BATCHES_KEY,
@@ -132,6 +148,7 @@ META_KEYS: tuple[str, ...] = (
 
 _RECORDS_KEY = "records"
 _COVERAGE_KEY = "coverage"
+
 
 #: Whether a staging file's rows are a model's answer about words janki
 #: already held, rather than a reading of some page.
@@ -156,11 +173,11 @@ _COVERAGE_KEY = "coverage"
 def is_model_pass(meta: Mapping[str, Any], *, collection_name: str = "") -> bool:
     """Whether these rows are a model's answer about words janki already held.
 
-    Two signals, because the marker arrived later than the files. A modern
-    `enrich --ai` review carries an `ai_enrichment` block. An older one
-    carries nothing but its `source_file`, which names the collection rather
-    than any document — and naming the collection as your source is what it
-    means to be a pass over what janki already had.
+    Modern `enrich --ai` and card-revision reviews carry their own
+    marker blocks. An older enrichment review carries nothing but its
+    `source_file`, which names the collection rather than any document — and
+    naming the collection as your source is what it means to be a pass over
+    what janki already had.
 
     That second signal is narrowed by `model`, and the narrowing matters: a
     review somebody wrote *by hand* against the collection names it the same
@@ -175,10 +192,12 @@ def is_model_pass(meta: Mapping[str, Any], *, collection_name: str = "") -> bool
     """
     # Presence, not truthiness: a pass that recorded an empty block is still a
     # pass, and `promote`'s own gate already reads the key this way.
-    if AI_ENRICHMENT_KEY in meta:
+    if AI_ENRICHMENT_KEY in meta or CARD_REVISION_KEY in meta:
         return True
     named = str(meta.get("source_file") or "").strip()
-    return bool(collection_name) and named == collection_name and bool(meta.get("model"))
+    return (
+        bool(collection_name) and named == collection_name and bool(meta.get("model"))
+    )
 
 
 #: Metadata written beside a large AI-enrichment review.  Ordinary extraction
@@ -187,6 +206,8 @@ def is_model_pass(meta: Mapping[str, Any], *, collection_name: str = "") -> bool
 #: has to carry proof of the exact old value the proposal was made against.
 FIELD_REPLACEMENTS_KEY = "field_replacements"
 FIELD_REPLACEMENTS_VERSION = 1
+AI_ENRICHMENT_REVIEW_VERSION = 1
+CARD_REVISION_REVIEW_VERSION = 1
 
 # Staging suffixes remain an explicit writer contract so review files are
 # recognizable as YAML to people and ordinary tools as well as to janki.
@@ -266,20 +287,17 @@ def review_run_id(meta: Mapping[str, Any]) -> str | None:
     value = meta.get("review_run_id")
     if not isinstance(value, str):
         raise StagingError(
-            "[review-run-id-invalid] review_run_id must be canonical lowercase "
-            "UUIDv4 text"
+            "[review-run-id-invalid] review_run_id must be canonical lowercase UUIDv4 text"
         )
     try:
         parsed = UUID(value)
     except ValueError as exc:
         raise StagingError(
-            "[review-run-id-invalid] review_run_id must be canonical lowercase "
-            "UUIDv4 text"
+            "[review-run-id-invalid] review_run_id must be canonical lowercase UUIDv4 text"
         ) from exc
     if parsed.version != 4 or str(parsed) != value:
         raise StagingError(
-            "[review-run-id-invalid] review_run_id must be canonical lowercase "
-            "UUIDv4 text"
+            "[review-run-id-invalid] review_run_id must be canonical lowercase UUIDv4 text"
         )
     return value
 
@@ -338,8 +356,7 @@ def field_replacement_block(
         record = by_id.get(key)
         if record is None:
             raise StagingError(
-                f"Cannot fingerprint replacements for {key}: there is no old record "
-                "with that id."
+                f"Cannot fingerprint replacements for {key}: there is no old record with that id."
             )
         if not isinstance(field_changes, Mapping) or not field_changes:
             raise StagingError(
@@ -405,14 +422,12 @@ def _replacement_records(meta: Mapping[str, Any]) -> Mapping[str, Any] | None:
     records = raw.get("records")
     if not isinstance(records, Mapping) or not records:
         raise StagingError(
-            "[field-replacements-invalid] field_replacements.records must be a "
-            "non-empty mapping"
+            "[field-replacements-invalid] field_replacements.records must be a non-empty mapping"
         )
     for raw_id, raw_fields in records.items():
         if not isinstance(raw_id, str) or not raw_id.strip():
             raise StagingError(
-                "[field-replacements-invalid] every replacement record id must be "
-                "non-empty text"
+                "[field-replacements-invalid] every replacement record id must be non-empty text"
             )
         if not isinstance(raw_fields, Mapping) or not raw_fields:
             raise StagingError(
@@ -421,9 +436,7 @@ def _replacement_records(meta: Mapping[str, Any]) -> Mapping[str, Any] | None:
         try:
             names = validate_prefer_incoming(str(name) for name in raw_fields)
         except JankiError as exc:
-            raise StagingError(
-                f"[field-replacements-invalid] {raw_id}: {exc}"
-            ) from exc
+            raise StagingError(f"[field-replacements-invalid] {raw_id}: {exc}") from exc
         if set(names) != set(raw_fields):
             # A non-string mapping key can stringify to a valid field name.
             # Accepting it here would make the block mean something other than
@@ -462,9 +475,7 @@ def authorized_field_replacements(
     for extraction schema-v2 staging and importer hold-backs, both of which
     predate this metadata and retain ordinary existing-wins merge behavior.
     """
-    authorized, _already_landed = _replacement_authorization(
-        meta, current, incoming
-    )
+    authorized, _already_landed = _replacement_authorization(meta, current, incoming)
     return authorized
 
 
@@ -481,10 +492,373 @@ def already_landed_field_replacements(
     The classifier still refuses a third value, so this recovery cannot turn a
     later human edit into replacement authority.
     """
-    _authorized, already_landed = _replacement_authorization(
-        meta, current, incoming
-    )
+    _authorized, already_landed = _replacement_authorization(meta, current, incoming)
     return already_landed
+
+
+def _with_exact_reviewed_example_authority(
+    record: VocabularyRecord,
+) -> VocabularyRecord:
+    sentences = (
+        (example.japanese for example in record.examples if example.japanese)
+        if record.source.type == "extract"
+        else ()
+    )
+    return set_example_flags(record, EXAMPLE_AUTHORITY_KEY, sentences)
+
+
+def ai_enrichment_review_fingerprint(
+    meta: Mapping[str, Any], records: Sequence[VocabularyRecord]
+) -> str:
+    """Bind owner review to exact AI-enrichment values and old-value proofs."""
+
+    enrichment = meta.get(AI_ENRICHMENT_KEY)
+    replacements = meta.get(FIELD_REPLACEMENTS_KEY)
+    if not isinstance(enrichment, Mapping) or not isinstance(replacements, Mapping):
+        raise StagingError(
+            "[ai-enrichment-review-invalid] review needs AI-enrichment provenance"
+        )
+    requests = enrichment.get("request_fingerprints")
+    inputs = enrichment.get("input_fingerprints")
+    fields = enrichment.get("fields")
+    proofs = replacements.get("records")
+    if not all(isinstance(value, Mapping) for value in (requests, inputs, fields, proofs)):
+        raise StagingError(
+            "[ai-enrichment-review-invalid] review needs request, input, field, "
+            "and replacement proofs"
+        )
+    assert isinstance(requests, Mapping)
+    assert isinstance(inputs, Mapping)
+    assert isinstance(fields, Mapping)
+    assert isinstance(proofs, Mapping)
+    values: dict[str, dict[str, Any]] = {}
+    for record in records:
+        names = fields.get(record.id)
+        bound = proofs.get(record.id)
+        if (
+            not isinstance(names, list)
+            or not names
+            or not isinstance(bound, Mapping)
+            or set(names) != set(bound)
+            or record.id not in requests
+            or record.id not in inputs
+        ):
+            raise StagingError(
+                f"[ai-enrichment-review-invalid] incomplete fields for {record.id}"
+            )
+        wire = record.to_dict()
+        exact = _with_exact_reviewed_example_authority(record)
+        values[record.id] = {
+            name: {"old_fingerprint": bound[name], "proposed_value": wire[name]}
+            for name in names
+        }
+        values[record.id]["example_authority"] = exact.source.raw_fields.get(
+            EXAMPLE_AUTHORITY_KEY
+        )
+    selected_ids = set(values)
+    bound_enrichment = {
+        str(key): value
+        for key, value in enrichment.items()
+        if key not in {"request_fingerprints", "input_fingerprints", "fields"}
+    }
+    for key, source in (
+        ("request_fingerprints", requests),
+        ("input_fingerprints", inputs),
+        ("fields", fields),
+    ):
+        bound_enrichment[key] = {
+            str(record_id): value
+            for record_id, value in source.items()
+            if record_id in selected_ids
+        }
+    payload = {
+        "ai_enrichment": bound_enrichment,
+        "records": values,
+        "review_run_id": meta.get("review_run_id"),
+    }
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _record_ai_enrichment_review_unlocked(
+    path: Path,
+    record_ids: Sequence[str],
+    *,
+    expected_revision: str,
+) -> Path:
+    """Narrow and mark one exact AI-enrichment proposal in one YAML CAS."""
+
+    document, captured, revision = _load_document_snapshot(Path(path))
+    if revision != expected_revision:
+        raise StagingError(
+            "[ai-enrichment-review-stale] the proposal changed before approval"
+        )
+    records, meta = read_staging_text(captured, source=str(path))
+    if len({record.id for record in records}) != len(records):
+        raise StagingError(
+            "[ai-enrichment-review-invalid] proposal record ids must be unique"
+        )
+    selected = tuple(record_ids)
+    if not selected or len(selected) != len(set(selected)):
+        raise StagingError(
+            "[ai-enrichment-review-invalid] accepted record ids must be nonempty and unique"
+        )
+    by_id = {record.id: record for record in records}
+    if any(not isinstance(item, str) or item not in by_id for item in selected):
+        raise StagingError(
+            "[ai-enrichment-review-invalid] accepted record ids must belong to the proposal"
+        )
+    if AI_ENRICHMENT_REVIEW_KEY in meta:
+        raise StagingError(
+            "[ai-enrichment-review-invalid] this proposal already records owner review"
+        )
+    selected_set = set(selected)
+    chosen = [record for record in records if record.id in selected_set]
+    marker = {
+        "version": AI_ENRICHMENT_REVIEW_VERSION,
+        "authority": "repository-owner",
+        "accepted_record_ids": [record.id for record in chosen],
+        "content_fingerprint": ai_enrichment_review_fingerprint(meta, chosen),
+    }
+    raw_records = document.get(_RECORDS_KEY)
+    if not isinstance(raw_records, list) or len(raw_records) != len(records):
+        raise StagingError(f"'{_RECORDS_KEY}' in {path} must be a list of records")
+    reviewed = {
+        record.id: _with_exact_reviewed_example_authority(record)
+        for record in chosen
+    }
+    kept_rows = []
+    for raw, before in zip(raw_records, records, strict=True):
+        after = reviewed.get(before.id)
+        if after is None:
+            continue
+        if not isinstance(raw, MutableMapping):
+            raise StagingError(
+                f"[ai-enrichment-review-invalid] record {before.id} is not rewritable"
+            )
+        _apply_changes(raw, before.to_dict(), after.to_dict())
+        kept_rows.append(raw)
+    raw_records[:] = kept_rows
+    _drop_provenance(document, set(by_id) - selected_set)
+    document[AI_ENRICHMENT_REVIEW_KEY] = _plain(marker)
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    atomic_write_text_bound(path, buffer.getvalue(), expected_revision=revision)
+    return Path(path)
+
+
+@_path_locked
+def record_ai_enrichment_review(
+    path: Path,
+    record_ids: Sequence[str],
+    *,
+    expected_revision: str,
+) -> Path:
+    """Persist exact owner acceptance for selected AI-enrichment rows."""
+
+    return _record_ai_enrichment_review_unlocked(
+        path, record_ids, expected_revision=expected_revision
+    )
+
+
+def card_revision_review_fingerprint(
+    meta: Mapping[str, Any], records: Sequence[VocabularyRecord]
+) -> str:
+    """Bind an owner review to the exact proposed values and old-value proofs."""
+
+    revision = meta.get(CARD_REVISION_KEY)
+    replacements = meta.get(FIELD_REPLACEMENTS_KEY)
+    if not isinstance(revision, Mapping) or not isinstance(replacements, Mapping):
+        raise StagingError(
+            "[card-revision-review-invalid] review needs card revision provenance"
+        )
+    fields = revision.get("fields")
+    proofs = replacements.get("records")
+    if not isinstance(fields, Mapping) or not isinstance(proofs, Mapping):
+        raise StagingError(
+            "[card-revision-review-invalid] review needs field replacement proofs"
+        )
+    values: dict[str, dict[str, Any]] = {}
+    for record in records:
+        names = fields.get(record.id)
+        bound = proofs.get(record.id)
+        if (
+            not isinstance(names, list)
+            or not names
+            or not isinstance(bound, Mapping)
+            or set(names) != set(bound)
+        ):
+            raise StagingError(
+                f"[card-revision-review-invalid] incomplete fields for {record.id}"
+            )
+        wire = record.to_dict()
+        values[record.id] = {
+            name: {"old_fingerprint": bound[name], "proposed_value": wire[name]}
+            for name in names
+        }
+        exact = (
+            _with_exact_reviewed_example_authority(record)
+            if "examples" in names
+            else record
+        )
+        values[record.id]["example_authority"] = exact.source.raw_fields.get(
+            EXAMPLE_AUTHORITY_KEY
+        )
+    selected_ids = set(values)
+    bound_revision = {
+        str(key): value
+        for key, value in revision.items()
+        if key not in {"input_fingerprints", "fields"}
+    }
+    bound_revision["input_fingerprints"] = {
+        str(key): value
+        for key, value in revision.get("input_fingerprints", {}).items()
+        if key in selected_ids
+    }
+    bound_revision["fields"] = {
+        str(key): value for key, value in fields.items() if key in selected_ids
+    }
+    payload = {
+        "card_revision": bound_revision,
+        "records": values,
+        "review_run_id": meta.get("review_run_id"),
+    }
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _record_card_revision_review_unlocked(
+    path: Path,
+    record_ids: Sequence[str],
+    *,
+    expected_revision: str,
+) -> Path:
+    """Narrow and mark one exact card-revision proposal in a single YAML CAS."""
+
+    document, captured, revision = _load_document_snapshot(Path(path))
+    if revision != expected_revision:
+        raise StagingError(
+            "[card-revision-review-stale] the proposal changed before approval"
+        )
+    records, meta = read_staging_text(captured, source=str(path))
+    if len({record.id for record in records}) != len(records):
+        raise StagingError(
+            "[card-revision-review-invalid] proposal record ids must be unique"
+        )
+    selected = tuple(record_ids)
+    if not selected or len(selected) != len(set(selected)):
+        raise StagingError(
+            "[card-revision-review-invalid] accepted record ids must be nonempty and unique"
+        )
+    by_id = {record.id: record for record in records}
+    if any(not isinstance(item, str) or item not in by_id for item in selected):
+        raise StagingError(
+            "[card-revision-review-invalid] accepted record ids must belong to the proposal"
+        )
+    selected_set = set(selected)
+    chosen = [record for record in records if record.id in selected_set]
+    if CARD_REVISION_REVIEW_KEY in meta:
+        raise StagingError(
+            "[card-revision-review-invalid] this proposal already records owner review"
+        )
+    raw_revision = meta.get(CARD_REVISION_KEY)
+    fields = (
+        raw_revision.get("fields") if isinstance(raw_revision, Mapping) else None
+    )
+    if not isinstance(fields, Mapping):
+        raise StagingError(
+            "[card-revision-review-invalid] proposal fields are not reviewable"
+        )
+    reviewed = [
+        (
+            _with_exact_reviewed_example_authority(record)
+            if isinstance(fields.get(record.id), list)
+            and "examples" in fields[record.id]
+            else record
+        )
+        for record in chosen
+    ]
+    marker = {
+        "version": CARD_REVISION_REVIEW_VERSION,
+        "authority": "repository-owner",
+        "accepted_record_ids": [record.id for record in reviewed],
+        "content_fingerprint": card_revision_review_fingerprint(meta, reviewed),
+    }
+    raw_records = document.get(_RECORDS_KEY)
+    if not isinstance(raw_records, list) or len(raw_records) != len(records):
+        raise StagingError(f"'{_RECORDS_KEY}' in {path} must be a list of records")
+    reviewed_by_id = {record.id: record for record in reviewed}
+    kept_rows = []
+    for raw, before in zip(raw_records, records, strict=True):
+        after = reviewed_by_id.get(before.id)
+        if after is None:
+            continue
+        if not isinstance(raw, MutableMapping):
+            raise StagingError(
+                f"[card-revision-review-invalid] record {before.id} is not rewritable"
+            )
+        _apply_changes(raw, before.to_dict(), after.to_dict())
+        kept_rows.append(raw)
+    raw_records[:] = kept_rows
+    keep = selected_set
+    revision_meta = document.get(CARD_REVISION_KEY)
+    replacement_meta = document.get(FIELD_REPLACEMENTS_KEY)
+    if not isinstance(revision_meta, MutableMapping) or not isinstance(
+        replacement_meta, MutableMapping
+    ):
+        raise StagingError(
+            "[card-revision-review-invalid] proposal metadata is not rewritable"
+        )
+    for key in ("input_fingerprints", "fields"):
+        values = revision_meta.get(key)
+        if not isinstance(values, MutableMapping):
+            raise StagingError(
+                f"[card-revision-review-invalid] card_revision.{key} is not rewritable"
+            )
+        for record_id in tuple(values):
+            if record_id not in keep:
+                del values[record_id]
+    replacement_records = replacement_meta.get("records")
+    if not isinstance(replacement_records, MutableMapping):
+        raise StagingError(
+            "[card-revision-review-invalid] field replacements are not rewritable"
+        )
+    for record_id in tuple(replacement_records):
+        if record_id not in keep:
+            del replacement_records[record_id]
+    document[CARD_REVISION_REVIEW_KEY] = _plain(marker)
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    atomic_write_text_bound(path, buffer.getvalue(), expected_revision=revision)
+    return Path(path)
+
+
+@_path_locked
+def record_card_revision_review(
+    path: Path,
+    record_ids: Sequence[str],
+    *,
+    expected_revision: str,
+) -> Path:
+    """Persist exact owner acceptance for selected card-revision rows."""
+
+    return _record_card_revision_review_unlocked(
+        path, record_ids, expected_revision=expected_revision
+    )
 
 
 def _replacement_authorization(
@@ -501,8 +875,7 @@ def _replacement_authorization(
     for record in current:
         if record.id in by_id:
             raise StagingError(
-                f"[field-replacements-invalid] current records contain duplicate "
-                f"id {record.id}"
+                f"[field-replacements-invalid] current records contain duplicate id {record.id}"
             )
         by_id[record.id] = record
 
@@ -645,10 +1018,7 @@ def _validate_coverage_block(block: Mapping[str, Any]) -> None:
     ]
     if version == 2:
         count_fields.extend(
-            sorted(
-                _COVERAGE_V2_CANDIDATE_FIELDS
-                - {"candidate_accounting_fingerprint"}
-            )
+            sorted(_COVERAGE_V2_CANDIDATE_FIELDS - {"candidate_accounting_fingerprint"})
         )
         accounting_fingerprint = block.get("candidate_accounting_fingerprint")
         if not isinstance(accounting_fingerprint, str) or not _SHA256.fullmatch(
@@ -683,9 +1053,10 @@ def _validate_coverage_block(block: Mapping[str, Any]) -> None:
         raise StagingError(
             "[coverage-block-invalid] prose_coverage must be unmeasured or not-applicable"
         )
-    if block.get("prose_candidate_count") > 0 and block.get(
-        "prose_coverage"
-    ) != "unmeasured":
+    if (
+        block.get("prose_candidate_count") > 0
+        and block.get("prose_coverage") != "unmeasured"
+    ):
         raise StagingError(
             "[coverage-block-invalid] prose coverage does not match its candidate count"
         )
@@ -756,9 +1127,7 @@ def _validate_prompt_provenance(
             "[prompt-provenance-invalid] response schema version must be a positive integer"
         )
     expected = (
-        _PROMPT_PROVENANCE_FIELDS
-        if version >= 3
-        else _PROMPT_PROVENANCE_V2_FIELDS
+        _PROMPT_PROVENANCE_FIELDS if version >= 3 else _PROMPT_PROVENANCE_V2_FIELDS
     )
     if set(provenance) != expected:
         raise StagingError(
@@ -791,15 +1160,12 @@ def _validate_prompt_provenance(
     for name in fingerprint_fields:
         value = provenance.get(name)
         if not isinstance(value, str) or not _SHA256.fullmatch(value):
-            raise StagingError(
-                f"[prompt-provenance-invalid] {name} must be SHA-256"
-            )
+            raise StagingError(f"[prompt-provenance-invalid] {name} must be SHA-256")
     if version >= 3:
         run_id = review_run_id(meta)
         if run_id is None:
             raise StagingError(
-                "[review-run-id-invalid] a rich extraction needs its "
-                "review_run_id"
+                "[review-run-id-invalid] a rich extraction needs its review_run_id"
             )
         pattern_set = meta.get("pattern_set")
         if not isinstance(pattern_set, Mapping):
@@ -810,8 +1176,7 @@ def _validate_prompt_provenance(
         pattern_provenance = pattern_set.get("prompt_provenance")
         if not isinstance(pattern_provenance, Mapping):
             raise StagingError(
-                "[prompt-provenance-invalid] the rich pattern answer needs exact "
-                "prompt provenance"
+                "[prompt-provenance-invalid] the rich pattern answer needs exact prompt provenance"
             )
         if dict(pattern_provenance) != dict(provenance):
             raise StagingError(
@@ -827,8 +1192,7 @@ def _validate_prompt_provenance(
             ) from exc
         if pattern_run_id is None:
             raise StagingError(
-                "[review-run-id-invalid] a rich pattern answer needs its "
-                "review_run_id"
+                "[review-run-id-invalid] a rich pattern answer needs its review_run_id"
             )
         if pattern_run_id != run_id:
             raise StagingError(
@@ -844,8 +1208,7 @@ def _validate_prompt_provenance(
                 )
             if reviewed_pattern_set.get("reviewed") is not True:
                 raise StagingError(
-                    "[pattern-review-invalid] reviewed_pattern_set must record "
-                    "reviewed: true"
+                    "[pattern-review-invalid] reviewed_pattern_set must record reviewed: true"
                 )
             reviewed_provenance = reviewed_pattern_set.get("prompt_provenance")
             if not isinstance(reviewed_provenance, Mapping) or dict(
@@ -935,8 +1298,7 @@ def validate_coverage_facts(
             "candidate_accounting_fingerprint"
         ):
             raise StagingError(
-                "[candidate-accounting-stale] coverage and candidate_accounting "
-                "fingerprints differ"
+                "[candidate-accounting-stale] coverage and candidate_accounting fingerprints differ"
             )
         for name in _COVERAGE_V2_CANDIDATE_FIELDS - {
             "candidate_accounting_fingerprint"
@@ -993,11 +1355,7 @@ def rich_extraction_review_run_id(meta: Mapping[str, Any]) -> str | None:
     if not isinstance(provenance, Mapping):
         return None
     version = provenance.get("response_schema_version")
-    if (
-        isinstance(version, bool)
-        or not isinstance(version, int)
-        or version < 3
-    ):
+    if isinstance(version, bool) or not isinstance(version, int) or version < 3:
         return None
     # Callers first pass through validate_coverage_facts, which requires this
     # for rich staging and binds the nested pattern answer to it.
@@ -1167,7 +1525,9 @@ def _write_staging_unlocked(
     for key, value in (meta or {}).items():
         name = str(key)
         if name == _RECORDS_KEY:
-            raise StagingError(f"Staging metadata cannot use the reserved key '{_RECORDS_KEY}'")
+            raise StagingError(
+                f"Staging metadata cannot use the reserved key '{_RECORDS_KEY}'"
+            )
         if name not in META_KEYS:
             print(
                 f"warning: staging metadata key '{name}' in {path} is not one of "
@@ -1335,7 +1695,9 @@ def _load_document_text(text: str, *, source: str) -> Any:
     except YAMLError as exc:
         raise StagingError(f"Could not read {source} for rewriting: {exc}") from exc
     if not isinstance(document, MutableMapping) or _RECORDS_KEY not in document:
-        raise StagingError(f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {source}")
+        raise StagingError(
+            f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {source}"
+        )
     return document
 
 
@@ -1444,7 +1806,9 @@ def render_example_authority_updates(
     """
     original, original_meta = read_staging_text(captured_text, source=source)
     if len(original) != len(records):
-        raise StagingError(f"{source} holds {len(original)} row(s) but {len(records)} were given")
+        raise StagingError(
+            f"{source} holds {len(original)} row(s) but {len(records)} were given"
+        )
     document = _load_document_text(captured_text, source=source)
     raw_records = document[_RECORDS_KEY] or []
     if not isinstance(raw_records, list) or len(raw_records) != len(original):
@@ -1461,7 +1825,9 @@ def render_example_authority_updates(
         )
         if authority is None:
             continue
-        record_node = _block_mapping(raw_records[index], where=f"record {index + 1}", source=source)
+        record_node = _block_mapping(
+            raw_records[index], where=f"record {index + 1}", source=source
+        )
         source_node = _block_mapping(
             record_node.get("source"),
             where=f"record {index + 1}.source",
@@ -1569,9 +1935,7 @@ def render_example_authority_updates(
     return rendered
 
 
-def _rewrite_staging_unlocked(
-    path: Path, records: Sequence[VocabularyRecord]
-) -> Path:
+def _rewrite_staging_unlocked(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     """Update an existing staging file in place, preserving what janki does not own.
 
     :func:`write_staging` renders a file from records, which is right when it is
@@ -1677,9 +2041,7 @@ def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     return _rewrite_staging_unlocked(path, records)
 
 
-def rewrite_staging_under_lock(
-    path: Path, records: Sequence[VocabularyRecord]
-) -> Path:
+def rewrite_staging_under_lock(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     """Update rows when the caller already holds this exact path's lock."""
     return _rewrite_staging_unlocked(path, records)
 
@@ -1724,8 +2086,7 @@ def _record_coverage_approval_unlocked(
     document, _captured_text, revision = _load_document_snapshot(path)
     if expected_revision is not None and revision != expected_revision:
         raise StagingError(
-            f"[coverage-review-stale] {path} changed before its coverage "
-            "approval could be recorded"
+            f"[coverage-review-stale] {path} changed before its coverage approval could be recorded"
         )
     block = document.get(_COVERAGE_KEY)
     if not isinstance(block, MutableMapping):
@@ -1857,17 +2218,19 @@ def _prune_staging_unlocked(path: Path, keep: Sequence[bool]) -> int:
     return removed
 
 
-#: The maps an `enrich --ai` review keys on record id.
+#: The model-pass maps keyed on canonical record id.
 #:
 #: `promote` demands they name exactly the rows the file holds plus the rows
 #: its archive holds — no more, no less. So a row cannot leave the file on its
 #: own: dropping the record and keeping its provenance makes the entry
 #: *unknown*, and the next promote refuses the whole file with every other
 #: paid answer still in it.
-_AI_PROVENANCE_MAPS = (
+_MODEL_PROVENANCE_MAPS = (
     (AI_ENRICHMENT_KEY, "request_fingerprints"),
     (AI_ENRICHMENT_KEY, "input_fingerprints"),
     (AI_ENRICHMENT_KEY, "fields"),
+    (CARD_REVISION_KEY, "input_fingerprints"),
+    (CARD_REVISION_KEY, "fields"),
     ("field_replacements", "records"),
 )
 
@@ -1882,7 +2245,7 @@ def _drop_provenance(document: Any, gone: Iterable[str]) -> None:
     departing = {str(record_id) for record_id in gone}
     if not departing:
         return
-    for block_key, map_key in _AI_PROVENANCE_MAPS:
+    for block_key, map_key in _MODEL_PROVENANCE_MAPS:
         block = document.get(block_key)
         if not isinstance(block, MutableMapping):
             continue
@@ -1966,8 +2329,7 @@ def finish_staging_under_lock(
     document, captured_text, revision = _load_document_snapshot(path)
     if revision != expected_revision:
         raise StagingError(
-            f"[staging-review-stale] {path} changed before its reviewed rows "
-            "could be retired"
+            f"[staging-review-stale] {path} changed before its reviewed rows could be retired"
         )
     original, _meta = read_staging_text(captured_text, source=str(path))
     raw_records = document[_RECORDS_KEY] or []
@@ -1983,8 +2345,7 @@ def finish_staging_under_lock(
     ]
     if len(kept) != len(held):
         raise StagingError(
-            f"{path} keeps {len(kept)} row(s) but promotion supplied "
-            f"{len(held)} held row(s)."
+            f"{path} keeps {len(kept)} row(s) but promotion supplied {len(held)} held row(s)."
         )
     removed = len(raw_records) - len(kept)
     raw_records[:] = [raw for raw, _before in kept]
@@ -2006,7 +2367,9 @@ def finish_staging_under_lock(
     return removed
 
 
-def _read_staging_data(data: Any, *, source: str) -> tuple[list[VocabularyRecord], dict[str, Any]]:
+def _read_staging_data(
+    data: Any, *, source: str
+) -> tuple[list[VocabularyRecord], dict[str, Any]]:
     """Build records and metadata from one already-captured YAML value."""
     if not isinstance(data, Mapping):
         raise StagingError(

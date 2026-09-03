@@ -377,7 +377,7 @@ def _build_wire(
     config: ProjectConfig,
     plan: deck_build_application.ConjugationDeckBuildPlan,
 ) -> dict[str, Any]:
-    return {
+    wire = {
         "deck_path": _relative(config, plan.deck_path, "build deck"),
         "source_path": _relative(config, plan.source_path, "build source"),
         "output_path": _relative(config, plan.output_path, "build output"),
@@ -400,8 +400,17 @@ def _build_wire(
         "deck_name": plan.deck_name,
         "form": plan.form,
         "card_count": plan.card_count,
-        "plan_fingerprint": plan.fingerprint,
     }
+    wire["plan_fingerprint"] = _sha(
+        json.dumps(
+            wire,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    )
+    return wire
 
 
 def _project_audio_references(
@@ -1984,7 +1993,7 @@ def _build_receipt(
         "output_path": _relative(config, result.output_path, "build output"),
         "package_sha256": result.package_sha256,
         "card_count": result.card_count,
-        "plan_fingerprint": plan.fingerprint,
+        "plan_fingerprint": _build_wire(config, plan)["plan_fingerprint"],
     }
 
 

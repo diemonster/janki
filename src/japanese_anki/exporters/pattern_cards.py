@@ -29,6 +29,7 @@ import copy
 import hashlib
 import html
 import io
+import os
 import re
 import unicodedata
 from collections import Counter
@@ -1982,6 +1983,10 @@ def build_pattern_deck(
     project_config: ProjectConfig,
     store: dict[str, PatternSet],
     output_path: Path | None = None,
+    *,
+    output_expected_revision: str | None = None,
+    output_expected_identity: tuple[int, int] | None = None,
+    output_expected_absent: bool = False,
 ) -> tuple[Path, int]:
     """Build one pattern deck. Returns ``(package path, card count)``."""
     if genanki is None:
@@ -2058,8 +2063,14 @@ def build_pattern_deck(
 
     filename = str(deck_config.get("output", f"{deck_path.stem}.apkg"))
     target = output_path or (project_config.dist_dir / filename)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    genanki.Package(deck).write_to_file(str(target))
+    target = Path(os.path.abspath(os.fspath(target)))
+    _write_package_atomic(
+        genanki.Package(deck),
+        target,
+        expected_revision=output_expected_revision,
+        expected_identity=output_expected_identity,
+        expected_absent=output_expected_absent,
+    )
     return target, len(cards)
 
 
@@ -2120,6 +2131,10 @@ def build_conjugation_deck(
     project_config: ProjectConfig,
     records: Sequence[VocabularyRecord],
     output_path: Path | None = None,
+    *,
+    output_expected_revision: str | None = None,
+    output_expected_identity: tuple[int, int] | None = None,
+    output_expected_absent: bool = False,
 ) -> tuple[Path, int]:
     """Build one conjugation drill deck. Returns ``(package path, card count)``."""
     if genanki is None:
@@ -2202,8 +2217,14 @@ def build_conjugation_deck(
 
     filename = str(deck_config.get("output", f"{deck_path.stem}.apkg"))
     target = output_path or (project_config.dist_dir / filename)
-    target.parent.mkdir(parents=True, exist_ok=True)
     package = genanki.Package(deck)
     package.media_files = sorted(set(media_files))
-    _write_package_atomic(package, target.resolve())
+    target = Path(os.path.abspath(os.fspath(target)))
+    _write_package_atomic(
+        package,
+        target,
+        expected_revision=output_expected_revision,
+        expected_identity=output_expected_identity,
+        expected_absent=output_expected_absent,
+    )
     return target, len(cards)

@@ -19,16 +19,15 @@ of why the asking changed.
 | `extract-prose.md` | `janki extract --mode prose` | system |
 | `enrich-bare-word.md` | `janki enrich --ai` | system |
 | `revise-conjugation-deck.md` | confirmed conjugation-deck `revise` | system |
-| `assistant-chat.md` | ordinary Janki conversation for a **Chat + changes** deck | complete system prompt |
-| `assistant-chat-only.md` | ordinary Janki conversation for a **Chat only** deck | complete system prompt |
+| `revise-cards.md` | confirmed canonical-card `revise` | system |
+| `assistant-agent.md` | repository-wide ordinary Janki conversation and closed intent planning | complete system prompt |
 | `approve-coverage.md` | `janki promote --accept-coverage` | system |
 
 The coverage check and conversational Assistant do not lead with the style
 guide. Coverage counts whether the page is accounted for rather than judging
-Japanese. Both Assistant prompts answer from a bounded deck scope and bounded
-thread history without writing cards, so a card-writing style guide would give
-them the wrong job. The local deck capability chooses between the revision-aware
-and chat-only prompts before the provider request is fingerprinted.
+Japanese. `assistant-agent.md` answers from bounded repository projections and
+thread history and may return one closed intent, but it does not write cards;
+the separately confirmed `revise-cards.md` pass does that work.
 
 The configured Codex enrichment provider receives the same style and task
 template, but its transport adapter rejoins those blocks and prepends a small
@@ -39,8 +38,9 @@ The **user turn** is not a file. For card-writing passes it is the record's own
 data — the expression, the reading, what janki already knows about the word —
 composed by Python. For the passes that read a source, it also carries the page
 itself: the same base64 image or PDF, so the model is looking at what you are
-looking at. For Assistant chat it carries only the selected deck scope, bounded
-visible thread history, and current message. That is data, not instruction.
+looking at. For the repository Assistant it carries bounded, fingerprinted
+repository projections, optional deck focus, bounded visible thread history,
+and the current message. That is data, not instruction.
 The terse schema labels and Codex transport preamble described above are the
 other Python-owned pieces of request structure.
 
@@ -81,8 +81,8 @@ that removing it should break something, `tests/test_prompts.py` is where that
 assertion goes — it reads these files, so a retired clause is a failing test
 rather than a silent weakening.
 
-Today that holds for `enrich-bare-word.md`, `revise-conjugation-deck.md`, both
-`assistant-chat*.md` files, the three `extract-*.md` files, and
+Today that holds for `enrich-bare-word.md`, both `revise-*.md` files,
+`assistant-agent.md`, the three `extract-*.md` files, and
 `approve-coverage.md`. Assertions living in tests read the files too: they once
 read Python constants holding byte-identical copies, which meant deleting a
 clause from the live template changed nothing anyone would notice.

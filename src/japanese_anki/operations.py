@@ -2349,7 +2349,12 @@ class OperationJournal:
                 f"Operation {operation_id!r} has no recoverable reply"
             )
 
-    def read_inspectable_reply(self, operation_id: str) -> bytes:
+    def read_inspectable_reply(
+        self,
+        operation_id: str,
+        *,
+        expected_operation: Operation | None = None,
+    ) -> bytes:
         """Read a complete reply or a frame-preserving incomplete-stream view.
 
         Complete artifact bytes pass through unchanged. A streaming operation
@@ -2361,6 +2366,10 @@ class OperationJournal:
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
             held = current.operations.get(operation_id)
+            if expected_operation is not None and held != expected_operation:
+                raise OperationError(
+                    f"Operation {operation_id!r} changed after the action was rendered"
+                )
             if held is None:
                 raise OperationError(f"No operation {operation_id!r} to read")
             if held.cleanup is not None:
@@ -2403,7 +2412,13 @@ class OperationJournal:
                 f"Operation {operation_id!r} has no recoverable reply or response frames"
             )
 
-    def end(self, operation_id: str, *, detail: str = "") -> Operation:
+    def end(
+        self,
+        operation_id: str,
+        *,
+        detail: str = "",
+        expected_operation: Operation | None = None,
+    ) -> Operation:
         """Say a call that will never finish is over, without inventing what it
         bought.
 
@@ -2431,6 +2446,10 @@ class OperationJournal:
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
             held = current.operations.get(operation_id)
+            if expected_operation is not None and held != expected_operation:
+                raise OperationError(
+                    f"Operation {operation_id!r} changed after the action was rendered"
+                )
             if held is None:
                 raise OperationError(f"No operation {operation_id!r} to end")
             if held.cleanup is not None:
@@ -2495,7 +2514,13 @@ class OperationJournal:
                 detail=settlement_detail,
             )
 
-    def forget(self, operation_ids: Iterable[str], *, force: bool = False) -> int:
+    def forget(
+        self,
+        operation_ids: Iterable[str],
+        *,
+        force: bool = False,
+        expected_operation: Operation | None = None,
+    ) -> int:
         """Drop finished operations, and only finished ones.
 
         Any terminal state, not just `committed`: an `outcome_unknown` a person
@@ -2507,11 +2532,25 @@ class OperationJournal:
         deletes it. The exact cleanup decision is journalled before deletion;
         an interrupted retry resumes those bindings without fresh force.
         """
+        requested_ids = tuple(sorted({str(value) for value in operation_ids}))
+        if expected_operation is not None and requested_ids != (
+            expected_operation.operation_id,
+        ):
+            raise OperationError(
+                "A guarded operation forget must target exactly its rendered operation"
+            )
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
+            if expected_operation is not None and current.operations.get(
+                expected_operation.operation_id
+            ) != expected_operation:
+                raise OperationError(
+                    f"Operation {expected_operation.operation_id!r} changed after "
+                    "the action was rendered"
+                )
             cleanup: dict[str, _CleanupIntent] = {}
             newly_bound: set[str] = set()
-            for operation_id in sorted({str(value) for value in operation_ids}):
+            for operation_id in requested_ids:
                 held = current.operations.get(operation_id)
                 if held is None:
                     continue

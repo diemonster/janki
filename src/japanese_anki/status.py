@@ -184,13 +184,19 @@ def _inline_record_ids(deck_path: Path) -> set[str]:
     }
 
 
-def collect_records(config: ProjectConfig) -> RecordUniverse:
+def collect_records(
+    config: ProjectConfig,
+    *,
+    deck_paths: Sequence[Path] | None = None,
+) -> RecordUniverse:
     """Every record janki manages, from the normalized file and every deck.
 
     A deck file that cannot be read is reported as a warning and skipped rather
     than aborting the report: status is the command you run to find out what is
     wrong, so it has to survive one broken file. ``janki validate`` is where a
-    bad deck is an error.
+    bad deck is an error.  ``deck_paths`` lets a stricter caller supply its own
+    already-validated census; the ordinary project status still discovers all
+    configured decks when it is omitted.
     """
     warnings: list[str] = []
     by_id: dict[str, VocabularyRecord] = {}
@@ -211,7 +217,8 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
             audio_records.append(record)
 
     decks: list[DeckView] = []
-    for deck_path in deck_files(config):
+    configured_decks = deck_files(config) if deck_paths is None else list(deck_paths)
+    for deck_path in configured_decks:
         resolved_path = deck_path.resolve()
         try:
             structural_owners = pattern_cards.declared_drill_audio_owner_ids(

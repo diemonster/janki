@@ -334,7 +334,8 @@ class ProjectConfig:
     #: from ``revise_provider``: asking a question and writing Japanese cards
     #: are different paid operations with separate prompts and authority.
     assistant_provider: str
-    #: The pinned model used for ordinary, non-mutating Assistant conversation.
+    #: The pinned model used for ordinary Assistant conversation. Its typed
+    #: intent is untrusted plan input; it is never repository write authority.
     assistant_model: str
     #: Whether `janki workbench` starts the isolated ChatKit sidecar. The
     #: default is deliberately off so a base install neither imports the

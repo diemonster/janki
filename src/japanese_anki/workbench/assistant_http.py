@@ -1,10 +1,11 @@
 """Isolated loopback HTTP origin for the workbench ChatKit surface.
 
 The hosted ChatKit JavaScript never runs in the main workbench authority
-origin. This sidecar has its own random path token, one project-scoped
-in-memory store with thread-local deck selection, and no access to the
-workbench session or CSRF secrets. Its own narrow capabilities authorize one
-conversational turn or one exact revision plan.
+origin. This sidecar has its own random path token, one repository-scoped
+in-memory store with optional thread-local deck focus, and no access to the
+workbench session or CSRF secrets. Opaque one-use capabilities bind deck-focus
+changes and exact confirmed actions to the server-rendered item that created
+them.
 """
 
 from __future__ import annotations
@@ -134,7 +135,7 @@ class AsyncLoopBridge:
 
 
 class AssistantHTTPServer(LocalOnlyServer):
-    """Loopback server carrying only the deck-scoped ChatKit sidecar."""
+    """Loopback server carrying the repository-scoped ChatKit sidecar."""
 
     assistant_core: AssistantCore
     bridge: AsyncLoopBridge
@@ -145,8 +146,6 @@ class AssistantHTTPServer(LocalOnlyServer):
     style_path: str
     upload_path_prefix: str | None
     attachment_store: LocalAssistantAttachmentStore | None
-    conversation_available: bool
-    revision_available: bool
     deck_choices: tuple[AssistantDeckChoice, ...]
 
 
@@ -462,32 +461,12 @@ def _request_refusal(
 
 
 def _shell_html(server: AssistantHTTPServer) -> str:
-    if server.conversation_available:
-        introduction = (
-            "Choose the active deck inside this chat, ask a question in ordinary "
-            "language, or attach one PDF or photo for local source intake. Questions "
-            "are read-only."
-        )
-        if server.revision_available:
-            introduction += (
-                " Use the explicit deck-change action when you want one exact "
-                "revision plan."
-            )
-        else:
-            introduction += (
-                " The available decks are chat only; deck changes require a "
-                "supported rich drill deck."
-            )
-        assistant_label = "janki deck assistant"
-    else:
-        introduction = (
-            "Attach one PDF or photo to save it to your local source inbox. Janki "
-            "then shows one exact extraction plan in this conversation; nothing is "
-            "sent unless you confirm it. Questions are unavailable until a readable "
-            "deck is configured; deck changes additionally require a supported rich "
-            "drill deck."
-        )
-        assistant_label = "janki source intake"
+    introduction = (
+        "Ask about your Japanese library in ordinary language, optionally focus this "
+        "conversation on one deck, or attach one PDF or photo for local source "
+        "intake. A deck focus narrows context; it does not limit what Janki can do."
+    )
+    assistant_label = "janki Japanese-library assistant"
     return (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
@@ -500,6 +479,10 @@ def _shell_html(server: AssistantHTTPServer) -> str:
         "<p class=boundary>This isolated page loads OpenAI's hosted ChatKit UI. It does "
         "not receive the main workbench session or its CSRF authority.</p></header>"
         f'<openai-chatkit id="janki-chat" aria-label="{assistant_label}"></openai-chatkit>'
+        '<section id="janki-chat-error" class="chat-error" role="alert" hidden>'
+        "<h2>Chat interface did not load</h2>"
+        "<p>The local workbench is still running. Check your connection to "
+        "OpenAI's hosted ChatKit service, then reload this page.</p></section>"
         "<noscript>JavaScript is required for the ChatKit interface.</noscript>"
         "</main></body></html>"
     )
@@ -508,40 +491,31 @@ def _shell_html(server: AssistantHTTPServer) -> str:
 def _application_javascript(server: AssistantHTTPServer) -> str:
     api_path = json.dumps(server.api_path)
     upload_path_prefix = json.dumps(server.upload_path_prefix)
-    if server.conversation_available:
-        frame_title = "janki deck assistant"
-        placeholder = "Ask Janki or attach a source"
-        greeting = "What would you like to do?"
-        starter_prompts = """[
+    frame_title = "janki Japanese-library assistant"
+    placeholder = "Ask Janki or attach a source"
+    greeting = "What would you like to do?"
+    starter_prompts = """[
         {
-          label: "Choose active deck",
-          prompt: "Choose an active deck",
+          label: "Explore my library",
+          prompt: "Show me what I can do with my Japanese library",
+          icon: "book-open",
+        },
+        {
+          label: "Focus on a deck",
+          prompt: "Choose a deck to focus on",
           icon: "notebook",
         },
         {
-          label: "What Janki can do",
-          prompt: "What can Janki help me do here?",
-          icon: "book-open",
-        },"""
-        if server.revision_available:
-            starter_prompts += """
-        {
-          label: "How changes work",
-          prompt: "Explain how I can prepare and confirm a deck change.",
-          icon: "write",
-        },"""
-        starter_prompts += """
-        {
-          label: "Create from a source",
-          prompt: "Explain how to make cards here from an attached PDF or photo.",
+          label: "Add study material",
+          prompt: "How do I add study material?",
           icon: "document",
         },
+        {
+          label: "Manage paid operations",
+          prompt: "Manage paid operations",
+          icon: "keys",
+        },
       ]"""
-    else:
-        frame_title = "janki source intake"
-        placeholder = "Attach a PDF or photo"
-        greeting = "Add a source to Janki"
-        starter_prompts = "[]"
     if server.attachment_store is None:
         attachments = "{ enabled: false }"
         upload_strategy = ""
@@ -561,7 +535,19 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
         upload_strategy = '\n      uploadStrategy: { type: "two_phase" },'
     return f'''"use strict";
 (async () => {{
-  await customElements.whenDefined("openai-chatkit");
+  await new Promise((resolve, reject) => {{
+    const timer = window.setTimeout(() => reject(new Error("ChatKit load timed out")), 10000);
+    customElements.whenDefined("openai-chatkit").then(
+      () => {{
+        window.clearTimeout(timer);
+        resolve();
+      }},
+      (error) => {{
+        window.clearTimeout(timer);
+        reject(error);
+      }}
+    );
+  }});
   const chat = document.getElementById("janki-chat");
   const apiPath = {api_path};
   const uploadPathPrefix = {upload_path_prefix};
@@ -607,6 +593,10 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
   }});
 }})().catch(() => {{
   document.body.dataset.chatkitFailed = "true";
+  const failure = document.getElementById("janki-chat-error");
+  if (failure !== null) {{
+    failure.hidden = false;
+  }}
 }});
 '''
 
@@ -624,6 +614,10 @@ p { margin: .35rem 0; line-height: 1.45; }
 .deck-scope { margin-top: .8rem; }
 .deck-scope code { color: GrayText; font-size: .8rem; overflow-wrap: anywhere; }
 openai-chatkit { display: block; width: 100%; height: min(76vh, 54rem); min-height: 32rem; }
+[data-chatkit-failed="true"] openai-chatkit { display: none; }
+.chat-error { width: min(100%, 48rem); margin: 2rem auto; padding: 1rem 1.25rem;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent); border-radius: .75rem; }
+.chat-error h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
 """.strip()
 
 
@@ -723,12 +717,6 @@ def create_assistant_sidecar(
         server.upload_path_prefix = upload_path_prefix
         server.attachment_store = attachment_store
         server.deck_choices = tuple(deck_choices)
-        server.conversation_available = any(
-            choice.chat_supported for choice in server.deck_choices
-        )
-        server.revision_available = any(
-            choice.revision_supported for choice in server.deck_choices
-        )
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:
         if attachment_store is not None:

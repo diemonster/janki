@@ -578,6 +578,51 @@ def plan_targeted_audio(
     )
 
 
+def plan_targeted_audio_revision(
+    config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    revision: RecordsRevision,
+    record_ids: Sequence[str],
+    *,
+    words: bool = False,
+    examples: bool = False,
+    force: bool = False,
+    chosen_provider: str | None = None,
+    word_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
+) -> AudioPlan:
+    """Plan targeted canonical audio against exact prospective record bytes.
+
+    A reviewed card revision needs to disclose its later audio spend before
+    the canonical merge lands.  This uses the ordinary planner with the same
+    durable-media protection set, changing only the exact canonical snapshot
+    supplied by the caller.
+    """
+
+    canonical = config.normalized_file.resolve()
+    if revision.path.resolve() != canonical or revision.text is None:
+        raise AudioPlanError(
+            "Prospective targeted audio needs a present revision of the canonical "
+            "vocabulary collection."
+        )
+    protected_records = tuple(
+        _all_durable_audio_records(config, status.deck_files(config), records)
+    )
+    return _plan_records(
+        config,
+        records,
+        revision,
+        _exact_ids(record_ids),
+        words=words,
+        examples=examples,
+        force=force,
+        chosen_provider=chosen_provider,
+        word_provider=word_provider,
+        sentence_provider=sentence_provider,
+        protected_records=protected_records,
+    )
+
+
 def plan_corpus_audio(
     config: ProjectConfig,
     *,
@@ -982,6 +1027,40 @@ def execute_targeted_audio(
         progress=progress,
         word_provider=word_provider,
         sentence_provider=sentence_provider,
+    )
+
+
+def execute_targeted_audio_locked(
+    config: ProjectConfig,
+    record_ids: Sequence[str],
+    *,
+    words: bool = False,
+    examples: bool = False,
+    expected_fingerprint: str | None = None,
+    force: bool = False,
+    prune: bool = False,
+    chosen_provider: str | None = None,
+    progress: AudioProgress | None = None,
+    word_provider: SpeechProvider | None = None,
+    sentence_provider: SentenceProvider | None = None,
+    before_paid_dispatch: Callable[[PaidAudioDispatch], None] | None = None,
+) -> AudioExecutionOutcome:
+    """Execute targeted audio while the caller owns the audio-operation lock."""
+
+    return _execute_audio_locked(
+        config,
+        _exact_ids(record_ids),
+        deck_path=None,
+        words=words,
+        examples=examples,
+        expected_fingerprint=expected_fingerprint,
+        force=force,
+        prune=prune,
+        chosen_provider=chosen_provider,
+        progress=progress,
+        word_provider=word_provider,
+        sentence_provider=sentence_provider,
+        before_paid_dispatch=before_paid_dispatch,
     )
 
 

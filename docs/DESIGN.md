@@ -11,8 +11,9 @@ generated `.apkg` files are build artifacts.
 
 ## The pipeline
 
-Where the code has not yet caught up with a sentence here, an M8 milestone in
-the plan names the gap. The sentence states the design, not the present.
+Where the code has not yet caught up with a sentence here, the implementation
+or workbench plan names the gap. The sentence states the design, not the
+present.
 
 **1. Intake.** Sources arrive and are preserved immutably under `data/inbox/`,
 with provenance. Nothing ever edits a source.
@@ -21,25 +22,32 @@ with provenance. Nothing ever edits a source.
 bare-record enrichment).** One rich template per input shape asks
 for the complete card: Japanese, natural English glosses, examples, furigana
 giving each kanji's *contextual* reading in that sentence, romaji, usage, and
-register. There are three paid card-writing paths. `extract` reads a preserved source
-once and returns candidates, coverage facts, complete card proposals, and the
-grammar patterns that source teaches in the same answer; its auto, table, and
-prose modes remain three complete source templates. `enrich --ai` reads a bare
-record once and returns glosses, examples, and usage together. `revise` reads
-only explicitly selected existing cards or deck content plus the owner's
-requested change and returns a fingerprinted staging proposal; it never writes
-canonical content directly. ChatKit may plan and, after an exact owner
-confirmation, dispatch that same revision operation, but conversation is a
-surface rather than a fourth writing path. Revision has one shared
+register. There are three paid card-writing paths. `extract` reads a preserved
+source once and returns candidates, coverage facts, complete card proposals,
+and the grammar patterns that source teaches in the same answer; its auto,
+table, and prose modes remain three complete source templates. `enrich --ai`
+reads a bare record once and returns glosses, examples, and usage together.
+`revise` reads only explicitly selected existing cards or deck content plus the
+owner's requested change and returns a fingerprinted staging proposal; it never
+writes canonical content directly. Janki's ChatKit agent may prepare typed
+plans and, after exact owner authority where required, dispatch these same
+application operations. Conversation is a repository-wide surface over the
+three paths, not a fourth writing path. Revision has one shared
 plan/consent/journal/recovery/staging/review/apply pipeline; configuration
-selects only its transport: `claude-code` consumes the logged-in Claude Pro or
-Max subscription allowance, while `anthropic-api` uses Anthropic API billing.
+selects only its transport. `claude-code` consumes the locally logged-in Claude
+Pro or Max subscription allowance; `anthropic-api` uses Anthropic API billing.
+Neither choice creates a different revision workflow.
+
 An ordinary Janki message is a separate, non-card-writing model turn. Its
-own `[assistant]` provider chooses between the same two Claude transports
-independently from revision, while its model is pinned to `claude-opus-5`.
-Sending the message authorizes exactly that one journaled conversational call,
-which may answer but cannot mutate repository state. Only an explicit **Change
-deck** action can turn an instruction into a revision plan.
+`[assistant]` provider is independent from the revision transport, its model is
+pinned to `claude-opus-5`, and its default is Claude Code using the owner's
+logged-in Pro or Max subscription. Sending the message authorizes exactly that
+one journaled turn over its exact bounded repository context. The turn may
+answer, request typed read-only repository projections, and return typed
+staged-change or action plans. Model output itself is never write authority:
+only janki's local broker may validate a closed action type, resolve opaque
+repository identities, call an existing application planner, and render any
+authority the operation still needs.
 Pattern listing and human review remain local operations over extraction
 output. Prompts are template files, readable without opening Python, and they
 are the quality mechanism: **when the output is wrong or thin, expand the
@@ -157,10 +165,14 @@ A paid model call follows the same write-ahead shape as that paid audio
 staging: journaled durably before dispatch, its exact response persisted as a
 pending artifact before parsing, so neither a crash nor a parse failure can
 lose an answer already paid for. `extract`, `revise`, the separate
-`promote --accept-coverage` completeness check, and OpenAI Realtime sentence
-audio do this today. `enrich --ai` spends money and does **not** yet journal,
-which is a gap to close rather than a design choice — until it does, nothing
-below applies to it. The journal moves
+`promote --accept-coverage` completeness check, OpenAI Realtime sentence
+audio, and Assistant-selected Anthropic enrichment do this today. The
+Assistant enrichment route always stages its captured answer and never writes
+canonical cards. Its Codex option is refused because that transport does not
+yet expose the exact raw-reply capture seam this contract requires. The direct
+CLI `enrich --ai` route still spends money without journaling, which is a gap
+to close rather than a design choice; this journal contract does not describe
+that CLI route yet. The journal moves
 `authorized → dispatching → running → result_captured → committed`, with
 `outcome_unknown`, `failed_before_send`, `canceled_before_send`, and `expired`
 as terminal or holding states. A dispatched call whose outcome is unknown is
@@ -180,10 +192,15 @@ frames already on disk; it never redispatches. Nonempty response frames from a
 call that may have been sent require `operations --forget --force` when they
 did not become committed output; an ordinary forget cannot silently erase
 partial paid output.
-An ordinary Assistant turn follows that shape too. Once captured, its exact
-user message, bounded context binding, provider/model identity and assistant
-reply become a durable turn under `data/assistant/`; ChatKit's thread is a view
-of that repository record, never its only copy or its authority source.
+An ordinary Assistant turn follows that shape too. Its exact user message,
+every bounded repository projection disclosed to the provider, the closed
+typed action schema, provider/model identity, and assistant reply become a
+durable turn under `data/assistant/`; no dynamically obtained repository byte
+may enter model context without first joining that manifest. ChatKit's thread
+is a view of that repository record, never its only copy or its authority
+source. A typed local read is not another paid operation. Every projection sent
+to a provider belongs to one freshly manifested Assistant request, and no typed
+intent can open an unjournaled nested model call.
 Normal capture keeps its terminal operation-bound marker until the
 `result_captured` journal write durably records the relative name, pending
 directory identity, five-field file snapshot (including ctime), and response
@@ -233,60 +250,91 @@ ChatKit uses its self-hosted/custom-backend integration as the conversational
 surface inside that workbench, not as the inference provider or a
 provider-owned workflow. OpenAI hosts the UI; janki's backend supplies the
 conversation through `[assistant].provider`, which defaults to `claude-code`
-and the logged-in Claude Pro or Max subscription. `anthropic-api` is the
-separately selectable API-billed alternative. These settings do not inherit
-from or silently change `[ai].revise_provider`.
+and the owner's logged-in Claude Pro or Max subscription. `anthropic-api` is
+the separately selectable API-billed alternative. These settings do not
+inherit from or silently change `[ai].revise_provider`. ChatKit is only the UI;
+it holds no repository authority and supplies no inference or workflow state.
 
-Each ChatKit thread starts with no implicit deck. A local in-conversation
-selector lists the configured decks and requires one explicit owner click
-before deck-scoped conversation or revision. Browser actions carry only an
-opaque startup-catalog id; janki resolves it to an allowlisted repository path
-and revalidates the deck locally without a model call. Switching decks clears
-that thread's bounded deck context and invalidates its older prepare, confirm
-and finish actions. Every safely readable configured deck is selectable for
-conversation. Deck kinds the current revision pass cannot safely write are
-labelled **Chat only** and never expose or enter a deck-change action; malformed
-or unreadable decks remain visible as unavailable and inert. Chat-only turns
-use their own non-revision system prompt, so the model cannot direct the owner
-to a change action that the selected deck will not render.
+Janki is repository-wide for Japanese-library operations. It can inspect and
+plan over configured decks, canonical records, staging proposals, pattern and
+kanji stores, immutable-source catalogues, operation and ledger projections,
+media currency, and package state. An active deck is an optional conversational
+focus that narrows context and presentation; it is not a capability grant, and
+there is no **Chat only** / **Chat + changes** class. A supported operation may
+target any freshly resolved repository object whether or not a deck is active.
+An unsafe or malformed individual object refuses when read or planned; it does
+not make unrelated library objects unavailable.
 
-Sending an ordinary Janki message authorizes one journaled Assistant turn over
-the message and its bounded context. The routine page need not repeat its
-provider, model or context-provenance prose; the exact request manifest and
-operation journal retain those bindings durably. That turn cannot mutate, prepare a
-revision by implication, or treat a question such as “which deck?” as a deck
-instruction. Only the explicit **Change deck** action may prepare an exact
-revision plan. Its owner-visible request detail names the transport provider,
-billing path, authentication class or subscription tier, model, CLI version
-when applicable, and exact request-byte fingerprint. One exact owner
-confirmation consumes a one-use capability bound to those values, the target,
-current repository fingerprints, cost-bearing purpose and consequences. It
-dispatches `revise`, captures the result, stages the unseen Japanese proposal,
-and then stops.
+Repository-wide does not mean unrestricted machine access. Janki exposes
+closed, bounded readers and planners whose browser and model-facing arguments
+are opaque resource identities, never host paths. The server resolves those
+identities through an allowlisted catalogue, uses containment and no-follow
+reads, caps files and bytes, snapshots every disclosed result, and revalidates
+it before use. Secrets, Git internals, credentials, and private unfinished paid
+reply bytes are not general Assistant context. The Claude Code process receives
+neither raw filesystem nor shell, Git, arbitrary subprocess, arbitrary network,
+or mutation tools. A model may emit only closed typed read, staged-change, and
+action intents. They are untrusted data until janki validates them and invokes
+the same application planner the CLI and ordinary workbench use. Unknown or
+unsupported intents refuse; the model never improvises a parallel writer.
+
+Sending an ordinary Janki message is the owner's one action authorizing one
+journaled Assistant turn over that message and its exact bounded context. The
+routine page need not repeat provider, model, or context-provenance prose; the
+request manifest and operation journal retain those bindings durably. Normal
+deterministic local reads, navigation, status, diffs, and pure plans need no
+additional confirmation. A plain instruction may therefore prepare a typed
+staged change or application action without a special deck-capability button,
+but neither the instruction nor the model's plan executes it.
+
+Before a protected effect, Janki renders one exact batch and one confirmation,
+not a confirmation ladder. Protected effects are an additional paid call,
+disclosure of private source or card bytes not already bound to the ordinary
+turn, a destructive action, staging model-authored Japanese the owner has not
+seen, or a canonical repository transition. The batch names every target,
+every fresh input fingerprint, provider/model/billing identity and exact
+request identity knowable before dispatch, explicit replacement or owner-only
+decision, recovery consequence, and all writes or removals. When the result
+already exists, the batch also binds its exact output fingerprint and
+provenance. A paid call's not-yet-created output is never pretended to exist:
+its capture records output provenance after dispatch, and a later
+visible-content batch binds those exact bytes. The browser-only one-use
+capability is bound to the thread, rendered action, optional focus, and complete
+plan. Execution consumes it, reloads configuration, re-plans under the
+application service's locks, compares every binding, and still relies on
+`OperationJournal.authorize` under its own lock as the final paid-call gate.
+The model cannot see, mint, widen, reuse, or consume that capability, answer its
+own confirmation, infer an owner review or identity decision, or manufacture a
+CLI approval flag.
+
+All protected consequences knowable at one point are consolidated into that
+one batch. A paid writing operation whose answer does not exist yet may be
+authorized to disclose its exact inputs and stage the unseen answer, but it
+must stop there. Once the Japanese is visible and reviewed, its canonical
+apply is necessarily a later batch because those exact output bytes could not
+have been approved earlier. That later **Apply and finish** batch may include
+promotion, selected audio, media/ledger updates, and package build under one
+durable receipt; those phases do not each ask again. The receipt is the only
+authority an interruption may resume, and a resume never repeats already
+captured paid work.
+
+That consolidated later batch is implemented for reviewed rich-conjugation
+whole-deck revisions, selected canonical-card revisions targeting vocabulary
+decks, and Assistant-selected AI enrichment whose persisted focus resolves to
+one vocabulary deck. Each binds the exact visible selection before recording a
+resumable review/promotion/audio/build receipt. Source-extraction proposals
+still expose their applicable review, assignment, coverage, promotion, audio,
+and build operations as separate typed protected actions. Extending the same
+receipt-backed **Apply and finish** contract to that flow remains W7 work; the
+paragraph above states the design, not every flow's present UI.
 
 An attachment added through Janki is local immutable intake only. Its bytes are
 saved through the same intake service under `data/inbox/`; uploading does not
-place the source in conversational context or authorize a paid model call. This
-project-wide intake and extraction surface stays available even when Janki
-cannot select one unambiguous deck for deck-scoped conversation or revision.
-The same Janki conversation then renders one freshly planned action bound to the
-exact stored source and request. One owner-confirmation click dispatches it;
-there is no additional consent page or confirmation chain. The action is
-separate from upload only because saving locally is not authority to transmit.
-
-The owner next reviews or edits that visible proposal. **Apply and finish** is
-a later exact content-authority event over those reviewed bytes and its stated
-audio/build consequences; unseen content is never applied automatically. It
-re-plans under the same locks and refuses drift, then records one durable finish
-authority before canonical mutation. Only the selected cards whose examples
-were displayed are voiced; unchanged cards remain byte-identical, while the
-whole-deck package still binds every referenced media file by path and digest.
-Its receipt advances through apply, audio and package completion and is the only
-authority an interruption may resume. This is not a ladder of separate ChatKit
-confirmations for apply, audio and build. The assistant cannot confirm for the
-owner, widen a plan, reuse a capability, or bypass a review, journal or identity
-gate. OpenAI Realtime audio remains API-backed and its provider cannot be
-switched by either Claude transport setting.
+place the source in model context or authorize a paid call. A later protected
+batch names the exact stored source, disclosure and extraction request; one
+owner-confirmation click dispatches and stages it, with no additional consent
+page or phase-by-phase confirmation. OpenAI Realtime audio remains API-backed
+and neither Claude transport setting nor a model intent can reroute it.
 
 Code review and Japanese-content approval are separate gates. A machinery
 review neither judges nor approves Japanese, and content approval neither

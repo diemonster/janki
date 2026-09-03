@@ -77,11 +77,11 @@ from japanese_anki.application import build as build_application
 from japanese_anki.application import revision_apply as revision_apply_application
 from japanese_anki.application import revision_finish as revision_finish_application
 from japanese_anki.application.assignment import (
-    AssignmentError,
     DeckAssignmentAttempt,
     DeckAssignmentPlan,
     ProposalOccurrence,
     plan_deck_assignments,
+    staged_sibling_proposals,
 )
 from japanese_anki.application.coverage import CoverageRunError
 from japanese_anki.application.deck_creation import (
@@ -549,7 +549,7 @@ def _assignment_offers(
     records: Sequence[VocabularyRecord],
     current_path: Path,
 ) -> tuple[_DeckAssignmentOffer, ...]:
-    siblings = _staged_sibling_proposals(
+    siblings = staged_sibling_proposals(
         config,
         current_path,
         frozenset(record.id for record in records),
@@ -569,54 +569,6 @@ def _assignment_offers(
         )
         for card, record in enumerate(records)
     )
-
-
-def _staged_sibling_proposals(
-    config: ProjectConfig,
-    current_path: Path,
-    record_ids: frozenset[str],
-) -> dict[str, tuple[VocabularyRecord, ...]]:
-    """Matching rows in every other readable live review.
-
-    A broken sibling cannot be silently omitted: its unreadable rows might
-    contain the same stable id, which would make the page's duplicate claim
-    and its bound assignment plan incomplete.
-    """
-    found: dict[str, list[VocabularyRecord]] = {
-        record_id: [] for record_id in record_ids
-    }
-    active = Path(os.path.abspath(config.staging_dir))
-    current = Path(os.path.abspath(current_path))
-    try:
-        candidates = sorted(active.iterdir())
-    except OSError as exc:
-        raise AssignmentError(
-            f"Could not inspect live reviews for duplicate proposals: {exc}"
-        ) from exc
-    for candidate in candidates:
-        candidate = Path(os.path.abspath(candidate))
-        if candidate == current or candidate.suffix.lower() not in staging.STAGING_SUFFIXES:
-            continue
-        try:
-            details = os.lstat(candidate)
-        except OSError as exc:
-            raise AssignmentError(
-                f"Could not inspect live review {candidate}: {exc}"
-            ) from exc
-        if not stat.S_ISREG(details.st_mode):
-            raise AssignmentError(
-                f"Live review {candidate} is not a direct regular file."
-            )
-        try:
-            records, _meta = staging.read_staging(candidate)
-        except JankiError as exc:
-            raise AssignmentError(
-                f"Could not inspect live review {candidate}: {exc}"
-            ) from exc
-        for record in records:
-            if record.id in found:
-                found[record.id].append(record)
-    return {record_id: tuple(items) for record_id, items in found.items()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -3773,7 +3725,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._error(400, "That assignment names a card which is not on this page.")
             return
         try:
-            siblings = _staged_sibling_proposals(
+            siblings = staged_sibling_proposals(
                 session.config,
                 panel.staging_path,
                 frozenset({panel.records[card].id}),

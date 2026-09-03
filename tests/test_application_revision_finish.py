@@ -552,12 +552,13 @@ def test_finish_never_completes_when_media_is_swapped_at_the_build_seam(
         current: ProjectConfig,
         records: tuple[Any, ...],
         output: Path,
+        **kwargs: object,
     ) -> tuple[Path, int]:
         at_seam = json.loads(plan.record_path.read_text(encoding="utf-8"))
         assert at_seam["state"] == "audio_complete"
         assert isinstance(at_seam["build_binding"], dict)
         assert at_seam["build_receipt"] is None
-        result = real_build(deck_path, current, records, output)
+        result = real_build(deck_path, current, records, output, **kwargs)
         raced_media.write_bytes(b"swapped at the finish build seam")
         return result
 

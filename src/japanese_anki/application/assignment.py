@@ -12,12 +12,15 @@ plan.
 
 from __future__ import annotations
 
+import os
+import stat
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
+from japanese_anki import staging
 from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -47,6 +50,7 @@ __all__ = [
     "plan_deck_assignment",
     "plan_deck_assignments",
     "require_exact_deck_ownership",
+    "staged_sibling_proposals",
 ]
 
 
@@ -164,6 +168,65 @@ class _PreparedAssignment:
     existing_owner: str | None
     tag_diff: DeckTagDiff
     assigned_record: VocabularyRecord
+
+
+def staged_sibling_proposals(
+    config: ProjectConfig,
+    current_path: Path,
+    record_ids: frozenset[str],
+) -> dict[str, tuple[VocabularyRecord, ...]]:
+    """Return matching rows from every other readable live staging review.
+
+    Assignment planning has to account for another source proposing the same
+    stable id.  A broken sibling therefore cannot be silently omitted: it may
+    carry exactly the duplicate that the owner needs to see.  Both the browser
+    controller and the Assistant action use this one census.
+    """
+
+    if any(not isinstance(record_id, str) or not record_id for record_id in record_ids):
+        raise AssignmentError("Staged sibling record ids must be nonblank text.")
+    active = Path(os.path.abspath(config.staging_dir))
+    current = Path(os.path.abspath(current_path))
+    if current.parent != active or current.suffix.lower() not in staging.STAGING_SUFFIXES:
+        raise AssignmentError(
+            "The current assignment proposal is not a direct staging YAML file."
+        )
+    found: dict[str, list[VocabularyRecord]] = {
+        record_id: [] for record_id in record_ids
+    }
+    try:
+        candidates = sorted(active.iterdir())
+    except OSError as exc:
+        raise AssignmentError(
+            f"Could not inspect live reviews for duplicate proposals: {exc}"
+        ) from exc
+    for candidate in candidates:
+        candidate = Path(os.path.abspath(candidate))
+        if (
+            candidate == current
+            or candidate.suffix.lower() not in staging.STAGING_SUFFIXES
+        ):
+            continue
+        try:
+            details = os.lstat(candidate)
+        except OSError as exc:
+            raise AssignmentError(
+                f"Could not inspect live review {candidate}: {exc}"
+            ) from exc
+        if not stat.S_ISREG(details.st_mode):
+            raise AssignmentError(
+                f"Live review {candidate} is not a direct regular file."
+            )
+        try:
+            records, _meta = staging.read_staging(candidate)
+        except JankiError as exc:
+            raise AssignmentError(
+                f"Could not inspect live review {candidate}: {exc}"
+            ) from exc
+        for record in records:
+            if record.id in found:
+                found[record.id].append(record)
+    return {record_id: tuple(items) for record_id, items in found.items()}
 
 
 def _word_deck_census(

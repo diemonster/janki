@@ -40,6 +40,7 @@ from typing import Any
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji
+from japanese_anki.io import read_text_bound
 
 __all__ = [
     "Example",
@@ -651,11 +652,11 @@ def load_store(path: Any) -> KanjiStore:
     from pathlib import Path
 
     file = Path(path)
-    if not file.exists():
-        return KanjiStore()
     try:
-        raw = json.loads(file.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
+        raw = json.loads(read_text_bound(file))
+    except FileNotFoundError:
+        return KanjiStore()
+    except (JankiError, OSError, ValueError) as exc:
         raise KanjiError(f"Could not read {file}: {exc}") from exc
     if not isinstance(raw, dict):
         raise KanjiError(f"{file} must hold a JSON object keyed by character")

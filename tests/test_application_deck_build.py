@@ -218,6 +218,7 @@ def test_deck_build_refuses_media_swapped_during_package_generation(
         current: ProjectConfig,
         records: tuple[VocabularyRecord, ...],
         output: Path,
+        **_output_binding: object,
     ) -> tuple[Path, int]:
         result = real_build(deck_path, current, records, output)
         polite.write_bytes(b"swapped at the build seam")
@@ -229,6 +230,39 @@ def test_deck_build_refuses_media_swapped_during_package_generation(
         deck_build.execute_conjugation_deck_build(config, plan)
 
     assert plan.output_path.exists(), "the dist artifact is disposable after refusal"
+
+
+def test_deck_build_preserves_a_late_output_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, deck = _fixture(tmp_path)
+    plan = deck_build.plan_conjugation_deck_build(config, deck)
+    real_build = pattern_cards.build_conjugation_deck
+    sentinel = b"another publisher claimed this path"
+
+    def raced_build(
+        deck_path: Path,
+        current: ProjectConfig,
+        records: tuple[VocabularyRecord, ...],
+        output: Path,
+        **output_binding: object,
+    ) -> tuple[Path, int]:
+        output.write_bytes(sentinel)
+        return real_build(
+            deck_path,
+            current,
+            records,
+            output,
+            **output_binding,
+        )
+
+    monkeypatch.setattr(pattern_cards, "build_conjugation_deck", raced_build)
+
+    with pytest.raises(deck_build.DeckBuildError, match="Could not build"):
+        deck_build.execute_conjugation_deck_build(config, plan)
+
+    assert plan.output_path.read_bytes() == sentinel
 
 
 def test_projected_build_names_future_media_but_is_not_executable_without_hashes(
@@ -335,6 +369,7 @@ def test_deck_build_holds_every_template_and_media_lock_through_package_generati
         _config: ProjectConfig,
         _records: tuple[VocabularyRecord, ...],
         output: Path,
+        **_output_binding: object,
     ) -> tuple[Path, int]:
         expected = set(pattern_cards.pattern_template_paths(config.template_dir)) | media
         assert expected <= {path for path, count in active.items() if count > 0}
