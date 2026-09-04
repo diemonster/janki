@@ -23,6 +23,7 @@ import pytest
 from chatkit.icons import IconName
 from pydantic import TypeAdapter
 
+from japanese_anki.application import assistant_agent
 from japanese_anki.workbench import assistant as assistant_module
 from japanese_anki.workbench import assistant_adapter
 from japanese_anki.workbench.assistant import (
@@ -885,6 +886,34 @@ def test_every_adapter_progress_label_is_one_the_validator_accepts() -> None:
     assert emitted, "no literal progress labels found; the scan stopped working"
     accepted = assistant_module._PROGRESS_LABELS
     assert emitted <= accepted, sorted(emitted - accepted)
+
+
+def test_every_agent_progress_label_is_accepted_on_both_routes() -> None:
+    """One agent label set reaches two validators, so both must accept it.
+
+    `run_agent` reports these on the chat route and `recover_agent` reports the
+    same ones on the action route, where an unknown label is refused outright —
+    so a label accepted by only one of the two wedges the other route.
+    """
+
+    source = Path(assistant_agent.__file__).read_text(encoding="utf-8")
+    emitted = {
+        node.args[1].value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_report_progress"
+        and len(node.args) > 1
+        and isinstance(node.args[1], ast.Constant)
+        and isinstance(node.args[1].value, str)
+    }
+
+    assert emitted, "no literal progress labels found; the scan stopped working"
+    for accepted in (
+        assistant_module._CHAT_PROGRESS_LABELS,
+        assistant_module._PROGRESS_LABELS,
+    ):
+        assert emitted <= accepted, sorted(emitted - accepted)
 
 
 def test_blocking_paid_operation_renders_local_recovery_without_chat() -> None:

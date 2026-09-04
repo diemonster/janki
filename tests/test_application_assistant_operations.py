@@ -9,10 +9,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from test_application_assistant_agent import _capture_without_commit, _context, _project
 
 from japanese_anki import operations, prompts
-from japanese_anki.application import assistant_operations
+from japanese_anki.application import assistant_agent, assistant_operations
 from japanese_anki.config import ProjectConfig
+from japanese_anki.workbench import assistant as assistant_module
 
 
 def _config(tmp_path: Path) -> ProjectConfig:
@@ -354,6 +356,54 @@ def test_captured_assistant_agent_can_recover_its_exact_manifest_without_reply_b
     assert result.result_names == (manifest_path.name,)
     assert result.result_sha256 == (hashlib.sha256(manifest + b"recovered\n").hexdigest(),)
     assert payload not in b"\n".join(name.encode() for name in result.result_names)
+
+
+def test_recovery_progress_reaches_the_action_validator_unrefused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recovery runs on the action route, whose validator refuses stray labels.
+
+    Every other recovery test substitutes `recover_agent`, so the labels the
+    real one reports never reach a validator. This one recovers a genuinely
+    captured turn through the action route's own progress contract, where an
+    unknown label is a refusal rather than a cosmetic drift.
+    """
+
+    config = _project(tmp_path)
+    agent_plan = assistant_agent.plan_agent(
+        config,
+        context=_context(),
+        message="Add one polite example.",
+    )
+    operation_id = _capture_without_commit(config, agent_plan, monkeypatch)
+    seen: list[str] = []
+
+    def report_progress(label: str) -> None:
+        if label not in assistant_module._PROGRESS_LABELS:
+            raise ValueError("The revision service reported an unknown progress state.")
+        seen.append(label)
+
+    plan = assistant_operations.plan_operation_action(
+        config,
+        operation_id=operation_id,
+        action="recover",
+    )
+    result = assistant_operations.execute_operation_action(
+        config,
+        plan,
+        progress=report_progress,
+    )
+
+    assert seen == ["Preparing answer", "Writing answer", "Saving answer"]
+    assert result.recovery_kind == "assistant_agent"
+    assert result.assistant_answer == "The captured answer."
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "committed"
+    )
 
 
 @pytest.mark.parametrize("manifest_state", ["request", "complete", "failed"])

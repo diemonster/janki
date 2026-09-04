@@ -106,6 +106,11 @@ _CHAT_PROGRESS_LABELS = frozenset(
 )
 _PROGRESS_LABELS = frozenset(
     {
+        # The Assistant agent's own labels: `run_agent` reports them on the chat
+        # route and `recover_agent` reports the same ones on the action route.
+        "Preparing answer",
+        "Writing answer",
+        "Saving answer",
         "Preparing revision",
         "Reading the source",
         "Checking the answer's shape",
