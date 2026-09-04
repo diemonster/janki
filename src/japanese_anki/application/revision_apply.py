@@ -20,6 +20,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters import pattern_cards
 from japanese_anki.io import (
+    YAML_LOADER,
     DataError,
     atomic_unlink_bound,
     atomic_write_bytes_bound,
@@ -804,7 +805,7 @@ def _refuse_pending_audio(config: ProjectConfig, plan: RevisionApplyPlan) -> Non
     content = pattern_cards.read_drill_deck_content(plan.deck_path)
     import yaml
 
-    document = yaml.safe_load(content.revision.text)
+    document = yaml.load(content.revision.text, Loader=YAML_LOADER)
     section = document["deck"]
     deck_id = section.get("deck_id")
     if isinstance(deck_id, bool) or not isinstance(deck_id, int):

@@ -6,6 +6,7 @@ from textwrap import dedent
 
 import pytest
 
+from japanese_anki.claude_client import EFFORT_LEVELS
 from japanese_anki.config import KNOWN_KEYS, ConfigError, ProjectConfig
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +50,7 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.assistant_enabled is False
     assert config.assistant_provider == "claude-code"
     assert config.assistant_model == "claude-opus-5"
+    assert config.assistant_effort == "medium"
     assert capsys.readouterr().err == ""
 
 
@@ -82,6 +84,7 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
         enabled = true
         provider = "anthropic-api"
         model = "claude-opus-5"
+        effort = "high"
         """,
     )
 
@@ -107,6 +110,7 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.assistant_enabled is True
     assert config.assistant_provider == "anthropic-api"
     assert config.assistant_model == "claude-opus-5"
+    assert config.assistant_effort == "high"
     assert capsys.readouterr().err == ""
 
 
@@ -165,6 +169,82 @@ def test_an_unpinned_assistant_model_is_rejected(
     message = str(caught.value)
     assert "[assistant] model" in message
     assert "claude-opus-5" in message
+
+
+#: Every depth `claude --effort` prints, spelled out rather than imported. A
+#: parametrization over the module's own tuple shrinks with it, so trimming a
+#: level would silently stop testing it instead of failing.
+CLI_EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+
+
+@pytest.mark.parametrize("level", CLI_EFFORT_LEVELS)
+def test_assistant_effort_accepts_each_cli_level(tmp_path: Path, level: str) -> None:
+    """Every depth `claude --effort` prints, and only those.
+
+    The Assistant turn is the one pass whose depth is configured rather than
+    resolved from the model, so the accepted set has to be the CLI's own — a
+    level trimmed from it here is a level the owner can no longer ask for.
+    """
+    assert EFFORT_LEVELS == CLI_EFFORT_LEVELS
+    _write_config(
+        tmp_path,
+        f"""
+        [assistant]
+        effort = "{level}"
+        """,
+    )
+
+    assert ProjectConfig.load(tmp_path).assistant_effort == level
+    # Absent, the measured default: one conversational turn is answered and
+    # read immediately, at 8.5 s against 10.8 s for 'xhigh'.
+    _write_config(tmp_path, "[assistant]\nenabled = true\n")
+    assert ProjectConfig.load(tmp_path).assistant_effort == "medium"
+
+
+def test_an_unknown_assistant_effort_is_rejected(tmp_path: Path) -> None:
+    """A level the CLI would reject must fail here, not at dispatch."""
+    _write_config(
+        tmp_path,
+        """
+        [assistant]
+        effort = "ultra"
+        """,
+    )
+
+    with pytest.raises(ConfigError) as caught:
+        ProjectConfig.load(tmp_path)
+
+    message = str(caught.value)
+    assert "[assistant] effort" in message
+    for level in CLI_EFFORT_LEVELS:
+        assert repr(level) in message
+
+
+def test_assistant_effort_is_independent_from_enrich_reasoning_effort(
+    tmp_path: Path,
+) -> None:
+    """Two unrelated settings that both spell 'effort'.
+
+    `enrich_reasoning_effort` is Codex's vocabulary for the bare-word pass and
+    accepts 'ultra', which the Claude CLI does not. Reading one from the other
+    would either reject a valid Codex project or send Claude a level it refuses.
+    """
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        enrich_provider = "codex"
+        enrich_reasoning_effort = "ultra"
+
+        [assistant]
+        effort = "high"
+        """,
+    )
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.enrich_reasoning_effort == "ultra"
+    assert config.assistant_effort == "high"
 
 
 def test_assistant_transport_is_independent_from_revision_transport(

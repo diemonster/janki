@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from japanese_anki import claude_client
 from japanese_anki.errors import JankiError
 
 
@@ -59,7 +60,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "voicevox_speed",
         "sentence_provider",
     ),
-    "assistant": ("enabled", "provider", "model"),
+    "assistant": ("enabled", "provider", "model", "effort"),
 }
 
 
@@ -337,6 +338,13 @@ class ProjectConfig:
     #: The pinned model used for ordinary Assistant conversation. Its typed
     #: intent is untrusted plan input; it is never repository write authority.
     assistant_model: str
+    #: Reasoning depth for one ordinary Assistant turn. Every card-writing pass
+    #: resolves depth from its model (``claude_client.effort_for``) because a
+    #: weaker answer there is study content nobody reviewed; a conversational
+    #: turn is answered and read immediately, and the measured round trip is
+    #: 10.8 s at 'xhigh' against 8.5 s at 'medium'. Hence the one configured
+    #: level, and hence it is not shared with the revision pass.
+    assistant_effort: str
     #: Whether `janki workbench` starts the isolated ChatKit sidecar. The
     #: default is deliberately off so a base install neither imports the
     #: optional SDK nor loads OpenAI-hosted UI code merely by opening a local
@@ -404,6 +412,13 @@ class ProjectConfig:
             "claude-opus-5",
             ("claude-opus-5",),
         )
+        assistant_effort = _choice(
+            data,
+            "assistant",
+            "effort",
+            "medium",
+            claude_client.EFFORT_LEVELS,
+        )
 
         return cls(
             root=project_root,
@@ -464,5 +479,6 @@ class ProjectConfig:
             sentence_provider=_str(data, "tts", "sentence_provider", ""),
             assistant_provider=assistant_provider,
             assistant_model=assistant_model,
+            assistant_effort=assistant_effort,
             assistant_enabled=_bool(data, "assistant", "enabled", False),
         )

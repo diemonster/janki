@@ -28,9 +28,12 @@ from japanese_anki.staging import (
     annotations,
     prune_staging,
     read_staging,
+    read_staging_text,
     rewrite_staging,
     write_staging,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _record(**overrides: object) -> VocabularyRecord:
@@ -1050,3 +1053,48 @@ def test_both_writers_read_the_same_width_constant() -> None:
     assert "width=STAGING_YAML_WIDTH" in source
     assert "parser.width = STAGING_YAML_WIDTH" in source
     assert "width=100" not in source
+
+
+def test_read_staging_text_parses_with_libyaml(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The largest YAML janki reads is a staging file, and it reads them all per turn."""
+    seen: list[object] = []
+    real = yaml.load
+
+    def spy(stream: object, Loader: object) -> object:  # noqa: N803 - PyYAML's name
+        seen.append(Loader)
+        return real(stream, Loader=Loader)
+
+    monkeypatch.setattr(yaml, "load", spy)
+
+    records, meta = read_staging_text(
+        "source_file: lesson.pdf\n"
+        "records:\n"
+        "  - id: word:話す:はなす\n"
+        "    expression: 話す\n"
+        "    reading: はなす\n"
+        "    meaning: to speak\n"
+    )
+
+    assert [record.expression for record in records] == ["話す"]
+    assert meta["source_file"] == "lesson.pdf"
+    assert seen == [yaml.CSafeLoader]
+
+
+def test_repository_staging_and_deck_files_parse_identically_under_both_loaders() -> None:
+    """libyaml is a faster scanner, not a different dialect — proven on real files.
+
+    The fixture is this checkout's own staging and deck YAML rather than an
+    invented document, because the risk being ruled out is a construction the
+    project actually writes and nobody thought to imagine.
+    """
+    paths = [
+        *sorted((REPO_ROOT / "data" / "staging").rglob("*.yaml")),
+        *sorted((REPO_ROOT / "data" / "decks").rglob("*.yaml")),
+    ]
+    assert paths, "the repository ships the staging and deck files this reads"
+
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        assert yaml.load(text, Loader=janki_io.YAML_LOADER) == yaml.load(
+            text, Loader=yaml.SafeLoader
+        ), path

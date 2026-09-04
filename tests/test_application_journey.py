@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 import yaml
-from test_workbench_fixtures import materialize
+from test_workbench_fixtures import RESPONSES, materialize
 
 from japanese_anki import staging
 from japanese_anki.application import (
@@ -771,3 +771,64 @@ def test_a_historical_archive_without_a_receipt_stays_added(tmp_path: Path) -> N
     assert journey.state == ADDED
     assert journey.finish_receipt_ids == ()
     assert journey.needs_a_person is True
+
+
+# --- the catalog's names-only projection -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "scenario", sorted(path.stem for path in RESPONSES.glob("*.json"))
+)
+def test_source_names_match_source_journeys_for_every_fixture(
+    tmp_path: Path, scenario: str
+) -> None:
+    """`source_names` is `source_journeys`' names, exactly — not an approximation.
+
+    The Assistant catalog registers one opaque resource per name and resolves
+    it later through `source_journeys`, so a name the cheap projection invents
+    or drops is a resource `source_path` will refuse. Every W0 fixture, plus
+    the three situations no fixture produces: an inbox file nobody has read, a
+    staging file nobody *can* read, and a staging file that renames its source.
+    """
+    _stage(tmp_path, scenario)
+    (tmp_path / "inbox" / "unread.pdf").write_bytes(b"%PDF-1.7 fake")
+    (tmp_path / "staging" / "broken.pdf.yaml").write_text(
+        "records: [\n", encoding="utf-8"
+    )
+    (tmp_path / "staging" / "renamed.pdf.yaml").write_text(
+        "source_file: Week 8 Handout\nrecords: []\n", encoding="utf-8"
+    )
+    (tmp_path / "inbox" / "renamed.pdf").write_bytes(b"%PDF-1.7 fake")
+
+    config = ProjectConfig.load(tmp_path)
+    journeys, _warnings = source_journeys(config)
+
+    assert journey_application.source_names(config) == tuple(
+        sorted(journey.source for journey in journeys)
+    )
+
+
+def test_source_names_never_open_the_completed_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`done/` decides a source's *state*, never its name.
+
+    Parsing every receipt in the archive was 0.6 s of the Assistant's per-turn
+    context build, spent deciding something the catalog does not disclose. The
+    corrupt archive here proves the point twice over: `source_journeys` cannot
+    even rank the source, and the name is unaffected.
+    """
+    _project(tmp_path)
+    (tmp_path / "inbox" / "week-8.pdf").write_bytes(b"%PDF-1.7 fake")
+    archive = tmp_path / "staging" / "done"
+    archive.mkdir(parents=True, exist_ok=True)
+    (archive / "unrelated.yaml").write_text(
+        "records: []\npromotion_batches: broken\n", encoding="utf-8"
+    )
+    config = ProjectConfig.load(tmp_path)
+    journeys, _warnings = source_journeys(config)
+    assert [journey.state for journey in journeys] == [FINISH_ARCHIVE_UNREADABLE]
+
+    monkeypatch.setattr(journey_application, "list_finish_receipts", pytest.fail)
+
+    assert journey_application.source_names(config) == ("week-8.pdf",)

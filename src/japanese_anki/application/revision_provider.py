@@ -5,11 +5,12 @@ only the provider-specific request: planning its exact bytes, preparing its
 authentication before authority exists, dispatching it, and decoding an exact
 captured reply.  Both transports therefore share one byte-oriented capture
 boundary even though Anthropic's API returns an SDK object and Claude Code
-returns a JSON envelope on stdout.
+streams JSON frames on stdout.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -17,6 +18,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -44,17 +46,8 @@ __all__ = [
 ANTHROPIC_API_PROVIDER = "anthropic-api"
 CLAUDE_CODE_PROVIDER = "claude-code"
 
-_STRUCTURED_RESPONSE_MODE = "structured"
-_PLAIN_MARKDOWN_RESPONSE_MODE = "plain-markdown"
-_PLAIN_MARKDOWN_RESPONSE_CONTRACT = MappingProxyType(
-    {
-        "type": "string",
-        "contentMediaType": "text/markdown",
-        "description": "One nonblank Markdown answer in the Claude JSON result envelope.",
-    }
-)
-
 Runner = Callable[..., subprocess.CompletedProcess[Any]]
+Spawn = Callable[..., subprocess.Popen[bytes]]
 Which = Callable[..., str | None]
 Capture = Callable[[bytes], None]
 
@@ -290,7 +283,7 @@ class RevisionProvider(Protocol):
         system_blocks: Sequence[Mapping[str, Any]],
         user_turn: str,
         schema: Any,
-        response_mode: str = _STRUCTURED_RESPONSE_MODE,
+        effort: str | None,
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
@@ -311,8 +304,10 @@ class RevisionProvider(Protocol):
         prepared: PreparedRevisionProvider,
         *,
         capture: Capture,
-        runner: Runner = subprocess.run,
+        spawn: Spawn = subprocess.Popen,
         api_call: Callable[..., Any] | None = None,
+        frame: Callable[[str], None] | None = None,
+        preview: Callable[[str], None] | None = None,
     ) -> claude_client.CallResult: ...
 
     def recover(
@@ -407,40 +402,44 @@ def _validate_cli_channels(plan: RevisionProviderPlan) -> Mapping[str, Any]:
             )
         return argv[positions[0] + 1]
 
-    if "response_mode" not in plan.transport:
-        response_mode = _STRUCTURED_RESPONSE_MODE
-    elif plan.transport.get("response_mode") == _PLAIN_MARKDOWN_RESPONSE_MODE:
-        response_mode = _PLAIN_MARKDOWN_RESPONSE_MODE
-    else:
+    try:
+        embedded_schema = json.loads(option("--json-schema"))
+    except json.JSONDecodeError as exc:
         raise RevisionProviderError(
-            "Claude Code plan has an invalid response mode."
-        )
-    invalid_response_contract = False
-    if response_mode == _STRUCTURED_RESPONSE_MODE:
-        try:
-            embedded_schema = json.loads(option("--json-schema"))
-        except json.JSONDecodeError as exc:
-            raise RevisionProviderError(
-                "Claude Code plan has an invalid JSON schema."
-            ) from exc
-        invalid_response_contract = (
-            not isinstance(embedded_schema, Mapping)
-            or prompts.schema_fingerprint(embedded_schema)
-            != plan.response_schema_fingerprint
-        )
-    else:
-        invalid_response_contract = (
-            "--json-schema" in argv
-            or plan.response_schema_fingerprint
-            != prompts.schema_fingerprint(
-                _plain_value(_PLAIN_MARKDOWN_RESPONSE_CONTRACT)
-            )
-        )
+            "Claude Code plan has an invalid JSON schema."
+        ) from exc
+    invalid_response_contract = (
+        not isinstance(embedded_schema, Mapping)
+        or prompts.schema_fingerprint(embedded_schema)
+        != plan.response_schema_fingerprint
+    )
+    # The depth is bound three ways: the command's option, the transport
+    # identity the fingerprint covers, and the environment the child runs
+    # under. They are compared against each other and against the CLI's own
+    # vocabulary — never against today's configured level — so a recovered plan
+    # is validated entirely from its stored bytes.
+    stored_effort = plan.transport.get("effort")
+    bound_effort = {
+        option("--effort"),
+        str(stored_effort),
+        str(plan.transport["controlled_environment"]["CLAUDE_CODE_EFFORT_LEVEL"]),
+    }
+    # The whole command is bound, not a list of flags: it is rebuilt from the
+    # plan's own model, prompt, schema and depth and compared as one value. A
+    # stored plan that dropped --safe-mode, or asked for the single-envelope
+    # output this module can no longer read, fails the same comparison as one
+    # with the wrong model, and a flag added to _cli_argv is bound the moment
+    # it exists.
     if (
-        option("--model") != plan.model
-        or option("--system-prompt") != _combined_system_prompt(plan.system_blocks)
-        or option("--effort")
-        != str(plan.transport["controlled_environment"]["CLAUDE_CODE_EFFORT_LEVEL"])
+        tuple(argv)
+        != _cli_argv(
+            model=plan.model,
+            system_prompt=_combined_system_prompt(plan.system_blocks),
+            schema_json=option("--json-schema"),
+            effort=str(stored_effort),
+        )
+        or stored_effort not in claude_client.EFFORT_LEVELS
+        or len(bound_effort) != 1
         or invalid_response_contract
     ):
         raise RevisionProviderError(
@@ -502,20 +501,15 @@ class _AnthropicAPIRevisionProvider:
         system_blocks: Sequence[Mapping[str, Any]],
         user_turn: str,
         schema: Any,
-        response_mode: str = _STRUCTURED_RESPONSE_MODE,
+        effort: str | None,
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
     ) -> RevisionProviderPlan:
         del style_guide, task_template, env, runner, which
-        if response_mode != _STRUCTURED_RESPONSE_MODE:
-            raise RevisionProviderError(
-                "Anthropic API revisions require structured responses."
-            )
         _require_supported_model(model)
         wire_schema = claude_client.wire_schema(schema)
         blocks = tuple(_frozen_mapping(block) for block in system_blocks)
-        effort = claude_client.effort_for(model)
         # One owner for the API request shape: this is the same helper used by
         # claude_client.parse_call immediately before the SDK dispatches it.
         request = claude_client.request_body(
@@ -585,10 +579,14 @@ class _AnthropicAPIRevisionProvider:
         prepared: PreparedRevisionProvider,
         *,
         capture: Capture,
-        runner: Runner = subprocess.run,
+        spawn: Spawn = subprocess.Popen,
         api_call: Callable[..., Any] | None = None,
+        frame: Callable[[str], None] | None = None,
+        preview: Callable[[str], None] | None = None,
     ) -> claude_client.CallResult:
-        del runner
+        # The SDK returns one object rather than a stream of frames, so this
+        # transport has nothing to spool or preview.
+        del spawn, frame, preview
         plan = prepared.plan
         _validate_plan(plan, self.name)
         _validate_api_channels(plan)
@@ -626,21 +624,45 @@ class _AnthropicAPIRevisionProvider:
         return _api_result_from_reply(plan, raw_reply)
 
 
-_CONTROLLED_CLAUDE_ENV = MappingProxyType(
-    {
-        "CLAUDE_CODE_SAFE_MODE": "1",
-        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-        "CLAUDE_CODE_EFFORT_LEVEL": claude_client.DEFAULT_EFFORT,
-        "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(claude_client.DEFAULT_MAX_TOKENS),
-        "MAX_STRUCTURED_OUTPUT_RETRIES": "0",
-        "CLAUDE_CODE_MAX_TURNS": "1",
-        "CLAUDE_CODE_MAX_RETRIES": "0",
-        "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS": "1",
-        "CLAUDE_CODE_FORK_SUBAGENT": "0",
-        "CLAUDE_CODE_DISABLE_WORKFLOWS": "1",
-    }
-)
+def _required_effort(effort: str | None) -> str:
+    """The depth for one Claude Code call, which is never absent.
+
+    The CLI takes ``--effort`` on every invocation, so there is no shape of
+    this request that omits it — unlike the API, whose older models reject the
+    key outright and must be sent none.
+    """
+    if effort is None:
+        raise RevisionProviderError(
+            "Claude Code revisions need one reasoning depth; the CLI takes "
+            "--effort on every call."
+        )
+    return effort
+
+
+def _controlled_claude_environment(effort: str) -> Mapping[str, str]:
+    """The exact environment one planned Claude Code call runs under.
+
+    Built per plan rather than held as a module constant because the depth is
+    the caller's, and the plan stores these bytes: dispatch and recovery both
+    read the stored mapping, so the environment a call ran under is the one its
+    fingerprint covers.
+    """
+    return MappingProxyType(
+        {
+            "CLAUDE_CODE_SAFE_MODE": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+            "CLAUDE_CODE_EFFORT_LEVEL": effort,
+            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(claude_client.DEFAULT_MAX_TOKENS),
+            "MAX_STRUCTURED_OUTPUT_RETRIES": "0",
+            "CLAUDE_CODE_MAX_TURNS": "1",
+            "CLAUDE_CODE_MAX_RETRIES": "0",
+            "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS": "1",
+            "CLAUDE_CODE_FORK_SUBAGENT": "0",
+            "CLAUDE_CODE_DISABLE_WORKFLOWS": "1",
+        }
+    )
+
 
 _HOST_ENV_ALLOWLIST = frozenset(
     {
@@ -657,13 +679,14 @@ _HOST_ENV_ALLOWLIST = frozenset(
 
 
 def _sanitized_claude_environment(
-    env: Mapping[str, str] | None = None,
+    env: Mapping[str, str] | None,
+    controlled: Mapping[str, str],
 ) -> dict[str, str]:
     source = os.environ if env is None else env
     clean = {
         name: str(source[name]) for name in _HOST_ENV_ALLOWLIST if name in source
     }
-    clean.update(_CONTROLLED_CLAUDE_ENV)
+    clean.update({str(name): str(value) for name, value in controlled.items()})
     return clean
 
 
@@ -732,8 +755,9 @@ def _probe_claude(
     env: Mapping[str, str] | None,
     runner: Runner,
     which: Which,
+    controlled: Mapping[str, str],
 ) -> tuple[str, dict[str, str], Mapping[str, Any], str]:
-    clean = _sanitized_claude_environment(env)
+    clean = _sanitized_claude_environment(env, controlled)
     executable = _resolve_claude(which, clean)
     with tempfile.TemporaryDirectory(prefix="janki-claude-probe-") as temporary:
         version_output = _run_probe(
@@ -795,9 +819,11 @@ def _combined_system_prompt(blocks: Sequence[Mapping[str, Any]]) -> str:
 
 
 def _cli_argv(
-    *, model: str, system_prompt: str, schema_json: str | None
+    *, model: str, system_prompt: str, schema_json: str, effort: str
 ) -> tuple[str, ...]:
-    argv = (
+    # ``--verbose`` is not optional decoration: with ``--print`` the CLI exits 1
+    # on ``--output-format=stream-json`` without it.
+    return (
         "claude",
         "-p",
         "--safe-mode",
@@ -810,16 +836,16 @@ def _cli_argv(
         "dontAsk",
         "--prompt-suggestions",
         "false",
+        "--verbose",
         "--output-format",
-        "json",
+        "stream-json",
+        "--include-partial-messages",
         "--model",
         model,
         "--effort",
-        claude_client.DEFAULT_EFFORT,
-    )
-    if schema_json is not None:
-        argv += ("--json-schema", schema_json)
-    return argv + (
+        effort,
+        "--json-schema",
+        schema_json,
         "--system-prompt",
         system_prompt,
     )
@@ -831,44 +857,38 @@ def _claude_code_plan(
     system_blocks: Sequence[Mapping[str, Any]],
     user_turn: str,
     schema: Any,
+    effort: str,
     auth: Mapping[str, Any],
     version: str,
-    response_mode: str = _STRUCTURED_RESPONSE_MODE,
 ) -> RevisionProviderPlan:
     _require_supported_model(model)
-    if response_mode == _STRUCTURED_RESPONSE_MODE:
-        response_contract = _neutral_wire_schema(schema)
-        schema_json: str | None = _canonical_json(response_contract)
-    elif response_mode == _PLAIN_MARKDOWN_RESPONSE_MODE:
-        response_contract = _PLAIN_MARKDOWN_RESPONSE_CONTRACT
-        schema_json = None
-    else:
-        raise RevisionProviderError(
-            f"Unknown Claude Code response mode {response_mode!r}."
-        )
+    response_contract = _neutral_wire_schema(schema)
+    schema_json = _canonical_json(response_contract)
     blocks = tuple(_frozen_mapping(block) for block in system_blocks)
     argv = _cli_argv(
         model=model,
         system_prompt=_combined_system_prompt(blocks),
         schema_json=schema_json,
+        effort=effort,
     )
-    transport_value: dict[str, Any] = {
-        "kind": "claude-code-cli",
-        "cli": "claude",
-        "cli_version": version,
-        "argv": argv,
-        "cwd": "fresh-empty-temporary-directory",
-        "stdin": "exact-user-turn-utf8",
-        "controlled_environment": _CONTROLLED_CLAUDE_ENV,
-    }
-    if response_mode == _PLAIN_MARKDOWN_RESPONSE_MODE:
-        transport_value["response_mode"] = response_mode
-    transport = _frozen_mapping(transport_value)
+    controlled = _controlled_claude_environment(effort)
+    transport = _frozen_mapping(
+        {
+            "kind": "claude-code-cli",
+            "cli": "claude",
+            "cli_version": version,
+            "argv": argv,
+            "cwd": "fresh-empty-temporary-directory",
+            "stdin": "exact-user-turn-utf8",
+            "effort": effort,
+            "controlled_environment": controlled,
+        }
+    )
     request_bytes = _canonical_json(
         {
             "argv": argv,
             "cli_version": version,
-            "controlled_environment": dict(_CONTROLLED_CLAUDE_ENV),
+            "controlled_environment": dict(controlled),
             "cwd": "fresh-empty-temporary-directory",
             "stdin_utf8": user_turn,
         }
@@ -901,20 +921,33 @@ def _claude_code_plan(
 def _cli_result_from_reply(
     plan: RevisionProviderPlan, raw_reply: bytes
 ) -> claude_client.CallResult:
-    payload = _strict_json(raw_reply, label="Claude Code reply")
-    if payload.get("type") != "result":
-        raise RevisionProviderError("Captured Claude Code reply is not a result envelope.")
+    """Decode one captured stream, which settles in exactly one result frame.
+
+    Every line is read, not just the last: a capture that is not wholly
+    well-formed stream-json, or that carries no single result frame, is a reply
+    janki cannot read rather than a reply that said nothing.
+    """
+    results: list[Mapping[str, Any]] = []
+    for number, line in enumerate(raw_reply.split(b"\n"), start=1):
+        if not line.strip():
+            continue
+        frame = _strict_json(line, label=f"Claude Code stream frame {number}")
+        kind = frame.get("type")
+        if not isinstance(kind, str) or not kind:
+            raise RevisionProviderError(
+                f"Captured Claude Code stream frame {number} has no frame type."
+            )
+        if kind == "result":
+            results.append(frame)
+    if len(results) != 1:
+        raise RevisionProviderError(
+            f"Captured Claude Code stream carries {len(results)} result frames; "
+            "exactly one settles a call."
+        )
+    payload = results[0]
     if payload.get("is_error") is not False or payload.get("subtype") != "success":
         reason = str(payload.get("subtype") or "error")
         return claude_client.CallResult(None, reason, None)
-    if plan.transport.get("response_mode") == _PLAIN_MARKDOWN_RESPONSE_MODE:
-        answer = payload.get("result")
-        if not isinstance(answer, str) or not answer.strip():
-            raise RevisionProviderError(
-                "Claude Code finished normally but returned no nonblank Markdown "
-                "result."
-            )
-        return claude_client.CallResult(answer, "end_turn", None)
     if "structured_output" not in payload:
         raise RevisionProviderError(
             "Claude Code finished normally but returned no structured output."
@@ -929,6 +962,149 @@ def _cli_result_from_reply(
     return claude_client.CallResult(parsed, "end_turn", None)
 
 
+class _FirstTextPreview:
+    """Forward the first assistant text block as the CLI streams it.
+
+    Only that block previews the answer.  Thinking is not the answer, the
+    structured result arrives later as a tool call whose partial JSON is not
+    displayable text, and a later message belongs to the schema round trip.
+    The preview is best effort throughout: one decoding or callback failure
+    ends it for the rest of the call and never touches the capture.
+    """
+
+    def __init__(self, forward: Callable[[str], None]) -> None:
+        self._forward: Callable[[str], None] | None = forward
+        self._index: Any = None
+
+    def observe(self, line: bytes) -> None:
+        if self._forward is None:
+            return
+        try:
+            self._observe(line)
+        except Exception:  # noqa: BLE001 - a preview never fails a paid call
+            self._forward = None
+
+    def _observe(self, line: bytes) -> None:
+        if not line.strip():
+            return
+        payload = _strict_json(line, label="Claude Code preview frame")
+        if payload.get("type") != "stream_event":
+            return
+        event = payload.get("event")
+        if not isinstance(event, Mapping):
+            return
+        kind = event.get("type")
+        if kind == "message_stop":
+            # The first message ends the preview: everything after it is the
+            # schema round trip, so nothing later can be forwarded.
+            self._forward = None
+            return
+        if kind == "content_block_start":
+            block = event.get("content_block")
+            if (
+                self._index is None
+                and isinstance(block, Mapping)
+                and block.get("type") == "text"
+            ):
+                self._index = event.get("index")
+            return
+        if kind != "content_block_delta" or self._index is None:
+            return
+        if event.get("index") != self._index:
+            return
+        delta = event.get("delta")
+        if not isinstance(delta, Mapping) or delta.get("type") != "text_delta":
+            return
+        text = delta.get("text")
+        if isinstance(text, str) and text:
+            assert self._forward is not None
+            self._forward(text)
+
+
+def _send_claude_prompt(process: Any, prompt: bytes) -> None:
+    """Write one exact user turn without blocking the frame reader.
+
+    The close is the child's end-of-prompt, so it happens even when the write
+    tore: a CLI still waiting on stdin would otherwise never reach EOF, and
+    the pipe would outlive the turn holding a file descriptor open.
+    """
+    try:
+        process.stdin.write(prompt)
+    except (OSError, ValueError):
+        # The child exited before reading its prompt; its exit code and
+        # captured frames are what report that, not a torn write.
+        pass
+    finally:
+        with contextlib.suppress(OSError, ValueError):
+            process.stdin.close()
+
+
+def _stream_claude_reply(
+    process: Any,
+    prompt: bytes,
+    *,
+    frame: Callable[[str], None] | None,
+    preview: Callable[[str], None] | None,
+) -> tuple[int, list[bytes], tuple[int, UnicodeDecodeError] | None]:
+    """Spool every exact byte, then read what the bytes say, then reap.
+
+    The reply is the child's, paid for whatever it says, so a line joins the
+    spool before anything looks at it.  The frame callback makes that line
+    durable elsewhere and runs before the next read; a failure there means
+    janki can no longer prove it holds what it is about to be told, so the
+    call ends where it stands and dispatch captures nothing.  A line that is
+    not UTF-8 is reported instead: the spool keeps growing to EOF so the exact
+    reply is still captured, and the returned marker names the frame that
+    cannot be read.
+
+    However this ends, the child is killed on the way out and always waited
+    for — before the writer is joined, since a writer blocked on a full stdin
+    pipe is released by EPIPE only once the child is dead.
+    """
+    writer = threading.Thread(
+        target=_send_claude_prompt, args=(process, prompt), daemon=True
+    )
+    writer.start()
+    watcher = None if preview is None else _FirstTextPreview(preview)
+    chunks: list[bytes] = []
+    unreadable: tuple[int, UnicodeDecodeError] | None = None
+    returncode: int
+    try:
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                break
+            chunks.append(line)
+            if unreadable is not None:
+                # Nothing downstream can read this stream any more; only its
+                # exact bytes still matter.
+                continue
+            try:
+                text = line.decode("utf-8", errors="strict")
+            except UnicodeDecodeError as exc:
+                unreadable = (len(chunks), exc)
+                continue
+            if frame is not None:
+                try:
+                    frame(text)
+                except Exception as exc:  # noqa: BLE001 - any failure ends the call
+                    raise RevisionProviderError(
+                        f"Claude Code frame capture failed after {len(chunks) - 1} "
+                        f"durable frames: {exc}"
+                    ) from exc
+            if watcher is not None:
+                watcher.observe(line)
+    except BaseException:
+        process.kill()
+        raise
+    finally:
+        with contextlib.suppress(OSError):
+            process.stdout.close()
+        returncode = process.wait()
+        writer.join()
+    return returncode, chunks, unreadable
+
+
 class _ClaudeCodeRevisionProvider:
     name = CLAUDE_CODE_PROVIDER
 
@@ -941,20 +1117,28 @@ class _ClaudeCodeRevisionProvider:
         system_blocks: Sequence[Mapping[str, Any]],
         user_turn: str,
         schema: Any,
-        response_mode: str = _STRUCTURED_RESPONSE_MODE,
+        effort: str | None,
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
     ) -> RevisionProviderPlan:
         del style_guide, task_template
         _require_supported_model(model)
-        _, _, auth, version = _probe_claude(env=env, runner=runner, which=which)
+        # Before the probe, because the probe already runs under the depth the
+        # planned call will use.
+        depth = _required_effort(effort)
+        _, _, auth, version = _probe_claude(
+            env=env,
+            runner=runner,
+            which=which,
+            controlled=_controlled_claude_environment(depth),
+        )
         return _claude_code_plan(
             model=model,
             system_blocks=system_blocks,
             user_turn=user_turn,
             schema=schema,
-            response_mode=response_mode,
+            effort=depth,
             auth=auth,
             version=version,
         )
@@ -971,8 +1155,14 @@ class _ClaudeCodeRevisionProvider:
         del client
         _validate_plan(plan, self.name)
         _validate_cli_channels(plan)
+        # The environment dispatch runs under is the bound one, read back from
+        # the plan rather than rebuilt from today's module constants — so a
+        # depth or limit that changed since planning cannot reach the child.
         executable, clean, auth, version = _probe_claude(
-            env=env, runner=runner, which=which
+            env=env,
+            runner=runner,
+            which=which,
+            controlled=plan.transport["controlled_environment"],
         )
         if (
             dict(auth) != dict(plan.auth_metadata)
@@ -994,8 +1184,10 @@ class _ClaudeCodeRevisionProvider:
         prepared: PreparedRevisionProvider,
         *,
         capture: Capture,
-        runner: Runner = subprocess.run,
+        spawn: Spawn = subprocess.Popen,
         api_call: Callable[..., Any] | None = None,
+        frame: Callable[[str], None] | None = None,
+        preview: Callable[[str], None] | None = None,
     ) -> claude_client.CallResult:
         del api_call
         plan = prepared.plan
@@ -1007,16 +1199,19 @@ class _ClaudeCodeRevisionProvider:
         if not isinstance(stable_argv, list) or not stable_argv or stable_argv[0] != "claude":
             raise RevisionProviderError("Claude Code plan has an invalid command identity.")
         command = [prepared.executable, *[str(value) for value in stable_argv[1:]]]
-        with tempfile.TemporaryDirectory(prefix="janki-claude-revise-") as temporary:
+        prompt = str(request["stdin_utf8"]).encode("utf-8")
+        with (
+            tempfile.TemporaryDirectory(prefix="janki-claude-revise-") as temporary,
+            tempfile.TemporaryFile(prefix="janki-claude-stderr-") as diagnostics,
+        ):
             try:
-                completed = runner(
+                process = spawn(
                     command,
-                    input=str(request["stdin_utf8"]).encode("utf-8"),
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=diagnostics,
                     cwd=temporary,
                     env=dict(prepared.environment),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    check=False,
                 )
             except FileNotFoundError as exc:
                 raise RevisionProviderError(
@@ -1026,18 +1221,28 @@ class _ClaudeCodeRevisionProvider:
                 raise RevisionProviderError(
                     f"Could not start the prepared Claude Code CLI: {exc}"
                 ) from exc
-        raw_reply = _as_bytes(completed.stdout)
+            returncode, chunks, unreadable = _stream_claude_reply(
+                process, prompt, frame=frame, preview=preview
+            )
+            diagnostics.seek(0)
+            stderr_bytes = diagnostics.read()
+        raw_reply = b"".join(chunks)
         if raw_reply:
             # The exact paid/capped reply is durable before exit classification,
             # outer JSON decoding, or Pydantic validation.
             capture(raw_reply)
-        if completed.returncode != 0:
+        if unreadable is not None:
+            number, error = unreadable
+            raise RevisionProviderError(
+                f"Claude Code stream frame {number} is not UTF-8: {error}"
+            ) from error
+        if returncode != 0:
             diagnostic = redact_environment_credentials(
-                _as_bytes(completed.stderr).decode("utf-8", errors="replace")
+                stderr_bytes.decode("utf-8", errors="replace")
             ).strip()
             suffix = f": {diagnostic[-1000:]}" if diagnostic else ""
             raise RevisionProviderError(
-                f"Claude Code {plan.model} failed (exit {completed.returncode}){suffix}"
+                f"Claude Code {plan.model} failed (exit {returncode}){suffix}"
             )
         if not raw_reply:
             raise RevisionProviderError(

@@ -435,14 +435,16 @@ def _plan_card_revision(
         owner_instruction=owner_instruction,
         records=records,
     )
+    chosen_model = str(config.revise_model).strip()
     provider_plan = revision_provider.plan_provider(
         str(config.revise_provider).strip().lower(),
-        model=str(config.revise_model).strip(),
+        model=chosen_model,
         style_guide=style_guide,
         task_template=task_template,
         system_blocks=system_blocks,
         user_turn=user_turn,
         schema=schema,
+        effort=claude_client.effort_for(chosen_model),
     )
     stem = f"card-revision-{operation}"
     manifest_path = config.staging_dir.resolve() / f"{stem}.request.json"
@@ -763,33 +765,6 @@ def _report(progress: Callable[[str], None] | None, label: str) -> None:
         progress(label)
 
 
-def _cancel_before_send(
-    config: ProjectConfig,
-    operation_id: str,
-    exc: BaseException,
-) -> CardRevisionRunError:
-    try:
-        operations.OperationJournal.load(config.operations_file).advance(
-            operation_id,
-            "canceled_before_send",
-            detail="The durable card-revision request manifest could not be prepared.",
-        )
-    except JankiError as journal_error:
-        return CardRevisionRunError(
-            f"Revision {operation_id} was not sent, but request publication failed "
-            f"and its authority could not be retired: {exc}; {journal_error}. "
-            "Inspect janki operations before retrying.",
-            operation_id=operation_id,
-            provider_dispatched=False,
-        )
-    return CardRevisionRunError(
-        f"Revision {operation_id} was canceled before send because its exact request "
-        f"manifest could not be made durable: {exc}",
-        operation_id=operation_id,
-        provider_dispatched=False,
-    )
-
-
 def run_card_revision(
     config: ProjectConfig,
     expected: CardRevisionPlan,
@@ -798,6 +773,7 @@ def run_card_revision(
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
+    provider_spawn: revision_provider.Spawn = subprocess.Popen,
     api_call: Callable[..., Any] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> CardRevisionRunResult:
@@ -866,7 +842,16 @@ def run_card_revision(
                 expected_absent=True,
             )
         except Exception as exc:  # noqa: BLE001 - publication may have landed
-            raise _cancel_before_send(config, fresh.operation_id, exc) from exc
+            raise operations.cancel_before_send(
+                config.operations_file,
+                fresh.operation_id,
+                error=CardRevisionRunError,
+                label="Revision",
+                detail=(
+                    "The durable card-revision request manifest could not be prepared."
+                ),
+                cause=exc,
+            ) from exc
 
     try:
         journal.advance(fresh.operation_id, "dispatching")
@@ -908,7 +893,7 @@ def run_card_revision(
         call_result = provider.dispatch(
             prepared,
             capture=capture,
-            runner=provider_runner,
+            spawn=provider_spawn,
             api_call=api_call,
         )
         captured = operations.OperationJournal.load(config.operations_file).operations.get(

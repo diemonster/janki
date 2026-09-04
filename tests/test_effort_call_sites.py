@@ -11,6 +11,7 @@ Deleting `effort=` from any one of them used to pass the whole suite.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,7 +19,10 @@ from typing import Any
 
 import pytest
 
+from conftest import seed_prompts
 from japanese_anki import claude_client, enrich, extract
+from japanese_anki.application import assistant_agent
+from japanese_anki.config import ProjectConfig
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
@@ -179,6 +183,50 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     )
     assert pair["output_config"].get("effort") is None
     assert pair["thinking"] == {"type": "adaptive"}
+
+
+@pytest.mark.parametrize(
+    "level", [level for level in claude_client.EFFORT_LEVELS if level != "medium"]
+)
+def test_the_assistant_turn_takes_its_depth_from_config_not_the_model(
+    tmp_path: Path, level: str
+) -> None:
+    """The one pass whose depth is configured rather than model-resolved.
+
+    Every other site here answers "what does this model accept"; conversation
+    answers "how long should one answered-and-read turn take". Resolving it
+    from the model instead would send `xhigh` — measured at 10.8 s against
+    8.5 s — while the owner's `janki.toml` said otherwise, and nothing else in
+    the suite would notice.
+
+    Every level *except* the configured default, because configuring the
+    default is how this test used to pass against a hardcoded `"medium"` at the
+    call site: a value the owner never has to write is not evidence that the
+    one they did write is read.
+    """
+    (tmp_path / "janki.toml").write_text(
+        "[assistant]\n"
+        "enabled = true\n"
+        'provider = "anthropic-api"\n'
+        'model = "claude-opus-5"\n'
+        f'effort = "{level}"\n',
+        encoding="utf-8",
+    )
+    seed_prompts(tmp_path)
+    config = ProjectConfig.load(tmp_path)
+    wire = '{"kind":"assistant_turn_context"}'
+    context = assistant_agent.AgentContext(
+        wire=wire,
+        fingerprint=hashlib.sha256(wire.encode("utf-8")).hexdigest(),
+        resource_ids=("resource_deck_01",),
+    )
+
+    plan = assistant_agent.plan_agent(config, context=context, message="Explain it.")
+
+    assert config.assistant_model == NEW
+    assert claude_client.effort_for(NEW) == "xhigh"
+    assert config.assistant_effort == level
+    assert plan.provider_plan.transport["effort"] == level
 
 
 def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(

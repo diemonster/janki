@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - exercised by the bootstrap environment
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
+    YAML_LOADER,
     DataError,
     RecordsRevision,
     atomic_write_bytes_bound,
@@ -719,7 +720,7 @@ def deck_declared_record_versions_from_revision(
     if revision.text is None:
         raise DataError(f"Deck file no longer exists: {target}")
     try:
-        raw = yaml.safe_load(revision.text)
+        raw = yaml.load(revision.text, Loader=YAML_LOADER)
     except yaml.YAMLError as exc:
         raise DataError(f"Could not parse {target}: {exc}") from exc
     return _deck_declared_record_versions_from_document(target, raw)

@@ -14,7 +14,6 @@ package, or make an owner-only decision.
 from __future__ import annotations
 
 import base64
-import contextlib
 import hashlib
 import json
 import shutil
@@ -23,7 +22,7 @@ import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from japanese_anki import ai_schema, claude_client, operations, prompts
 from japanese_anki.application import revision_provider
@@ -469,6 +468,9 @@ def _plan_agent(
     model = str(config.assistant_model).strip()
     if not model:
         raise AgentApplicationError("Assistant model must be nonblank; nothing was sent.")
+    # The depth is configured rather than model-resolved: one turn is answered
+    # and read immediately, unlike a card-writing pass. Whether the model takes
+    # the key at all is the provider's own `plan` refusal, which runs first.
     task_template = prompts.load(config.root, "assistant-agent")
     blocks = tuple(claude_client.system_blocks(task_template))
     user_turn = _user_turn(
@@ -484,6 +486,7 @@ def _plan_agent(
         system_blocks=blocks,
         user_turn=user_turn,
         schema=ai_schema.assistant_agent_schema(),
+        effort=config.assistant_effort,
         env=provider_env,
         runner=provider_runner,
         which=provider_which,
@@ -508,39 +511,6 @@ def plan_agent(
 ) -> AgentPlan:
     """Plan one repository-aware turn without writing or granting authority."""
     return _plan_agent(config, context=context, message=message, history=history)
-
-
-def _fresh_plan(
-    config: ProjectConfig,
-    expected: AgentPlan,
-    *,
-    context_loader: Callable[[], AgentContext],
-    provider_env: Mapping[str, str] | None,
-    provider_runner: Callable[..., Any],
-    provider_which: Callable[..., str | None],
-) -> AgentPlan:
-    if expected.repository_root != config.root.resolve():
-        raise AgentApplicationError(
-            "This Assistant request belongs to a different repository; nothing was sent."
-        )
-    fresh = _plan_agent(
-        config,
-        context=context_loader(),
-        message=expected.message,
-        history=expected.history,
-        provider_env=provider_env,
-        provider_runner=provider_runner,
-        provider_which=provider_which,
-    )
-    if (
-        fresh.context != expected.context
-        or fresh.request_fingerprint != expected.request_fingerprint
-    ):
-        raise AgentApplicationError(
-            "The Assistant context, prompt, provider, model, authentication, or "
-            "message changed after planning; nothing was sent."
-        )
-    return fresh
 
 
 def _decode_answer(
@@ -797,31 +767,76 @@ def _commit_captured_failure(
     return True
 
 
+def _retire_unsent_turn(
+    config: ProjectConfig,
+    operation_id: str,
+    *,
+    detail: str,
+    cause: BaseException,
+) -> NoReturn:
+    """Retire authority for a turn whose preparation failed before any send."""
+    raise operations.cancel_before_send(
+        config.operations_file,
+        operation_id,
+        error=AgentRunError,
+        label="Assistant turn",
+        detail=detail,
+        cause=cause,
+    ) from cause
+
+
 def run_agent(
     config: ProjectConfig,
     expected: AgentPlan,
     *,
-    context_loader: Callable[[], AgentContext],
     client: Any | None = None,
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
+    provider_spawn: revision_provider.Spawn = subprocess.Popen,
     api_call: Callable[..., Any] | None = None,
     progress: Callable[[str], None] | None = None,
+    preview: Callable[[str], None] | None = None,
 ) -> AgentRunResult:
-    """Dispatch one turn, capture it, and persist its untrusted closed intent."""
+    """Dispatch one turn, capture it, and persist its untrusted closed intent.
+
+    Sending the message authorizes exactly that one journaled turn over that
+    message and its exact bounded context, so this dispatches the plan it was
+    handed rather than replacing it with a newer one.  What the model receives
+    is still bound to what was fingerprinted: the context is checked against
+    its own fingerprint here, the plan's user turn embeds that exact wire, the
+    provider's request bytes embed the user turn, and the provider refuses
+    request bytes or a prompt channel that no longer match.  Preparation still
+    refuses authentication or CLI drift before any authority exists.
+    """
     _report_progress(progress, "Preparing answer")
-    fresh = _fresh_plan(
-        config,
-        expected,
-        context_loader=context_loader,
-        provider_env=provider_env,
-        provider_runner=provider_runner,
-        provider_which=provider_which,
-    )
-    provider = revision_provider.provider_for(fresh.provider)
+    if expected.repository_root != config.root.resolve():
+        raise AgentApplicationError(
+            "This Assistant request belongs to a different repository; nothing was sent."
+        )
+    _validated_context(expected.context)
+    # The fingerprint binds the context *wire* and nothing else, so the ids the
+    # turn is authorized over — plus its focus, history and message — are bound
+    # only where they already are: inside the user turn the provider is sent.
+    # Rebuild it. Without this a plan whose `resource_ids` were widened after
+    # planning dispatches a request that never mentions the extra resource,
+    # then has an intent naming it accepted and committed into a manifest that
+    # `recover_agent` refuses to read back.
+    if (
+        _user_turn(
+            context=expected.context,
+            history=expected.history,
+            message=expected.message,
+        )
+        != expected.user_turn
+        or expected.provider_plan.user_turn != expected.user_turn
+    ):
+        raise AgentApplicationError(
+            "Assistant plan no longer matches its dispatched user turn; nothing was sent."
+        )
+    provider = revision_provider.provider_for(expected.provider)
     prepared_provider = provider.prepare(
-        fresh.provider_plan,
+        expected.provider_plan,
         env=provider_env,
         runner=provider_runner,
         which=provider_which,
@@ -829,31 +844,20 @@ def run_agent(
     )
     operation_id = str(uuid.uuid4())
     manifest_path = config.assistant_dir / f"{operation_id}.json"
-    prompt_path = prompts.path_for(config.root, "assistant-agent")
 
-    with contextlib.ExitStack() as locks:
-        for path in sorted({manifest_path, prompt_path}, key=lambda item: str(item)):
-            locks.enter_context(exclusive_path_lock(path))
-        fresh = _fresh_plan(
-            config,
-            expected,
-            context_loader=context_loader,
-            provider_env=provider_env,
-            provider_runner=provider_runner,
-            provider_which=provider_which,
-        )
+    with exclusive_path_lock(manifest_path):
         operations.prepare_artifact_store(config.operations_file)
         prepare_bound_directory(config.assistant_dir)
         journal = operations.OperationJournal.load(config.operations_file)
-        source = fresh.context.focus_resource_id or "janki-project"
+        source = expected.context.focus_resource_id or "janki-project"
         try:
             journal.authorize(
                 operation_id,
                 kind="assistant_agent",
                 source_file=source,
-                source_sha256=fresh.context.fingerprint,
-                request_fp=fresh.request_fingerprint,
-                model=fresh.model,
+                source_sha256=expected.context.fingerprint,
+                request_fp=expected.request_fingerprint,
+                model=expected.model,
             )
         except Exception as exc:  # noqa: BLE001 - authority may have landed
             raise AgentRunError(
@@ -862,31 +866,27 @@ def run_agent(
                 operation_id=operation_id,
                 provider_dispatched=False,
             ) from exc
-        request_manifest = _request_manifest(fresh, operation_id=operation_id)
+        try:
+            journal.begin_response_capture(operation_id)
+        except Exception as exc:  # noqa: BLE001 - preparation may have landed
+            _retire_unsent_turn(
+                config,
+                operation_id,
+                detail="The Assistant response frame spool could not be prepared.",
+                cause=exc,
+            )
+        request_manifest = _request_manifest(expected, operation_id=operation_id)
         request_text = _canonical_json(request_manifest, pretty=True) + "\n"
         request_revision = _sha256(request_text.encode("utf-8"))
         try:
             atomic_write_text_bound(manifest_path, request_text, expected_absent=True)
         except Exception as exc:  # noqa: BLE001 - publication may have landed
-            try:
-                operations.OperationJournal.load(config.operations_file).advance(
-                    operation_id,
-                    "canceled_before_send",
-                    detail="The durable Assistant request manifest could not be prepared.",
-                )
-            except JankiError as journal_error:
-                raise AgentRunError(
-                    f"Assistant turn {operation_id} was not sent, but its manifest "
-                    f"and authority could not be retired: {exc}; {journal_error}.",
-                    operation_id=operation_id,
-                    provider_dispatched=False,
-                ) from exc
-            raise AgentRunError(
-                f"Assistant turn {operation_id} was canceled before send because "
-                f"its exact request manifest could not be made durable: {exc}",
-                operation_id=operation_id,
-                provider_dispatched=False,
-            ) from exc
+            _retire_unsent_turn(
+                config,
+                operation_id,
+                detail="The durable Assistant request manifest could not be prepared.",
+                cause=exc,
+            )
 
     try:
         journal.advance(operation_id, "dispatching")
@@ -926,8 +926,10 @@ def run_agent(
         result = provider.dispatch(
             prepared_provider,
             capture=capture_reply,
-            runner=provider_runner,
+            spawn=provider_spawn,
             api_call=api_call,
+            frame=lambda payload: journal.append_response_frame(operation_id, payload),
+            preview=preview,
         )
         captured = operations.OperationJournal.load(config.operations_file).operations.get(
             operation_id
@@ -939,9 +941,9 @@ def run_agent(
             )
         answer, intents = _decode_answer(
             result,
-            model=fresh.model,
+            model=expected.model,
             captured=True,
-            context=fresh.context,
+            context=expected.context,
         )
     except Exception as exc:  # noqa: BLE001 - settle every post-dispatch failure
         try:
@@ -950,7 +952,7 @@ def run_agent(
                 _report_progress(progress, "Saving answer")
                 committed_failure = _commit_captured_failure(
                     config,
-                    fresh,
+                    expected,
                     operation_id=operation_id,
                     manifest_path=manifest_path,
                     request_manifest=request_manifest,
@@ -977,7 +979,7 @@ def run_agent(
     try:
         rendered = _complete_manifest(
             request_manifest,
-            fresh,
+            expected,
             answer=answer,
             action_intents=intents,
         )
@@ -1014,7 +1016,7 @@ def run_agent(
         action_intents=intents,
         operation_id=operation_id,
         manifest_path=manifest_path,
-        request_fingerprint=fresh.request_fingerprint,
+        request_fingerprint=expected.request_fingerprint,
     )
 
 

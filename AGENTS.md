@@ -96,7 +96,8 @@ or second-guesses what came back.
   planning at max (`.claude/agents/code-reviewer.md`, `.claude/agents/planner.md`).
   No model aliases in settings: the id is written out, so a harness alias
   change cannot silently swap the model. janki's own runtime calls follow the
-  same rule (`config.py` defaults, `claude_client.DEFAULT_EFFORT`).
+  same rule (`config.py` defaults, `claude_client.DEFAULT_EFFORT`; only the
+  ordinary Assistant turn takes a configured depth, `[assistant] effort`).
 - Run `make gates` before considering work complete: it runs ruff, pytest,
   and a sample deck build. Run it rather than its parts. Bare `pytest` and
   bare `janki` resolve through the venv's editable install to the *primary*

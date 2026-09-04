@@ -203,6 +203,42 @@ def test_append_fsyncs_each_exact_length_payload_and_sha_record_before_return(
     assert _spool_path(tmp_path).read_bytes() == _record(payload)
 
 
+def test_append_response_frame_reads_the_spool_a_bounded_number_of_times(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One frame costs a fixed number of whole-spool reads, not a growing one.
+
+    A streaming turn appends one frame per provider event and every read here
+    is the entire file so far, so each extra proof of the same bytes is another
+    quadratic term: six reads and seven decodes a frame made a 1000-frame
+    answer take 9.2 s, with the last frames costing 15 ms each. Two is the
+    working minimum — one snapshot to validate the durable head before the
+    write, one to confirm exactly what landed after it — and everything else
+    that must hold about the file is a stat, not a reread.
+    """
+    journal = _journal(tmp_path)
+    journal.begin_response_capture("op-1")
+    journal.advance("op-1", "dispatching")
+    journal.advance("op-1", "running")
+    real_read = operations._read_descriptor
+    reads: list[int] = []
+
+    def counting_read(descriptor: int) -> bytes:
+        reads[-1] += 1
+        return real_read(descriptor)
+
+    monkeypatch.setattr(operations, "_read_descriptor", counting_read)
+    for index in range(6):
+        reads.append(0)
+        journal.append_response_frame("op-1", f"frame {index}")
+
+    assert reads == [2] * 6
+    monkeypatch.undo()
+    assert journal.read_response_frames("op-1") == tuple(
+        f"frame {index}" for index in range(6)
+    )
+
+
 def test_response_spool_round_trips_complete_utf8_frames_without_parsing_json(
     tmp_path: Path,
 ) -> None:

@@ -37,6 +37,31 @@ class DataError(JankiError):
     pass
 
 
+def _require_libyaml(available: bool) -> None:
+    """Refuse a PyYAML that cannot supply the one loader, at import.
+
+    Without libyaml, `yaml.CSafeLoader` is not merely slow — the attribute is
+    absent, so every janki entry point would die with an `AttributeError` from
+    an import nobody wrote, naming a class no user has heard of. This is what
+    the wheel is missing and how to replace it.
+    """
+    if not available:
+        raise SystemExit(
+            "janki needs PyYAML built against libyaml (yaml.__with_libyaml__ is False). "
+            "Install libyaml (brew install libyaml / apt install libyaml-dev) and "
+            "reinstall: pip install --force-reinstall --no-cache-dir pyyaml"
+        )
+
+
+_require_libyaml(yaml.__with_libyaml__)
+
+# The one loader janki reads YAML with. PyYAML's pure-Python scanner costs 8x on
+# the 570 KB staging files the Assistant catalog reads on every turn, so libyaml
+# (`yaml.__with_libyaml__`) is a requirement of this project, not a fast path it
+# falls back from: a second loader is a second set of parse semantics.
+YAML_LOADER = yaml.CSafeLoader
+
+
 def _user_home() -> Path:
     """Return the current user's home so tests can isolate cache fallbacks."""
     return Path.home()
@@ -4003,7 +4028,7 @@ def _parse_structured_text(
     path: Path,
     text: str,
     *,
-    yaml_loader: type[yaml.SafeLoader] = yaml.SafeLoader,
+    yaml_loader: type[yaml.CSafeLoader] = YAML_LOADER,
 ) -> Any:
     suffix = path.suffix.lower()
     try:
@@ -4019,7 +4044,7 @@ def _parse_structured_text(
 def load_structured(
     path: Path,
     *,
-    yaml_loader: type[yaml.SafeLoader] = yaml.SafeLoader,
+    yaml_loader: type[yaml.CSafeLoader] = YAML_LOADER,
 ) -> Any:
     try:
         text = read_text_bound(path)

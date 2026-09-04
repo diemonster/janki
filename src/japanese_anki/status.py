@@ -63,7 +63,8 @@ from japanese_anki.models import (
     split_provisional,
 )
 from japanese_anki.staging import (
-    read_staging,
+    LiveStaging,
+    live_staging,
     require_resolved_coverage,
     validate_coverage_facts,
 )
@@ -424,16 +425,27 @@ def _pattern_review_state(
     return ("reviewed" if stored.reviewed else "unreviewed"), ""
 
 
-def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
+def collect_staged(
+    config: ProjectConfig,
+    *,
+    parsed: Sequence[LiveStaging] | None = None,
+) -> tuple[list[StagedFile], list[str]]:
     """Every row waiting for a human under ``staging_dir``.
 
     Held rows are the one category of record that is *not* in the collection and
     needs a person, so a report that never mentions them lets a review queue sit
     unnoticed forever. Unreadable files are warnings, not a dead report — the
     same rule the deck scan follows.
+
+    ``parsed`` is every live staging file as some caller has *already* read it
+    (`staging.live_staging`).  A half-megabyte staging file costs
+    ~90 ms to parse, so a caller that also needs source names or proposal kinds
+    reads once and hands the same entries to each answer — which also stops two
+    answers about one directory from disagreeing because a file changed between
+    their reads.  Unreadable entries still become the warnings above.
     """
     staged: list[StagedFile] = []
-    parsed: list[tuple[Path, list[VocabularyRecord], dict[str, Any]]] = []
+    readable: list[tuple[Path, list[VocabularyRecord], dict[str, Any]]] = []
     warnings: list[str] = []
     if not config.staging_dir.is_dir():
         # "No staging directory yet" and "staging_dir points at something that
@@ -446,19 +458,17 @@ def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
                 "queue could be read"
             )
         return staged, warnings
-    for path in sorted(
-        [*config.staging_dir.glob("*.yaml"), *config.staging_dir.glob("*.yml")]
-    ):
-        try:
-            records, meta = read_staging(path)
-        except JankiError as exc:
-            warnings.append(f"skipping staging file {path}: {exc}")
+    if parsed is None:
+        parsed = live_staging(config)
+    for entry in parsed:
+        if entry.records is None or entry.meta is None:
+            warnings.append(f"skipping staging file {entry.path}: {entry.error}")
             continue
-        parsed.append((path, records, meta))
+        readable.append((entry.path, entry.records, entry.meta))
 
     needs_pattern_store = any(
         not records and _looks_like_rich_extraction(meta)
-        for _path, records, meta in parsed
+        for _path, records, meta in readable
     )
     pattern_store: dict[str, patterns.PatternSet] = {}
     pattern_store_issue = ""
@@ -471,7 +481,7 @@ def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
                 f"could not inspect pattern review state in {config.patterns_file}: {exc}"
             )
 
-    for path, records, meta in parsed:
+    for path, records, meta in readable:
         # Promote uses this exact top-level value as the pattern-store key.
         # Whitespace is tested only for nonblankness, never normalized away;
         # advertising a stripped key could make status's command disagree with

@@ -1243,6 +1243,28 @@ description is superseded:
    Real-browser journeys with and without focus, including cross-deck change,
    still need owner acceptance.
 
+*Current progress 2026-09-03.* An ordinary turn now builds its bounded
+repository context exactly once. The re-plan under the dispatch lock mirrored a
+protected effect's owner gap, which an ordinary turn does not have: sending the
+message authorizes that one journaled turn over that message and its exact
+context. What binds the dispatched context to the fingerprinted one is
+structural and unchanged — the context is checked against its own fingerprint,
+the user turn embeds that wire, the request bytes embed the user turn, and
+preparation still refuses authentication or CLI-version drift before any
+authority exists. Repository YAML loads through libyaml everywhere, the source
+catalogue discloses names only, and `[assistant] effort` configures the one
+pass whose answer is read immediately rather than written into study content.
+The Claude Code transport is now `--verbose --output-format stream-json
+--include-partial-messages` over a spawned pipe: every exact frame is fsynced
+into the operation's response spool before the next one is read, the whole
+capture is the recoverable artifact, and the turn's answer is the single
+`result` frame's structured output. The first assistant text block streams to
+the composer as a live preview, which the validated answer always replaces —
+the two really differ, because the CLI writes prose first and calls for
+structured output afterwards. (`CLAUDE_CODE_MAX_TURNS=1` is in the controlled
+environment, yet the CLI reports `num_turns: 3` for that structured-output
+round trip.)
+
 - **Depends on:** W5. **Files:** `workbench/`, `application/`, `operations.py`,
   `config.py`, Assistant prompts and schemas, `docs/QUALITY.md`.
 

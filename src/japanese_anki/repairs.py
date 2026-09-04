@@ -41,6 +41,7 @@ from japanese_anki import qc
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji
 from japanese_anki.io import (
+    YAML_LOADER,
     atomic_write_text_bound,
     exclusive_path_lock,
     read_bytes_bound,
@@ -75,7 +76,7 @@ class RepairError(JankiError):
     pass
 
 
-class _StrictLoader(yaml.SafeLoader):
+class _StrictLoader(YAML_LOADER):
     pass
 
 

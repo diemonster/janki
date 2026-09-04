@@ -93,6 +93,7 @@ from japanese_anki.application.journey import (
     STAGING_UNREADABLE,
     SourceJourney,
     source_journeys,
+    source_names,
 )
 from japanese_anki.application.promotion import (
     HeldCard,
@@ -203,6 +204,7 @@ __all__ = [
     "list_finish_receipts",
     "source_detail",
     "source_journeys",
+    "source_names",
     "run_model_coverage",
     "resolve_promotion_for_execution",
 ]

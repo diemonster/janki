@@ -49,6 +49,7 @@ from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.io import (
     MERGEABLE_FIELDS,
+    YAML_LOADER,
     DataError,
     MergeOutcome,
     atomic_write_text,
@@ -310,7 +311,7 @@ def rewrite_deck_file(
     edited = _edit_deck_text(_read_text(path), deck_config, updates, drop_keys)
     if edited is not None:
         try:
-            if yaml.safe_load(edited) != expected:
+            if yaml.load(edited, Loader=YAML_LOADER) != expected:
                 edited = None
         except yaml.YAMLError:
             edited = None

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from test_revision_provider import STREAM_FIXTURE, FakeClaudeRunner, _which
 
 from conftest import seed_prompts
 from japanese_anki import ai_schema, operations
@@ -19,16 +20,55 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.models import VocabularyRecord
 
 
-def _project(tmp_path: Path) -> ProjectConfig:
+def _project(tmp_path: Path, *, provider: str = "anthropic-api") -> ProjectConfig:
     (tmp_path / "janki.toml").write_text(
         "[assistant]\n"
         'enabled = true\n'
-        'provider = "anthropic-api"\n'
+        f'provider = "{provider}"\n'
         'model = "claude-opus-5"\n',
         encoding="utf-8",
     )
     seed_prompts(tmp_path)
     return ProjectConfig.load(tmp_path)
+
+
+def _agent_answer(answer: str) -> Any:
+    return ai_schema.assistant_agent_schema()(answer=answer, action_intents=[])
+
+
+def _stream_reply(answer: str) -> bytes:
+    """The captured stream, answering with janki's own Assistant schema.
+
+    The capture itself was taken with the plain chat contract, so its result
+    frame carries no ``action_intents``; every other frame — init, thinking,
+    the streamed prose, the structured-output tool call, usage — is the CLI's.
+    """
+    lines = []
+    for line in STREAM_FIXTURE.read_bytes().splitlines(keepends=True):
+        payload = json.loads(line)
+        if payload.get("type") == "result":
+            payload["structured_output"] = {"answer": answer, "action_intents": []}
+            line = json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n"
+        lines.append(line)
+    return b"".join(lines)
+
+
+def _claude_code_turn(
+    tmp_path: Path,
+    *,
+    answer: str,
+) -> tuple[ProjectConfig, assistant_agent.AgentPlan, FakeClaudeRunner]:
+    config = _project(tmp_path, provider="claude-code")
+    runner = FakeClaudeRunner(reply=_stream_reply(answer))
+    plan = assistant_agent._plan_agent(
+        config,
+        context=_context(focused=False, editable=False),
+        message="Summarize this library.",
+        provider_env={"PATH": "/bin"},
+        provider_runner=runner,
+        provider_which=_which,
+    )
+    return config, plan, runner
 
 
 def _record() -> VocabularyRecord:
@@ -126,6 +166,19 @@ def _api_call(response: dict[str, Any]):
     return call
 
 
+class _RecordingProvider:
+    """A provider whose dispatch is supplied by the test that needs it."""
+
+    def __init__(self, dispatch: Any) -> None:
+        self.dispatch = dispatch
+
+    def prepare(self, plan: Any, **_kwargs: Any) -> Any:
+        return assistant_agent.revision_provider.PreparedRevisionProvider(plan=plan)
+
+    def recover(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("this provider is only dispatched")
+
+
 def _capture_without_commit(
     config: ProjectConfig,
     plan: assistant_agent.AgentPlan,
@@ -174,7 +227,6 @@ def _capture_without_commit(
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: _context(),
             client=object(),
             api_call=_api_call(response),
         )
@@ -431,7 +483,6 @@ def test_run_preserves_exact_typed_action_options(tmp_path: Path) -> None:
     result = assistant_agent.run_agent(
         config,
         plan,
-        context_loader=lambda: _context(focused=False, editable=False),
         client=object(),
         api_call=_api_call(_api_response("I prepared one plan.", intents=[intent])),
     )
@@ -487,7 +538,6 @@ def test_run_without_focus_journals_exact_request_before_dispatch(tmp_path: Path
     result = assistant_agent.run_agent(
         config,
         plan,
-        context_loader=lambda: _context(focused=False, editable=False),
         client=object(),
         api_call=call,
     )
@@ -503,6 +553,262 @@ def test_run_without_focus_journals_exact_request_before_dispatch(tmp_path: Path
         config.operations_file
     ).operations.values()
     assert committed.state == "committed"
+
+
+def test_run_prepares_a_response_spool_and_frames_land_before_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each exact frame is durable before the next one is even read.
+
+    The spool is what an interrupted turn is read back from, so it has to be
+    bound while the operation is still merely authorized and written into while
+    the call is in flight — not assembled afterwards from a reply that arrived.
+    """
+
+    config = _project(tmp_path)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=_context(focused=False, editable=False),
+        message="Summarize this library.",
+    )
+    frames = (
+        '{"type":"system","subtype":"init"}\n',
+        '{"type":"stream_event","event":{"type":"message_start"}}\n',
+        '{"type":"result","subtype":"success","is_error":false}\n',
+    )
+    spooled: list[int] = []
+
+    def dispatch(
+        _prepared: Any,
+        *,
+        capture: Any,
+        frame: Any = None,
+        **_kwargs: Any,
+    ) -> CallResult:
+        for payload in frames:
+            [entry] = operations.OperationJournal.load(
+                config.operations_file
+            ).operations.values()
+            assert entry.state == "dispatching"
+            assert entry.response_spool is not None
+            spooled.append(entry.response_spool.frame_count)
+            frame(payload)
+        capture("".join(frames).encode("utf-8"))
+        return CallResult(_agent_answer("The streamed answer."), "end_turn", None)
+
+    monkeypatch.setattr(
+        assistant_agent.revision_provider,
+        "provider_for",
+        lambda _name: _RecordingProvider(dispatch),
+    )
+
+    result = assistant_agent.run_agent(config, plan, client=object())
+
+    assert result.answer == "The streamed answer."
+    assert spooled == [0, 1, 2]
+    journal = operations.OperationJournal.load(config.operations_file)
+    assert journal.read_response_frames(result.operation_id) == frames
+    assert journal.read_reply(result.operation_id) == "".join(frames).encode("utf-8")
+
+
+def test_run_refuses_when_the_response_spool_cannot_be_prepared(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No spool, no send: a call janki could not read back is not started."""
+
+    config = _project(tmp_path)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=_context(focused=False, editable=False),
+        message="Summarize this library.",
+    )
+    monkeypatch.setattr(
+        operations.OperationJournal,
+        "begin_response_capture",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            operations.OperationError("simulated spool failure")
+        ),
+    )
+
+    with pytest.raises(assistant_agent.AgentRunError, match="spool") as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            client=object(),
+            api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
+        )
+
+    assert raised.value.provider_dispatched is False
+    held = operations.OperationJournal.load(config.operations_file).operations[
+        raised.value.operation_id
+    ]
+    assert held.state == "canceled_before_send"
+
+
+def test_run_forwards_preview_text_from_the_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Streamed prose reaches the caller; the committed answer is still the schema's.
+
+    The two differ in the real transport — the prose is the model's first pass
+    and the structured answer is a later rewrite — so the preview is narration,
+    never the thing that gets journaled.
+    """
+
+    config = _project(tmp_path)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=_context(focused=False, editable=False),
+        message="Summarize this library.",
+    )
+
+    def dispatch(
+        _prepared: Any,
+        *,
+        capture: Any,
+        preview: Any = None,
+        **_kwargs: Any,
+    ) -> CallResult:
+        preview("Hel")
+        preview("lo")
+        capture(b'{"type":"result"}\n')
+        return CallResult(_agent_answer("The validated answer."), "end_turn", None)
+
+    monkeypatch.setattr(
+        assistant_agent.revision_provider,
+        "provider_for",
+        lambda _name: _RecordingProvider(dispatch),
+    )
+    deltas: list[str] = []
+
+    result = assistant_agent.run_agent(
+        config,
+        plan,
+        client=object(),
+        preview=deltas.append,
+    )
+
+    assert deltas == ["Hel", "lo"]
+    assert result.answer == "The validated answer."
+
+
+def test_run_streams_a_claude_code_turn_and_commits_its_structured_answer(
+    tmp_path: Path,
+) -> None:
+    """The real transport spools every frame and answers from the result frame."""
+    config, plan, runner = _claude_code_turn(tmp_path, answer="The streamed answer.")
+    deltas: list[str] = []
+
+    result = assistant_agent.run_agent(
+        config,
+        plan,
+        provider_env={"PATH": "/bin"},
+        provider_runner=runner,
+        provider_which=_which,
+        provider_spawn=runner.spawn,
+        preview=deltas.append,
+    )
+
+    assert result.answer == "The streamed answer."
+    assert deltas
+    assert "".join(deltas) != result.answer
+    journal = operations.OperationJournal.load(config.operations_file)
+    frames = journal.read_response_frames(result.operation_id)
+    assert "".join(frames).encode("utf-8") == journal.read_reply(result.operation_id)
+    assert journal.operations[result.operation_id].state == "committed"
+
+
+def test_a_failing_preview_callback_still_commits_the_answer(tmp_path: Path) -> None:
+    """A caller whose preview raises loses the narration, not the paid answer.
+
+    The preview runs on the frame-reading thread of a call already in flight;
+    letting it escape would abandon the rest of a reply janki is spending on.
+    """
+
+    config, plan, runner = _claude_code_turn(tmp_path, answer="The streamed answer.")
+
+    def failing_preview(_delta: str) -> None:
+        raise RuntimeError("the caller's event loop is closed")
+
+    result = assistant_agent.run_agent(
+        config,
+        plan,
+        provider_env={"PATH": "/bin"},
+        provider_runner=runner,
+        provider_which=_which,
+        provider_spawn=runner.spawn,
+        preview=failing_preview,
+    )
+
+    assert result.answer == "The streamed answer."
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[result.operation_id]
+        .state
+        == "committed"
+    )
+
+
+def test_recover_agent_decodes_a_captured_claude_code_stream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recovery reads the whole captured stream, not whichever frame came first."""
+    config, plan, runner = _claude_code_turn(tmp_path, answer="The captured answer.")
+    real_write = assistant_agent.atomic_write_text_bound
+
+    def fail_complete(path: Path, text: str, **kwargs: Any) -> Any:
+        if json.loads(text).get("state") == "complete":
+            raise OSError("simulated complete-manifest failure")
+        return real_write(path, text, **kwargs)
+
+    monkeypatch.setattr(assistant_agent, "atomic_write_text_bound", fail_complete)
+    with pytest.raises(assistant_agent.AgentRunError) as raised:
+        assistant_agent.run_agent(
+            config,
+            plan,
+            provider_env={"PATH": "/bin"},
+            provider_runner=runner,
+            provider_which=_which,
+            provider_spawn=runner.spawn,
+        )
+    monkeypatch.setattr(assistant_agent, "atomic_write_text_bound", real_write)
+    operation_id = raised.value.operation_id
+    real_provider = assistant_agent.revision_provider.provider_for(plan.provider)
+    monkeypatch.setattr(
+        assistant_agent.revision_provider,
+        "plan_provider",
+        lambda *_args, **_kwargs: pytest.fail("recovery must not plan a new call"),
+    )
+
+    class RecoveryOnlyProvider:
+        def recover(self, provider_plan: Any, reply: bytes) -> CallResult:
+            return real_provider.recover(provider_plan, reply)
+
+        def prepare(self, *_args: Any, **_kwargs: Any) -> Any:
+            pytest.fail("recovery must not prepare provider credentials")
+
+        def dispatch(self, *_args: Any, **_kwargs: Any) -> Any:
+            pytest.fail("recovery must not redispatch")
+
+    monkeypatch.setattr(
+        assistant_agent.revision_provider,
+        "provider_for",
+        lambda _name: RecoveryOnlyProvider(),
+    )
+
+    result = assistant_agent.recover_agent(config, operation_id)
+
+    assert result.answer == "The captured answer."
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "committed"
+    )
 
 
 def test_run_accepts_only_targets_in_exact_disclosed_context(tmp_path: Path) -> None:
@@ -523,7 +829,6 @@ def test_run_accepts_only_targets_in_exact_disclosed_context(tmp_path: Path) -> 
     result = assistant_agent.run_agent(
         config,
         plan,
-        context_loader=lambda: _context(),
         client=object(),
         api_call=_api_call(_api_response("I prepared one plan.", intents=[intent])),
     )
@@ -558,7 +863,6 @@ def test_captured_provider_failure_is_committed_as_a_durable_failed_turn(
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: context,
             client=object(),
             api_call=fail_after_capture,
         )
@@ -598,7 +902,6 @@ def test_captured_provider_failure_is_committed_as_a_durable_failed_turn(
     result = assistant_agent.run_agent(
         config,
         retry,
-        context_loader=lambda: context,
         client=object(),
         api_call=_api_call(_api_response("This answer succeeded.")),
     )
@@ -639,7 +942,6 @@ def test_recovery_finishes_a_failed_manifest_without_calling_the_provider(
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: context,
             client=object(),
             api_call=fail_after_capture,
         )
@@ -706,7 +1008,6 @@ def test_recovery_persists_a_captured_provider_error_from_a_request_manifest(
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: context,
             client=object(),
             api_call=fail_after_capture,
         )
@@ -755,7 +1056,6 @@ def test_invented_resource_target_is_refused_after_exact_reply_capture(
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: _context(),
             client=object(),
             api_call=_api_call(_api_response("I prepared it.", intents=[intent])),
         )
@@ -799,7 +1099,6 @@ def test_a_failing_progress_callback_still_settles_the_turn(tmp_path: Path) -> N
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: context,
             client=object(),
             api_call=_api_call(_api_response("This answer never arrives.")),
             progress=failing_progress,
@@ -835,7 +1134,6 @@ def test_unreadable_provider_reply_is_left_for_the_owner_to_settle(
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: context,
             client=object(),
             api_call=_api_call(_unreadable_api_response()),
         )
@@ -882,7 +1180,6 @@ def test_recovery_leaves_a_refused_answer_for_the_owner_to_settle(
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: context,
             client=object(),
             api_call=_api_call(_api_response("I prepared it.", intents=[intent])),
         )
@@ -934,7 +1231,6 @@ def test_record_ids_are_forwarded_to_the_resource_specific_planner(
     result = assistant_agent.run_agent(
         config,
         plan,
-        context_loader=lambda: _context(editable=False),
         client=object(),
         api_call=_api_call(_api_response("I prepared it.", intents=[intent])),
     )
@@ -944,34 +1240,134 @@ def test_record_ids_are_forwarded_to_the_resource_specific_planner(
     )
 
 
-def test_run_replans_and_refuses_context_drift_before_authority_or_dispatch(
-    tmp_path: Path,
-) -> None:
+def test_run_refuses_a_tampered_context_before_authority(tmp_path: Path) -> None:
+    """The dispatched context is the one the plan was fingerprinted against.
+
+    An ordinary turn has no owner gap between planning and execution, so there
+    is nothing to re-plan; what keeps a substituted context out of the model's
+    hands is that the wire must still hash to the fingerprint the user turn,
+    the request bytes, and the journal entry all carry.
+    """
+
     config = _project(tmp_path)
-    expected_context = _context(marker="planned")
-    changed_context = _context(marker="changed")
     plan = assistant_agent.plan_agent(
         config,
-        context=expected_context,
+        context=_context(marker="planned"),
         message="What changed?",
     )
-    calls = 0
+    tampered = replace(
+        plan,
+        context=replace(plan.context, wire=_context(marker="changed").wire),
+    )
 
-    def loader() -> assistant_agent.AgentContext:
-        nonlocal calls
-        calls += 1
-        return expected_context if calls == 1 else changed_context
-
-    with pytest.raises(assistant_agent.AgentApplicationError, match="context.*changed"):
+    with pytest.raises(assistant_agent.AgentApplicationError, match="fingerprint"):
         assistant_agent.run_agent(
             config,
-            plan,
-            context_loader=loader,
+            tampered,
             client=object(),
             api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
         )
 
-    assert calls == 2
+    assert not config.operations_file.exists()
+    assert not config.assistant_dir.exists()
+
+
+def test_run_refuses_a_plan_whose_context_drifted_from_its_user_turn(
+    tmp_path: Path,
+) -> None:
+    """The fingerprint binds the wire; only the user turn binds the rest.
+
+    `resource_ids`, the focus, the history and the message are bound where the
+    provider can see them — inside the user turn that becomes the request
+    bytes. Widening the id list after planning leaves the fingerprint valid, so
+    without this check janki dispatched a request that never mentioned the
+    extra resource, accepted an intent naming it, and committed a manifest
+    `recover_agent` then refused to read back.
+    """
+
+    config = _project(tmp_path)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=_context(),
+        message="Add one polite example.",
+    )
+    widened = replace(
+        plan,
+        context=replace(
+            plan.context,
+            resource_ids=(*plan.context.resource_ids, "resource_deck_99"),
+        ),
+    )
+    assert "resource_deck_99" not in widened.provider_plan.user_turn
+
+    with pytest.raises(
+        assistant_agent.AgentApplicationError, match="dispatched user turn"
+    ):
+        assistant_agent.run_agent(
+            config,
+            widened,
+            client=object(),
+            api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
+        )
+
+    assert not config.operations_file.exists()
+    assert not config.assistant_dir.exists()
+
+
+def test_run_refuses_a_plan_whose_user_turn_left_its_provider_request(
+    tmp_path: Path,
+) -> None:
+    """The request bytes the provider will send are the turn that was planned.
+
+    Rebuilding the user turn proves it still describes the plan; this proves
+    the provider is actually carrying that turn, so neither half can be swapped
+    for the other's.
+    """
+
+    config = _project(tmp_path)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=_context(),
+        message="Add one polite example.",
+    )
+    substituted = replace(
+        plan,
+        provider_plan=replace(plan.provider_plan, user_turn="Something else entirely."),
+    )
+
+    with pytest.raises(
+        assistant_agent.AgentApplicationError, match="dispatched user turn"
+    ):
+        assistant_agent.run_agent(
+            config,
+            substituted,
+            client=object(),
+            api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
+        )
+
+    assert not config.operations_file.exists()
+    assert not config.assistant_dir.exists()
+
+
+def test_run_refuses_a_plan_from_another_repository(tmp_path: Path) -> None:
+    config = _project(tmp_path)
+    plan = assistant_agent.plan_agent(
+        config,
+        context=_context(focused=False, editable=False),
+        message="Summarize this library.",
+    )
+    elsewhere = replace(plan, repository_root=tmp_path / "elsewhere")
+
+    with pytest.raises(
+        assistant_agent.AgentApplicationError, match="different repository"
+    ):
+        assistant_agent.run_agent(
+            config,
+            elsewhere,
+            client=object(),
+            api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
+        )
+
     assert not config.operations_file.exists()
     assert not config.assistant_dir.exists()
 
@@ -997,7 +1393,6 @@ def test_one_live_operation_gate_refuses_under_journal_authority(tmp_path: Path)
         assistant_agent.run_agent(
             config,
             plan,
-            context_loader=lambda: context,
             client=object(),
             api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
         )
@@ -1165,28 +1560,3 @@ def test_recover_refuses_noncanonical_operation_id_before_path_resolution(
         assistant_agent.recover_agent(config, "../../outside")
 
     assert not config.assistant_dir.exists()
-
-
-def test_fresh_plan_binds_hidden_editable_record_snapshot_too(tmp_path: Path) -> None:
-    config = _project(tmp_path)
-    context = _context()
-    plan = assistant_agent.plan_agent(
-        config,
-        context=context,
-        message="Change this card.",
-    )
-    changed = _context()
-    changed_record = changed.editable_records[0]
-    changed_record.meanings = ["a changed current meaning"]
-    changed = replace(changed, editable_records=(changed_record,))
-
-    with pytest.raises(assistant_agent.AgentApplicationError, match="context.*changed"):
-        assistant_agent.run_agent(
-            config,
-            plan,
-            context_loader=lambda: changed,
-            client=object(),
-            api_call=lambda *_args, **_kwargs: pytest.fail("must not dispatch"),
-        )
-
-    assert not config.operations_file.exists()

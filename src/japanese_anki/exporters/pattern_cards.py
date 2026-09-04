@@ -61,6 +61,7 @@ from japanese_anki.exporters.anki import (
 )
 from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.io import (
+    YAML_LOADER,
     DataError,
     RecordsRevision,
     atomic_write_text_bound,
@@ -156,8 +157,8 @@ PATTERN_TEMPLATE_FILENAMES: tuple[str, ...] = (
 )
 
 
-class _UniqueDeckKeyLoader(yaml.SafeLoader):
-    """SafeLoader that cannot silently replace earlier deck-file content."""
+class _UniqueDeckKeyLoader(YAML_LOADER):
+    """The project loader, minus the silent replacement of deck-file content."""
 
 
 def _unique_deck_mapping(

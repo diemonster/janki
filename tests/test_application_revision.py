@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from test_revision_provider import FakePopen
 
 from conftest import seed_prompts
 from japanese_anki import operations
@@ -225,6 +226,22 @@ def test_revision_transport_and_model_come_only_from_project_config(
         )
 
     assert not config.operations_file.exists()
+
+
+def test_revision_keeps_the_model_resolved_depth(tmp_path: Path) -> None:
+    """Card writing is not the pass with a configured level.
+
+    `[assistant] effort` exists because one conversational turn is answered and
+    read immediately. A deck revision writes study content an owner then
+    confirms, so its depth stays whatever the model it sends accepts — sharing
+    the Assistant's setting would quietly shallow every proposal.
+    """
+    config, deck = _project(tmp_path)
+
+    plan = revision.plan_revision(config, deck, [SELECTED], "Revise it.")
+
+    assert config.assistant_effort == "medium"
+    assert plan.provider_plan.transport["effort"] == "xhigh"
 
 
 @pytest.mark.parametrize(
@@ -711,7 +728,8 @@ def test_claude_subscription_revision_composes_through_apply_and_archive(
     def runner(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
         if "--version" in command:
             stdout = b"2.1.246\n"
-        elif "auth" in command:
+        else:
+            assert "auth" in command
             stdout = json.dumps(
                 {
                     "loggedIn": True,
@@ -720,19 +738,20 @@ def test_claude_subscription_revision_composes_through_apply_and_archive(
                     "subscriptionType": "max",
                 }
             ).encode("utf-8")
-        else:
-            assert answer is not None
-            assert kwargs["input"]
-            stdout = json.dumps(
-                {
-                    "type": "result",
-                    "subtype": "success",
-                    "is_error": False,
-                    "structured_output": answer,
-                },
-                ensure_ascii=False,
-            ).encode("utf-8")
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr=b"")
+
+    def spawn(command: list[str], **kwargs: Any) -> Any:
+        assert answer is not None
+        reply = json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "structured_output": answer,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return FakePopen(reply + b"\n", returncode=0, stderr=kwargs["stderr"])
 
     def fake_plan_provider(name: str, **kwargs: Any) -> Any:
         return real_plan_provider(name, **kwargs, runner=runner, which=which)
@@ -746,6 +765,7 @@ def test_claude_subscription_revision_composes_through_apply_and_archive(
         plan,
         provider_runner=runner,
         provider_which=which,
+        provider_spawn=spawn,
     )
     apply_plan = revision_apply.plan_revision_apply(config, staged.staging_path)
     applied = revision_apply.execute_revision_apply(config, apply_plan)

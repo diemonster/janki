@@ -29,9 +29,9 @@ import json
 import re
 import sys
 from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 import yaml
@@ -40,6 +40,7 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
+    YAML_LOADER,
     DataError,
     atomic_write_text_bound,
     exclusive_path_lock,
@@ -51,6 +52,57 @@ from japanese_anki.models import (
     VocabularyRecord,
     set_example_flags,
 )
+
+if TYPE_CHECKING:
+    from japanese_anki.config import ProjectConfig
+
+
+@dataclass(frozen=True, slots=True)
+class LiveStaging:
+    """One live staging file as read: its records, or why they could not be."""
+
+    path: Path
+    records: list[VocabularyRecord] | None
+    meta: dict[str, Any] | None
+    error: str
+
+    @property
+    def source(self) -> str:
+        """The name this file speaks for — its own unless the file renames it.
+
+        An unreadable file keeps its filename: the metadata that would rename
+        it is exactly what could not be read.
+        """
+        named = self.meta.get("source_file") if self.meta is not None else None
+        return named if isinstance(named, str) and named.strip() else self.path.name
+
+
+def live_staging(config: ProjectConfig) -> list[LiveStaging]:
+    """Read every live staging file once, in path order.
+
+    The names are cheap and the states are not: naming a source needs this and
+    nothing else, while ranking one costs the pattern store, the completed-card
+    archive and a deck-ownership evaluation per staged record.
+
+    This is also the *only* read: a staging file can be half a megabyte, and a
+    caller that needs names, proposal kinds and staged counts at once must
+    derive all three from one parse — both because three parses cost three
+    times as much and because three reads of a changing directory can disagree
+    with each other.
+    """
+    if not config.staging_dir.is_dir():
+        return []
+    live: list[LiveStaging] = []
+    for path in sorted(
+        [*config.staging_dir.glob("*.yaml"), *config.staging_dir.glob("*.yml")]
+    ):
+        try:
+            records, meta = read_staging(path)
+        except JankiError as exc:
+            live.append(LiveStaging(path=path, records=None, meta=None, error=str(exc)))
+            continue
+        live.append(LiveStaging(path=path, records=records, meta=meta, error=""))
+    return live
 
 
 class StagingError(JankiError):
@@ -2401,7 +2453,7 @@ def read_staging_text(
 ) -> tuple[list[VocabularyRecord], dict[str, Any]]:
     """Read records and metadata from captured staging text, without a path race."""
     try:
-        data = yaml.safe_load(text)
+        data = yaml.load(text, Loader=YAML_LOADER)
     except yaml.YAMLError as exc:
         raise DataError(f"Could not parse staging file {source}: {exc}") from exc
     return _read_staging_data(data, source=source)

@@ -423,6 +423,7 @@ class RevisionCallbacks(Protocol):
         history: tuple[tuple[str, str], ...],
         message: str,
         progress: Callable[[str], None],
+        preview: Callable[[str], None],
     ) -> ChatReply | Awaitable[ChatReply]:
         """Answer one message without planning or mutating a deck."""
 
@@ -794,7 +795,9 @@ class ScopedMemoryStore:
                 if item.id == item_id:
                     del items[index]
                     return
-        raise self._not_found(f"Unknown item: {item_id}")
+        # Delete means ensure-absent. ChatKit removes pending items it never
+        # stored — a streamed message that did not finish is the common case —
+        # so an id this store never held is the state the caller asked for.
 
     async def save_attachment(self, attachment: Any, context: AssistantRequestContext) -> None:
         self._context_ok(context)
@@ -1646,12 +1649,18 @@ def create_assistant_core(
     from chatkit.server import ChatKitServer
     from chatkit.types import (
         AssistantMessageContent,
+        AssistantMessageContentPartAdded,
+        AssistantMessageContentPartDone,
+        AssistantMessageContentPartTextDelta,
         AssistantMessageItem,
         ErrorEvent,
         NoticeEvent,
         ProgressUpdateEvent,
         StreamOptions,
+        ThreadItemAddedEvent,
         ThreadItemDoneEvent,
+        ThreadItemRemovedEvent,
+        ThreadItemUpdatedEvent,
         WidgetItem,
     )
     from chatkit.widgets import DynamicWidgetRoot
@@ -2168,14 +2177,41 @@ def create_assistant_core(
             del thread, request_context
             return StreamOptions(allow_cancel=False)
 
-        def _message_event(self, thread: Any, text: str) -> Any:
+        async def handle_stream_cancelled(
+            self,
+            thread: Any,
+            pending_items: Any,
+            context: Any,
+        ) -> None:
+            """Keep nothing a canceled stream had only started to say.
+
+            ChatKit's default persists unfinished assistant messages. Here the
+            only unfinished item is the live preview of a turn whose validated
+            answer is the durable record, so saving it would put text into the
+            transcript that no Assistant manifest ever answered with.
+            """
+            del thread, pending_items, context
+
+        def _message_item(
+            self, thread: Any, text: str | None, *, item_id: str | None = None
+        ) -> Any:
+            """One assistant message item; ``text`` of ``None`` opens an empty one.
+
+            The empty shape is the item a live preview streams into, finished
+            later under the same id with the answer the schema returned.
+            """
+            return AssistantMessageItem(
+                id=item_id or store.generate_item_id("message", thread, context),
+                thread_id=thread.id,
+                created_at=datetime.now(),
+                content=[] if text is None else [AssistantMessageContent(text=text)],
+            )
+
+        def _message_event(
+            self, thread: Any, text: str, *, item_id: str | None = None
+        ) -> Any:
             return ThreadItemDoneEvent(
-                item=AssistantMessageItem(
-                    id=store.generate_item_id("message", thread, context),
-                    thread_id=thread.id,
-                    created_at=datetime.now(),
-                    content=[AssistantMessageContent(text=text)],
-                )
+                item=self._message_item(thread, text, item_id=item_id)
             )
 
         @staticmethod
@@ -2546,14 +2582,22 @@ def create_assistant_core(
                 )
                 return
 
-            progress_queue: asyncio.Queue[str] = asyncio.Queue()
+            # One queue, not two: a preview delta and a progress label are the
+            # same turn's narration, and separate queues would let a drain
+            # reorder them against each other.
+            turn_queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
             loop = asyncio.get_running_loop()
 
             def report_progress(label: str) -> None:
                 normalized = label.strip()
                 if normalized not in _CHAT_PROGRESS_LABELS:
                     raise ValueError("The chat service reported an unknown progress state.")
-                loop.call_soon_threadsafe(progress_queue.put_nowait, normalized)
+                loop.call_soon_threadsafe(
+                    turn_queue.put_nowait, ("progress", normalized)
+                )
+
+            def report_preview(delta: str) -> None:
+                loop.call_soon_threadsafe(turn_queue.put_nowait, ("preview", delta))
 
             async def execute_chat() -> ChatReply:
                 history_lock = self._history_locks.setdefault(thread.id, asyncio.Lock())
@@ -2566,6 +2610,7 @@ def create_assistant_core(
                             history=history,
                             message=message,
                             progress=report_progress,
+                            preview=report_preview,
                         )
                     )
                     self._histories[thread.id] = list(
@@ -2577,23 +2622,74 @@ def create_assistant_core(
 
             execution_task = asyncio.create_task(execute_chat())
             release_busy = self._track_durable_task(thread.id, execution_task)
+            preview_id: str | None = None
+
+            def narrate(batch: list[tuple[str, str]]) -> list[Any]:
+                """Render one drained batch, keeping its exact arrival order."""
+                nonlocal preview_id
+                rendered: list[Any] = []
+                for kind, payload in batch:
+                    if kind == "progress":
+                        rendered.append(
+                            ProgressUpdateEvent(text=payload, icon="write")
+                        )
+                        continue
+                    if preview_id is None:
+                        preview_id = store.generate_item_id(
+                            "message", thread, request_context
+                        )
+                        rendered.append(
+                            ThreadItemAddedEvent(
+                                item=self._message_item(
+                                    thread, None, item_id=preview_id
+                                )
+                            )
+                        )
+                        rendered.append(
+                            ThreadItemUpdatedEvent(
+                                item_id=preview_id,
+                                update=AssistantMessageContentPartAdded(
+                                    content_index=0,
+                                    content=AssistantMessageContent(text=""),
+                                ),
+                            )
+                        )
+                    rendered.append(
+                        ThreadItemUpdatedEvent(
+                            item_id=preview_id,
+                            update=AssistantMessageContentPartTextDelta(
+                                content_index=0,
+                                delta=payload,
+                            ),
+                        )
+                    )
+                return rendered
+
+            def drain(first: tuple[str, str] | None = None) -> list[tuple[str, str]]:
+                batch = [] if first is None else [first]
+                while not turn_queue.empty():
+                    batch.append(turn_queue.get_nowait())
+                return batch
+
             try:
                 try:
                     while not execution_task.done():
                         try:
-                            label = await asyncio.wait_for(
-                                progress_queue.get(), timeout=0.1
+                            item = await asyncio.wait_for(
+                                turn_queue.get(), timeout=0.1
                             )
                         except TimeoutError:
                             continue
-                        yield ProgressUpdateEvent(text=label, icon="write")
-                    while not progress_queue.empty():
-                        yield ProgressUpdateEvent(
-                            text=progress_queue.get_nowait(),
-                            icon="write",
-                        )
+                        for event in narrate(drain(item)):
+                            yield event
+                    for event in narrate(drain()):
+                        yield event
                     reply = await asyncio.shield(execution_task)
                 except RevisionRefusal as error:
+                    if preview_id is not None:
+                        # The unvalidated preview is not an answer; it leaves the
+                        # transcript before the refusal explains why.
+                        yield ThreadItemRemovedEvent(item_id=preview_id)
                     yield NoticeEvent(
                         level="danger", title="Answer refused", message=str(error)
                     )
@@ -2629,8 +2725,31 @@ def create_assistant_core(
                             blocking_operations,
                         )
                     return
+                except Exception:
+                    # A refusal is not the only way a turn ends. Every other
+                    # failure leaves the same unvalidated preview on screen,
+                    # where the error reported next would stand beside half an
+                    # answer that no longer belongs to any turn.
+                    if preview_id is not None:
+                        yield ThreadItemRemovedEvent(item_id=preview_id)
+                    raise
 
-                yield self._message_event(thread, reply.text)
+                if preview_id is None:
+                    yield self._message_event(thread, reply.text)
+                else:
+                    # The validated answer replaces the preview whole: the
+                    # streamed prose is the model's first pass at it, not a
+                    # prefix of what the schema finally returned.
+                    yield ThreadItemUpdatedEvent(
+                        item_id=preview_id,
+                        update=AssistantMessageContentPartDone(
+                            content_index=0,
+                            content=AssistantMessageContent(text=reply.text),
+                        ),
+                    )
+                    yield self._message_event(
+                        thread, reply.text, item_id=preview_id
+                    )
                 plan = reply.action
                 if plan is not None:
                     instruction = reply.action_instruction

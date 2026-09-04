@@ -36,6 +36,7 @@ from japanese_anki.application.finish import FinishScopeError, list_finish_recei
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.models import VocabularyRecord
+from japanese_anki.staging import LiveStaging, live_staging
 
 __all__ = [
     "ADDED",
@@ -57,6 +58,7 @@ __all__ = [
     "STAGING_UNREADABLE",
     "SourceJourney",
     "source_journeys",
+    "source_names",
 ]
 
 # --- the words on the dashboard ---------------------------------------------
@@ -305,39 +307,40 @@ def _staged_journeys(
     config: ProjectConfig,
     store: Mapping[str, patterns.PatternSet],
     store_issue: str,
+    live: Sequence[LiveStaging] | None = None,
 ) -> tuple[list[SourceJourney], set[str], list[str]]:
-    """Every live staging file, plus the source names they account for."""
+    """Every live staging file, plus the source names they account for.
+
+    ``live`` is a parse a caller already paid for; without it the directory is
+    read here.
+    """
     journeys: list[SourceJourney] = []
     accounted: set[str] = set()
     warnings: list[str] = []
-    if not config.staging_dir.is_dir():
-        return journeys, accounted, warnings
+    if live is None:
+        live = live_staging(config)
 
-    parsed: list[tuple[Path, list[VocabularyRecord], dict[str, Any]]] = []
-    for path in sorted(
-        [*config.staging_dir.glob("*.yaml"), *config.staging_dir.glob("*.yml")]
-    ):
-        try:
-            records, meta = staging.read_staging(path)
-        except JankiError as exc:
-            # An unreadable file is a visible state, not a dropped row. A queue
-            # that silently omits it is how a source goes missing for a week.
-            journeys.append(
-                SourceJourney(
-                    source=path.name,
-                    state=STAGING_UNREADABLE,
-                    next_action="Repair this file, or ask for help reading it",
-                    staging_path=path,
-                    detail=str(exc),
-                )
-            )
-            warnings.append(f"skipping staging file {path}: {exc}")
+    for entry in live:
+        if entry.records is not None:
             continue
-        parsed.append((path, records, meta))
+        # An unreadable file is a visible state, not a dropped row. A queue
+        # that silently omits it is how a source goes missing for a week.
+        journeys.append(
+            SourceJourney(
+                source=entry.source,
+                state=STAGING_UNREADABLE,
+                next_action="Repair this file, or ask for help reading it",
+                staging_path=entry.path,
+                detail=entry.error,
+            )
+        )
+        warnings.append(f"skipping staging file {entry.path}: {entry.error}")
 
-    for path, records, meta in parsed:
-        named = meta.get("source_file")
-        source = named if isinstance(named, str) and named.strip() else path.name
+    for entry in live:
+        if entry.records is None or entry.meta is None:
+            continue
+        path, records, meta = entry.path, entry.records, entry.meta
+        source = entry.source
         accounted.add(source)
         grammar, grammar_detail = _grammar_state(meta, store, store_issue)
         deck_decision_count, deck_detail, deck_repair_action = _deck_decisions(
@@ -376,6 +379,32 @@ def _staged_journeys(
     return journeys, accounted, warnings
 
 
+def _unread_inbox_paths(config: ProjectConfig, accounted: set[str]) -> list[Path]:
+    """Inbox files no live staging review already speaks for, in name order.
+
+    Selection only. Whether such a file is unread, promoted, or read for
+    grammar alone is `_unextracted`'s question, and answering it is what costs
+    the completed-card archive and the pattern store.
+    """
+    if not config.scan_inbox.is_dir():
+        return []
+    unread: list[Path] = []
+    for path in sorted(config.scan_inbox.iterdir()):
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        if path.name in accounted:
+            continue
+        # `extract` owns the staging filename convention; deriving it here by
+        # string concatenation would drift the moment that changes.
+        if extract.staging_path(config.staging_dir, path.name).exists():
+            # A live file is this source's current state; _staged_journeys
+            # already spoke for it, and re-extraction after a promotion is
+            # ordinary. The newer answer wins.
+            continue
+        unread.append(path)
+    return unread
+
+
 def _unextracted(
     config: ProjectConfig,
     accounted: set[str],
@@ -395,24 +424,10 @@ def _unextracted(
     repository already holds. The store is consulted before calling the source
     unread for that reason.
     """
-    if not config.scan_inbox.is_dir():
-        return []
     found: list[SourceJourney] = []
     archive = config.staging_dir / "done"
-    for path in sorted(config.scan_inbox.iterdir()):
-        if not path.is_file() or path.name.startswith("."):
-            continue
-        if path.name in accounted:
-            continue
-        # `extract` owns the staging filename convention; deriving it here by
-        # string concatenation would drift the moment that changes.
-        live = extract.staging_path(config.staging_dir, path.name)
-        if live.exists():
-            # A live file is this source's current state; _staged_journeys
-            # already spoke for it, and re-extraction after a promotion is
-            # ordinary. The newer answer wins.
-            continue
-        archive_exists = (archive / live.name).exists()
+    for path in _unread_inbox_paths(config, accounted):
+        archive_exists = extract.staging_path(archive, path.name).exists()
         if archive_issue:
             # Receipt discovery validates the whole archive namespace so a
             # malformed file cannot conceal a duplicate durable handle. Once
@@ -514,6 +529,8 @@ def _unextracted(
 
 def source_journeys(
     config: ProjectConfig,
+    *,
+    live: Sequence[LiveStaging] | None = None,
 ) -> tuple[list[SourceJourney], list[str]]:
     """Every source's state and next action, plus any warnings.
 
@@ -527,6 +544,9 @@ def source_journeys(
     durable projection. Deck ownership, by contrast, is reconstructed from
     the staged records, canonical collection, and real deck selectors on every
     call.
+
+    ``live`` is every live staging file as a caller already read it, so a
+    broker that parsed the queue once can rank a source without a second parse.
     """
     store: dict[str, patterns.PatternSet] = {}
     store_issue = ""
@@ -542,7 +562,9 @@ def source_journeys(
     # prunes the live review; this order means a concurrent promotion can leave
     # a stale-but-safe review row or a fresh receipt row, never a false offer to
     # pay for extraction after both reads miss opposite sides of the handoff.
-    staged, accounted, staged_warnings = _staged_journeys(config, store, store_issue)
+    staged, accounted, staged_warnings = _staged_journeys(
+        config, store, store_issue, live=live
+    )
     warnings.extend(staged_warnings)
 
     receipt_ids_by_source: dict[str, list[str]] = {}
@@ -582,3 +604,31 @@ def source_journeys(
     ]
     journeys.sort(key=lambda journey: (JOURNEY_STATES.index(journey.state), journey.source))
     return journeys, warnings
+
+
+def source_names(
+    config: ProjectConfig,
+    *,
+    live: Sequence[LiveStaging] | None = None,
+) -> tuple[str, ...]:
+    """Every source's name, sorted — without deciding what state it is in.
+
+    The Assistant catalog registers one opaque resource per source and reads
+    nothing but the name, and a name is the one thing `source_journeys` spends
+    its second of work *not* deciding: every branch of both journey builders
+    names a source from its staging metadata or its filename, and neither the
+    completed-card archive nor deck ownership can change that answer. So this
+    is that answer exactly, not a cheaper approximation of it.
+
+    The on-demand source snapshot still goes through `source_journeys`: it
+    discloses the state, and it revalidates before use either way.
+
+    ``live`` is the projection over a parse a caller already paid for; without
+    it this reads the staging directory itself.
+    """
+    if live is None:
+        live = live_staging(config)
+    accounted = {entry.source for entry in live if entry.records is not None}
+    names = [entry.source for entry in live]
+    names.extend(path.name for path in _unread_inbox_paths(config, accounted))
+    return tuple(sorted(names))

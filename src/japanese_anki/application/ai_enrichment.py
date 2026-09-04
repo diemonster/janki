@@ -432,6 +432,7 @@ def _plan_ai_enrichment(
             system_blocks=system_blocks,
             user_turn=user_turn,
             schema=schema,
+            effort=claude_client.effort_for(config.enrich_model),
         )
         stem = f"ai-enrichment-{operation_id}"
         request_manifest_path = config.staging_dir.absolute() / f"{stem}.request.json"
@@ -723,33 +724,6 @@ def _persist_result(
     )
 
 
-def _cancel_before_send(
-    config: ProjectConfig,
-    operation_id: str,
-    exc: BaseException,
-) -> AiEnrichmentRunError:
-    try:
-        operations.OperationJournal.load(config.operations_file).advance(
-            operation_id,
-            "canceled_before_send",
-            detail="The durable AI-enrichment request manifest could not be prepared.",
-        )
-    except JankiError as journal_error:
-        return AiEnrichmentRunError(
-            f"AI enrichment {operation_id} was not sent, but request publication "
-            f"failed and its authority could not be retired: {exc}; {journal_error}. "
-            "Inspect janki operations before retrying.",
-            operation_id=operation_id,
-            provider_dispatched=False,
-        )
-    return AiEnrichmentRunError(
-        f"AI enrichment {operation_id} was canceled before send because its exact "
-        f"request manifest could not be made durable: {exc}",
-        operation_id=operation_id,
-        provider_dispatched=False,
-    )
-
-
 def _require_current_record(
     config: ProjectConfig,
     expected: AiEnrichmentCallPlan,
@@ -779,6 +753,7 @@ def _run_call(
     provider_env: Mapping[str, str] | None,
     provider_runner: Callable[..., Any],
     provider_which: Callable[..., str | None],
+    provider_spawn: revision_provider.Spawn,
     api_call: Callable[..., Any] | None,
     progress: Callable[[str], None] | None,
 ) -> AiEnrichmentItemResult:
@@ -846,7 +821,16 @@ def _run_call(
                 expected_absent=True,
             )
         except Exception as exc:  # noqa: BLE001 - publication may have landed
-            raise _cancel_before_send(config, fresh.operation_id, exc) from exc
+            raise operations.cancel_before_send(
+                config.operations_file,
+                fresh.operation_id,
+                error=AiEnrichmentRunError,
+                label="AI enrichment",
+                detail=(
+                    "The durable AI-enrichment request manifest could not be prepared."
+                ),
+                cause=exc,
+            ) from exc
 
     try:
         journal.advance(fresh.operation_id, "dispatching")
@@ -890,7 +874,7 @@ def _run_call(
         call_result = provider.dispatch(
             prepared,
             capture=capture,
-            runner=provider_runner,
+            spawn=provider_spawn,
             api_call=api_call,
         )
         captured = operations.OperationJournal.load(config.operations_file).operations.get(
@@ -988,6 +972,7 @@ def run_ai_enrichment(
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
+    provider_spawn: revision_provider.Spawn = subprocess.Popen,
     api_call: Callable[..., Any] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> AiEnrichmentRunResult:
@@ -1009,6 +994,7 @@ def run_ai_enrichment(
                     provider_env=provider_env,
                     provider_runner=provider_runner,
                     provider_which=provider_which,
+                    provider_spawn=provider_spawn,
                     api_call=api_call,
                     progress=progress,
                 )

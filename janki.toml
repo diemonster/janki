@@ -53,6 +53,9 @@ enrich_reasoning_effort = "ultra"
 enabled = true
 provider = "claude-code"          # local Claude Code Pro/Max subscription login
 model = "claude-opus-5"           # pinned; unsupported model ids are refused
+effort = "medium"                 # one measured turn: 8.5 s here against 10.8 s
+                                  # at "xhigh". Card-writing passes are not
+                                  # configurable and stay at the model's depth
 
 [tts]
 provider = "voicevox"              # words only; the one engine that forces accent

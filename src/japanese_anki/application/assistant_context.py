@@ -26,7 +26,11 @@ from typing import Any, Literal
 from japanese_anki import kanji, ledger, operations, patterns, staging, status
 from japanese_anki.application import promotion, revision_apply
 from japanese_anki.application.detail import source_detail
-from japanese_anki.application.journey import SourceJourney, source_journeys
+from japanese_anki.application.journey import (
+    SourceJourney,
+    source_journeys,
+    source_names,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters import pattern_cards
@@ -43,6 +47,7 @@ from japanese_anki.io import (
     records_revision,
 )
 from japanese_anki.models import ExampleSentence, VocabularyRecord
+from japanese_anki.staging import LiveStaging, live_staging
 
 __all__ = [
     "AssistantContextBroker",
@@ -350,6 +355,18 @@ class AssistantContextBroker:
         self._budget_lock = threading.Lock()
         self._resources: dict[str, _Resource] = {}
         self._root = config.root.absolute()
+        # The one parse of the review queue this broker gets. Source names,
+        # proposal kinds and the staged counts in the project status are three
+        # projections of the same half-megabyte of YAML: reading it once costs
+        # a third as much, and it is also the only way the catalog and the
+        # status it discloses cannot describe two different directories.
+        try:
+            self._live_staging: tuple[LiveStaging, ...] | None = tuple(
+                live_staging(config)
+            )
+        except (JankiError, OSError, UnicodeError, ValueError):
+            # Unknown, not empty: every projection re-reads and reports for itself.
+            self._live_staging = None
         try:
             self._preflight_project()
             self._discover_resources()
@@ -548,7 +565,7 @@ class AssistantContextBroker:
         if not resource.key or _safe_name(resource.key) != resource.key:
             raise AssistantContextError("The selected source is not a basename-shaped inbox entry.")
         try:
-            journeys, _warnings = source_journeys(self.config)
+            journeys, _warnings = source_journeys(self.config, live=self._live_staging)
         except (JankiError, OSError, UnicodeError, ValueError) as exc:
             raise AssistantContextError(
                 f"Could not refresh the selected source journey: {exc}"
@@ -683,11 +700,11 @@ class AssistantContextBroker:
             self._register("card", record_title, record.id)
 
         try:
-            journeys, _warnings = source_journeys(self.config)
+            names = source_names(self.config, live=self._live_staging)
         except (JankiError, OSError, UnicodeError, ValueError):
-            journeys = []
-        for journey in journeys:
-            self._register("source", _safe_name(journey.source), journey.source)
+            names = ()
+        for name in names:
+            self._register("source", _safe_name(name), name)
 
         for resource in self._discover_proposals():
             self._register(
@@ -712,13 +729,16 @@ class AssistantContextBroker:
                 entries = sorted(scan, key=lambda entry: entry.name)
         except (AssistantContextError, FileNotFoundError, OSError):
             return []
+        parsed = {read.path.name: read for read in self._live_staging or ()}
         found: list[_Resource] = []
         for entry in entries:
             path = Path(entry.path)
             try:
                 if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
                     continue
-                subtype, title = self._readable_proposal_identity(path)
+                subtype, title = self._readable_proposal_identity(
+                    path, read=parsed.get(entry.name)
+                )
             except (AssistantContextError, JankiError, OSError, UnicodeError, ValueError):
                 continue
             if not subtype:
@@ -734,10 +754,24 @@ class AssistantContextBroker:
             )
         return found
 
-    def _readable_proposal_identity(self, path: Path) -> tuple[str, str]:
+    def _readable_proposal_identity(
+        self, path: Path, *, read: LiveStaging | None = None
+    ) -> tuple[str, str]:
+        """Classify one staging entry, reusing this broker's parse of it.
+
+        ``read`` is this file as `live_staging` already parsed it, or `None`
+        for one it did not cover — a `revise-*.json` plan, or a name the
+        directory grew since. An entry it *could not* read is not a proposal:
+        the symlink and regular-file guards above still run first either way.
+        """
         self._guard_regular_file(path, "staging proposal")
         if path.suffix.lower() in {".yaml", ".yml"}:
-            records, meta = staging.read_staging(path)
+            if read is None:
+                records, meta = staging.read_staging(path)
+            elif read.records is None or read.meta is None:
+                return "", ""
+            else:
+                records, meta = read.records, read.meta
             if staging.CARD_REVISION_KEY in meta:
                 promotion.staged_card_revision(
                     meta,
@@ -882,7 +916,7 @@ class AssistantContextBroker:
         return {"card": _display_record(record)}, 1
 
     def _source_snapshot(self, resource: _Resource) -> tuple[dict[str, Any], int]:
-        journeys, _warnings = source_journeys(self.config)
+        journeys, _warnings = source_journeys(self.config, live=self._live_staging)
         journey = next((item for item in journeys if item.source == resource.key), None)
         if journey is None:
             raise AssistantContextError(
@@ -892,7 +926,9 @@ class AssistantContextBroker:
         count = 1
         if journey.staging_path is not None:
             self._guard_regular_file(journey.staging_path, "staging source projection")
-            detail = source_detail(self.config, journey.source)
+            detail = source_detail(
+                self.config, journey.source, live=self._live_staging
+            )
             if detail is not None:
                 value["proposed_cards"] = [
                     {
@@ -919,7 +955,9 @@ class AssistantContextBroker:
             self._guard_missing_parent(self.config.ledger_file, "ledger")
             ledger_wire = None
         book = ledger.load_snapshot(self.config.ledger_file, ledger_wire)
-        staged, _warnings = status.collect_staged(self.config)
+        staged, _warnings = status.collect_staged(
+            self.config, parsed=self._live_staging
+        )
         report = status.build_report(
             self.config,
             universe,
@@ -1013,6 +1051,8 @@ class AssistantContextBroker:
         self._guard_directory(self.config.staging_dir, "staging directory", missing_ok=True)
         path = self.config.staging_dir / resource.key
         self._guard_regular_file(path, "staging proposal")
+        # Deliberately *not* the catalog's parse: this is the revalidation that
+        # refuses a proposal whose kind changed since the catalog named it.
         subtype, _title = self._readable_proposal_identity(path)
         if subtype != resource.subtype:
             raise AssistantContextError(

@@ -35,7 +35,7 @@ from japanese_anki.application.assistant_context import (
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.io import exclusive_path_lock, read_bytes_bound
+from japanese_anki.io import YAML_LOADER, exclusive_path_lock, read_bytes_bound
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.workbench import review
 
@@ -358,8 +358,9 @@ def _assignment_dependency_paths(
     }
     for deck_path in deck_paths:
         try:
-            raw = yaml.safe_load(
-                read_bytes_bound(deck_path).decode("utf-8", errors="strict")
+            raw = yaml.load(
+                read_bytes_bound(deck_path).decode("utf-8", errors="strict"),
+                Loader=YAML_LOADER,
             )
         except (JankiError, OSError, UnicodeError, ValueError, yaml.YAMLError) as exc:
             raise AssistantAssignmentError(

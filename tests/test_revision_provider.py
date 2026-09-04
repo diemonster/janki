@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import errno
+import hashlib
+import io
 import json
 import subprocess
+import threading
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -18,12 +22,75 @@ class Answer(BaseModel):
     examples: list[str]
 
 
+class StreamedAnswer(BaseModel):
+    """The response contract the captured stream fixture was really planned with."""
+
+    answer: str
+
+
 BLOCKS = (
     {"type": "text", "text": "Style\n"},
     {"type": "text", "text": "Task\n"},
 )
 USER_TURN = "Use 食べられる。"
 MODEL = "claude-opus-5"
+#: One real ``claude -p --output-format stream-json`` capture, redacted. Frame
+#: order, event shapes, and the gap between the streamed prose and the final
+#: structured answer are all the CLI's, not this suite's guess at them.
+STREAM_FIXTURE = Path(__file__).parent / "fixtures" / "claude-code-stream.ndjson"
+
+
+def _stream_lines() -> list[bytes]:
+    return STREAM_FIXTURE.read_bytes().splitlines(keepends=True)
+
+
+def _without_result_line() -> list[bytes]:
+    return [
+        line
+        for line in _stream_lines()
+        if json.loads(line).get("type") != "result"
+    ]
+
+
+def _result_line() -> bytes:
+    [line] = [
+        line for line in _stream_lines() if json.loads(line).get("type") == "result"
+    ]
+    return line
+
+
+def _fixture_answer() -> str:
+    answer = json.loads(_result_line())["structured_output"]["answer"]
+    assert isinstance(answer, str)
+    return answer
+
+
+def _stream_with_torn_frame(number: int) -> bytes:
+    """The captured stream with one frame ending in a truncated rune.
+
+    A child killed mid-write, or a CLI that wrote a rune in two syscalls, ends
+    a line no decoder can read — which does not make the bytes any less paid
+    for.
+    """
+    lines = _stream_lines()
+    lines[number - 1] = lines[number - 1].rstrip(b"\n") + b"\xe3\x81\n"  # torn "あ"
+    return b"".join(lines)
+
+
+def _fixture_preview() -> tuple[str, ...]:
+    """Each prose chunk the CLI streamed before it called for structured output."""
+    chunks = []
+    for line in _stream_lines():
+        payload = json.loads(line)
+        if payload.get("type") != "stream_event":
+            continue
+        event = payload["event"]
+        if event["type"] != "content_block_delta":
+            continue
+        if event["delta"]["type"] == "text_delta":
+            chunks.append(event["delta"]["text"])
+    assert chunks
+    return tuple(chunks)
 
 
 def _auth(**changes: Any) -> dict[str, Any]:
@@ -41,6 +108,79 @@ def _auth(**changes: Any) -> dict[str, Any]:
     return value
 
 
+class FakeStdin(io.BytesIO):
+    """A pipe that keeps its exact bytes after the writer closes it.
+
+    ``blocking`` is a full pipe whose child is not reading: the write only
+    completes once that child is gone, which is what releases a real writer
+    thread. A write still waiting when the test gives up records that, so an
+    unreaped child is a failure rather than a slow pass.
+    """
+
+    def __init__(self, *, blocking: bool = False) -> None:
+        super().__init__()
+        self.written = b""
+        self.timed_out = False
+        self._blocking = blocking
+        self._child_gone = threading.Event()
+
+    def child_exited(self) -> None:
+        self._child_gone.set()
+
+    def write(self, payload: Any) -> int:
+        if self._blocking and not self._child_gone.wait(3):
+            self.timed_out = True
+        return super().write(payload)
+
+    def close(self) -> None:
+        if not self.closed:
+            self.written = self.getvalue()
+        super().close()
+
+
+class FakeStdout(io.BytesIO):
+    """The child's stdout, optionally torn by a read error mid-stream."""
+
+    def __init__(self, payload: bytes, *, error_on_line: int | None = None) -> None:
+        super().__init__(payload)
+        self._error_on_line = error_on_line
+        self._lines = 0
+
+    def readline(self, *args: Any) -> bytes:
+        self._lines += 1
+        if self._lines == self._error_on_line:
+            raise OSError(errno.EIO, "Input/output error")
+        return super().readline(*args)
+
+
+class FakePopen:
+    """The exact child surface the streaming Claude Code transport drives."""
+
+    def __init__(
+        self,
+        stdout: bytes,
+        *,
+        returncode: int,
+        stderr: Any,
+        read_error: int | None = None,
+        blocking_stdin: bool = False,
+    ) -> None:
+        self.stdin = FakeStdin(blocking=blocking_stdin)
+        self.stdout = FakeStdout(stdout, error_on_line=read_error)
+        self.returncode = returncode
+        self.killed = False
+        self.waits = 0
+        stderr.write(b"local diagnostic")
+
+    def wait(self) -> int:
+        self.waits += 1
+        self.stdin.child_exited()
+        return self.returncode
+
+    def kill(self) -> None:
+        self.killed = True
+
+
 class FakeClaudeRunner:
     def __init__(
         self,
@@ -49,12 +189,18 @@ class FakeClaudeRunner:
         version: bytes = b"2.1.246 (Claude Code)\n",
         reply: bytes | None = None,
         returncode: int = 0,
+        read_error: int | None = None,
+        blocking_stdin: bool = False,
     ) -> None:
         self.auth = dict(_auth() if auth is None else auth)
         self.version = version
         self.reply = reply
         self.returncode = returncode
+        self.read_error = read_error
+        self.blocking_stdin = blocking_stdin
         self.calls: list[tuple[list[str], dict[str, Any]]] = []
+        self.spawned: list[tuple[list[str], dict[str, Any]]] = []
+        self.processes: list[FakePopen] = []
 
     def __call__(
         self, command: list[str], **kwargs: Any
@@ -65,19 +211,28 @@ class FakeClaudeRunner:
         assert list(cwd.iterdir()) == []
         if "--version" in command:
             return subprocess.CompletedProcess(command, 0, self.version, b"")
-        if "auth" in command:
-            return subprocess.CompletedProcess(
-                command,
-                0,
-                json.dumps(self.auth).encode("utf-8"),
-                b"",
-            )
+        assert "auth" in command, command
         return subprocess.CompletedProcess(
             command,
-            self.returncode,
-            self.reply or b"",
-            b"local diagnostic",
+            0,
+            json.dumps(self.auth).encode("utf-8"),
+            b"",
         )
+
+    def spawn(self, command: list[str], **kwargs: Any) -> FakePopen:
+        self.spawned.append((list(command), kwargs))
+        cwd = Path(kwargs["cwd"])
+        assert cwd.is_dir()
+        assert list(cwd.iterdir()) == []
+        process = FakePopen(
+            self.reply or b"",
+            returncode=self.returncode,
+            stderr=kwargs["stderr"],
+            read_error=self.read_error,
+            blocking_stdin=self.blocking_stdin,
+        )
+        self.processes.append(process)
+        return process
 
 
 def _which(name: str, **kwargs: Any) -> str:
@@ -90,6 +245,8 @@ def _cli_plan(
     runner: FakeClaudeRunner | None = None,
     *,
     env: Mapping[str, str] | None = None,
+    effort: str = "medium",
+    schema: Any = Answer,
 ) -> tuple[revision_provider.RevisionProviderPlan, FakeClaudeRunner]:
     used = runner or FakeClaudeRunner()
     plan = revision_provider.plan_provider(
@@ -99,7 +256,8 @@ def _cli_plan(
         task_template="Task\n",
         system_blocks=BLOCKS,
         user_turn=USER_TURN,
-        schema=Answer,
+        schema=schema,
+        effort=effort,
         env=env or {"PATH": "/bin", "BENIGN": "kept"},
         runner=used,
         which=_which,
@@ -107,24 +265,29 @@ def _cli_plan(
     return plan, used
 
 
-def _cli_plain_markdown_plan(
-    runner: FakeClaudeRunner | None = None,
-) -> tuple[revision_provider.RevisionProviderPlan, FakeClaudeRunner]:
-    used = runner or FakeClaudeRunner()
-    plan = revision_provider.plan_provider(
-        "claude-code",
-        model=MODEL,
-        style_guide="",
-        task_template="Task\n",
-        system_blocks=BLOCKS,
-        user_turn=USER_TURN,
-        schema=Answer,
-        response_mode="plain-markdown",
-        env={"PATH": "/bin"},
-        runner=used,
-        which=_which,
+def _prepared_stream(
+    reply: bytes,
+    *,
+    returncode: int = 0,
+    read_error: int | None = None,
+    blocking_stdin: bool = False,
+) -> tuple[
+    revision_provider.RevisionProvider,
+    revision_provider.PreparedRevisionProvider,
+    FakeClaudeRunner,
+]:
+    plan, runner = _cli_plan(
+        FakeClaudeRunner(
+            reply=reply,
+            returncode=returncode,
+            read_error=read_error,
+            blocking_stdin=blocking_stdin,
+        ),
+        schema=StreamedAnswer,
     )
-    return plan, used
+    provider = revision_provider.provider_for("claude-code")
+    prepared = provider.prepare(plan, runner=runner, which=_which)
+    return provider, prepared, runner
 
 
 def test_registry_has_only_the_two_revision_transports() -> None:
@@ -189,7 +352,7 @@ def test_claude_environment_scrubs_diversions_and_sets_exact_limits() -> None:
     assert "BENIGN" not in child
     for name in dangerous.keys() - {"PATH", "MAX_STRUCTURED_OUTPUT_RETRIES"}:
         assert name not in child
-    assert child["CLAUDE_CODE_EFFORT_LEVEL"] == "xhigh"
+    assert child["CLAUDE_CODE_EFFORT_LEVEL"] == "medium"
     assert child["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "64000"
     assert child["MAX_STRUCTURED_OUTPUT_RETRIES"] == "0"
     assert child["CLAUDE_CODE_MAX_TURNS"] == "1"
@@ -276,21 +439,25 @@ def test_claude_plan_requires_the_exact_supported_model(model: str) -> None:
             system_blocks=BLOCKS,
             user_turn=USER_TURN,
             schema=Answer,
+            effort="medium",
             runner=lambda *_args, **_kwargs: pytest.fail("must fail before probing"),
             which=_which,
         )
 
 
 def test_claude_command_has_exact_isolation_and_exact_prompt_channels() -> None:
-    reply = json.dumps(
-        {
-            "type": "result",
-            "subtype": "success",
-            "is_error": False,
-            "structured_output": {"examples": ["食べられます。"]},
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
+    reply = (
+        json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "structured_output": {"examples": ["食べられます。"]},
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        + b"\n"
+    )
     plan, runner = _cli_plan(FakeClaudeRunner(reply=reply))
     provider = revision_provider.provider_for("claude-code")
     prepared = provider.prepare(
@@ -301,11 +468,11 @@ def test_claude_command_has_exact_isolation_and_exact_prompt_channels() -> None:
     )
     captured: list[bytes] = []
 
-    result = provider.dispatch(prepared, capture=captured.append, runner=runner)
+    result = provider.dispatch(prepared, capture=captured.append, spawn=runner.spawn)
 
     assert result.parsed == Answer(examples=["食べられます。"])
     assert captured == [reply]
-    command, kwargs = runner.calls[-1]
+    command, kwargs = runner.spawned[-1]
     assert command[0] == "/private/test/bin/claude"
     assert "--bare" not in command
     for flag in (
@@ -317,7 +484,9 @@ def test_claude_command_has_exact_isolation_and_exact_prompt_channels() -> None:
         "--tools",
         "--permission-mode",
         "--prompt-suggestions",
+        "--verbose",
         "--output-format",
+        "--include-partial-messages",
         "--model",
         "--effort",
         "--json-schema",
@@ -327,93 +496,495 @@ def test_claude_command_has_exact_isolation_and_exact_prompt_channels() -> None:
     assert command[command.index("--tools") + 1] == ""
     assert command[command.index("--permission-mode") + 1] == "dontAsk"
     assert command[command.index("--prompt-suggestions") + 1] == "false"
-    assert command[command.index("--output-format") + 1] == "json"
+    assert command[command.index("--output-format") + 1] == "stream-json"
     assert command[command.index("--model") + 1] == MODEL
-    assert command[command.index("--effort") + 1] == "xhigh"
+    assert command[command.index("--effort") + 1] == "medium"
     assert command[command.index("--system-prompt") + 1] == "Style\n\n\nTask\n"
     assert json.loads(command[command.index("--json-schema") + 1])["type"] == "object"
-    assert kwargs["input"] == USER_TURN.encode("utf-8")
+    # The prompt is a pipe the transport writes and closes, never an argument
+    # and never a keyword the caller could substitute.
+    assert "input" not in kwargs
+    assert runner.processes[-1].stdin.written == USER_TURN.encode("utf-8")
     assert "shell" not in kwargs
 
 
-def test_claude_plain_markdown_uses_json_envelope_without_response_schema() -> None:
-    reply = json.dumps(
-        {
-            "type": "result",
-            "subtype": "success",
-            "is_error": False,
-            "result": "## Selected deck\n\n- One clear answer.",
-        }
-    ).encode("utf-8")
-    plan, runner = _cli_plain_markdown_plan(FakeClaudeRunner(reply=reply))
-    provider = revision_provider.provider_for("claude-code")
-    prepared = provider.prepare(
-        plan,
-        env={"PATH": "/bin"},
-        runner=runner,
-        which=_which,
-    )
-    captured: list[bytes] = []
+def test_claude_plan_binds_effort_into_argv_environment_and_transport() -> None:
+    """One depth, three bound channels — the caller's, not a module default.
 
-    result = provider.dispatch(prepared, capture=captured.append, runner=runner)
+    The Assistant's turn is the one pass that configures this, so a level that
+    reached only the command line would leave the environment and the stored
+    transport describing a call that never happened.
+    """
+    plan, runner = _cli_plan(effort="high")
 
-    assert result.parsed == "## Selected deck\n\n- One clear answer."
-    assert captured == [reply]
-    assert plan.transport["response_mode"] == "plain-markdown"
-    command = runner.calls[-1][0]
-    assert command[command.index("--output-format") + 1] == "json"
-    assert "--json-schema" not in command
-    assert "--system-prompt" in command
+    argv = list(plan.transport["argv"])
+    assert argv[argv.index("--effort") + 1] == "high"
+    assert plan.transport["effort"] == "high"
+    assert plan.transport["controlled_environment"]["CLAUDE_CODE_EFFORT_LEVEL"] == "high"
+    # The probe already runs under the depth the call will use.
+    assert runner.calls[0][1]["env"]["CLAUDE_CODE_EFFORT_LEVEL"] == "high"
+    request = json.loads(plan.persistent_manifest()["request_bytes_utf8"])
+    assert request["argv"][request["argv"].index("--effort") + 1] == "high"
+    assert request["controlled_environment"]["CLAUDE_CODE_EFFORT_LEVEL"] == "high"
 
 
-def test_claude_plain_markdown_requires_a_nonblank_result_string() -> None:
-    plan, _ = _cli_plain_markdown_plan()
-    provider = revision_provider.provider_for("claude-code")
+def test_claude_transport_effort_must_agree_with_argv_on_reconstruction() -> None:
+    """A stored depth that disagrees with the command is refused, not preferred.
 
-    for result in (None, "", "  \n"):
-        raw = json.dumps(
-            {
-                "type": "result",
-                "subtype": "success",
-                "is_error": False,
-                "result": result,
-            }
-        ).encode("utf-8")
-        with pytest.raises(
-            revision_provider.RevisionProviderError,
-            match="nonblank Markdown",
-        ):
-            provider.recover(plan, raw)
-
-
-def test_claude_plain_markdown_mode_is_bound_and_reconstructed_from_manifest() -> None:
-    plan, _ = _cli_plain_markdown_plan()
-    manifest = plan.persistent_manifest()
-
-    recovered = revision_provider.provider_plan_from_manifest(
-        manifest,
-        model=MODEL,
-        style_guide="",
-        task_template="Task\n",
-        system_blocks=BLOCKS,
-        user_turn=USER_TURN,
-        schema=Answer,
+    The transport is what the fingerprint covers and what a receipt displays;
+    the argv is what actually ran. A manifest whose two disagree describes a
+    call nobody made, so it cannot be reconstructed at all.
+    """
+    plan, _ = _cli_plan(effort="medium")
+    manifest = json.loads(json.dumps(plan.persistent_manifest()))
+    manifest["transport"]["effort"] = "max"
+    manifest["request_fingerprint"] = revision_provider._request_identity(
+        provider=manifest["provider"],
+        billing_class=manifest["billing_class"],
+        auth=manifest["auth"],
+        model=manifest["model"],
+        transport=manifest["transport"],
+        request_bytes=manifest["request_bytes_utf8"].encode("utf-8"),
+        response_schema_fingerprint=manifest["response_schema_fingerprint"],
     )
 
-    assert recovered.transport["response_mode"] == "plain-markdown"
-    assert recovered.request_fingerprint == plan.request_fingerprint
-    changed = json.loads(json.dumps(manifest))
-    changed["transport"].pop("response_mode")
-    with pytest.raises(revision_provider.RevisionProviderError, match="fingerprint"):
+    with pytest.raises(
+        revision_provider.RevisionProviderError, match="bound model, prompts"
+    ):
         revision_provider.provider_plan_from_manifest(
-            changed,
+            manifest,
             model=MODEL,
-            style_guide="",
+            style_guide="Style\n",
             task_template="Task\n",
             system_blocks=BLOCKS,
             user_turn=USER_TURN,
             schema=Answer,
         )
+
+
+def test_claude_command_is_bound_whole_not_flag_by_flag() -> None:
+    """A stored command missing a flag the CLI needs is refused on reconstruction.
+
+    Binding a command by checking the options janki happens to name leaves every
+    other flag free to drift: a manifest whose argv lost --safe-mode described a
+    call with a wider permission surface than the one that was fingerprinted,
+    and it validated. The command is rebuilt from the plan's own fields and
+    compared as one value, so a flag is bound the moment _cli_argv emits it.
+    """
+    plan, _ = _cli_plan(effort="medium")
+    manifest = json.loads(json.dumps(plan.persistent_manifest()))
+    argv = [item for item in manifest["transport"]["argv"] if item != "--safe-mode"]
+    assert len(argv) == len(manifest["transport"]["argv"]) - 1
+    manifest["transport"]["argv"] = argv
+    request = json.loads(manifest["request_bytes_utf8"])
+    request["argv"] = argv
+    manifest["request_bytes_utf8"] = revision_provider._canonical_json(request)
+    manifest["request_bytes_sha256"] = hashlib.sha256(
+        manifest["request_bytes_utf8"].encode("utf-8")
+    ).hexdigest()
+    manifest["request_fingerprint"] = revision_provider._request_identity(
+        provider=manifest["provider"],
+        billing_class=manifest["billing_class"],
+        auth=manifest["auth"],
+        model=manifest["model"],
+        transport=manifest["transport"],
+        request_bytes=manifest["request_bytes_utf8"].encode("utf-8"),
+        response_schema_fingerprint=manifest["response_schema_fingerprint"],
+    )
+
+    with pytest.raises(
+        revision_provider.RevisionProviderError, match="bound model, prompts"
+    ):
+        revision_provider.provider_plan_from_manifest(
+            manifest,
+            model=MODEL,
+            style_guide="Style\n",
+            task_template="Task\n",
+            system_blocks=BLOCKS,
+            user_turn=USER_TURN,
+            schema=Answer,
+        )
+
+
+def test_claude_prepare_binds_the_dispatch_environment_to_the_plan() -> None:
+    """The child runs under the plan's environment, not today's constants.
+
+    Preparation re-probes the CLI, and the environment that probe builds is the
+    one dispatch reuses. Rebuilding it from the module would let a configured
+    depth changed since planning reach a call whose fingerprint says otherwise.
+    """
+    reply = json.dumps(
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "structured_output": {"examples": ["食べられます。"]},
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    plan, runner = _cli_plan(FakeClaudeRunner(reply=reply), effort="low")
+    provider = revision_provider.provider_for("claude-code")
+
+    prepared = provider.prepare(plan, env={"PATH": "/bin"}, runner=runner, which=_which)
+    provider.dispatch(prepared, capture=lambda _raw: None, spawn=runner.spawn)
+
+    assert prepared.environment is not None
+    assert prepared.environment["CLAUDE_CODE_EFFORT_LEVEL"] == "low"
+    assert runner.spawned[-1][1]["env"]["CLAUDE_CODE_EFFORT_LEVEL"] == "low"
+
+
+def test_claude_dispatch_captures_exact_stdout_and_decodes_the_result_line() -> None:
+    """The artifact is the whole stream; the answer is its one result frame.
+
+    Capturing only the frame janki reads would leave the paid call's own record
+    of what it did — its init, its usage, its turn count — unrecoverable.
+    """
+    raw = STREAM_FIXTURE.read_bytes()
+    provider, prepared, runner = _prepared_stream(raw)
+    captured: list[bytes] = []
+
+    result = provider.dispatch(prepared, capture=captured.append, spawn=runner.spawn)
+
+    assert captured == [raw]
+    assert result.parsed == StreamedAnswer(answer=_fixture_answer())
+    assert result.stop_reason == "end_turn"
+
+
+def test_claude_reply_needs_exactly_one_result_line() -> None:
+    """No result frame and two result frames are both unreadable, not answers.
+
+    Silently preferring one of several would settle a call on a frame nobody
+    proved was the last, and a capture with none finished nothing at all.
+    """
+    provider = revision_provider.provider_for("claude-code")
+    plan, _ = _cli_plan(schema=StreamedAnswer)
+
+    for reply in (
+        b"".join(_without_result_line()),
+        STREAM_FIXTURE.read_bytes() + _result_line(),
+    ):
+        with pytest.raises(
+            revision_provider.RevisionProviderError, match="result frames"
+        ):
+            provider.recover(plan, reply)
+
+
+def test_claude_error_result_line_decodes_to_no_answer() -> None:
+    """A failed result frame is a turn that said nothing, not a torn capture."""
+    failed = json.dumps(
+        {
+            "type": "result",
+            "subtype": "error_during_execution",
+            "is_error": True,
+        }
+    ).encode("utf-8")
+    reply = b"".join([*_without_result_line(), failed, b"\n"])
+    provider, prepared, runner = _prepared_stream(reply)
+    captured: list[bytes] = []
+
+    result = provider.dispatch(prepared, capture=captured.append, spawn=runner.spawn)
+
+    assert captured == [reply]
+    assert result.parsed is None
+    assert result.stop_reason == "error_during_execution"
+
+
+def test_claude_recover_decodes_a_captured_stream_reply_identically() -> None:
+    """Recovery reads the same whole capture dispatch did, not its first frame."""
+    raw = STREAM_FIXTURE.read_bytes()
+    provider, prepared, runner = _prepared_stream(raw)
+
+    dispatched = provider.dispatch(
+        prepared, capture=lambda _raw: None, spawn=runner.spawn
+    )
+    recovered = provider.recover(prepared.plan, raw)
+
+    assert recovered.parsed == dispatched.parsed
+    assert recovered.stop_reason == dispatched.stop_reason
+
+
+def test_claude_stream_frames_concatenate_to_the_captured_artifact() -> None:
+    """Every spooled frame keeps its exact bytes, newline included.
+
+    The spool exists so an interrupted call can be read back; a frame stripped
+    of its boundary would rebuild an artifact the receipt no longer matches.
+    """
+    raw = STREAM_FIXTURE.read_bytes()
+    provider, prepared, runner = _prepared_stream(raw)
+    frames: list[str] = []
+    captured: list[bytes] = []
+
+    provider.dispatch(
+        prepared,
+        capture=captured.append,
+        spawn=runner.spawn,
+        frame=frames.append,
+    )
+
+    assert len(frames) == len(_stream_lines())
+    assert "".join(frames).encode("utf-8") == captured[0]
+
+
+def test_claude_frame_failure_kills_the_process_and_captures_nothing() -> None:
+    """A frame janki could not make durable ends the call where it stands.
+
+    Reading on would consume a reply whose earlier bytes are already lost, and
+    capturing the remainder would publish an artifact missing them.
+    """
+    raw = STREAM_FIXTURE.read_bytes()
+    provider, prepared, runner = _prepared_stream(raw)
+    frames: list[str] = []
+    captured: list[bytes] = []
+
+    def spool(payload: str) -> None:
+        frames.append(payload)
+        if len(frames) == 3:
+            raise OSError("the frame spool is full")
+
+    with pytest.raises(
+        revision_provider.RevisionProviderError, match="frame capture failed"
+    ):
+        provider.dispatch(
+            prepared,
+            capture=captured.append,
+            spawn=runner.spawn,
+            frame=spool,
+        )
+
+    assert captured == []
+    assert runner.processes[-1].killed
+
+
+def test_claude_undecodable_stream_line_is_captured_then_refused() -> None:
+    """One unreadable byte never costs the reply that carried it.
+
+    The child was paid for the whole stream whatever the bytes turned out to
+    be, so reading runs to EOF, the exact artifact is captured, and only then
+    is the call refused — naming the frame nobody can read.
+    """
+    corrupted = _stream_with_torn_frame(16)
+    provider, prepared, runner = _prepared_stream(corrupted)
+    frames: list[str] = []
+    captured: list[bytes] = []
+
+    with pytest.raises(
+        revision_provider.RevisionProviderError, match="frame 16 is not UTF-8"
+    ):
+        provider.dispatch(
+            prepared,
+            capture=captured.append,
+            spawn=runner.spawn,
+            frame=frames.append,
+        )
+
+    assert captured == [corrupted]
+    assert frames == [line.decode("utf-8") for line in _stream_lines()[:15]]
+    assert not runner.processes[-1].killed
+
+
+def test_claude_refused_stream_spool_is_a_prefix_of_the_artifact() -> None:
+    """The spool stops where reading did, so it is a prefix and not a hole.
+
+    Spooling on past the unreadable frame would leave a durable record that
+    rebuilds to a stream missing the very bytes that refused it, and every
+    later frame would then be attributed to a reply nobody could read.
+    """
+    corrupted = _stream_with_torn_frame(16)
+    provider, prepared, runner = _prepared_stream(corrupted)
+    frames: list[str] = []
+    captured: list[bytes] = []
+
+    with pytest.raises(revision_provider.RevisionProviderError, match="not UTF-8"):
+        provider.dispatch(
+            prepared,
+            capture=captured.append,
+            spawn=runner.spawn,
+            frame=frames.append,
+        )
+
+    spooled = "".join(frames).encode("utf-8")
+    assert captured[0].startswith(spooled)
+    assert len(captured[0]) > len(spooled)
+
+
+def test_claude_read_failure_kills_and_reaps_the_child() -> None:
+    """A torn read leaves no child behind in a directory about to be deleted.
+
+    Dispatch reads inside a temporary cwd it removes on the way out, so a
+    child still running there writes into a directory that is gone. It is
+    killed and waited for exactly once, and only then is its prompt writer
+    joined: a writer blocked on a full stdin pipe is released by the child's
+    death, not before it. Nothing is captured either — a read that tore
+    mid-stream holds bytes janki cannot claim are the whole reply.
+    """
+    provider, prepared, runner = _prepared_stream(
+        STREAM_FIXTURE.read_bytes(), read_error=3, blocking_stdin=True
+    )
+    captured: list[bytes] = []
+
+    with pytest.raises(OSError, match="Input/output error"):
+        provider.dispatch(prepared, capture=captured.append, spawn=runner.spawn)
+
+    process = runner.processes[-1]
+    assert process.killed
+    assert process.waits == 1
+    assert not process.stdin.timed_out
+    assert process.stdin.closed
+    assert captured == []
+
+
+def test_claude_prompt_write_failure_still_closes_stdin() -> None:
+    """A torn prompt write still ends the prompt.
+
+    The close is the CLI's end of input. Skipping it because the write failed
+    leaves a child waiting on a stdin that never reaches EOF, and holds the
+    pipe open past the turn that opened it.
+    """
+
+    class BrokenPipe(FakeStdin):
+        def write(self, payload: Any) -> int:
+            raise OSError(errno.EPIPE, "Broken pipe")
+
+    process = FakePopen(b"", returncode=0, stderr=io.BytesIO())
+    process.stdin = BrokenPipe()
+
+    revision_provider._send_claude_prompt(process, b"one exact user turn")
+
+    assert process.stdin.closed
+
+
+def test_claude_preview_receives_only_first_text_block_deltas() -> None:
+    """The live preview is the streamed prose, and nothing else on the wire.
+
+    Thinking is not an answer, the structured answer arrives later as partial
+    tool-call JSON that is not displayable text, and the fixture proves the
+    prose is only a near-paraphrase of what the schema finally returns. The
+    schema round trip is a second message, and prose it happens to stream is
+    the model talking to the tool call, not to the reader — so this splices
+    exactly that into the real capture, which never contained any.
+    """
+    later_prose = b"".join(
+        json.dumps(payload).encode("utf-8") + b"\n"
+        for payload in (
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_start",
+                    "index": 1,
+                    "content_block": {"type": "text", "text": ""},
+                },
+            },
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_delta",
+                    "index": 1,
+                    "delta": {"type": "text_delta", "text": "LATER"},
+                },
+            },
+            {
+                "type": "stream_event",
+                "event": {"type": "content_block_stop", "index": 1},
+            },
+        )
+    )
+    lines = _stream_lines()
+    # After the last block the CLI really closed, which is the tool call the
+    # second message was opened for.
+    cut = 1 + max(
+        index
+        for index, line in enumerate(lines)
+        if json.loads(line).get("event", {}).get("type") == "content_block_stop"
+    )
+    raw = b"".join([*lines[:cut], later_prose, *lines[cut:]])
+    provider, prepared, runner = _prepared_stream(raw)
+    deltas: list[str] = []
+
+    provider.dispatch(
+        prepared,
+        capture=lambda _raw: None,
+        spawn=runner.spawn,
+        preview=deltas.append,
+    )
+
+    assert "LATER" not in "".join(deltas)
+    assert tuple(deltas) == _fixture_preview()
+    assert "".join(deltas) != _fixture_answer()
+
+
+def test_claude_preview_keeps_the_first_text_block_when_a_second_starts() -> None:
+    """The preview is one block's prose, so a later block cannot join it.
+
+    A message may open more than one text block; only the first is the answer
+    being previewed, and appending a second would show two passes as one.
+    """
+    second_block = b"".join(
+        json.dumps(payload).encode("utf-8") + b"\n"
+        for payload in (
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_start",
+                    "index": 2,
+                    "content_block": {"type": "text", "text": ""},
+                },
+            },
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_delta",
+                    "index": 2,
+                    "delta": {"type": "text_delta", "text": "A second pass."},
+                },
+            },
+        )
+    )
+    lines = _stream_lines()
+    cut = next(
+        index
+        for index, line in enumerate(lines)
+        if json.loads(line).get("event", {}).get("type") == "message_delta"
+    )
+    raw = b"".join([*lines[:cut], second_block, *lines[cut:]])
+    provider, prepared, runner = _prepared_stream(raw)
+    deltas: list[str] = []
+
+    provider.dispatch(
+        prepared,
+        capture=lambda _raw: None,
+        spawn=runner.spawn,
+        preview=deltas.append,
+    )
+
+    assert tuple(deltas) == _fixture_preview()
+
+
+def test_claude_preview_survives_a_blank_stdout_line() -> None:
+    """A blank line is not a frame, and not the end of the preview either.
+
+    The decoder skips blank lines, so a preview that treated one as a fatal
+    error would go quiet for the rest of a turn the CLI is still streaming —
+    and say nothing about why.
+    """
+    lines = _stream_lines()
+    first_delta = next(
+        index
+        for index, line in enumerate(lines)
+        if json.loads(line).get("event", {}).get("delta", {}).get("type")
+        == "text_delta"
+    )
+    raw = b"".join([*lines[:first_delta], b"\n", *lines[first_delta:]])
+    provider, prepared, runner = _prepared_stream(raw)
+    deltas: list[str] = []
+
+    provider.dispatch(
+        prepared,
+        capture=lambda _raw: None,
+        spawn=runner.spawn,
+        preview=deltas.append,
+    )
+
+    assert tuple(deltas) == _fixture_preview()
 
 
 def test_claude_captures_nonzero_stdout_before_reporting_failure() -> None:
@@ -424,7 +995,7 @@ def test_claude_captures_nonzero_stdout_before_reporting_failure() -> None:
     events: list[bytes] = []
 
     with pytest.raises(revision_provider.RevisionProviderError, match="exit 3"):
-        provider.dispatch(prepared, capture=events.append, runner=runner)
+        provider.dispatch(prepared, capture=events.append, spawn=runner.spawn)
 
     assert events == [raw]
 
@@ -441,7 +1012,7 @@ def test_claude_captures_before_outer_json_and_schema_validation() -> None:
         events: list[bytes] = []
 
         with pytest.raises(revision_provider.RevisionProviderError):
-            provider.dispatch(prepared, capture=events.append, runner=runner)
+            provider.dispatch(prepared, capture=events.append, spawn=runner.spawn)
 
         assert events == [raw]
 
@@ -464,9 +1035,6 @@ def test_claude_success_requires_an_explicit_false_error_flag() -> None:
 
 def test_claude_plan_is_deeply_immutable_and_purely_recoverable() -> None:
     plan, _ = _cli_plan()
-    # Structured Claude manifests predate the explicit plain-Markdown mode;
-    # an already-captured operation must remain exactly reconstructible.
-    assert "response_mode" not in plan.transport
     with pytest.raises(TypeError):
         plan.transport["argv"][0] = "other"  # type: ignore[index]
     with pytest.raises(TypeError):
@@ -535,9 +1103,12 @@ def test_each_claude_transport_identity_change_changes_the_fingerprint() -> None
         system_blocks=BLOCKS,
         user_turn="Different",
         schema=Answer,
+        effort="medium",
         runner=FakeClaudeRunner(),
         which=_which,
     )
+
+    effort_plan, _ = _cli_plan(effort="high")
 
     assert len(
         {
@@ -545,8 +1116,9 @@ def test_each_claude_transport_identity_change_changes_the_fingerprint() -> None
             pro_plan.request_fingerprint,
             version_plan.request_fingerprint,
             turn_plan.request_fingerprint,
+            effort_plan.request_fingerprint,
         }
-    ) == 4
+    ) == 5
 
 
 class FakeAPIResponse:
@@ -566,6 +1138,7 @@ def test_api_adapter_keeps_existing_call_shape_and_byte_capture() -> None:
         system_blocks=BLOCKS,
         user_turn=USER_TURN,
         schema=Answer,
+        effort="xhigh",
     )
     prepared = provider.prepare(plan, client=object())
     raw = json.dumps(
@@ -614,6 +1187,7 @@ def test_api_dispatch_and_recovery_both_refuse_multiple_text_answers() -> None:
         system_blocks=BLOCKS,
         user_turn=USER_TURN,
         schema=Answer,
+        effort="xhigh",
     )
     prepared = provider.prepare(plan, client=object())
     raw = json.dumps(
@@ -646,6 +1220,7 @@ def test_api_dispatch_refuses_two_capture_callbacks() -> None:
         system_blocks=BLOCKS,
         user_turn=USER_TURN,
         schema=Answer,
+        effort="xhigh",
     )
     prepared = provider.prepare(plan, client=object())
     raw = json.dumps({"stop_reason": "max_tokens", "content": []}).encode()
@@ -712,6 +1287,7 @@ def test_reconstruction_does_not_regenerate_todays_schema(
             system_blocks=BLOCKS,
             user_turn=USER_TURN,
             schema=Answer,
+            effort="xhigh",
         )
     monkeypatch.setattr(
         revision_provider,
@@ -749,6 +1325,7 @@ def test_api_reconstruction_uses_the_stored_thinking_contract() -> None:
         system_blocks=BLOCKS,
         user_turn=USER_TURN,
         schema=Answer,
+        effort="xhigh",
     )
     manifest = json.loads(json.dumps(plan.persistent_manifest()))
     request = json.loads(manifest["request_bytes_utf8"])

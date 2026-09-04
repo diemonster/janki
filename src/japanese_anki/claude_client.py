@@ -103,11 +103,18 @@ DEFAULT_MAX_TOKENS = 64000
 #: Reasoning depth for every pass. Inside ``output_config`` beside the schema,
 #: not a top-level field.
 #:
-#: Every janki pass writes study content or authorizes its movement, so every
-#: one runs here: extraction reads a source and mints identities plus patterns,
+#: Every janki pass that writes study content or authorizes its movement runs
+#: here: extraction reads a source and mints identities plus patterns,
 #: enrichment writes complete card content, and coverage approval guards a
-#: promotion. There is no pass whose answer is worth less than the others'.
+#: promotion. There is no such pass whose answer is worth less than the others'.
+#: The exception is the conversational Assistant turn, which writes nothing and
+#: is read immediately, so ``[assistant] effort`` configures its depth instead.
 DEFAULT_EFFORT = "xhigh"
+
+#: Every depth ``--effort`` and ``output_config.effort`` accept, shallowest
+#: first. The exact set ``claude --help`` prints, so a configured level is
+#: validated against the CLI's own vocabulary rather than against a guess.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 
 #: Models that accept ``output_config.effort`` at :data:`DEFAULT_EFFORT`.
 #:
@@ -161,6 +168,11 @@ def effort_for(model: str) -> str | None:
     because ``--model`` changes the model alone: a guard on either of the other
     two guards something the caller did not just override — and pinning an
     older model is the usual reason to pass it.
+
+    Answers *whether* a model takes the key and at what card-writing depth, so
+    every pass that writes study content resolves its depth here. The one pass
+    that does not is the ordinary Assistant turn, which writes conversation
+    rather than cards and takes its level from ``[assistant] effort``.
     """
     name = model.strip().lower()
     if not name:

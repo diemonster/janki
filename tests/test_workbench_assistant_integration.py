@@ -1499,6 +1499,7 @@ def test_discovery_keeps_an_unreadable_deck_visible_but_chat_inert(
             history=(),
             message="Can you read this deck?",
             progress=lambda _label: None,
+            preview=lambda _delta: None,
         )
 
 
@@ -1599,6 +1600,7 @@ def test_chat_refuses_a_path_that_has_no_startup_choice(
             history=(),
             message="Which deck?",
             progress=lambda _label: None,
+            preview=lambda _delta: None,
         )
 
 
@@ -1684,13 +1686,11 @@ def test_adapter_routes_unfocused_and_focused_turns_through_exact_agent_context(
         _config: ProjectConfig,
         received: Any,
         *,
-        context_loader: Any,
         progress: Any,
+        preview: Any,
     ) -> Any:
         assert received is planned
-        assert context_loader().focus_resource_id == (
-            "resource_deck" if focused else None
-        )
+        assert received is not None
         progress("Writing answer")
         return _agent_result(answer="This is the exact repository answer.")
 
@@ -1715,9 +1715,12 @@ def test_adapter_routes_unfocused_and_focused_turns_through_exact_agent_context(
         history=(("user", "earlier"), ("assistant", "Earlier answer.")),
         message="What is in my library?",
         progress=progress.append,
+        preview=lambda _delta: None,
     )
 
-    assert contexts == [deck_scope, deck_scope]
+    # One build per message: the turn dispatches the exact context it was
+    # planned and fingerprinted against, so there is no second read to differ.
+    assert contexts == [deck_scope]
     assert len(observed) == 1
     context, message, history = observed[0]
     assert context.focus_resource_id == ("resource_deck" if focused else None)
@@ -1727,6 +1730,50 @@ def test_adapter_routes_unfocused_and_focused_turns_through_exact_agent_context(
     assert reply.text == "This is the exact repository answer."
     assert reply.action is None
     assert reply.action_instruction is None
+
+
+def test_adapter_forwards_preview_deltas_from_the_agent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The adapter is a pipe for streamed prose, not a place it can be dropped."""
+    deck = tmp_path / "data" / "decks" / "potential.yaml"
+    adapter = _adapter(_config(tmp_path), deck)
+
+    def run_agent(
+        _config: ProjectConfig,
+        _received: Any,
+        *,
+        progress: Any,
+        preview: Any,
+    ) -> Any:
+        del progress
+        preview("partial")
+        return _agent_result(answer="This is the exact repository answer.")
+
+    monkeypatch.setattr(
+        assistant_adapter,
+        "_agent_context",
+        lambda _config, *, deck_scope: _agent_context_value(focus_resource_id=None),
+    )
+    monkeypatch.setattr(
+        assistant_adapter.assistant_agent,
+        "plan_agent",
+        lambda *_args, **_kwargs: object(),
+    )
+    monkeypatch.setattr(assistant_adapter.assistant_agent, "run_agent", run_agent)
+    deltas: list[str] = []
+
+    reply = adapter.chat(
+        deck_scope="",
+        history=(),
+        message="What is in my library?",
+        progress=lambda _label: None,
+        preview=deltas.append,
+    )
+
+    assert deltas == ["partial"]
+    assert reply.text == "This is the exact repository answer."
 
 
 def test_revise_cards_resolves_every_deck_record_in_canonical_deck_order(
@@ -1788,6 +1835,7 @@ def test_revise_cards_resolves_every_deck_record_in_canonical_deck_order(
         history=(),
         message="Improve every card in this deck.",
         progress=lambda _label: None,
+        preview=lambda _delta: None,
     )
 
     assert planned == [
@@ -2477,6 +2525,7 @@ def test_card_action_planner_failure_keeps_the_answer_and_reports_no_change(
         history=(),
         message="Improve this card.",
         progress=lambda _label: None,
+        preview=lambda _delta: None,
     )
 
     assert reply.text.startswith("I found the requested cards.\n\n")
@@ -2993,6 +3042,7 @@ def test_inspect_resources_preserves_an_unknown_resource_refusal(
         history=(),
         message="Inspect that resource.",
         progress=lambda _label: None,
+        preview=lambda _delta: None,
     )
 
     assert "I need the exact local resource." in reply.text

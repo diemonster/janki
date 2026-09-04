@@ -39,7 +39,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
@@ -79,6 +79,7 @@ __all__ = [
     "ResponseSpoolObservation",
     "ResponseSpoolReceipt",
     "advance_refusal",
+    "cancel_before_send",
     "capture_artifact",
     "prepare_artifact_store",
     "reply_observation",
@@ -90,6 +91,10 @@ __all__ = [
 
 class OperationError(JankiError):
     """A journal transition that is not allowed, or a journal that is unreadable."""
+
+
+#: Any paid service's run error: `(message, *, operation_id, provider_dispatched)`.
+_UnsentError = TypeVar("_UnsentError", bound=JankiError)
 
 
 #: Every state an operation may hold, and the only legal moves between them.
@@ -1241,6 +1246,39 @@ def _read_response_spool_snapshot(
         return None
 
 
+def _read_response_spool_state(
+    journal_path: Path,
+    receipt: ResponseSpoolReceipt,
+) -> os.stat_result | None:
+    """Bind the direct regular name of a spool without reading a byte of it.
+
+    Every guarantee `_read_response_spool_snapshot` gets from the directory and
+    the inode, for the questions that only need the file's size: a same-name
+    replacement, a symlink, or a hard-linked name still answers `None` here.
+    """
+    target = (Path(journal_path).parent / receipt.relative_name).absolute()
+    try:
+        with _open_bound_directory(target.parent, create=False) as directory:
+            parent = os.fstat(directory.descriptor)
+            if (parent.st_dev, parent.st_ino) != receipt.directory_identity:
+                return None
+            named = os.stat(
+                target.name,
+                dir_fd=directory.descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISREG(named.st_mode)
+                or named.st_nlink != 1
+                or (named.st_dev, named.st_ino) != receipt.file_identity
+            ):
+                return None
+            _validate_bound_directory(directory)
+            return named
+    except (DataError, OSError):
+        return None
+
+
 def _decode_response_frames(payload: bytes) -> tuple[str, ...]:
     """Validate structural framing without interpreting any frame as JSON."""
     frames: list[str] = []
@@ -1284,7 +1322,14 @@ def _validated_response_frames(
         receipt.committed_sha256,
     ):
         raise OperationError("Response spool changed before its durable head")
-    committed_frames = _decode_response_frames(committed_prefix)
+    # The ordinary spool holds no crash extension, so its durable prefix is the
+    # whole payload that was just decoded. Decoding those same bytes a second
+    # time only to count them is what makes a streaming call quadratic.
+    committed_frames = (
+        frames
+        if len(payload) == receipt.committed_size
+        else _decode_response_frames(committed_prefix)
+    )
     if len(committed_frames) != receipt.frame_count:
         raise OperationError(
             "Response spool durable frame count does not match its head"
@@ -1399,9 +1444,13 @@ def _append_response_spool(
                     not stat.S_ISREG(before.st_mode)
                     or before.st_nlink != 1
                     or _artifact_state(before) != binding.entry_state
-                    or hashlib.sha256(_read_descriptor(descriptor)).hexdigest()
-                    != binding.content_sha256
                 ):
+                    # The bound state carries dev, inode, size and both
+                    # timestamps in nanoseconds, and no write can restore a
+                    # ctime — so re-reading and rehashing the whole file here
+                    # proves nothing the snapshot taken moments ago under this
+                    # same lock did not. What the bytes are is proved after the
+                    # append instead, against that snapshot.
                     raise OperationError(
                         "The exact response spool changed before append"
                     )
@@ -1422,8 +1471,10 @@ def _append_response_spool(
                 )
                 complete_payload = _read_descriptor(descriptor)
                 confirmed = os.fstat(descriptor)
-                expected_frames = (*existing_frames, payload)
-                complete_frames = _decode_response_frames(complete_payload)
+                # The validated snapshot already decoded the prefix, and this
+                # exact record encodes exactly one frame. Proving the file is
+                # that prefix followed by that record therefore proves the
+                # frames without decoding and rechecksumming every earlier one.
                 if (
                     not stat.S_ISREG(named.st_mode)
                     or named.st_nlink != 1
@@ -1431,11 +1482,14 @@ def _append_response_spool(
                     or _artifact_state(after) != _artifact_state(named)
                     or _artifact_state(after) != _artifact_state(confirmed)
                     or after.st_size != before.st_size + len(record)
-                    or complete_frames != expected_frames
+                    or len(complete_payload) != before.st_size + len(record)
+                    or not complete_payload.startswith(existing_payload)
+                    or not complete_payload.endswith(record)
                 ):
                     raise OperationError(
                         "The exact response spool changed during append"
                     )
+                complete_frames = (*existing_frames, payload)
             finally:
                 os.close(descriptor)
             _validate_bound_directory(directory)
@@ -2040,7 +2094,7 @@ class OperationJournal:
         *,
         unavailable_ok: bool = False,
         invalid_ok: bool = False,
-    ) -> tuple[Operation, tuple[str, ...] | None]:
+    ) -> Operation:
         """Adopt the sole complete frame left past a durable spool head.
 
         The provider callback fsyncs a frame before the journal records its new
@@ -2048,22 +2102,31 @@ class OperationJournal:
         journal lock is allowed to adopt exactly that one validated extension.
         Missing, replaced, or malformed evidence may be preserved for an
         explicit discard path without preventing a person from ending a call.
+
+        Only an extension is recovery's business, and only a size can make one:
+        a spool still exactly as long as its durable head has nothing to adopt,
+        which one bound stat settles.  Every caller that needs the frames
+        themselves validates them for its own use — this must not become the
+        place a streaming append pays to reread the whole file each frame.
         """
         receipt = held.response_spool
         if receipt is None:
             raise OperationError(
                 f"Operation {held.operation_id!r} has no response spool"
             )
+        state = _read_response_spool_state(self.path, receipt)
+        if state is not None and state.st_size == receipt.committed_size:
+            return held
         observed = _read_response_spool_snapshot(self.path, receipt)
         if observed is None:
             if unavailable_ok:
-                return held, None
+                return held
             raise OperationError("The exact response spool is unavailable")
         try:
             frames = _validated_response_frames(receipt, observed[1])
         except OperationError:
             if invalid_ok:
-                return held, None
+                return held
             raise
         if len(observed[1]) > receipt.committed_size:
             adopted_spool = _response_spool_receipt_at_head(
@@ -2077,7 +2140,7 @@ class OperationJournal:
             _confirm_response_spool_head(
                 self.path, adopted_spool, observed[1]
             )
-        return held, frames
+        return held
 
     def append_response_frame(self, operation_id: str, payload: str) -> None:
         """Append one exact text frame and fsync it before returning."""
@@ -2102,9 +2165,7 @@ class OperationJournal:
                     f"Operation {operation_id!r} in state {held.state!r} "
                     "cannot append a provider response frame"
                 )
-            held, _ = self._recover_response_spool_head_under_lock(
-                current, held
-            )
+            held = self._recover_response_spool_head_under_lock(current, held)
             updated_spool = _append_response_spool(
                 # ``held`` now carries the adopted exact head, if recovery was
                 # needed; the low-level writer refuses any extension itself.
@@ -2113,16 +2174,18 @@ class OperationJournal:
             updated = self._record_response_spool_head_under_lock(
                 current, held, updated_spool
             )
-            updated_observation = _read_response_spool_snapshot(
-                self.path, updated_spool
-            )
-            if updated_observation is None:
+            # The appended bytes were proved against this receipt two steps
+            # ago, under this same lock, and nothing since has touched the
+            # spool. All that is left to confirm is that the journal write did
+            # not disturb the file it just described, which is a bound stat.
+            recorded = _read_response_spool_state(self.path, updated_spool)
+            if (
+                recorded is None
+                or recorded.st_size != updated_spool.committed_size
+            ):
                 raise OperationError(
-                    "The exact response spool is unavailable after append"
+                    "The exact response spool changed after its head was journalled"
                 )
-            _confirm_response_spool_head(
-                self.path, updated_spool, updated_observation[1]
-            )
             self.operations[operation_id] = updated
 
     def read_response_frames(self, operation_id: str) -> tuple[str, ...]:
@@ -2143,13 +2206,20 @@ class OperationJournal:
                 raise OperationError(
                     f"Operation {operation_id!r} has no response spool"
                 )
-            _, frames = self._recover_response_spool_head_under_lock(
-                current, held
+            held = self._recover_response_spool_head_under_lock(current, held)
+            # Recovery only ever adopts a newer head, so the receipt checked
+            # above is still there. It answers "is there an extension" from a
+            # stat, which is what makes appending cheap, so the frames
+            # themselves are read here — by the one caller that wants them.
+            receipt = held.response_spool
+            observed = (
+                _read_response_spool_snapshot(self.path, receipt)
+                if receipt is not None
+                else None
             )
-            if frames is None:  # unavailable/invalid are refused above
-                raise OperationError(
-                    "The exact response spool could not be validated"
-                )
+            if receipt is None or observed is None:
+                raise OperationError("The exact response spool is unavailable")
+            frames = _validated_response_frames(receipt, observed[1])
             self.operations = current.operations
             return frames
 
@@ -2468,7 +2538,7 @@ class OperationJournal:
                 # the terminal transition makes provider recovery ineligible.
                 # Unreadable evidence is left bound for the explicit forced
                 # discard path; it does not make the money outcome knowable.
-                held, _ = self._recover_response_spool_head_under_lock(
+                held = self._recover_response_spool_head_under_lock(
                     current,
                     held,
                     unavailable_ok=True,
@@ -2874,3 +2944,47 @@ class OperationJournal:
             (op for op in self.operations.values() if op.needs_a_person),
             key=lambda op: (op.authorized_at, op.operation_id),
         )
+
+
+def cancel_before_send(
+    journal_path: Path,
+    operation_id: str,
+    *,
+    error: type[_UnsentError],
+    label: str,
+    detail: str,
+    cause: BaseException,
+) -> _UnsentError:
+    """Retire a paid identity nothing was sent under, and say what happened.
+
+    Every paid service allocates its operation *before* it publishes the exact
+    request bytes it is about to send, so preparation can still fail with an
+    authority already on disk. That authority blocks the next call until a
+    person clears it, so it has to be retired here — and if retiring it also
+    fails, the owner needs both failures in one sentence, because the second
+    one is what leaves work for them.
+
+    Returned rather than raised so the caller keeps `raise ... from cause` and
+    the original traceback. `provider_dispatched` is always False: reaching
+    this means the request never left, which is the fact a refusal has to carry
+    for the caller to know its money was not spent.
+    """
+    try:
+        OperationJournal.load(journal_path).advance(
+            operation_id,
+            "canceled_before_send",
+            detail=detail,
+        )
+    except JankiError as journal_error:
+        return error(
+            f"{label} {operation_id} was not sent, and its authority could not "
+            f"be retired: {detail} {cause}; {journal_error}. Inspect janki "
+            "operations before retrying.",
+            operation_id=operation_id,
+            provider_dispatched=False,
+        )
+    return error(
+        f"{label} {operation_id} was canceled before send: {detail} {cause}",
+        operation_id=operation_id,
+        provider_dispatched=False,
+    )

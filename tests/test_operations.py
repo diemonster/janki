@@ -176,6 +176,93 @@ def test_no_terminal_state_can_be_reused(tmp_path: Path, terminal: str) -> None:
         _authorize(journal)
 
 
+class _RunRefusal(OperationError):
+    """Stands in for the four services' run errors, which share this shape."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        operation_id: str,
+        provider_dispatched: bool,
+    ) -> None:
+        self.operation_id = operation_id
+        self.provider_dispatched = provider_dispatched
+        super().__init__(message)
+
+
+def test_cancel_before_send_retires_the_authority_and_says_it_was_not_sent(
+    tmp_path: Path,
+) -> None:
+    """Preparation failed after the identity existed; the money is still safe.
+
+    The authority is allocated before the exact request bytes are published, so
+    a failure in between leaves one on disk blocking the next call. Retiring it
+    is the whole job, and the refusal has to say the request never left —
+    otherwise the owner is left deciding whether they were charged.
+    """
+    journal = _journal(tmp_path)
+    _authorize(journal)
+
+    refusal = operations.cancel_before_send(
+        journal.path,
+        "op-1",
+        error=_RunRefusal,
+        label="Revision",
+        detail="The durable revision request manifest could not be prepared.",
+        cause=OSError("the disk went away"),
+    )
+
+    assert isinstance(refusal, _RunRefusal)
+    assert refusal.operation_id == "op-1"
+    assert refusal.provider_dispatched is False
+    assert str(refusal) == (
+        "Revision op-1 was canceled before send: The durable revision request "
+        "manifest could not be prepared. the disk went away"
+    )
+    assert (
+        OperationJournal.load(journal.path).operations["op-1"].state
+        == "canceled_before_send"
+    )
+
+
+def test_cancel_before_send_names_both_failures_when_retirement_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The second failure is the one that leaves work for a person.
+
+    A refusal that reported only the preparation error would send the owner
+    looking for a manifest problem while a live authorization sits in the
+    journal refusing every later call, so both errors travel together.
+    """
+    journal = _journal(tmp_path)
+    _authorize(journal)
+
+    def refuse_advance(*_args: Any, **_kwargs: Any) -> Operation:
+        raise OperationError("the journal could not be rewritten")
+
+    monkeypatch.setattr(OperationJournal, "advance", refuse_advance)
+
+    refusal = operations.cancel_before_send(
+        journal.path,
+        "op-1",
+        error=_RunRefusal,
+        label="Revision",
+        detail="The durable revision request manifest could not be prepared.",
+        cause=OSError("the disk went away"),
+    )
+
+    assert refusal.provider_dispatched is False
+    assert str(refusal) == (
+        "Revision op-1 was not sent, and its authority could not be retired: "
+        "The durable revision request manifest could not be prepared. "
+        "the disk went away; the journal could not be rewritten. Inspect janki "
+        "operations before retrying."
+    )
+    monkeypatch.undo()
+    assert OperationJournal.load(journal.path).operations["op-1"].state == "authorized"
+
+
 # --- the transition nobody may make -----------------------------------------
 
 

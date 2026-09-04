@@ -475,6 +475,7 @@ def plan_revision(
         system_blocks=blocks,
         user_turn=user_turn,
         schema=schema,
+        effort=claude_client.effort_for(chosen_model),
     )
     request_fingerprint = provider_plan.request_fingerprint
     deck_relative = deck_path.relative_to(config.root.absolute()).as_posix()
@@ -925,6 +926,7 @@ def run_revision(
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
+    provider_spawn: revision_provider.Spawn = subprocess.Popen,
     api_call: Callable[..., Any] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> RevisionRunResult:
@@ -1000,25 +1002,15 @@ def run_revision(
                 expected_absent=True,
             )
         except Exception as exc:  # noqa: BLE001 - publication may have landed
-            try:
-                operations.OperationJournal.load(config.operations_file).advance(
-                    operation_id,
-                    "canceled_before_send",
-                    detail="The durable revision request manifest could not be prepared.",
-                )
-            except JankiError as journal_error:
-                raise RevisionRunError(
-                    f"Revision {operation_id} was not sent, but its request manifest "
-                    f"failed and its authority could not be retired: {exc}; "
-                    f"{journal_error}. Inspect janki operations before retrying.",
-                    operation_id=operation_id,
-                    provider_dispatched=False,
-                ) from exc
-            raise RevisionRunError(
-                f"Revision {operation_id} was canceled before send because its exact "
-                f"request manifest could not be made durable: {exc}",
-                operation_id=operation_id,
-                provider_dispatched=False,
+            raise operations.cancel_before_send(
+                config.operations_file,
+                operation_id,
+                error=RevisionRunError,
+                label="Revision",
+                detail=(
+                    "The durable revision request manifest could not be prepared."
+                ),
+                cause=exc,
             ) from exc
 
     try:
@@ -1062,7 +1054,7 @@ def run_revision(
         result = provider.dispatch(
             prepared_provider,
             capture=capture_and_check,
-            runner=provider_runner,
+            spawn=provider_spawn,
             api_call=api_call,
         )
         captured = operations.OperationJournal.load(

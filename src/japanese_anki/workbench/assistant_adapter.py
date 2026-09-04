@@ -834,6 +834,7 @@ class RevisionAssistantAdapter:
         history: tuple[tuple[str, str], ...],
         message: str,
         progress: Callable[[str], None],
+        preview: Callable[[str], None],
     ) -> ChatReply:
         """Answer one bounded repository turn and prepare at most one typed plan."""
 
@@ -849,11 +850,8 @@ class RevisionAssistantAdapter:
             result = assistant_agent.run_agent(
                 fresh_config,
                 plan,
-                context_loader=lambda: _agent_context(
-                    ProjectConfig.load(self.config.root),
-                    deck_scope=deck_scope,
-                ),
                 progress=progress,
+                preview=preview,
             )
         except (JankiError, OSError, TypeError, ValueError) as exc:
             raise RevisionRefusal(str(exc)) from exc

@@ -133,6 +133,7 @@ assistant_dir = "data/assistant"  # durable conversational turns
 enabled = true
 provider = "claude-code"          # ordinary Janki turns: local Pro/Max login
 model = "claude-opus-5"           # pinned; other model ids are refused
+effort = "medium"                 # this turn only; low/medium/high/xhigh/max
 
 [ai]
 revise_provider = "claude-code"   # card-writing revision pass
@@ -365,7 +366,9 @@ max_meanings = 4              # senses per card; 0 shows them all, a deck may
 enrich_provider = "anthropic"   # or "codex"
 enrich_model = "claude-opus-5"
 enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth follows
-                                    # the model (claude_client.effort_for)
+                                    # the model (claude_client.effort_for).
+                                    # Only [assistant] effort is configurable,
+                                    # and only for conversation
 
 [tts]
 voicevox_speaker = 53         # words, with the pitch accent forced

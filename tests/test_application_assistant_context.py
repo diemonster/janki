@@ -10,7 +10,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from japanese_anki import staging as staging_module
 from japanese_anki.application import assistant_context as context_module
+from japanese_anki.application import journey as journey_module
 from japanese_anki.application.assistant_context import (
     AssistantContextBroker,
     AssistantContextError,
@@ -242,6 +244,37 @@ def test_catalog_uses_opaque_ids_and_lists_every_supported_resource(
     assert "data/decks" not in disclosure.wire
 
 
+def test_catalog_lists_sources_without_reading_the_completed_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The catalog names sources; it must not pay to rank them.
+
+    A `source` entry is an opaque id and a name. Ranking one reads every
+    receipt in `staging/done/`, the pattern store, and deck ownership for every
+    staged record — a second of every Assistant turn, disclosed nowhere in the
+    catalog. The corrupt archive here makes the separation visible: it is
+    enough to change the state and cannot change the name.
+    """
+    config = _project(tmp_path)
+    archive = config.staging_dir / "done"
+    archive.mkdir(parents=True, exist_ok=True)
+    (archive / "unrelated.yaml").write_text(
+        "records: []\npromotion_batches: broken\n", encoding="utf-8"
+    )
+    ranked = context_module.source_journeys
+    monkeypatch.setattr(context_module, "source_journeys", pytest.fail)
+
+    broker = AssistantContextBroker(config)
+    source = _entry(_decoded(broker.catalog()), "source")
+
+    assert source["title"] == "lesson.pdf"
+
+    # The on-demand snapshot still discloses the full state, archive and all.
+    monkeypatch.setattr(context_module, "source_journeys", ranked)
+    value = _decoded(broker.snapshot(source["resource_id"]))  # type: ignore[arg-type]
+    assert value["data"]["source"]["name"] == "lesson.pdf"
+
+
 def test_vocabulary_deck_snapshot_contains_resolved_cards_and_teaching_config(
     tmp_path: Path,
 ) -> None:
@@ -297,6 +330,107 @@ def test_project_status_helper_uses_the_same_snapshot_and_turn_budget(
     assert _decoded(disclosure)["data"]["records"]["total"] == 2
     assert broker.used_items == disclosure.item_count
     assert broker.used_utf8_bytes == disclosure.utf8_bytes
+
+
+def test_source_snapshots_rank_from_the_broker_parse_not_a_second_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disclosing a source reuses the queue the broker already parsed.
+
+    The catalog is built from one parse of the staging directory; a source
+    snapshot that read the directory again would pay the half-megabyte parse a
+    second time on the same turn and could rank a queue the catalog never saw.
+    """
+    config = _project(tmp_path)
+    config.staging_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        config.staging_dir / "lesson.pdf.yaml",
+        {
+            "source_file": "lesson.pdf",
+            "records": [
+                {
+                    "id": "word:食べる:たべる",
+                    "expression": "食べる",
+                    "meanings": ["placeholder"],
+                    "source": {"type": "extract", "imported_from": "lesson.pdf"},
+                }
+            ],
+        },
+    )
+    broker = AssistantContextBroker(config)
+    catalog = _decoded(broker.catalog())
+    [source] = [
+        item
+        for item in catalog["data"]["resources"]
+        if item.get("kind") == "source" and "lesson.pdf" in item.values()
+    ]
+    monkeypatch.setattr(
+        journey_module,
+        "live_staging",
+        lambda *_args, **_kwargs: pytest.fail("a source snapshot re-read the queue"),
+    )
+
+    disclosed = _decoded(broker.snapshot(source["resource_id"]))
+    resolved = broker.source_path(source["resource_id"])
+
+    assert "lesson.pdf" in json.dumps(disclosed, ensure_ascii=False)
+    assert resolved.name.startswith("lesson.pdf")
+
+
+def test_a_broker_build_parses_each_live_staging_file_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One Assistant turn, one parse of the review queue.
+
+    Source names, proposal kinds and the staged counts in the project status
+    are three projections of the same YAML, and a real staging file runs to
+    half a megabyte — 90 ms a parse, paid three times over on every turn.
+    Worse than the cost: three reads of one directory can disagree, so a
+    catalog could name a proposal the status it disclosed had never seen.
+    """
+    config = _project(tmp_path)
+    config.staging_dir.mkdir(parents=True, exist_ok=True)
+    for name, source, record_id, expression in (
+        ("lesson.pdf.yaml", "lesson.pdf", "word:食べる:たべる", "食べる"),
+        ("week-2.pdf.yaml", "week-2.pdf", "word:遊ぶ:あそぶ", "遊ぶ"),
+    ):
+        _write_json(
+            config.staging_dir / name,
+            {
+                "source_file": source,
+                "records": [
+                    {
+                        "id": record_id,
+                        "expression": expression,
+                        "meanings": ["placeholder"],
+                        "source": {"type": "extract", "imported_from": source},
+                    }
+                ],
+            },
+        )
+    reads: list[str] = []
+    real_read = staging_module.read_staging
+
+    def counting_read(path: Path, *args: object, **kwargs: object) -> object:
+        reads.append(Path(path).name)
+        return real_read(path, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(staging_module, "read_staging", counting_read)
+
+    broker = AssistantContextBroker(config)
+    catalog = _decoded(broker.catalog())
+    reported = _decoded(broker.project_status())
+
+    assert sorted(reads) == ["lesson.pdf.yaml", "week-2.pdf.yaml"]
+    # Each projection still answers for both files, from that one parse.
+    resources = catalog["data"]["resources"]
+    assert {
+        item["title"] for item in resources if item["kind"] == "proposal"  # type: ignore[index,union-attr]
+    } == {"lesson.pdf", "week-2.pdf"}
+    assert {
+        item["title"] for item in resources if item["kind"] == "source"  # type: ignore[index,union-attr]
+    } == {"lesson.pdf", "week-2.pdf"}
+    assert reported["data"]["staging"] == {"files": 2, "cards": 2}
 
 
 def test_conjugation_snapshot_contains_the_resolved_drill_answer(

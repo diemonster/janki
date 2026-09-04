@@ -151,6 +151,7 @@ def _fixture(tmp_path: Path) -> tuple[ProjectConfig, Path, Path]:
         system_blocks=system_blocks,
         user_turn=user_turn,
         schema=ai_schema.conjugation_deck_revision_schema(),
+        effort=claude_client.effort_for(model),
     )
     request_fp = provider_plan.request_fingerprint
     deck_sha = _sha(deck.read_text(encoding="utf-8"))
@@ -263,6 +264,7 @@ def _replace_with_claude_code_plan(
         system_blocks=request["system_blocks"],
         user_turn=request["user_turn"],
         schema=ai_schema.conjugation_deck_revision_schema(),
+        effort=claude_client.effort_for(model),
         auth={
             "auth_method": "claude.ai",
             "api_provider": "firstParty",

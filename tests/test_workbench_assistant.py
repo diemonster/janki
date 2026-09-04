@@ -14,6 +14,7 @@ import json
 import re
 import threading
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -154,6 +155,8 @@ class _FakeRevisions:
     resolve_refusal: str | None = None
     deck_choices: tuple[AssistantDeckChoice, ...] = ()
     chat_reply: ChatReply | None = None
+    chat_preview: tuple[str, ...] = ()
+    chat_refusal: str | None = None
     execution_result: RevisionExecution | None = None
     execution_progress: tuple[str, ...] = (
         "Reading the source",
@@ -216,9 +219,12 @@ class _FakeRevisions:
         history: tuple[tuple[str, str], ...],
         message: str,
         progress: Any,
+        preview: Any,
     ) -> ChatReply:
         self.chatted.append((deck_scope, message))
         self.chat_histories.append(history)
+        for delta in self.chat_preview:
+            preview(delta)
         if self.chat_entered is not None:
             self.chat_entered.set()
         if self.chat_release is not None and not self.chat_release.wait(3):
@@ -227,6 +233,8 @@ class _FakeRevisions:
         progress("Writing answer")
         progress("Staging proposed changes")
         progress("Saving answer")
+        if self.chat_refusal is not None:
+            raise RevisionRefusal(self.chat_refusal)
         if self.chat_finished is not None:
             self.chat_finished.set()
         if self.chat_reply is not None:
@@ -969,8 +977,9 @@ def test_chat_authorization_race_refreshes_blocking_operation_actions() -> None:
         history: tuple[tuple[str, str], ...],
         message: str,
         progress: Any,
+        preview: Any,
     ) -> ChatReply:
-        del history, progress
+        del history, progress, preview
         revisions.chatted.append((deck_scope, message))
         raise RevisionRefusal("A paid operation began before authorization.")
 
@@ -3404,7 +3413,9 @@ def test_history_drops_an_oversized_prior_reply_without_truncating_it() -> None:
             history: tuple[tuple[str, str], ...],
             message: str,
             progress: Any,
+            preview: Any,
         ) -> ChatReply:
+            del preview
             self.chatted.append((deck_scope, message))
             self.chat_histories.append(history)
             progress("Preparing answer")
@@ -4804,6 +4815,342 @@ def test_invented_legacy_followup_actions_are_refused(old_action: str) -> None:
         sidecar.close()
 
 
+def _preview_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        event
+        for event in events
+        if event["type"]
+        in {"thread.item.added", "thread.item.updated", "thread.item.removed"}
+    ]
+
+
+def _assistant_done_items(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        event["item"]
+        for event in events
+        if event["type"] == "thread.item.done"
+        and event["item"]["type"] == "assistant_message"
+    ]
+
+
+def test_chat_streams_preview_then_replaces_it_with_the_validated_answer() -> None:
+    """One message item is streamed into and then finished, not two.
+
+    The preview and the answer are the same turn. Finishing under a new id
+    would leave the streamed text in the transcript beside the validated one.
+    """
+
+    revisions = _FakeRevisions(
+        chat_preview=("Partial ", "answer"),
+        chat_reply=ChatReply(text="The validated answer."),
+    )
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        _thread_id, _assistant, _item, events = _create_chat(sidecar, "which deck?")
+
+        added = [event for event in events if event["type"] == "thread.item.added"]
+        assert len(added) == 1
+        preview_id = added[0]["item"]["id"]
+        assert added[0]["item"]["type"] == "assistant_message"
+        assert added[0]["item"]["content"] == []
+        updates = [
+            event["update"]
+            for event in events
+            if event["type"] == "thread.item.updated"
+            and event["item_id"] == preview_id
+        ]
+        assert updates[0]["type"] == "assistant_message.content_part.added"
+        assert updates[0]["content"]["text"] == ""
+        deltas = [
+            update["delta"]
+            for update in updates
+            if update["type"] == "assistant_message.content_part.text_delta"
+        ]
+        assert "".join(deltas) == "Partial answer"
+        assert updates[-1]["type"] == "assistant_message.content_part.done"
+        assert updates[-1]["content"]["text"] == "The validated answer."
+        done = _assistant_done_items(events)
+        assert len(done) == 1
+        assert done[0]["id"] == preview_id
+        assert done[0]["content"] == [
+            {
+                "annotations": [],
+                "text": "The validated answer.",
+                "type": "output_text",
+            }
+        ]
+    finally:
+        sidecar.close()
+
+
+def test_chat_preview_that_diverges_is_replaced_by_the_validated_answer() -> None:
+    """The streamed prose is a draft, so the finished part is always rewritten.
+
+    The real transport streams one pass and returns another; treating the
+    preview as a prefix would leave a sentence nobody wrote in the transcript.
+    """
+
+    revisions = _FakeRevisions(
+        chat_preview=("Wrong start",),
+        chat_reply=ChatReply(text="Right answer"),
+    )
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        _thread_id, _assistant, _item, events = _create_chat(sidecar, "which deck?")
+
+        done_parts = [
+            event["update"]
+            for event in events
+            if event["type"] == "thread.item.updated"
+            and event["update"]["type"] == "assistant_message.content_part.done"
+        ]
+        assert [part["content"]["text"] for part in done_parts] == ["Right answer"]
+        assert _assistant_done_items(events)[0]["content"][0]["text"] == "Right answer"
+    finally:
+        sidecar.close()
+
+
+def test_chat_without_preview_keeps_the_single_done_message() -> None:
+    """A turn whose provider streams nothing still emits exactly one message."""
+    revisions = _FakeRevisions()
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        _thread_id, _assistant, _item, events = _create_chat(sidecar, "which deck?")
+
+        assert _preview_events(events) == []
+        assert len(_assistant_done_items(events)) == 1
+    finally:
+        sidecar.close()
+
+
+def test_a_refused_turn_removes_its_preview() -> None:
+    """A refusal keeps no half-said answer on screen.
+
+    Streamed prose is not an answer janki validated or journaled; leaving it
+    beside the refusal would read as though part of it still stood.
+    """
+
+    revisions = _FakeRevisions(
+        chat_preview=("Half an ", "answer"),
+        chat_refusal="The Assistant context changed before the call.",
+    )
+    sidecar = create_assistant_sidecar(
+        revisions,
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, selector, _selector_events = _start_deck_selector(sidecar)
+        selectable = next(
+            choice for choice in sidecar.server.deck_choices if choice.revision_supported
+        )
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                selector,
+                _deck_selector_action(selector, selectable.deck_id),
+            ),
+        )
+        status, _headers, body = _post(
+            sidecar,
+            _followup_message_request(thread_id, "which deck?"),
+        )
+
+        assert status == 200
+        events = _events(body)
+        added = [event for event in events if event["type"] == "thread.item.added"]
+        removed = [event for event in events if event["type"] == "thread.item.removed"]
+        assert len(added) == 1
+        assert [event["item_id"] for event in removed] == [added[0]["item"]["id"]]
+        notices = [event for event in events if event["type"] == "notice"]
+        assert notices[-1]["title"] == "Answer refused"
+        assert events.index(removed[0]) < events.index(notices[-1])
+        assert [event for event in events if event["type"] == "error"] == []
+        assert _assistant_done_items(events) == []
+    finally:
+        sidecar.close()
+
+
+def test_any_failure_after_a_preview_removes_it() -> None:
+    """A crash is not gentler than a refusal, so it takes the preview too.
+
+    A refusal is the failure this turn expects; every other one leaves the
+    same unvalidated prose on screen, where the generic error that follows
+    would read as an aside beside half an answer that still stands.
+    """
+
+    @dataclass
+    class CrashingRevisions(_FakeRevisions):
+        def chat(
+            self,
+            *,
+            deck_scope: str,
+            history: tuple[tuple[str, str], ...],
+            message: str,
+            progress: Any,
+            preview: Any,
+        ) -> ChatReply:
+            preview("Half an ")
+            preview("answer")
+            raise RuntimeError("the chat service has a bug")
+
+    sidecar = create_assistant_sidecar(
+        CrashingRevisions(),
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        thread_id, selector, _selector_events = _start_deck_selector(sidecar)
+        selectable = next(
+            choice for choice in sidecar.server.deck_choices if choice.revision_supported
+        )
+        _post(
+            sidecar,
+            _action_request(
+                thread_id,
+                selector,
+                _deck_selector_action(selector, selectable.deck_id),
+            ),
+        )
+        status, _headers, body = _post(
+            sidecar,
+            _followup_message_request(thread_id, "which deck?"),
+        )
+
+        assert status == 200
+        events = _events(body)
+        added = [event for event in events if event["type"] == "thread.item.added"]
+        removed = [event for event in events if event["type"] == "thread.item.removed"]
+        errors = [event for event in events if event["type"] == "error"]
+        assert len(added) == 1
+        assert [event["item_id"] for event in removed] == [added[0]["item"]["id"]]
+        assert errors
+        assert events.index(removed[0]) < events.index(errors[0])
+        assert _assistant_done_items(events) == []
+    finally:
+        sidecar.close()
+
+
+def test_progress_and_preview_keep_one_order() -> None:
+    """Narration and prose share one queue, so the transcript keeps their order.
+
+    Two queues drained one after the other would show every progress state
+    before every delta, whatever the provider actually reported when.
+    """
+
+    @dataclass
+    class InterleavingRevisions(_FakeRevisions):
+        def chat(
+            self,
+            *,
+            deck_scope: str,
+            history: tuple[tuple[str, str], ...],
+            message: str,
+            progress: Any,
+            preview: Any,
+        ) -> ChatReply:
+            self.chatted.append((deck_scope, message))
+            self.chat_histories.append(history)
+            progress("Preparing answer")
+            preview("first ")
+            progress("Writing answer")
+            preview("second")
+            progress("Saving answer")
+            return ChatReply(text="The validated answer.")
+
+    sidecar = create_assistant_sidecar(
+        InterleavingRevisions(),
+        deck_choices=_assistant_deck_choices(),
+        session_token=SESSION_TOKEN,
+    )
+    sidecar.start()
+    try:
+        _thread_id, _assistant, _item, events = _create_chat(sidecar, "which deck?")
+
+        narration = [
+            (
+                event["text"]
+                if event["type"] == "progress_update"
+                else event["update"]["delta"]
+            )
+            for event in events
+            if event["type"] == "progress_update"
+            or (
+                event["type"] == "thread.item.updated"
+                and event["update"]["type"]
+                == "assistant_message.content_part.text_delta"
+            )
+        ]
+        assert narration == [
+            "Preparing answer",
+            "first ",
+            "Writing answer",
+            "second",
+            "Saving answer",
+        ]
+    finally:
+        sidecar.close()
+
+
+def test_stream_cancellation_does_not_persist_an_unvalidated_preview() -> None:
+    """A canceled stream leaves nothing behind, not a half-streamed message.
+
+    ChatKit's default saves unfinished assistant messages; here the unfinished
+    item is a preview of an answer no Assistant manifest ever recorded.
+    """
+
+    from chatkit.types import (
+        AssistantMessageContent,
+        AssistantMessageItem,
+        ThreadMetadata,
+    )
+
+    core = create_assistant_core(
+        _FakeRevisions(),
+        deck_choices=_assistant_deck_choices(),
+    )
+
+    async def exercise() -> list[Any]:
+        thread = ThreadMetadata(
+            id=core.store.generate_thread_id(core.context),
+            created_at=datetime.now(),
+        )
+        await core.store.save_thread(thread, core.context)
+        pending = AssistantMessageItem(
+            id=core.store.generate_item_id("message", thread, core.context),
+            thread_id=thread.id,
+            created_at=datetime.now(),
+            content=[AssistantMessageContent(text="Half an answer")],
+        )
+
+        await core.server.handle_stream_cancelled(thread, [pending], core.context)
+
+        page = await core.store.load_thread_items(
+            thread.id, None, 20, "asc", core.context
+        )
+        return list(page.data)
+
+    assert asyncio.run(exercise()) == []
+
+
 def test_browser_disconnect_does_not_cancel_a_dispatched_chat_turn() -> None:
     entered = threading.Event()
     release = threading.Event()
@@ -4812,6 +5159,7 @@ def test_browser_disconnect_does_not_cancel_a_dispatched_chat_turn() -> None:
         chat_entered=entered,
         chat_release=release,
         chat_finished=finished,
+        chat_preview=("A partial ",),
     )
     sidecar = create_assistant_sidecar(
         revisions,

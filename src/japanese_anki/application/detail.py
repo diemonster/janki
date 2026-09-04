@@ -17,6 +17,7 @@ what it produced.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +33,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import load_records
 from japanese_anki.models import VocabularyRecord
+from japanese_anki.staging import LiveStaging
 
 __all__ = ["CardDetail", "SourceDetail", "source_detail"]
 
@@ -110,14 +112,19 @@ def _merge_preview(
     return {record.id: record for record in merged}
 
 
-def source_detail(config: ProjectConfig, source: str) -> SourceDetail | None:
+def source_detail(
+    config: ProjectConfig,
+    source: str,
+    *,
+    live: Sequence[LiveStaging] | None = None,
+) -> SourceDetail | None:
     """Open one source by its dashboard name, or None if there is no such one.
 
     Lookup is by exact match against the names the dashboard itself computed,
     and the staging path comes from that journey — never from the caller. A
     request cannot name a path, so it cannot name a path outside the corpus.
     """
-    journeys, _warnings = source_journeys(config)
+    journeys, _warnings = source_journeys(config, live=live)
     journey = next((one for one in journeys if one.source == source), None)
     if journey is None or journey.staging_path is None:
         return None

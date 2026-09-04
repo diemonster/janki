@@ -192,15 +192,16 @@ frames already on disk; it never redispatches. Nonempty response frames from a
 call that may have been sent require `operations --forget --force` when they
 did not become committed output; an ordinary forget cannot silently erase
 partial paid output.
-An ordinary Assistant turn follows that shape too. Its exact user message,
-every bounded repository projection disclosed to the provider, the closed
-typed action schema, provider/model identity, and assistant reply become a
-durable turn under `data/assistant/`; no dynamically obtained repository byte
-may enter model context without first joining that manifest. ChatKit's thread
-is a view of that repository record, never its only copy or its authority
-source. A typed local read is not another paid operation. Every projection sent
-to a provider belongs to one freshly manifested Assistant request, and no typed
-intent can open an unjournaled nested model call.
+An ordinary Assistant turn follows that shape too. Over the Claude Code
+transport it fsyncs every exact stream frame before inspecting one, as Realtime
+does. Its exact user message, every bounded repository projection disclosed to
+the provider, the closed typed action schema, provider/model identity, and
+assistant reply become a durable turn under `data/assistant/`; no dynamically
+obtained repository byte may enter model context without first joining that
+manifest. ChatKit's thread is a view of that repository record, never its only
+copy or its authority source. A typed local read is not another paid operation.
+Every projection sent to a provider belongs to one freshly manifested Assistant
+request, and no typed intent can open an unjournaled nested model call.
 Normal capture keeps its terminal operation-bound marker until the
 `result_captured` journal write durably records the relative name, pending
 directory identity, five-field file snapshot (including ctime), and response
