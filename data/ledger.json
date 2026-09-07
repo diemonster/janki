@@ -1,6 +1,582 @@
 {
   "pending_batches": {},
   "records": {
+    "drill-audio:1047286103:potential:word:あそぶ:あそぶ": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "a5f46cf2e94044536160f7e16c2441290551f6eea3cbb597261019e22a1f410a",
+          "file": "janki-4d4f24caf38d.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "4aca165c9fcded0b2d3b0b82f1c38260863da5b02d08b8949693d6659e03de1e",
+          "file": "janki-efb7f385e622.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:およぐ:およぐ": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "0c0470b4564fdbb9c89e09147e8666a31c6ee472eaa85187903f2107ebbdbbc2",
+          "file": "janki-e3f245fc2780.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "eb90e1a01ce7fd58b69699420513fa1299cc15453e445ba38ab333b00b6a2b96",
+          "file": "janki-0fc987bc9e9f.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:しぬ:しぬ": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "dc86739bdbfd50bb58e8226ba7191cc05d2fb4c7504960e48cab0212141aa9c9",
+          "file": "janki-065329b77ec2.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "80b83057b7b84b581f91c1917e2a8bfd2ed65453f34c1a78c1b95b0c081e30c6",
+          "file": "janki-2440501ca7d7.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:する:する": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "8645ba79932b033af33769c4ad915c3959da766c6bfce9a8f3fbaf2cb433eb65",
+          "file": "janki-b83def1ab8a2.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "525b8d3d24b85fe09dcb4aab83a0bdf3cb35b998eb95d01a25472133f091137f",
+          "file": "janki-05ebe791696c.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:たたく:たたく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "6e1bdf88154af678ce8d87a96816a277a7613fa630ee3b3049decf1a42c15c12",
+          "file": "janki-00a8d303c325.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "e87fa4776455bf70770cab6c87d2a1ec41e484dad1ecbfd3b6e06eab72bff7a3",
+          "file": "janki-facc62e3fb23.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:まつ:まつ": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "98c47fab04526f1d86bf816f7c218e9dd2e7c5b0b94d1cbeb24b61daf0dd6fb4",
+          "file": "janki-fd9b0107354f.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "6a884cac5092e05a9a04ce3302a0e208c2ddbec37f203da6d9804186124e818d",
+          "file": "janki-3eb6da066130.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:吹く:ふく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "e692e0bb6cf7d9e0be93d61ebe98911bb6ba44b66b3c5bee1fc88e252b86231d",
+          "file": "janki-bcef8ea10d8b.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "92cd34f622f041bda0e4143b652a45c3c459f036a8fce3da457068fc71c575d4",
+          "file": "janki-55e0a66d58ba.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:弾く:ひく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "d4848a0aaf5341656e78cc45c85d23319300f7c8ad89e725a5b5d8322aed28ec",
+          "file": "janki-5bc9c549dd6b.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "4b9c7a22f4371663fe57b8cccf7cd41795548f904bd1029181baf4a150bf6e1d",
+          "file": "janki-4a7ed50f36ee.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:書く:かく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "943b3684926d9578aa0217e598c9cc3cb6b938cbcfabb825a01a6615880c6cf2",
+          "file": "janki-3579f2da379f.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "4feee5b3138174eebb23319b0aebbbfd76e692e3e763ee5bd448171f1b4b8acf",
+          "file": "janki-c43630d0dccc.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:来る:くる": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "4e12617f3a8c637713047493c3d777b3d21f9da8c395a18c0e04f290093dd5a0",
+          "file": "janki-8608767fc949.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "dfb5aa8e2667f245cedd3fbd8f7dbcfd2f3e9c9b75ec23ee6b2989a4fa02785f",
+          "file": "janki-2862251a570f.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:行く:いく": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "50752adc3c9ab0e45c773742bc218b6f71fb32245a3b36d2c8c6087234d4de4e",
+          "file": "janki-7e0c0f147499.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "7082aa58d444fe149824ca6962ae10301817ab05bb7261e68c7a463abe87d54e",
+          "file": "janki-ddc8831e5dd5.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:見る:みる": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "a2e21bed42223e4befd7a93b9d4f5d243670e36ce312f742cc85513324bc2489",
+          "file": "janki-a6e59debedfc.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "db9b62bfd8718713422a95aa7a3c3929ab2518ec5765d56f8bc802cf7aecad81",
+          "file": "janki-2f2f19feae82.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:話す:はなす": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "83f69d47b513a4f17950d4dcd14236909c8e2e127225877589561262ca09ec47",
+          "file": "janki-3daceb701c03.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "6c45bb4ef895fb20297686700057cd615c815c063080544df6abef77eb4aa626",
+          "file": "janki-4871d4ab4a8a.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:読む:よむ": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "64e735a89e9c9e3c54eaddc463d28f4843ebc57d85be542ad3d97a3aec609026",
+          "file": "janki-b1e52ad98f7d.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "d16d9de8ae79402c276eacb63f27d92df38456a03d2f74c629a8a37ed654e8bf",
+          "file": "janki-0623a3ff7465.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:買う:かう": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "2451afede147514ccce41ec38444bfc1a770aaf09cd2b49ed49206020585e705",
+          "file": "janki-cb9b612fb9b5.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "568ea0b76c1be023ab3f358334cd229b37ba60aaee4c0fa14e857779960f452b",
+          "file": "janki-cac4a37816ed.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
+    "drill-audio:1047286103:potential:word:飼う:かう": {
+      "added_at": "2026-08-31",
+      "audio": [
+        {
+          "at": "2026-08-31",
+          "content_fp": "c6ddd4359a7f50d77c27013c23de91dff4c1f9a34cbb59d6f1a070f57609fa1e",
+          "file": "janki-b671d14d6843.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-08-31",
+          "content_fp": "5fca6d612b83773295474bd14dd7190f8424969a9b3aefcd855f4edba5882779",
+          "file": "janki-8864d96b98aa.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [],
+      "exports": {},
+      "sources": []
+    },
     "word:あそぶ:あそぶ": {
       "added_at": "2026-08-13",
       "audio": [
@@ -4767,6 +5343,86 @@
         }
       ]
     },
+    "word:やめる:やめる": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "7537f00b72253cf1c2400f490bcb0528be3ac04b6edb7b381f05901e9cc10bdc",
+          "file": "janki-d48fc9270e00.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "0fe7e3099e67a47c473c7ad015c1231ae9ef5dc69cdea67411a7ae45a233fab9",
+          "file": "janki-b5014949a62e.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "518b9637a0a3fa822465d47ed300daa6e9f317cb163e5fe3074a81965dcc90c1",
+          "file": "janki-fad309229ba3.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "750982e76eae81208179a47470e312f03731abb5e028369c03ee202ce6add46e"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
     "word:よう:よう": {
       "added_at": "2026-08-12",
       "audio": [
@@ -8193,6 +8849,83 @@
         }
       ]
     },
+    "word:動物:どうぶつ": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "ba1c5181be4dfcc11a6e716f137f586b65ba6e24f8d5b84f5241904e6c7aa1ca",
+          "file": "janki-0fa6b56bcf2f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "1cd922f6605a326a75353ee78c6e13cc4881d363c04ce8facb8a2960b6ff4f60",
+          "file": "janki-4a6f632f331b.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "dc56cd3db4588d6fb4acaaecc832ec3a5d5103d00ddb29f67e443b88c7c5b7c3",
+          "file": "janki-ec3a017f8d3c.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "b17a1381fd858c0500861fa56dd8401b27ae8852680985b736af8a8c73f0f878"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
     "word:北海道:ほっかいどう": {
       "added_at": "2026-08-16",
       "audio": [
@@ -10592,6 +11325,86 @@
         }
       ]
     },
+    "word:持ってくる:もってくる": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "d9a4e09d60267a649004a04022fff819a136b625fa20ef996bc6c3eb72d0e4be",
+          "file": "janki-3d5ca769421a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "3df3eafd8a225c459f3a79a413a96ab4df5fecf4fc30a2b79c048ed2d1738892",
+          "file": "janki-758b03766798.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "eb27aceec8f0564598b28768a7a3de0be4d08f54b8a661a94c6858e3d4d1a9c8",
+          "file": "janki-b8d70fb97958.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "e50d4921b6d219c6c71d81058f8f1139d55867678de566cc6de1c94400384a08"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
     "word:指:ゆび": {
       "added_at": "2026-08-23",
       "audio": [
@@ -10878,6 +11691,163 @@
           "ref": "Kanji Practice Sheet No.112-123.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
+        }
+      ]
+    },
+    "word:料理:りょうり": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "4c722a2025166f4f2c1662d436ccdf9c90bca335b7dd7ae0a906c30b756b327b",
+          "file": "janki-d1894f363a6e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "98ef65d5e28efbb601eee37ae1ff814ee7ff3dc31b85418e4284e274edfb2f04",
+          "file": "janki-5b13ddacfa59.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "1cfb624f8bf2433a5c58d9e39bc87fb4b7cfb38b07426a513708d9879abcd3b1",
+          "file": "janki-70752354f6d0.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "e18e9f0e4cf46bd5008a7953cacf6d95987bbd2926109a4fc2c8cfa95d797690"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
+    "word:料金:りょうきん": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "540d4e95fbe489ce9e55ced064528ed2465079bd2ab7c7c0984adb0d11b3128c",
+          "file": "janki-c74fa54e800b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "38500b79f70e38bcc7e2ed86d1b2b89b50f4cd10af03e4e2ff5e5790936b1ddb",
+          "file": "janki-00e6e1f4f1c4.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "e11eb844008b1d400abc2c1bd3f74cedc258213a5b85dc148a7e3e88f00e14f8",
+          "file": "janki-6d139a9a6bd4.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "e990af3721eac48e60ac6040b9ab2b3371fd03a74034b665ac302c1fc1cd3d7d"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
         }
       ]
     },
@@ -12331,6 +13301,85 @@
         }
       ]
     },
+    "word:歌う:うたう": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "b19378cd35f3f6d2d08795e93ef2f216f2534ea370dceeb10a45310a69592531",
+          "file": "janki-48ee09d40363.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "da35a7bf46cd3c2bd449b66f3b2b7a6a310ce7a489bfd1ec07e9861461ad1817",
+          "file": "janki-e5fe46e77175.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "6e58a59d3f9010dda7d08146493766017fc366094c7544ed323c6d115d563ba4",
+          "file": "janki-2267df880fb2.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "3d02fb81e896b62e3047f9997adda08171b0be86b854cfad668dd4400df29607"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
     "word:歌手:かしゅ": {
       "added_at": "2026-08-16",
       "audio": [
@@ -13052,6 +14101,163 @@
         }
       ]
     },
+    "word:無理:むり": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "f305e7591be9b1d967db2942caf72cabdfb5ee30c3bd5bcf1e952f05dacf1c12",
+          "file": "janki-e8e94a2d9ff7.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "4bf73726c66db44a8023c873565912fbda88310a1894008bc00058f57c5642a7",
+          "file": "janki-9d6f47e46726.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "a254cb4b63d9bd2c4b835c9580797fe78f9d6f2ace1b18658df2bb50bd333d76",
+          "file": "janki-8559275e215e.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "888650bf0c702fffb59877117336d1c75c92e1131de5c29f9dd1b82846032721"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
+    "word:焼き鳥:やきとり": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "a443c63157bba0278c85c35129b22681c9ef0f31f4866c8042ccbef0b460b48d",
+          "file": "janki-8a30c72f2de1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "66163cde8241f1699306cc74240aa443cb7410c30dba1c2365ca2dc72757a35d",
+          "file": "janki-a50078bd01f6.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "158c57db26f18c877e8bba0f39b80d52aa4e6a163dd74f52c6b5ee42134fd868",
+          "file": "janki-f439218bd158.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "e0af9c3e427ea9c8510fe49305d362909511eb61fa72e81025f95472400a2388"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
     "word:熱:ねつ": {
       "added_at": "2026-08-23",
       "audio": [
@@ -13244,6 +14450,318 @@
           "ref": "medical-conditions-vocab.pdf",
           "seen_at": "2026-08-23",
           "type": "extract"
+        }
+      ]
+    },
+    "word:物:もの": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "d50ecd72b7cb7df8f40557b27db6110d2a2c803d5641c819ac006dc5a0b51007",
+          "file": "janki-1cb717258b35.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "13961641cae04e12d9554b1ba187ae0b171050c012b476b81b1e236765feeb19",
+          "file": "janki-57dce76088c6.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "ea36f66fa0eda766182d6c8c5a153bbae6c3af868786bcaa3bb6d502d7ad3e58",
+          "file": "janki-3d459ff2cb23.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "7f2e509fb5a5224de1a38824a23ddf3f0d53fe2069bdcdb53d9477bd67e610d1"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
+    "word:特に:とくに": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "aa11391f256e060892a2e67ac5de705b28653b92a59c7cb7404fe19f8203c895",
+          "file": "janki-62aead33475a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "581e71b07d1ac0360b225f104e43159a0d0dea2e5bfe632658f05a17b74162ff",
+          "file": "janki-2b98ce4dbd4d.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "4f684c977dc3f6a1cfff2bff03939d257183fb38060006f3277030f8b3b421bb",
+          "file": "janki-e176564be024.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "540a56c017d70c2ff5fa16e689f844053326d02cb8aefa8a4424845790a9f335"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
+    "word:特別:とくべつ": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "e08b526644a2933397c6bf5a0b8eb69d0e4ab3b160e8b323f2ad0b6d6af0b0a3",
+          "file": "janki-b56c11095553.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "570e49b5bb93a95d95e050928d145a381103242f5ca12eafda778c366f974d9c",
+          "file": "janki-c56b635c9635.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "4e989dc402fb7b467ed50879155bee2acd988f852998ad6c6406a7a5305a9996",
+          "file": "janki-60703b1f4f31.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "710cfa33630270eb03c7a7c2df5a43ef642f84ca1cba33c965e5dbd8f090796d"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
+    "word:理由:りゆう": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "0336a5c5543f9cf85adbbe4fe2cc0e6e6395d3ca985a55298f9717b76fbaffaa",
+          "file": "janki-92d60cc8c42e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "bea0930ad9255da115acb309cbf6815e20f1a79d40d32db9f865e2cf67b51e62",
+          "file": "janki-1a56a5e99ca8.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "dd229bf8af28092ebf58e7b68604eda4166e1321b2c0378203631823b16180ae",
+          "file": "janki-0f5e9b121b6c.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "57f00fc8e527654aaceb58fcac9046bc6b023f194b7ecaa0001dd5bba530a301"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
         }
       ]
     },
@@ -13762,6 +15280,83 @@
           "ref": "medical-conditions-vocab.pdf",
           "seen_at": "2026-08-23",
           "type": "extract"
+        }
+      ]
+    },
+    "word:白鳥:はくちょう": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "f246ad97f0b5a7f345f64d49ebd894f4788e5e57851d576c1bd2b5a179991659",
+          "file": "janki-c340af9b3dbc.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "251a1b1a103cd7a71a4ca80b84865464c6146358d39ccdc457c199e2a1e2f9b3",
+          "file": "janki-da4a7574d175.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "2c7daca5d46fc7639ff2052b3d9b4a03519c06f508b9df5a0abfe9e2148ed1c9",
+          "file": "janki-4b01d6d05069.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "verse"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "2fb1c628901e54926c565e5feb31d6c958218979be468d517e249ad3f630f836"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
         }
       ]
     },
@@ -16336,6 +17931,84 @@
         }
       ]
     },
+    "word:荷物:にもつ": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "8941e2509235d375ecf2cec1cade4dec78f7a81d2a8b2d7be9c8aa7d0dc9e926",
+          "file": "janki-23efd0580347.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "449d06331c5b6b9ae3beb885c63e894207cb610b38247887fd01152faefc5830",
+          "file": "janki-4b71483f688a.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "84f94674d14a76f924e9df4eb3f0165951523e2f5be4b5ab9077913824a0c936",
+          "file": "janki-9992b61f7530.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "cedar"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "544e0907cbef9bb5fd08e2e698848035acbd8cf056697d5780948200fbb308a7"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
     "word:虫歯:むしば": {
       "added_at": "2026-08-23",
       "audio": [
@@ -17427,6 +19100,87 @@
         }
       ]
     },
+    "word:走る:はしる": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "e879a0b23dffdad0e81e64ecded5475b99113a60b229c835fc4ddaffafd42eac",
+          "file": "janki-3b3957cdaef2.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "751377a1340c166c901e579a3a1662f2ef5ae5ea1e34d7a7ad44b522c1e9d495",
+          "file": "janki-22c9bf4adb2d.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "e455359512a8b5fda2f56e543dceab7b4a0a9914b6d152af191844512bb7b0fa",
+          "file": "janki-7bfa08e17292.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "ash"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "b139318f116e9f2f4d9d75a0a8cb8e0edaaaa28052a1f331d305acb07e89fb2a"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
+        }
+      ]
+    },
     "word:起きる:おきる": {
       "added_at": "2026-08-16",
       "audio": [
@@ -17629,6 +19383,87 @@
           "ref": "Kanji Practice Sheet No.112-123.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
+        }
+      ]
+    },
+    "word:返す:かえす": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "4d67bdf03004b58c5520ac34abd2af55319f8c2789af6aa489bb9446f2393874",
+          "file": "janki-45fcb8e31b26.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "8f4290ea6baf83f4bb26fcd0349d8feed3c2992f2fa985bbb19385789be708ec",
+          "file": "janki-376f77112b35.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "9b2a100f7b0efbac25d814da26b118c203e71b06ef42c9be64f7e372c40f1758",
+          "file": "janki-a67998b2d989.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "77e50e7240dca349d27c734bd3fc14593a5aff8dc8793f73e4433a5141a5ad45"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
         }
       ]
     },
@@ -19330,6 +21165,84 @@
           "ref": "Kanji Practice Sheet No.112-123.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
+        }
+      ]
+    },
+    "word:鳥:とり": {
+      "added_at": "2026-09-04",
+      "audio": [
+        {
+          "at": "2026-09-04",
+          "content_fp": "30307a093152fedc1c60e2fb6acb9c354e576be7909cd83ed638bfc1245492e6",
+          "file": "janki-81d1f3fd778b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "dca14a02dcd5b2f2c1d3210e0b968804e46b52fdfe1029fffd1b2bbcece5e77f",
+          "file": "janki-81e1e0f65259.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        },
+        {
+          "at": "2026-09-04",
+          "content_fp": "a4bd7729750237c8f0985c2d60a022526a317518a644c14c292f070a18f66ffb",
+          "file": "janki-530c788c4fee.wav",
+          "of": "example",
+          "provider": "openai-realtime",
+          "settings": {
+            "audio_format": "pcm16-24000-mono",
+            "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+            "model": "gpt-realtime-1.5"
+          },
+          "speed": 1.0,
+          "voice": "marin"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "romaji"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-09-04",
+          "fields": [
+            "examples",
+            "meanings",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5",
+          "provider": "anthropic",
+          "request_fingerprint": "93d9742661f50a48f2e8c665992e7b125df800efddb3b8d6f81a36f08bceff7c"
+        }
+      ],
+      "exports": {
+        "201-week-2": "2026-09-06"
+      },
+      "sources": [
+        {
+          "ref": "",
+          "seen_at": "2026-09-04",
+          "type": "manual"
         }
       ]
     },

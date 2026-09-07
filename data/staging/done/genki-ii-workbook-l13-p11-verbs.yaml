@@ -1,0 +1,477 @@
+source_file: Genki II Workbook Lesson 13 p.11 chart and this week's kanji sheet
+extracted_at: '2026-09-04'
+review_notes: 'The five verbs from the Genki II workbook Lesson 13 page 11 chart ("1 Potential Verbs-1") that the collection did not already hold. The workbook prints only the dictionary forms; its te-form, potential and potential-negative columns are blank for the student, so nothing here is copied from an answer key. Readings and identity only: meanings, examples and usage notes are left for the enrichment passes. The one-line glosses below exist only to satisfy validation before promote; the --ai pass is run with --force-fields so it authors the shipped meanings itself.
+
+  The twelve words after the verbs teach the kanji 物・特・鳥・料・理 the way the Kanji Practice 112-123 deck does: two or three words per character, covering the kun and on readings on the sheet. 料理 carries both 料 and 理, and 特に is also Lesson 13 vocabulary (textbook page 25).
+
+
+  Promoted 17 record(s) from this file.'
+promotion_batches:
+- receipt_id: c37ec6a206e78f907ef49227903b0072e660abe26f06cbfd8622d27011dce56a
+  archive_file: genki-ii-workbook-l13-p11-verbs.yaml
+  archive_run_fingerprint: 3da0b1ce12872f440342cf9e4e581c37c516f2072c0d8023f8b09bdfc7616658
+  archive_start_index: 0
+  source_file: Genki II Workbook Lesson 13 p.11 chart and this week's kanji sheet
+  review_run_id: null
+  promoted_ids:
+  - word:やめる:やめる
+  - word:持ってくる:もってくる
+  - word:歌う:うたう
+  - word:走る:はしる
+  - word:返す:かえす
+  - word:物:もの
+  - word:動物:どうぶつ
+  - word:荷物:にもつ
+  - word:特に:とくに
+  - word:特別:とくべつ
+  - word:鳥:とり
+  - word:焼き鳥:やきとり
+  - word:白鳥:はくちょう
+  - word:料理:りょうり
+  - word:料金:りょうきん
+  - word:理由:りゆう
+  - word:無理:むり
+  owner_stems:
+    word:やめる:やめる: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:持ってくる:もってくる: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:歌う:うたう: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:走る:はしる: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:返す:かえす: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:物:もの: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:動物:どうぶつ: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:荷物:にもつ: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:特に:とくに: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:特別:とくべつ: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:鳥:とり: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:焼き鳥:やきとり: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:白鳥:はくちょう: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:料理:りょうり: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:料金:りょうきん: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:理由:りゆう: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+    word:無理:むり: brandon-japanese-genki-ii-lesson-13-workbook-kan-102accaa20
+records:
+- id: word:やめる:やめる
+  expression: やめる
+  reading: やめる
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to quit, to stop
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:持ってくる:もってくる
+  expression: 持ってくる
+  reading: もってくる
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to bring (something)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:歌う:うたう
+  expression: 歌う
+  reading: うたう
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to sing
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:走る:はしる
+  expression: 走る
+  reading: はしる
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to run
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:返す:かえす
+  expression: 返す
+  reading: かえす
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to return (something)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:物:もの
+  expression: 物
+  reading: もの
+  furigana: ''
+  romaji: ''
+  meanings:
+  - thing, object
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:動物:どうぶつ
+  expression: 動物
+  reading: どうぶつ
+  furigana: ''
+  romaji: ''
+  meanings:
+  - animal
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:荷物:にもつ
+  expression: 荷物
+  reading: にもつ
+  furigana: ''
+  romaji: ''
+  meanings:
+  - luggage, baggage
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:特に:とくに
+  expression: 特に
+  reading: とくに
+  furigana: ''
+  romaji: ''
+  meanings:
+  - especially
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:特別:とくべつ
+  expression: 特別
+  reading: とくべつ
+  furigana: ''
+  romaji: ''
+  meanings:
+  - special
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:鳥:とり
+  expression: 鳥
+  reading: とり
+  furigana: ''
+  romaji: ''
+  meanings:
+  - bird
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:焼き鳥:やきとり
+  expression: 焼き鳥
+  reading: やきとり
+  furigana: ''
+  romaji: ''
+  meanings:
+  - grilled chicken skewer
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:白鳥:はくちょう
+  expression: 白鳥
+  reading: はくちょう
+  furigana: ''
+  romaji: ''
+  meanings:
+  - swan
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:料理:りょうり
+  expression: 料理
+  reading: りょうり
+  furigana: ''
+  romaji: ''
+  meanings:
+  - cooking, dish
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:料金:りょうきん
+  expression: 料金
+  reading: りょうきん
+  furigana: ''
+  romaji: ''
+  meanings:
+  - fee, charge
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:理由:りゆう
+  expression: 理由
+  reading: りゆう
+  furigana: ''
+  romaji: ''
+  meanings:
+  - reason
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}
+- id: word:無理:むり
+  expression: 無理
+  reading: むり
+  furigana: ''
+  romaji: ''
+  meanings:
+  - impossible, unreasonable
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - 201-week-2
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: manual
+    imported_from: ''
+    row: null
+    raw_fields: {}

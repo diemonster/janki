@@ -1,0 +1,903 @@
+{
+  "acceptance": {
+    "accepted_at": "2026-09-02T16:06:17.343967+00:00",
+    "authority": "repository-owner",
+    "intended_deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+    "intended_deck_text": "deck:\n  kind: conjugation\n  form: potential\n  name: \"Brandon Japanese::Genki II::Lesson 13::Potential Practice\"\n  deck_id: 1047286103\n  model_id: 1607392351\n  model_name: \"Japanese Pattern\"\n  description: \"Potential-form practice for selected verbs taught or exemplified on Genki II Lesson 13 textbook pages 26–28 and 32.\"\n  output: \"brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.apkg\"\n  source: ../normalized/vocabulary.json\n  form_note: >-\n    Potential expresses ability or possibility (“can / be able to”). Potential\n    verbs conjugate like ichidan (る) verbs, so the example may change tense,\n    polarity, or politeness. With most を-verbs, either が or を is possible;\n    できる takes が almost all the time. Other particles stay unchanged.\n  include_ids:\n    - word:話す:はなす\n    - word:まつ:まつ\n    - word:およぐ:およぐ\n    - word:行く:いく\n    - word:しぬ:しぬ\n    - word:読む:よむ\n    - word:あそぶ:あそぶ\n    - word:買う:かう\n    - word:見る:みる\n    - word:来る:くる\n    - word:する:する\n    - word:書く:かく\n    - word:飼う:かう\n    - word:弾く:ひく\n    - word:吹く:ふく\n    - word:たたく:たたく\n  drill_examples:\n    \"word:話す:はなす\":\n      - japanese: 私は日本語が話せます。\n        furigana: 私[わたし]は 日本語[にほんご]が 話[はな]せます。\n        english: I can speak Japanese.\n        register: polite\n        audio: audio/janki-3daceb701c03.wav\n      - japanese: 英語も話せる？\n        furigana: 英語[えいご]も 話[はな]せる？\n        english: Can you speak English too?\n        register: casual\n        audio: audio/janki-4871d4ab4a8a.wav\n    \"word:まつ:まつ\":\n      - japanese: もう少しここでまてますか。\n        furigana: もう 少[すこ]しここでまてますか。\n        english: Can you wait here a little longer?\n        register: polite\n        audio: audio/janki-fd9b0107354f.wav\n      - japanese: もう少しここでまてる？\n        furigana: もう 少[すこ]しここでまてる？\n        english: Can you wait here a little longer?\n        register: casual\n        audio: audio/janki-3eb6da066130.wav\n    \"word:およぐ:およぐ\":\n      - japanese: 私はおよげないんです。\n        furigana: 私[わたし]はおよげないんです。\n        english: The truth is, I can't swim.\n        register: polite\n        audio: audio/janki-e3f245fc2780.wav\n      - japanese: 海でおよげる？\n        furigana: 海[うみ]でおよげる？\n        english: Can you swim in the ocean?\n        register: casual\n        audio: audio/janki-0fc987bc9e9f.wav\n    \"word:行く:いく\":\n      - japanese: 雨が降ったので、海に行けませんでした。\n        furigana: 雨[あめ]が 降[ふ]ったので、 海[うみ]に 行[い]けませんでした。\n        english: We couldn't go to the beach because it rained.\n        register: polite\n        audio: audio/janki-7e0c0f147499.wav\n      - japanese: 明日は私も行けるよ。\n        furigana: 明日[あした]は 私[わたし]も 行[い]けるよ。\n        english: I can go tomorrow too.\n        register: casual\n        audio: audio/janki-ddc8831e5dd5.wav\n    \"word:しぬ:しぬ\":\n      - japanese: これで安心してしねます。\n        furigana: これで 安心[あんしん]してしねます。\n        english: Now I can die in peace.\n        register: polite\n        audio: audio/janki-065329b77ec2.wav\n      - japanese: これで安心してしねる。\n        furigana: これで 安心[あんしん]してしねる。\n        english: Now I can die in peace.\n        register: casual\n        audio: audio/janki-2440501ca7d7.wav\n    \"word:読む:よむ\":\n      - japanese: この漢字が読めますか。\n        furigana: この 漢字[かんじ]が 読[よ]めますか。\n        english: Can you read this kanji?\n        register: polite\n        audio: audio/janki-b1e52ad98f7d.wav\n      - japanese: この字、読める？\n        furigana: この 字[じ]、 読[よ]める？\n        english: Can you read this character?\n        register: casual\n        audio: audio/janki-0623a3ff7465.wav\n    \"word:あそぶ:あそぶ\":\n      - japanese: 明日の午後、あそべますか。\n        furigana: 明日[あした]の 午後[ごご]、あそべますか。\n        english: Can you hang out tomorrow afternoon?\n        register: polite\n        audio: audio/janki-4d4f24caf38d.wav\n      - japanese: 明日は公園であそべるよ。\n        furigana: 明日[あした]は 公園[こうえん]であそべるよ。\n        english: I can play at the park tomorrow.\n        register: casual\n        audio: audio/janki-efb7f385e622.wav\n    \"word:買う:かう\":\n      - japanese: この店で切符が買えます。\n        furigana: この 店[みせ]で 切符[きっぷ]が 買[か]えます。\n        english: You can buy tickets at this store.\n        register: polite\n        audio: audio/janki-cb9b612fb9b5.wav\n      - japanese: この店ではおみやげも買えるよ。\n        furigana: この 店[みせ]ではおみやげも 買[か]えるよ。\n        english: You can buy souvenirs at this store too.\n        register: casual\n        audio: audio/janki-cac4a37816ed.wav\n    \"word:見る:みる\":\n      - japanese: この動物園ではパンダが見られます。\n        furigana: この 動物園[どうぶつえん]ではパンダが 見[み]られます。\n        english: You can see pandas at this zoo.\n        register: polite\n        audio: audio/janki-a6e59debedfc.wav\n      - japanese: この映画は家でも見られるよ。\n        furigana: この 映画[えいが]は 家[いえ]でも 見[み]られるよ。\n        english: You can watch this movie at home too.\n        register: casual\n        audio: audio/janki-2f2f19feae82.wav\n    \"word:来る:くる\":\n      - japanese: 土曜日に来られますか。\n        furigana: 土曜日[どようび]に 来[こ]られますか。\n        english: Can you come on Saturday?\n        register: polite\n        audio: audio/janki-8608767fc949.wav\n      - japanese: 明日のパーティーに来られる？\n        furigana: 明日[あした]のパーティーに 来[こ]られる？\n        english: Can you come to tomorrow's party?\n        register: casual\n        audio: audio/janki-2862251a570f.wav\n    \"word:する:する\":\n      - japanese: 何か楽器ができますか。\n        furigana: 何[なに]か 楽器[がっき]ができますか。\n        english: Can you play any instruments?\n        register: polite\n        audio: audio/janki-b83def1ab8a2.wav\n      - japanese: 明日は仕事ができる？\n        furigana: 明日[あした]は 仕事[しごと]ができる？\n        english: Can you work tomorrow?\n        register: casual\n        audio: audio/janki-05ebe791696c.wav\n    \"word:書く:かく\":\n      - japanese: ひらがなで名前が書けますか。\n        furigana: ひらがなで 名前[なまえ]が 書[か]けますか。\n        english: Can you write your name in hiragana?\n        register: polite\n        audio: audio/janki-3579f2da379f.wav\n      - japanese: この漢字、書ける？\n        furigana: この 漢字[かんじ]、 書[か]ける？\n        english: Can you write this kanji?\n        register: casual\n        audio: audio/janki-c43630d0dccc.wav\n    \"word:飼う:かう\":\n      - japanese: このアパートでは犬が飼えません。\n        furigana: このアパートでは 犬[いぬ]が 飼[か]えません。\n        english: You can't keep a dog in this apartment.\n        register: polite\n        audio: audio/janki-b671d14d6843.wav\n      - japanese: このアパートでは猫が飼えるよ。\n        furigana: このアパートでは 猫[ねこ]が 飼[か]えるよ。\n        english: You can keep a cat in this apartment.\n        register: casual\n        audio: audio/janki-8864d96b98aa.wav\n    \"word:弾く:ひく\":\n      - japanese: ギターが弾けます。\n        furigana: ギターが 弾[ひ]けます。\n        english: I can play the guitar.\n        register: polite\n        audio: audio/janki-5bc9c549dd6b.wav\n      - japanese: ピアノも弾ける？\n        furigana: ピアノも 弾[ひ]ける？\n        english: Can you play the piano too?\n        register: casual\n        audio: audio/janki-4a7ed50f36ee.wav\n    \"word:吹く:ふく\":\n      - japanese: フルートも吹けますか。\n        furigana: フルートも 吹[ふ]けますか。\n        english: Can you play the flute too?\n        register: polite\n        audio: audio/janki-bcef8ea10d8b.wav\n      - japanese: サックスが吹ける？\n        furigana: サックスが 吹[ふ]ける？\n        english: Can you play the saxophone?\n        register: casual\n        audio: audio/janki-55e0a66d58ba.wav\n    \"word:たたく:たたく\":\n      - japanese: 私はドラムがたたけません。\n        furigana: 私[わたし]はドラムがたたけません。\n        english: I can't play the drums.\n        register: polite\n        audio: audio/janki-00a8d303c325.wav\n      - japanese: ドラムがたたける？\n        furigana: ドラムがたたける？\n        english: Can you play the drums?\n        register: casual\n        audio: audio/janki-facc62e3fb23.wav\n",
+    "plan_fingerprint": "79e709b26dc6e7c1f6b433e8b2aaeac983f4b1380e5fb0bbe5b4bf6a284ac6eb",
+    "proposal_sha256": "4789c9c1ea6cdf57db5a0cf4e12b8f8cf964e800e1872cb5b90c1d5e1711b8ed"
+  },
+  "before": {
+    "drill_examples": {
+      "word:あそぶ:あそぶ": [
+        {
+          "audio": "audio/janki-4d4f24caf38d.wav",
+          "english": "Can you hang out tomorrow afternoon?",
+          "furigana": "明日[あした]の 午後[ごご]、あそべますか。",
+          "japanese": "明日の午後、あそべますか。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-efb7f385e622.wav",
+          "english": "I can play at the park tomorrow.",
+          "furigana": "明日[あした]は 公園[こうえん]であそべるよ。",
+          "japanese": "明日は公園であそべるよ。",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:およぐ:およぐ": [
+        {
+          "audio": "audio/janki-e3f245fc2780.wav",
+          "english": "The truth is, I can't swim.",
+          "furigana": "私[わたし]はおよげないんです。",
+          "japanese": "私はおよげないんです。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-0fc987bc9e9f.wav",
+          "english": "Can you swim in the ocean?",
+          "furigana": "海[うみ]でおよげる？",
+          "japanese": "海でおよげる？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:しぬ:しぬ": [
+        {
+          "audio": "audio/janki-065329b77ec2.wav",
+          "english": "Now I can die in peace.",
+          "furigana": "これで 安心[あんしん]してしねます。",
+          "japanese": "これで安心してしねます。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-2440501ca7d7.wav",
+          "english": "Now I can die in peace.",
+          "furigana": "これで 安心[あんしん]してしねる。",
+          "japanese": "これで安心してしねる。",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:する:する": [
+        {
+          "audio": "audio/janki-b83def1ab8a2.wav",
+          "english": "Can you play any instruments?",
+          "furigana": "何[なに]か 楽器[がっき]ができますか。",
+          "japanese": "何か楽器ができますか。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-05ebe791696c.wav",
+          "english": "Can you work tomorrow?",
+          "furigana": "明日[あした]は 仕事[しごと]ができる？",
+          "japanese": "明日は仕事ができる？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:たたく:たたく": [
+        {
+          "audio": "audio/janki-00a8d303c325.wav",
+          "english": "I can't play the drums.",
+          "furigana": "私[わたし]はドラムがたたけません。",
+          "japanese": "私はドラムがたたけません。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-facc62e3fb23.wav",
+          "english": "Can you play the drums?",
+          "furigana": "ドラムがたたける？",
+          "japanese": "ドラムがたたける？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:まつ:まつ": [
+        {
+          "audio": "audio/janki-fd9b0107354f.wav",
+          "english": "Can you wait here a little longer?",
+          "furigana": "もう 少[すこ]しここでまてますか。",
+          "japanese": "もう少しここでまてますか。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-3eb6da066130.wav",
+          "english": "Can you wait here a little longer?",
+          "furigana": "もう 少[すこ]しここでまてる？",
+          "japanese": "もう少しここでまてる？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:吹く:ふく": [
+        {
+          "audio": "audio/janki-bcef8ea10d8b.wav",
+          "english": "Can you play the flute too?",
+          "furigana": "フルートも 吹[ふ]けますか。",
+          "japanese": "フルートも吹けますか。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-55e0a66d58ba.wav",
+          "english": "Can you play the saxophone?",
+          "furigana": "サックスが 吹[ふ]ける？",
+          "japanese": "サックスが吹ける？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:弾く:ひく": [
+        {
+          "audio": "audio/janki-5bc9c549dd6b.wav",
+          "english": "I can play the guitar.",
+          "furigana": "ギターが 弾[ひ]けます。",
+          "japanese": "ギターが弾けます。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-4a7ed50f36ee.wav",
+          "english": "Can you play the piano too?",
+          "furigana": "ピアノも 弾[ひ]ける？",
+          "japanese": "ピアノも弾ける？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:書く:かく": [
+        {
+          "audio": "audio/janki-3579f2da379f.wav",
+          "english": "Can you write your name in hiragana?",
+          "furigana": "ひらがなで 名前[なまえ]が 書[か]けますか。",
+          "japanese": "ひらがなで名前が書けますか。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-c43630d0dccc.wav",
+          "english": "Can you write this kanji?",
+          "furigana": "この 漢字[かんじ]、 書[か]ける？",
+          "japanese": "この漢字、書ける？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:来る:くる": [
+        {
+          "audio": "audio/janki-8608767fc949.wav",
+          "english": "Can you come on Saturday?",
+          "furigana": "土曜日[どようび]に 来[こ]られますか。",
+          "japanese": "土曜日に来られますか。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-2862251a570f.wav",
+          "english": "Can you come to tomorrow's party?",
+          "furigana": "明日[あした]のパーティーに 来[こ]られる？",
+          "japanese": "明日のパーティーに来られる？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:行く:いく": [
+        {
+          "audio": "audio/janki-7e0c0f147499.wav",
+          "english": "We couldn't go to the beach because it rained.",
+          "furigana": "雨[あめ]が 降[ふ]ったので、 海[うみ]に 行[い]けませんでした。",
+          "japanese": "雨が降ったので、海に行けませんでした。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-ddc8831e5dd5.wav",
+          "english": "I can go tomorrow too.",
+          "furigana": "明日[あした]は 私[わたし]も 行[い]けるよ。",
+          "japanese": "明日は私も行けるよ。",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:見る:みる": [
+        {
+          "audio": "audio/janki-a6e59debedfc.wav",
+          "english": "You can see pandas at this zoo.",
+          "furigana": "この 動物園[どうぶつえん]ではパンダが 見[み]られます。",
+          "japanese": "この動物園ではパンダが見られます。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-2f2f19feae82.wav",
+          "english": "You can watch this movie at home too.",
+          "furigana": "この 映画[えいが]は 家[いえ]でも 見[み]られるよ。",
+          "japanese": "この映画は家でも見られるよ。",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:話す:はなす": [
+        {
+          "audio": "audio/janki-3daceb701c03.wav",
+          "english": "I can speak Japanese.",
+          "furigana": "私[わたし]は 日本語[にほんご]が 話[はな]せます。",
+          "japanese": "私は日本語が話せます。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-4871d4ab4a8a.wav",
+          "english": "Can you speak English too?",
+          "furigana": "英語[えいご]も 話[はな]せる？",
+          "japanese": "英語も話せる？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:読む:よむ": [
+        {
+          "audio": "audio/janki-b1e52ad98f7d.wav",
+          "english": "Can you read this kanji?",
+          "furigana": "この 漢字[かんじ]が 読[よ]めますか。",
+          "japanese": "この漢字が読めますか。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-0623a3ff7465.wav",
+          "english": "Can you read this character?",
+          "furigana": "この 字[じ]、 読[よ]める？",
+          "japanese": "この字、読める？",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:買う:かう": [
+        {
+          "audio": "audio/janki-cb9b612fb9b5.wav",
+          "english": "You can buy tickets at this store.",
+          "furigana": "この 店[みせ]で 切符[きっぷ]が 買[か]えます。",
+          "japanese": "この店で切符が買えます。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-cac4a37816ed.wav",
+          "english": "You can buy souvenirs at this store too.",
+          "furigana": "この 店[みせ]ではおみやげも 買[か]えるよ。",
+          "japanese": "この店ではおみやげも買えるよ。",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ],
+      "word:飼う:かう": [
+        {
+          "audio": "audio/janki-b671d14d6843.wav",
+          "english": "You can't keep a dog in this apartment.",
+          "furigana": "このアパートでは 犬[いぬ]が 飼[か]えません。",
+          "japanese": "このアパートでは犬が飼えません。",
+          "register": "polite",
+          "romaji": "",
+          "spoken_japanese": ""
+        },
+        {
+          "audio": "audio/janki-8864d96b98aa.wav",
+          "english": "You can keep a cat in this apartment.",
+          "furigana": "このアパートでは 猫[ねこ]が 飼[か]えるよ。",
+          "japanese": "このアパートでは猫が飼えるよ。",
+          "register": "casual",
+          "romaji": "",
+          "spoken_japanese": ""
+        }
+      ]
+    },
+    "form_note": "Potential expresses ability or possibility (“can / be able to”). Potential verbs conjugate like ichidan (る) verbs, so the example may change tense, polarity, or politeness. With most を-verbs, either が or を is possible; できる takes が almost all the time. Other particles stay unchanged."
+  },
+  "canonical_context": {
+    "word:あそぶ:あそぶ": {
+      "expression": "あそぶ",
+      "id": "word:あそぶ:あそぶ",
+      "meanings": [
+        "to play",
+        "to hang out"
+      ],
+      "part_of_speech": "godan verb (u-verb)",
+      "reading": "あそぶ",
+      "target_conjugation": "あそべる",
+      "transitivity": "intransitive",
+      "verb_group": "godan"
+    },
+    "word:およぐ:およぐ": {
+      "expression": "およぐ",
+      "id": "word:およぐ:およぐ",
+      "meanings": [
+        "to swim"
+      ],
+      "part_of_speech": "godan verb (u-verb)",
+      "reading": "およぐ",
+      "target_conjugation": "およげる",
+      "transitivity": "intransitive",
+      "verb_group": "godan"
+    },
+    "word:しぬ:しぬ": {
+      "expression": "しぬ",
+      "id": "word:しぬ:しぬ",
+      "meanings": [
+        "to die"
+      ],
+      "part_of_speech": "godan verb (u-verb)",
+      "reading": "しぬ",
+      "target_conjugation": "しねる",
+      "transitivity": "intransitive",
+      "verb_group": "godan"
+    },
+    "word:する:する": {
+      "expression": "する",
+      "id": "word:する:する",
+      "meanings": [
+        "to do, to carry out, to perform",
+        "to cause to become, to make (into), to turn (into)",
+        "to serve as, to act as, to work as",
+        "to wear (clothes, a facial expression, etc.)",
+        "to judge as being, to view as being, to think of as, to treat as, to use as",
+        "to decide on, to choose",
+        "to be sensed (of a smell, noise, etc.)",
+        "to be (in a state, condition, etc.)",
+        "to be worth, to cost",
+        "to pass (of time), to elapse",
+        "to place, or raise, person A to a post or status B",
+        "to transform A to B, to make A into B, to exchange A for B",
+        "to make use of A for B, to view A as B, to handle A as if it were B",
+        "to feel A about B",
+        "verbalizing suffix (applies to nouns noted in this dictionary with the part of speech \"vs\")",
+        "creates a humble verb (after a noun prefixed with \"o\" or \"go\")",
+        "to be just about to, to be just starting to, to try to, to attempt to"
+      ],
+      "part_of_speech": "verb",
+      "reading": "する",
+      "target_conjugation": "できる",
+      "transitivity": "",
+      "verb_group": "suru"
+    },
+    "word:たたく:たたく": {
+      "expression": "たたく",
+      "id": "word:たたく:たたく",
+      "meanings": [
+        "to play (a percussion instrument)"
+      ],
+      "part_of_speech": "verb",
+      "reading": "たたく",
+      "target_conjugation": "たたける",
+      "transitivity": "transitive",
+      "verb_group": "godan"
+    },
+    "word:まつ:まつ": {
+      "expression": "まつ",
+      "id": "word:まつ:まつ",
+      "meanings": [
+        "to wait"
+      ],
+      "part_of_speech": "godan verb (u-verb)",
+      "reading": "まつ",
+      "target_conjugation": "まてる",
+      "transitivity": "",
+      "verb_group": ""
+    },
+    "word:吹く:ふく": {
+      "expression": "吹く",
+      "id": "word:吹く:ふく",
+      "meanings": [
+        "to play (a wind instrument)"
+      ],
+      "part_of_speech": "verb",
+      "reading": "ふく",
+      "target_conjugation": "吹ける",
+      "transitivity": "",
+      "verb_group": "godan"
+    },
+    "word:弾く:ひく": {
+      "expression": "弾く",
+      "id": "word:弾く:ひく",
+      "meanings": [
+        "to play (a stringed or keyboard instrument)"
+      ],
+      "part_of_speech": "verb",
+      "reading": "ひく",
+      "target_conjugation": "弾ける",
+      "transitivity": "transitive",
+      "verb_group": "godan"
+    },
+    "word:書く:かく": {
+      "expression": "書く",
+      "id": "word:書く:かく",
+      "meanings": [
+        "to write, to compose, to pen",
+        "to draw, to paint"
+      ],
+      "part_of_speech": "verb",
+      "reading": "かく",
+      "target_conjugation": "書ける",
+      "transitivity": "transitive",
+      "verb_group": "godan"
+    },
+    "word:来る:くる": {
+      "expression": "来る",
+      "id": "word:来る:くる",
+      "meanings": [
+        "to come (spatially or temporally), to approach, to arrive",
+        "to come back, to do ... and come back",
+        "to come to be, to become, to get, to grow, to continue",
+        "to come from, to be caused by, to derive from",
+        "to come to (i.e. \"when it comes to spinach ...\")"
+      ],
+      "part_of_speech": "verb",
+      "reading": "くる",
+      "target_conjugation": "来られる",
+      "transitivity": "intransitive",
+      "verb_group": "kuru"
+    },
+    "word:行く:いく": {
+      "expression": "行く",
+      "id": "word:行く:いく",
+      "meanings": [
+        "to go"
+      ],
+      "part_of_speech": "verb",
+      "reading": "いく",
+      "target_conjugation": "行ける",
+      "transitivity": "intransitive",
+      "verb_group": "godan"
+    },
+    "word:見る:みる": {
+      "expression": "見る",
+      "id": "word:見る:みる",
+      "meanings": [
+        "to see, to look, to watch, to view, to observe",
+        "to examine, to look over, to assess, to check, to judge",
+        "to look after, to attend to, to take care of, to keep an eye on",
+        "to experience, to meet with (misfortune, success, etc.)",
+        "to try ..., to have a go at ..., to give ... a try",
+        "to see (that) ..., to find (that) ..."
+      ],
+      "part_of_speech": "verb",
+      "reading": "みる",
+      "target_conjugation": "見られる",
+      "transitivity": "transitive",
+      "verb_group": "ichidan"
+    },
+    "word:話す:はなす": {
+      "expression": "話す",
+      "id": "word:話す:はなす",
+      "meanings": [
+        "to speak",
+        "to talk"
+      ],
+      "part_of_speech": "verb",
+      "reading": "はなす",
+      "target_conjugation": "話せる",
+      "transitivity": "transitive",
+      "verb_group": "godan"
+    },
+    "word:読む:よむ": {
+      "expression": "読む",
+      "id": "word:読む:よむ",
+      "meanings": [
+        "to read",
+        "to recite (e.g. a sutra), to chant",
+        "to predict, to guess, to forecast, to read (someone's thoughts), to see (e.g. into someone's heart), to divine",
+        "to decipher",
+        "to count, to estimate",
+        "to read (a kanji) with its native Japanese reading"
+      ],
+      "part_of_speech": "verb",
+      "reading": "よむ",
+      "target_conjugation": "読める",
+      "transitivity": "transitive",
+      "verb_group": "godan"
+    },
+    "word:買う:かう": {
+      "expression": "買う",
+      "id": "word:買う:かう",
+      "meanings": [
+        "to buy, to purchase",
+        "to value, to have a high opinion",
+        "to stir, to provoke, to draw upon oneself"
+      ],
+      "part_of_speech": "verb",
+      "reading": "かう",
+      "target_conjugation": "買える",
+      "transitivity": "transitive",
+      "verb_group": "godan"
+    },
+    "word:飼う:かう": {
+      "expression": "飼う",
+      "id": "word:飼う:かう",
+      "meanings": [
+        "to keep (a pet)",
+        "to raise (an animal)"
+      ],
+      "part_of_speech": "verb",
+      "reading": "かう",
+      "target_conjugation": "飼える",
+      "transitivity": "transitive",
+      "verb_group": "godan"
+    }
+  },
+  "kind": "conjugation_deck_revision",
+  "operation_id": "105955d8-a38b-4904-92e8-fbec3082be86",
+  "proposal": {
+    "drill_examples": {
+      "word:あそぶ:あそぶ": [
+        {
+          "english": "Can you hang out tomorrow afternoon?",
+          "furigana": "明日[あした]の 午後[ごご]、あそべますか。",
+          "japanese": "明日の午後、あそべますか。",
+          "register": "polite"
+        },
+        {
+          "english": "I can play at the park tomorrow.",
+          "furigana": "明日[あした]は 公園[こうえん]であそべるよ。",
+          "japanese": "明日は公園であそべるよ。",
+          "register": "casual"
+        }
+      ],
+      "word:およぐ:およぐ": [
+        {
+          "english": "The truth is, I can't swim.",
+          "furigana": "私[わたし]はおよげないんです。",
+          "japanese": "私はおよげないんです。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you swim in the ocean?",
+          "furigana": "海[うみ]でおよげる？",
+          "japanese": "海でおよげる？",
+          "register": "casual"
+        }
+      ],
+      "word:しぬ:しぬ": [
+        {
+          "english": "Now I can die in peace.",
+          "furigana": "これで 安心[あんしん]してしねます。",
+          "japanese": "これで安心してしねます。",
+          "register": "polite"
+        },
+        {
+          "english": "Now I can die in peace.",
+          "furigana": "これで 安心[あんしん]してしねる。",
+          "japanese": "これで安心してしねる。",
+          "register": "casual"
+        }
+      ],
+      "word:する:する": [
+        {
+          "english": "Can you play any instruments?",
+          "furigana": "何[なに]か 楽器[がっき]ができますか。",
+          "japanese": "何か楽器ができますか。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you work tomorrow?",
+          "furigana": "明日[あした]は 仕事[しごと]ができる？",
+          "japanese": "明日は仕事ができる？",
+          "register": "casual"
+        }
+      ],
+      "word:たたく:たたく": [
+        {
+          "english": "I can't play the drums.",
+          "furigana": "私[わたし]はドラムがたたけません。",
+          "japanese": "私はドラムがたたけません。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you play the drums?",
+          "furigana": "ドラムがたたける？",
+          "japanese": "ドラムがたたける？",
+          "register": "casual"
+        }
+      ],
+      "word:まつ:まつ": [
+        {
+          "english": "Can you wait here a little longer?",
+          "furigana": "もう 少[すこ]しここでまてますか。",
+          "japanese": "もう少しここでまてますか。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you wait here a little longer?",
+          "furigana": "もう 少[すこ]しここでまてる？",
+          "japanese": "もう少しここでまてる？",
+          "register": "casual"
+        }
+      ],
+      "word:吹く:ふく": [
+        {
+          "english": "Can you play the flute too?",
+          "furigana": "フルートも 吹[ふ]けますか。",
+          "japanese": "フルートも吹けますか。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you play the saxophone?",
+          "furigana": "サックスが 吹[ふ]ける？",
+          "japanese": "サックスが吹ける？",
+          "register": "casual"
+        }
+      ],
+      "word:弾く:ひく": [
+        {
+          "english": "I can play the guitar.",
+          "furigana": "ギターが 弾[ひ]けます。",
+          "japanese": "ギターが弾けます。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you play the piano too?",
+          "furigana": "ピアノも 弾[ひ]ける？",
+          "japanese": "ピアノも弾ける？",
+          "register": "casual"
+        }
+      ],
+      "word:書く:かく": [
+        {
+          "english": "Can you write your name in hiragana?",
+          "furigana": "ひらがなで 名前[なまえ]が 書[か]けますか。",
+          "japanese": "ひらがなで名前が書けますか。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you write this kanji?",
+          "furigana": "この 漢字[かんじ]、 書[か]ける？",
+          "japanese": "この漢字、書ける？",
+          "register": "casual"
+        }
+      ],
+      "word:来る:くる": [
+        {
+          "english": "Can you come on Saturday?",
+          "furigana": "土曜日[どようび]に 来[こ]られますか。",
+          "japanese": "土曜日に来られますか。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you come to tomorrow's party?",
+          "furigana": "明日[あした]のパーティーに 来[こ]られる？",
+          "japanese": "明日のパーティーに来られる？",
+          "register": "casual"
+        }
+      ],
+      "word:行く:いく": [
+        {
+          "english": "We couldn't go to the beach because it rained.",
+          "furigana": "雨[あめ]が 降[ふ]ったので、 海[うみ]に 行[い]けませんでした。",
+          "japanese": "雨が降ったので、海に行けませんでした。",
+          "register": "polite"
+        },
+        {
+          "english": "I can go tomorrow too.",
+          "furigana": "明日[あした]は 私[わたし]も 行[い]けるよ。",
+          "japanese": "明日は私も行けるよ。",
+          "register": "casual"
+        }
+      ],
+      "word:見る:みる": [
+        {
+          "english": "You can see pandas at this zoo.",
+          "furigana": "この 動物園[どうぶつえん]ではパンダが 見[み]られます。",
+          "japanese": "この動物園ではパンダが見られます。",
+          "register": "polite"
+        },
+        {
+          "english": "You can watch this movie at home too.",
+          "furigana": "この 映画[えいが]は 家[いえ]でも 見[み]られるよ。",
+          "japanese": "この映画は家でも見られるよ。",
+          "register": "casual"
+        }
+      ],
+      "word:話す:はなす": [
+        {
+          "english": "I can speak Japanese.",
+          "furigana": "私[わたし]は 日本語[にほんご]が 話[はな]せます。",
+          "japanese": "私は日本語が話せます。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you speak English too?",
+          "furigana": "英語[えいご]も 話[はな]せる？",
+          "japanese": "英語も話せる？",
+          "register": "casual"
+        }
+      ],
+      "word:読む:よむ": [
+        {
+          "english": "Can you read this kanji?",
+          "furigana": "この 漢字[かんじ]が 読[よ]めますか。",
+          "japanese": "この漢字が読めますか。",
+          "register": "polite"
+        },
+        {
+          "english": "Can you read this character?",
+          "furigana": "この 字[じ]、 読[よ]める？",
+          "japanese": "この字、読める？",
+          "register": "casual"
+        }
+      ],
+      "word:買う:かう": [
+        {
+          "english": "You can buy tickets at this store.",
+          "furigana": "この 店[みせ]で 切符[きっぷ]が 買[か]えます。",
+          "japanese": "この店で切符が買えます。",
+          "register": "polite"
+        },
+        {
+          "english": "You can buy souvenirs at this store too.",
+          "furigana": "この 店[みせ]ではおみやげも 買[か]えるよ。",
+          "japanese": "この店ではおみやげも買えるよ。",
+          "register": "casual"
+        }
+      ],
+      "word:飼う:かう": [
+        {
+          "english": "You can't keep a dog in this apartment.",
+          "furigana": "このアパートでは 犬[いぬ]が 飼[か]えません。",
+          "japanese": "このアパートでは犬が飼えません。",
+          "register": "polite"
+        },
+        {
+          "english": "You can keep a cat in this apartment.",
+          "furigana": "このアパートでは 猫[ねこ]が 飼[か]えるよ。",
+          "japanese": "このアパートでは猫が飼えるよ。",
+          "register": "casual"
+        }
+      ]
+    },
+    "form_note": "Potential expresses ability or possibility (“can / be able to”). Potential verbs conjugate like ichidan (る) verbs, so the example may change tense, polarity, or politeness. With most を-verbs, either が or を is possible; できる takes が almost all the time. Other particles stay unchanged."
+  },
+  "request": {
+    "canonical_context_fingerprint": "7f5da0994e3ae634c0a2210ff835a7ad199470f224033ff86d7c8db94342d83a",
+    "owner_instruction": "test",
+    "plan_fingerprint": "21d59109244ab9d03412104d66bebb29cc3d1cf743c87ca66dac84c843094b5d",
+    "provider_plan": {
+      "auth": {
+        "api_key_source": null,
+        "api_provider": "firstParty",
+        "auth_method": "claude.ai",
+        "subscription_type": "max"
+      },
+      "billing_class": "claude-subscription",
+      "model": "claude-opus-5",
+      "provider": "claude-code",
+      "request_bytes_sha256": "81aa3b1749ca9c2c1d985484f3a1ba7e38233d75cc88d399515d01cb6ae54daa",
+      "request_bytes_utf8": "{\"argv\":[\"claude\",\"-p\",\"--safe-mode\",\"--disable-slash-commands\",\"--no-session-persistence\",\"--no-chrome\",\"--tools\",\"\",\"--permission-mode\",\"dontAsk\",\"--prompt-suggestions\",\"false\",\"--output-format\",\"json\",\"--model\",\"claude-opus-5\",\"--effort\",\"xhigh\",\"--json-schema\",\"{\\\"$defs\\\":{\\\"RevisionCard\\\":{\\\"additionalProperties\\\":false,\\\"properties\\\":{\\\"examples\\\":{\\\"items\\\":{\\\"$ref\\\":\\\"#/$defs/RevisionExample\\\"},\\\"maxItems\\\":2,\\\"minItems\\\":2,\\\"title\\\":\\\"Examples\\\",\\\"type\\\":\\\"array\\\"},\\\"record_id\\\":{\\\"description\\\":\\\"Selected record identifier.\\\",\\\"minLength\\\":1,\\\"title\\\":\\\"Record Id\\\",\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"record_id\\\",\\\"examples\\\"],\\\"title\\\":\\\"RevisionCard\\\",\\\"type\\\":\\\"object\\\"},\\\"RevisionExample\\\":{\\\"additionalProperties\\\":false,\\\"properties\\\":{\\\"english\\\":{\\\"description\\\":\\\"Natural English translation.\\\",\\\"minLength\\\":1,\\\"title\\\":\\\"English\\\",\\\"type\\\":\\\"string\\\"},\\\"furigana\\\":{\\\"description\\\":\\\"Sentence with Anki furigana.\\\",\\\"minLength\\\":1,\\\"title\\\":\\\"Furigana\\\",\\\"type\\\":\\\"string\\\"},\\\"japanese\\\":{\\\"description\\\":\\\"Japanese sentence.\\\",\\\"minLength\\\":1,\\\"title\\\":\\\"Japanese\\\",\\\"type\\\":\\\"string\\\"},\\\"speech_level\\\":{\\\"description\\\":\\\"Speech level.\\\",\\\"enum\\\":[\\\"polite\\\",\\\"casual\\\"],\\\"title\\\":\\\"Speech Level\\\",\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"japanese\\\",\\\"speech_level\\\",\\\"furigana\\\",\\\"english\\\"],\\\"title\\\":\\\"RevisionExample\\\",\\\"type\\\":\\\"object\\\"}},\\\"additionalProperties\\\":false,\\\"properties\\\":{\\\"cards\\\":{\\\"items\\\":{\\\"$ref\\\":\\\"#/$defs/RevisionCard\\\"},\\\"minItems\\\":1,\\\"title\\\":\\\"Cards\\\",\\\"type\\\":\\\"array\\\"},\\\"form_note\\\":{\\\"description\\\":\\\"Proposed deck-wide form note.\\\",\\\"title\\\":\\\"Form Note\\\",\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"form_note\\\",\\\"cards\\\"],\\\"title\\\":\\\"ConjugationDeckRevision\\\",\\\"type\\\":\\\"object\\\"}\",\"--system-prompt\",\"# Japanese Content Style Guide\\n\\n## Audience\\n\\nDefault material targets a beginner or lower-intermediate learner following a\\nGenki-style sequence.\\n\\n## Required fields\\n\\nEvery vocabulary note should have:\\n\\n- `expression`;\\n- `reading` when the expression contains kanji;\\n- at least one concise English meaning;\\n- a stable `id`.\\n\\n## Preferred enrichments\\n\\n- Anki-formatted furigana: a space before every ruby group, punctuation\\n  included — `今[いま]、 東京[とうきょう]`, never `今[いま]、東京[とうきょう]`,\\n  because Anki takes everything since the last space as the base and would\\n  draw the reading over the comma too.\\n- Hepburn romaji.\\n- Part of speech.\\n- Verb group for verbs.\\n- Transitivity when meaningful.\\n- Common conjugations for verbs.\\n- Usage or nuance notes only when they teach something useful.\\n\\n## English meanings\\n\\nUse compact dictionary-style meanings on cards:\\n\\n```yaml\\nmeanings:\\n  - \\\"to speak\\\"\\n  - \\\"to talk\\\"\\n```\\n\\nAvoid long paragraphs in the meaning field. Put nuance and restrictions under\\n`usage_notes`.\\n\\n## Example sentences\\n\\nPrefer familiar, concrete content. Useful recurring contexts include software\\ndevelopment, electronic music, family, hiking, travel in Japan, restaurants, and\\neveryday conversation.\\n\\nA good example:\\n\\n```yaml\\njapanese: \\\"毎日、妻と日本語で話します。\\\"\\nenglish: \\\"I speak Japanese with my wife every day.\\\"\\n```\\n\\nAvoid introducing several unknown grammar points merely to demonstrate one word.\\n\\n## Verb conjugations\\n\\nUseful starter forms are:\\n\\n- dictionary/plain affirmative;\\n- plain negative;\\n- plain past;\\n- plain past negative;\\n- `て`-form;\\n- potential;\\n- passive when common or pedagogically relevant.\\n\\nDo not manufacture forms for words whose analysis is uncertain.\\n\\n## Furigana and readings\\n\\nUse the reading that applies in the exact word, not an exhaustive list of every\\npossible on'yomi and kun'yomi. Kanji-reference decks can store broader reading\\ninformation separately.\\n\\n## Tags\\n\\nUse lowercase, stable tags where possible:\\n\\n```text\\nshirabe verb godan genki::week11 topic::conversation\\n```\\n\\nThe builder converts whitespace in individual tags to underscores.\\n\\n\\nYou are revising explicitly selected cards in an existing Japanese\\nconjugation-practice deck for the repository owner. The labelled data turn\\ncontains the owner's exact instruction, the current deck content for only the\\nselected cards, and the minimal canonical vocabulary facts needed to write\\ntheir examples.\\n\\nFollow the owner's instruction within this response's narrow authority. You may\\npropose only the deck-wide form note and the two example sentences for every\\nselected record. You cannot change or propose record identity, expression,\\nreading, deck identity, deck membership, source provenance, review or approval\\nstate, promotion, deletion, audio, or spoken-audio overrides. Do not include\\nthose decisions in prose or encode them in another field.\\n\\nReturn every selected record ID exactly once, in the same order as the labelled\\ndata turn. Return exactly two complete examples for each: one polite and one\\ncasual. The polite example is everyday Japanese using 〜ます or 〜です and has\\nspeech_level `polite`. The casual example is everyday casual plain-form\\nJapanese, as a friend would naturally say it, and has speech_level `casual`.\\nBoth examples must actually demonstrate the deck's named conjugation form for\\nthat record. Casual speech uses its own natural particles and sentence-final\\nforms rather than mechanically swapping an ending.\\n\\nGive every example nonempty Japanese, natural English, and complete Anki\\nfurigana. In Anki notation, a group is\\nbase[reading]. The base contains exactly the characters that reading spells,\\nand an ASCII space separates each ruby group from what precedes it unless the\\ngroup opens the field. Kana already in the base remain outside brackets.\\n\\nThe form note is always present in the response. Unless the owner's instruction\\nasks to change it, copy the current form note exactly. Likewise, preserve a\\ncurrent example exactly when it already satisfies the requested change; do not\\nrewrite content merely to make it different. Do not preserve an audio field:\\naudio is deliberately outside this paid writing pass and is planned separately\\nafter the owner reviews and applies a proposal.\\n\\nDo not audit, grade, or discuss the current Japanese. Write the requested\\nproposal. Before returning it, check structurally that every selected ID appears\\nonce, every card has exactly one polite and one casual example, and every\\nexample field is complete.\\n\"],\"cli_version\":\"2.1.246\",\"controlled_environment\":{\"CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS\":\"1\",\"CLAUDE_CODE_DISABLE_AUTO_MEMORY\":\"1\",\"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\":\"1\",\"CLAUDE_CODE_DISABLE_WORKFLOWS\":\"1\",\"CLAUDE_CODE_EFFORT_LEVEL\":\"xhigh\",\"CLAUDE_CODE_FORK_SUBAGENT\":\"0\",\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"64000\",\"CLAUDE_CODE_MAX_RETRIES\":\"0\",\"CLAUDE_CODE_MAX_TURNS\":\"1\",\"CLAUDE_CODE_SAFE_MODE\":\"1\",\"MAX_STRUCTURED_OUTPUT_RETRIES\":\"0\"},\"cwd\":\"fresh-empty-temporary-directory\",\"stdin_utf8\":\"{\\n  \\\"deck\\\": {\\n    \\\"current_form_note\\\": \\\"Potential expresses ability or possibility (“can / be able to”). Potential verbs conjugate like ichidan (る) verbs, so the example may change tense, polarity, or politeness. With most を-verbs, either が or を is possible; できる takes が almost all the time. Other particles stay unchanged.\\\",\\n    \\\"file\\\": \\\"brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml\\\",\\n    \\\"form\\\": \\\"potential\\\",\\n    \\\"selected_cards\\\": [\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"I can speak Japanese.\\\",\\n            \\\"furigana\\\": \\\"私[わたし]は 日本語[にほんご]が 話[はな]せます。\\\",\\n            \\\"japanese\\\": \\\"私は日本語が話せます。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you speak English too?\\\",\\n            \\\"furigana\\\": \\\"英語[えいご]も 話[はな]せる？\\\",\\n            \\\"japanese\\\": \\\"英語も話せる？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"話す\\\",\\n          \\\"id\\\": \\\"word:話す:はなす\\\",\\n          \\\"meanings\\\": [\\n            \\\"to speak\\\",\\n            \\\"to talk\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"はなす\\\",\\n          \\\"target_conjugation\\\": \\\"話せる\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Can you wait here a little longer?\\\",\\n            \\\"furigana\\\": \\\"もう 少[すこ]しここでまてますか。\\\",\\n            \\\"japanese\\\": \\\"もう少しここでまてますか。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you wait here a little longer?\\\",\\n            \\\"furigana\\\": \\\"もう 少[すこ]しここでまてる？\\\",\\n            \\\"japanese\\\": \\\"もう少しここでまてる？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"まつ\\\",\\n          \\\"id\\\": \\\"word:まつ:まつ\\\",\\n          \\\"meanings\\\": [\\n            \\\"to wait\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"godan verb (u-verb)\\\",\\n          \\\"reading\\\": \\\"まつ\\\",\\n          \\\"target_conjugation\\\": \\\"まてる\\\",\\n          \\\"transitivity\\\": \\\"\\\",\\n          \\\"verb_group\\\": \\\"\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"The truth is, I can't swim.\\\",\\n            \\\"furigana\\\": \\\"私[わたし]はおよげないんです。\\\",\\n            \\\"japanese\\\": \\\"私はおよげないんです。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you swim in the ocean?\\\",\\n            \\\"furigana\\\": \\\"海[うみ]でおよげる？\\\",\\n            \\\"japanese\\\": \\\"海でおよげる？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"およぐ\\\",\\n          \\\"id\\\": \\\"word:およぐ:およぐ\\\",\\n          \\\"meanings\\\": [\\n            \\\"to swim\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"godan verb (u-verb)\\\",\\n          \\\"reading\\\": \\\"およぐ\\\",\\n          \\\"target_conjugation\\\": \\\"およげる\\\",\\n          \\\"transitivity\\\": \\\"intransitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"We couldn't go to the beach because it rained.\\\",\\n            \\\"furigana\\\": \\\"雨[あめ]が 降[ふ]ったので、 海[うみ]に 行[い]けませんでした。\\\",\\n            \\\"japanese\\\": \\\"雨が降ったので、海に行けませんでした。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"I can go tomorrow too.\\\",\\n            \\\"furigana\\\": \\\"明日[あした]は 私[わたし]も 行[い]けるよ。\\\",\\n            \\\"japanese\\\": \\\"明日は私も行けるよ。\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"行く\\\",\\n          \\\"id\\\": \\\"word:行く:いく\\\",\\n          \\\"meanings\\\": [\\n            \\\"to go\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"いく\\\",\\n          \\\"target_conjugation\\\": \\\"行ける\\\",\\n          \\\"transitivity\\\": \\\"intransitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Now I can die in peace.\\\",\\n            \\\"furigana\\\": \\\"これで 安心[あんしん]してしねます。\\\",\\n            \\\"japanese\\\": \\\"これで安心してしねます。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Now I can die in peace.\\\",\\n            \\\"furigana\\\": \\\"これで 安心[あんしん]してしねる。\\\",\\n            \\\"japanese\\\": \\\"これで安心してしねる。\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"しぬ\\\",\\n          \\\"id\\\": \\\"word:しぬ:しぬ\\\",\\n          \\\"meanings\\\": [\\n            \\\"to die\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"godan verb (u-verb)\\\",\\n          \\\"reading\\\": \\\"しぬ\\\",\\n          \\\"target_conjugation\\\": \\\"しねる\\\",\\n          \\\"transitivity\\\": \\\"intransitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Can you read this kanji?\\\",\\n            \\\"furigana\\\": \\\"この 漢字[かんじ]が 読[よ]めますか。\\\",\\n            \\\"japanese\\\": \\\"この漢字が読めますか。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you read this character?\\\",\\n            \\\"furigana\\\": \\\"この 字[じ]、 読[よ]める？\\\",\\n            \\\"japanese\\\": \\\"この字、読める？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"読む\\\",\\n          \\\"id\\\": \\\"word:読む:よむ\\\",\\n          \\\"meanings\\\": [\\n            \\\"to read\\\",\\n            \\\"to recite (e.g. a sutra), to chant\\\",\\n            \\\"to predict, to guess, to forecast, to read (someone's thoughts), to see (e.g. into someone's heart), to divine\\\",\\n            \\\"to decipher\\\",\\n            \\\"to count, to estimate\\\",\\n            \\\"to read (a kanji) with its native Japanese reading\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"よむ\\\",\\n          \\\"target_conjugation\\\": \\\"読める\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Can you hang out tomorrow afternoon?\\\",\\n            \\\"furigana\\\": \\\"明日[あした]の 午後[ごご]、あそべますか。\\\",\\n            \\\"japanese\\\": \\\"明日の午後、あそべますか。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"I can play at the park tomorrow.\\\",\\n            \\\"furigana\\\": \\\"明日[あした]は 公園[こうえん]であそべるよ。\\\",\\n            \\\"japanese\\\": \\\"明日は公園であそべるよ。\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"あそぶ\\\",\\n          \\\"id\\\": \\\"word:あそぶ:あそぶ\\\",\\n          \\\"meanings\\\": [\\n            \\\"to play\\\",\\n            \\\"to hang out\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"godan verb (u-verb)\\\",\\n          \\\"reading\\\": \\\"あそぶ\\\",\\n          \\\"target_conjugation\\\": \\\"あそべる\\\",\\n          \\\"transitivity\\\": \\\"intransitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"You can buy tickets at this store.\\\",\\n            \\\"furigana\\\": \\\"この 店[みせ]で 切符[きっぷ]が 買[か]えます。\\\",\\n            \\\"japanese\\\": \\\"この店で切符が買えます。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"You can buy souvenirs at this store too.\\\",\\n            \\\"furigana\\\": \\\"この 店[みせ]ではおみやげも 買[か]えるよ。\\\",\\n            \\\"japanese\\\": \\\"この店ではおみやげも買えるよ。\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"買う\\\",\\n          \\\"id\\\": \\\"word:買う:かう\\\",\\n          \\\"meanings\\\": [\\n            \\\"to buy, to purchase\\\",\\n            \\\"to value, to have a high opinion\\\",\\n            \\\"to stir, to provoke, to draw upon oneself\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"かう\\\",\\n          \\\"target_conjugation\\\": \\\"買える\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"You can see pandas at this zoo.\\\",\\n            \\\"furigana\\\": \\\"この 動物園[どうぶつえん]ではパンダが 見[み]られます。\\\",\\n            \\\"japanese\\\": \\\"この動物園ではパンダが見られます。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"You can watch this movie at home too.\\\",\\n            \\\"furigana\\\": \\\"この 映画[えいが]は 家[いえ]でも 見[み]られるよ。\\\",\\n            \\\"japanese\\\": \\\"この映画は家でも見られるよ。\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"見る\\\",\\n          \\\"id\\\": \\\"word:見る:みる\\\",\\n          \\\"meanings\\\": [\\n            \\\"to see, to look, to watch, to view, to observe\\\",\\n            \\\"to examine, to look over, to assess, to check, to judge\\\",\\n            \\\"to look after, to attend to, to take care of, to keep an eye on\\\",\\n            \\\"to experience, to meet with (misfortune, success, etc.)\\\",\\n            \\\"to try ..., to have a go at ..., to give ... a try\\\",\\n            \\\"to see (that) ..., to find (that) ...\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"みる\\\",\\n          \\\"target_conjugation\\\": \\\"見られる\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"ichidan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Can you come on Saturday?\\\",\\n            \\\"furigana\\\": \\\"土曜日[どようび]に 来[こ]られますか。\\\",\\n            \\\"japanese\\\": \\\"土曜日に来られますか。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you come to tomorrow's party?\\\",\\n            \\\"furigana\\\": \\\"明日[あした]のパーティーに 来[こ]られる？\\\",\\n            \\\"japanese\\\": \\\"明日のパーティーに来られる？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"来る\\\",\\n          \\\"id\\\": \\\"word:来る:くる\\\",\\n          \\\"meanings\\\": [\\n            \\\"to come (spatially or temporally), to approach, to arrive\\\",\\n            \\\"to come back, to do ... and come back\\\",\\n            \\\"to come to be, to become, to get, to grow, to continue\\\",\\n            \\\"to come from, to be caused by, to derive from\\\",\\n            \\\"to come to (i.e. \\\\\\\"when it comes to spinach ...\\\\\\\")\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"くる\\\",\\n          \\\"target_conjugation\\\": \\\"来られる\\\",\\n          \\\"transitivity\\\": \\\"intransitive\\\",\\n          \\\"verb_group\\\": \\\"kuru\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Can you play any instruments?\\\",\\n            \\\"furigana\\\": \\\"何[なに]か 楽器[がっき]ができますか。\\\",\\n            \\\"japanese\\\": \\\"何か楽器ができますか。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you work tomorrow?\\\",\\n            \\\"furigana\\\": \\\"明日[あした]は 仕事[しごと]ができる？\\\",\\n            \\\"japanese\\\": \\\"明日は仕事ができる？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"する\\\",\\n          \\\"id\\\": \\\"word:する:する\\\",\\n          \\\"meanings\\\": [\\n            \\\"to do, to carry out, to perform\\\",\\n            \\\"to cause to become, to make (into), to turn (into)\\\",\\n            \\\"to serve as, to act as, to work as\\\",\\n            \\\"to wear (clothes, a facial expression, etc.)\\\",\\n            \\\"to judge as being, to view as being, to think of as, to treat as, to use as\\\",\\n            \\\"to decide on, to choose\\\",\\n            \\\"to be sensed (of a smell, noise, etc.)\\\",\\n            \\\"to be (in a state, condition, etc.)\\\",\\n            \\\"to be worth, to cost\\\",\\n            \\\"to pass (of time), to elapse\\\",\\n            \\\"to place, or raise, person A to a post or status B\\\",\\n            \\\"to transform A to B, to make A into B, to exchange A for B\\\",\\n            \\\"to make use of A for B, to view A as B, to handle A as if it were B\\\",\\n            \\\"to feel A about B\\\",\\n            \\\"verbalizing suffix (applies to nouns noted in this dictionary with the part of speech \\\\\\\"vs\\\\\\\")\\\",\\n            \\\"creates a humble verb (after a noun prefixed with \\\\\\\"o\\\\\\\" or \\\\\\\"go\\\\\\\")\\\",\\n            \\\"to be just about to, to be just starting to, to try to, to attempt to\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"する\\\",\\n          \\\"target_conjugation\\\": \\\"できる\\\",\\n          \\\"transitivity\\\": \\\"\\\",\\n          \\\"verb_group\\\": \\\"suru\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Can you write your name in hiragana?\\\",\\n            \\\"furigana\\\": \\\"ひらがなで 名前[なまえ]が 書[か]けますか。\\\",\\n            \\\"japanese\\\": \\\"ひらがなで名前が書けますか。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you write this kanji?\\\",\\n            \\\"furigana\\\": \\\"この 漢字[かんじ]、 書[か]ける？\\\",\\n            \\\"japanese\\\": \\\"この漢字、書ける？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"書く\\\",\\n          \\\"id\\\": \\\"word:書く:かく\\\",\\n          \\\"meanings\\\": [\\n            \\\"to write, to compose, to pen\\\",\\n            \\\"to draw, to paint\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"かく\\\",\\n          \\\"target_conjugation\\\": \\\"書ける\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"You can't keep a dog in this apartment.\\\",\\n            \\\"furigana\\\": \\\"このアパートでは 犬[いぬ]が 飼[か]えません。\\\",\\n            \\\"japanese\\\": \\\"このアパートでは犬が飼えません。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"You can keep a cat in this apartment.\\\",\\n            \\\"furigana\\\": \\\"このアパートでは 猫[ねこ]が 飼[か]えるよ。\\\",\\n            \\\"japanese\\\": \\\"このアパートでは猫が飼えるよ。\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"飼う\\\",\\n          \\\"id\\\": \\\"word:飼う:かう\\\",\\n          \\\"meanings\\\": [\\n            \\\"to keep (a pet)\\\",\\n            \\\"to raise (an animal)\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"かう\\\",\\n          \\\"target_conjugation\\\": \\\"飼える\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"I can play the guitar.\\\",\\n            \\\"furigana\\\": \\\"ギターが 弾[ひ]けます。\\\",\\n            \\\"japanese\\\": \\\"ギターが弾けます。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you play the piano too?\\\",\\n            \\\"furigana\\\": \\\"ピアノも 弾[ひ]ける？\\\",\\n            \\\"japanese\\\": \\\"ピアノも弾ける？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"弾く\\\",\\n          \\\"id\\\": \\\"word:弾く:ひく\\\",\\n          \\\"meanings\\\": [\\n            \\\"to play (a stringed or keyboard instrument)\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"ひく\\\",\\n          \\\"target_conjugation\\\": \\\"弾ける\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"Can you play the flute too?\\\",\\n            \\\"furigana\\\": \\\"フルートも 吹[ふ]けますか。\\\",\\n            \\\"japanese\\\": \\\"フルートも吹けますか。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you play the saxophone?\\\",\\n            \\\"furigana\\\": \\\"サックスが 吹[ふ]ける？\\\",\\n            \\\"japanese\\\": \\\"サックスが吹ける？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"吹く\\\",\\n          \\\"id\\\": \\\"word:吹く:ふく\\\",\\n          \\\"meanings\\\": [\\n            \\\"to play (a wind instrument)\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"ふく\\\",\\n          \\\"target_conjugation\\\": \\\"吹ける\\\",\\n          \\\"transitivity\\\": \\\"\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      },\\n      {\\n        \\\"current_examples\\\": [\\n          {\\n            \\\"english\\\": \\\"I can't play the drums.\\\",\\n            \\\"furigana\\\": \\\"私[わたし]はドラムがたたけません。\\\",\\n            \\\"japanese\\\": \\\"私はドラムがたたけません。\\\",\\n            \\\"register\\\": \\\"polite\\\"\\n          },\\n          {\\n            \\\"english\\\": \\\"Can you play the drums?\\\",\\n            \\\"furigana\\\": \\\"ドラムがたたける？\\\",\\n            \\\"japanese\\\": \\\"ドラムがたたける？\\\",\\n            \\\"register\\\": \\\"casual\\\"\\n          }\\n        ],\\n        \\\"record\\\": {\\n          \\\"expression\\\": \\\"たたく\\\",\\n          \\\"id\\\": \\\"word:たたく:たたく\\\",\\n          \\\"meanings\\\": [\\n            \\\"to play (a percussion instrument)\\\"\\n          ],\\n          \\\"part_of_speech\\\": \\\"verb\\\",\\n          \\\"reading\\\": \\\"たたく\\\",\\n          \\\"target_conjugation\\\": \\\"たたける\\\",\\n          \\\"transitivity\\\": \\\"transitive\\\",\\n          \\\"verb_group\\\": \\\"godan\\\"\\n        }\\n      }\\n    ]\\n  },\\n  \\\"owner_instruction\\\": \\\"test\\\"\\n}\\n\"}",
+      "request_fingerprint": "2df519967cad94da8dafbb2c93954c00c8a976313f08152290018d60b3c1242d",
+      "response_schema_fingerprint": "bdc8d7a1bfd650908cac9d85d1092436f18846252df9b69a7ea949117d0fe9e7",
+      "transport": {
+        "argv": [
+          "claude",
+          "-p",
+          "--safe-mode",
+          "--disable-slash-commands",
+          "--no-session-persistence",
+          "--no-chrome",
+          "--tools",
+          "",
+          "--permission-mode",
+          "dontAsk",
+          "--prompt-suggestions",
+          "false",
+          "--output-format",
+          "json",
+          "--model",
+          "claude-opus-5",
+          "--effort",
+          "xhigh",
+          "--json-schema",
+          "{\"$defs\":{\"RevisionCard\":{\"additionalProperties\":false,\"properties\":{\"examples\":{\"items\":{\"$ref\":\"#/$defs/RevisionExample\"},\"maxItems\":2,\"minItems\":2,\"title\":\"Examples\",\"type\":\"array\"},\"record_id\":{\"description\":\"Selected record identifier.\",\"minLength\":1,\"title\":\"Record Id\",\"type\":\"string\"}},\"required\":[\"record_id\",\"examples\"],\"title\":\"RevisionCard\",\"type\":\"object\"},\"RevisionExample\":{\"additionalProperties\":false,\"properties\":{\"english\":{\"description\":\"Natural English translation.\",\"minLength\":1,\"title\":\"English\",\"type\":\"string\"},\"furigana\":{\"description\":\"Sentence with Anki furigana.\",\"minLength\":1,\"title\":\"Furigana\",\"type\":\"string\"},\"japanese\":{\"description\":\"Japanese sentence.\",\"minLength\":1,\"title\":\"Japanese\",\"type\":\"string\"},\"speech_level\":{\"description\":\"Speech level.\",\"enum\":[\"polite\",\"casual\"],\"title\":\"Speech Level\",\"type\":\"string\"}},\"required\":[\"japanese\",\"speech_level\",\"furigana\",\"english\"],\"title\":\"RevisionExample\",\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"cards\":{\"items\":{\"$ref\":\"#/$defs/RevisionCard\"},\"minItems\":1,\"title\":\"Cards\",\"type\":\"array\"},\"form_note\":{\"description\":\"Proposed deck-wide form note.\",\"title\":\"Form Note\",\"type\":\"string\"}},\"required\":[\"form_note\",\"cards\"],\"title\":\"ConjugationDeckRevision\",\"type\":\"object\"}",
+          "--system-prompt",
+          "# Japanese Content Style Guide\n\n## Audience\n\nDefault material targets a beginner or lower-intermediate learner following a\nGenki-style sequence.\n\n## Required fields\n\nEvery vocabulary note should have:\n\n- `expression`;\n- `reading` when the expression contains kanji;\n- at least one concise English meaning;\n- a stable `id`.\n\n## Preferred enrichments\n\n- Anki-formatted furigana: a space before every ruby group, punctuation\n  included — `今[いま]、 東京[とうきょう]`, never `今[いま]、東京[とうきょう]`,\n  because Anki takes everything since the last space as the base and would\n  draw the reading over the comma too.\n- Hepburn romaji.\n- Part of speech.\n- Verb group for verbs.\n- Transitivity when meaningful.\n- Common conjugations for verbs.\n- Usage or nuance notes only when they teach something useful.\n\n## English meanings\n\nUse compact dictionary-style meanings on cards:\n\n```yaml\nmeanings:\n  - \"to speak\"\n  - \"to talk\"\n```\n\nAvoid long paragraphs in the meaning field. Put nuance and restrictions under\n`usage_notes`.\n\n## Example sentences\n\nPrefer familiar, concrete content. Useful recurring contexts include software\ndevelopment, electronic music, family, hiking, travel in Japan, restaurants, and\neveryday conversation.\n\nA good example:\n\n```yaml\njapanese: \"毎日、妻と日本語で話します。\"\nenglish: \"I speak Japanese with my wife every day.\"\n```\n\nAvoid introducing several unknown grammar points merely to demonstrate one word.\n\n## Verb conjugations\n\nUseful starter forms are:\n\n- dictionary/plain affirmative;\n- plain negative;\n- plain past;\n- plain past negative;\n- `て`-form;\n- potential;\n- passive when common or pedagogically relevant.\n\nDo not manufacture forms for words whose analysis is uncertain.\n\n## Furigana and readings\n\nUse the reading that applies in the exact word, not an exhaustive list of every\npossible on'yomi and kun'yomi. Kanji-reference decks can store broader reading\ninformation separately.\n\n## Tags\n\nUse lowercase, stable tags where possible:\n\n```text\nshirabe verb godan genki::week11 topic::conversation\n```\n\nThe builder converts whitespace in individual tags to underscores.\n\n\nYou are revising explicitly selected cards in an existing Japanese\nconjugation-practice deck for the repository owner. The labelled data turn\ncontains the owner's exact instruction, the current deck content for only the\nselected cards, and the minimal canonical vocabulary facts needed to write\ntheir examples.\n\nFollow the owner's instruction within this response's narrow authority. You may\npropose only the deck-wide form note and the two example sentences for every\nselected record. You cannot change or propose record identity, expression,\nreading, deck identity, deck membership, source provenance, review or approval\nstate, promotion, deletion, audio, or spoken-audio overrides. Do not include\nthose decisions in prose or encode them in another field.\n\nReturn every selected record ID exactly once, in the same order as the labelled\ndata turn. Return exactly two complete examples for each: one polite and one\ncasual. The polite example is everyday Japanese using 〜ます or 〜です and has\nspeech_level `polite`. The casual example is everyday casual plain-form\nJapanese, as a friend would naturally say it, and has speech_level `casual`.\nBoth examples must actually demonstrate the deck's named conjugation form for\nthat record. Casual speech uses its own natural particles and sentence-final\nforms rather than mechanically swapping an ending.\n\nGive every example nonempty Japanese, natural English, and complete Anki\nfurigana. In Anki notation, a group is\nbase[reading]. The base contains exactly the characters that reading spells,\nand an ASCII space separates each ruby group from what precedes it unless the\ngroup opens the field. Kana already in the base remain outside brackets.\n\nThe form note is always present in the response. Unless the owner's instruction\nasks to change it, copy the current form note exactly. Likewise, preserve a\ncurrent example exactly when it already satisfies the requested change; do not\nrewrite content merely to make it different. Do not preserve an audio field:\naudio is deliberately outside this paid writing pass and is planned separately\nafter the owner reviews and applies a proposal.\n\nDo not audit, grade, or discuss the current Japanese. Write the requested\nproposal. Before returning it, check structurally that every selected ID appears\nonce, every card has exactly one polite and one casual example, and every\nexample field is complete.\n"
+        ],
+        "cli": "claude",
+        "cli_version": "2.1.246",
+        "controlled_environment": {
+          "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS": "1",
+          "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+          "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+          "CLAUDE_CODE_DISABLE_WORKFLOWS": "1",
+          "CLAUDE_CODE_EFFORT_LEVEL": "xhigh",
+          "CLAUDE_CODE_FORK_SUBAGENT": "0",
+          "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
+          "CLAUDE_CODE_MAX_RETRIES": "0",
+          "CLAUDE_CODE_MAX_TURNS": "1",
+          "CLAUDE_CODE_SAFE_MODE": "1",
+          "MAX_STRUCTURED_OUTPUT_RETRIES": "0"
+        },
+        "cwd": "fresh-empty-temporary-directory",
+        "kind": "claude-code-cli",
+        "stdin": "exact-user-turn-utf8"
+      }
+    },
+    "style_guide": "# Japanese Content Style Guide\n\n## Audience\n\nDefault material targets a beginner or lower-intermediate learner following a\nGenki-style sequence.\n\n## Required fields\n\nEvery vocabulary note should have:\n\n- `expression`;\n- `reading` when the expression contains kanji;\n- at least one concise English meaning;\n- a stable `id`.\n\n## Preferred enrichments\n\n- Anki-formatted furigana: a space before every ruby group, punctuation\n  included — `今[いま]、 東京[とうきょう]`, never `今[いま]、東京[とうきょう]`,\n  because Anki takes everything since the last space as the base and would\n  draw the reading over the comma too.\n- Hepburn romaji.\n- Part of speech.\n- Verb group for verbs.\n- Transitivity when meaningful.\n- Common conjugations for verbs.\n- Usage or nuance notes only when they teach something useful.\n\n## English meanings\n\nUse compact dictionary-style meanings on cards:\n\n```yaml\nmeanings:\n  - \"to speak\"\n  - \"to talk\"\n```\n\nAvoid long paragraphs in the meaning field. Put nuance and restrictions under\n`usage_notes`.\n\n## Example sentences\n\nPrefer familiar, concrete content. Useful recurring contexts include software\ndevelopment, electronic music, family, hiking, travel in Japan, restaurants, and\neveryday conversation.\n\nA good example:\n\n```yaml\njapanese: \"毎日、妻と日本語で話します。\"\nenglish: \"I speak Japanese with my wife every day.\"\n```\n\nAvoid introducing several unknown grammar points merely to demonstrate one word.\n\n## Verb conjugations\n\nUseful starter forms are:\n\n- dictionary/plain affirmative;\n- plain negative;\n- plain past;\n- plain past negative;\n- `て`-form;\n- potential;\n- passive when common or pedagogically relevant.\n\nDo not manufacture forms for words whose analysis is uncertain.\n\n## Furigana and readings\n\nUse the reading that applies in the exact word, not an exhaustive list of every\npossible on'yomi and kun'yomi. Kanji-reference decks can store broader reading\ninformation separately.\n\n## Tags\n\nUse lowercase, stable tags where possible:\n\n```text\nshirabe verb godan genki::week11 topic::conversation\n```\n\nThe builder converts whitespace in individual tags to underscores.\n",
+    "system_blocks": [
+      {
+        "text": "# Japanese Content Style Guide\n\n## Audience\n\nDefault material targets a beginner or lower-intermediate learner following a\nGenki-style sequence.\n\n## Required fields\n\nEvery vocabulary note should have:\n\n- `expression`;\n- `reading` when the expression contains kanji;\n- at least one concise English meaning;\n- a stable `id`.\n\n## Preferred enrichments\n\n- Anki-formatted furigana: a space before every ruby group, punctuation\n  included — `今[いま]、 東京[とうきょう]`, never `今[いま]、東京[とうきょう]`,\n  because Anki takes everything since the last space as the base and would\n  draw the reading over the comma too.\n- Hepburn romaji.\n- Part of speech.\n- Verb group for verbs.\n- Transitivity when meaningful.\n- Common conjugations for verbs.\n- Usage or nuance notes only when they teach something useful.\n\n## English meanings\n\nUse compact dictionary-style meanings on cards:\n\n```yaml\nmeanings:\n  - \"to speak\"\n  - \"to talk\"\n```\n\nAvoid long paragraphs in the meaning field. Put nuance and restrictions under\n`usage_notes`.\n\n## Example sentences\n\nPrefer familiar, concrete content. Useful recurring contexts include software\ndevelopment, electronic music, family, hiking, travel in Japan, restaurants, and\neveryday conversation.\n\nA good example:\n\n```yaml\njapanese: \"毎日、妻と日本語で話します。\"\nenglish: \"I speak Japanese with my wife every day.\"\n```\n\nAvoid introducing several unknown grammar points merely to demonstrate one word.\n\n## Verb conjugations\n\nUseful starter forms are:\n\n- dictionary/plain affirmative;\n- plain negative;\n- plain past;\n- plain past negative;\n- `て`-form;\n- potential;\n- passive when common or pedagogically relevant.\n\nDo not manufacture forms for words whose analysis is uncertain.\n\n## Furigana and readings\n\nUse the reading that applies in the exact word, not an exhaustive list of every\npossible on'yomi and kun'yomi. Kanji-reference decks can store broader reading\ninformation separately.\n\n## Tags\n\nUse lowercase, stable tags where possible:\n\n```text\nshirabe verb godan genki::week11 topic::conversation\n```\n\nThe builder converts whitespace in individual tags to underscores.\n",
+        "type": "text"
+      },
+      {
+        "cache_control": {
+          "type": "ephemeral"
+        },
+        "text": "You are revising explicitly selected cards in an existing Japanese\nconjugation-practice deck for the repository owner. The labelled data turn\ncontains the owner's exact instruction, the current deck content for only the\nselected cards, and the minimal canonical vocabulary facts needed to write\ntheir examples.\n\nFollow the owner's instruction within this response's narrow authority. You may\npropose only the deck-wide form note and the two example sentences for every\nselected record. You cannot change or propose record identity, expression,\nreading, deck identity, deck membership, source provenance, review or approval\nstate, promotion, deletion, audio, or spoken-audio overrides. Do not include\nthose decisions in prose or encode them in another field.\n\nReturn every selected record ID exactly once, in the same order as the labelled\ndata turn. Return exactly two complete examples for each: one polite and one\ncasual. The polite example is everyday Japanese using 〜ます or 〜です and has\nspeech_level `polite`. The casual example is everyday casual plain-form\nJapanese, as a friend would naturally say it, and has speech_level `casual`.\nBoth examples must actually demonstrate the deck's named conjugation form for\nthat record. Casual speech uses its own natural particles and sentence-final\nforms rather than mechanically swapping an ending.\n\nGive every example nonempty Japanese, natural English, and complete Anki\nfurigana. In Anki notation, a group is\nbase[reading]. The base contains exactly the characters that reading spells,\nand an ASCII space separates each ruby group from what precedes it unless the\ngroup opens the field. Kana already in the base remain outside brackets.\n\nThe form note is always present in the response. Unless the owner's instruction\nasks to change it, copy the current form note exactly. Likewise, preserve a\ncurrent example exactly when it already satisfies the requested change; do not\nrewrite content merely to make it different. Do not preserve an audio field:\naudio is deliberately outside this paid writing pass and is planned separately\nafter the owner reviews and applies a proposal.\n\nDo not audit, grade, or discuss the current Japanese. Write the requested\nproposal. Before returning it, check structurally that every selected ID appears\nonce, every card has exactly one polite and one casual example, and every\nexample field is complete.\n",
+        "type": "text"
+      }
+    ],
+    "task_template": "You are revising explicitly selected cards in an existing Japanese\nconjugation-practice deck for the repository owner. The labelled data turn\ncontains the owner's exact instruction, the current deck content for only the\nselected cards, and the minimal canonical vocabulary facts needed to write\ntheir examples.\n\nFollow the owner's instruction within this response's narrow authority. You may\npropose only the deck-wide form note and the two example sentences for every\nselected record. You cannot change or propose record identity, expression,\nreading, deck identity, deck membership, source provenance, review or approval\nstate, promotion, deletion, audio, or spoken-audio overrides. Do not include\nthose decisions in prose or encode them in another field.\n\nReturn every selected record ID exactly once, in the same order as the labelled\ndata turn. Return exactly two complete examples for each: one polite and one\ncasual. The polite example is everyday Japanese using 〜ます or 〜です and has\nspeech_level `polite`. The casual example is everyday casual plain-form\nJapanese, as a friend would naturally say it, and has speech_level `casual`.\nBoth examples must actually demonstrate the deck's named conjugation form for\nthat record. Casual speech uses its own natural particles and sentence-final\nforms rather than mechanically swapping an ending.\n\nGive every example nonempty Japanese, natural English, and complete Anki\nfurigana. In Anki notation, a group is\nbase[reading]. The base contains exactly the characters that reading spells,\nand an ASCII space separates each ruby group from what precedes it unless the\ngroup opens the field. Kana already in the base remain outside brackets.\n\nThe form note is always present in the response. Unless the owner's instruction\nasks to change it, copy the current form note exactly. Likewise, preserve a\ncurrent example exactly when it already satisfies the requested change; do not\nrewrite content merely to make it different. Do not preserve an audio field:\naudio is deliberately outside this paid writing pass and is planned separately\nafter the owner reviews and applies a proposal.\n\nDo not audit, grade, or discuss the current Japanese. Write the requested\nproposal. Before returning it, check structurally that every selected ID appears\nonce, every card has exactly one polite and one casual example, and every\nexample field is complete.\n",
+    "user_turn": "{\n  \"deck\": {\n    \"current_form_note\": \"Potential expresses ability or possibility (“can / be able to”). Potential verbs conjugate like ichidan (る) verbs, so the example may change tense, polarity, or politeness. With most を-verbs, either が or を is possible; できる takes が almost all the time. Other particles stay unchanged.\",\n    \"file\": \"brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml\",\n    \"form\": \"potential\",\n    \"selected_cards\": [\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"I can speak Japanese.\",\n            \"furigana\": \"私[わたし]は 日本語[にほんご]が 話[はな]せます。\",\n            \"japanese\": \"私は日本語が話せます。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you speak English too?\",\n            \"furigana\": \"英語[えいご]も 話[はな]せる？\",\n            \"japanese\": \"英語も話せる？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"話す\",\n          \"id\": \"word:話す:はなす\",\n          \"meanings\": [\n            \"to speak\",\n            \"to talk\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"はなす\",\n          \"target_conjugation\": \"話せる\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Can you wait here a little longer?\",\n            \"furigana\": \"もう 少[すこ]しここでまてますか。\",\n            \"japanese\": \"もう少しここでまてますか。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you wait here a little longer?\",\n            \"furigana\": \"もう 少[すこ]しここでまてる？\",\n            \"japanese\": \"もう少しここでまてる？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"まつ\",\n          \"id\": \"word:まつ:まつ\",\n          \"meanings\": [\n            \"to wait\"\n          ],\n          \"part_of_speech\": \"godan verb (u-verb)\",\n          \"reading\": \"まつ\",\n          \"target_conjugation\": \"まてる\",\n          \"transitivity\": \"\",\n          \"verb_group\": \"\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"The truth is, I can't swim.\",\n            \"furigana\": \"私[わたし]はおよげないんです。\",\n            \"japanese\": \"私はおよげないんです。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you swim in the ocean?\",\n            \"furigana\": \"海[うみ]でおよげる？\",\n            \"japanese\": \"海でおよげる？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"およぐ\",\n          \"id\": \"word:およぐ:およぐ\",\n          \"meanings\": [\n            \"to swim\"\n          ],\n          \"part_of_speech\": \"godan verb (u-verb)\",\n          \"reading\": \"およぐ\",\n          \"target_conjugation\": \"およげる\",\n          \"transitivity\": \"intransitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"We couldn't go to the beach because it rained.\",\n            \"furigana\": \"雨[あめ]が 降[ふ]ったので、 海[うみ]に 行[い]けませんでした。\",\n            \"japanese\": \"雨が降ったので、海に行けませんでした。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"I can go tomorrow too.\",\n            \"furigana\": \"明日[あした]は 私[わたし]も 行[い]けるよ。\",\n            \"japanese\": \"明日は私も行けるよ。\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"行く\",\n          \"id\": \"word:行く:いく\",\n          \"meanings\": [\n            \"to go\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"いく\",\n          \"target_conjugation\": \"行ける\",\n          \"transitivity\": \"intransitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Now I can die in peace.\",\n            \"furigana\": \"これで 安心[あんしん]してしねます。\",\n            \"japanese\": \"これで安心してしねます。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Now I can die in peace.\",\n            \"furigana\": \"これで 安心[あんしん]してしねる。\",\n            \"japanese\": \"これで安心してしねる。\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"しぬ\",\n          \"id\": \"word:しぬ:しぬ\",\n          \"meanings\": [\n            \"to die\"\n          ],\n          \"part_of_speech\": \"godan verb (u-verb)\",\n          \"reading\": \"しぬ\",\n          \"target_conjugation\": \"しねる\",\n          \"transitivity\": \"intransitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Can you read this kanji?\",\n            \"furigana\": \"この 漢字[かんじ]が 読[よ]めますか。\",\n            \"japanese\": \"この漢字が読めますか。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you read this character?\",\n            \"furigana\": \"この 字[じ]、 読[よ]める？\",\n            \"japanese\": \"この字、読める？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"読む\",\n          \"id\": \"word:読む:よむ\",\n          \"meanings\": [\n            \"to read\",\n            \"to recite (e.g. a sutra), to chant\",\n            \"to predict, to guess, to forecast, to read (someone's thoughts), to see (e.g. into someone's heart), to divine\",\n            \"to decipher\",\n            \"to count, to estimate\",\n            \"to read (a kanji) with its native Japanese reading\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"よむ\",\n          \"target_conjugation\": \"読める\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Can you hang out tomorrow afternoon?\",\n            \"furigana\": \"明日[あした]の 午後[ごご]、あそべますか。\",\n            \"japanese\": \"明日の午後、あそべますか。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"I can play at the park tomorrow.\",\n            \"furigana\": \"明日[あした]は 公園[こうえん]であそべるよ。\",\n            \"japanese\": \"明日は公園であそべるよ。\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"あそぶ\",\n          \"id\": \"word:あそぶ:あそぶ\",\n          \"meanings\": [\n            \"to play\",\n            \"to hang out\"\n          ],\n          \"part_of_speech\": \"godan verb (u-verb)\",\n          \"reading\": \"あそぶ\",\n          \"target_conjugation\": \"あそべる\",\n          \"transitivity\": \"intransitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"You can buy tickets at this store.\",\n            \"furigana\": \"この 店[みせ]で 切符[きっぷ]が 買[か]えます。\",\n            \"japanese\": \"この店で切符が買えます。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"You can buy souvenirs at this store too.\",\n            \"furigana\": \"この 店[みせ]ではおみやげも 買[か]えるよ。\",\n            \"japanese\": \"この店ではおみやげも買えるよ。\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"買う\",\n          \"id\": \"word:買う:かう\",\n          \"meanings\": [\n            \"to buy, to purchase\",\n            \"to value, to have a high opinion\",\n            \"to stir, to provoke, to draw upon oneself\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"かう\",\n          \"target_conjugation\": \"買える\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"You can see pandas at this zoo.\",\n            \"furigana\": \"この 動物園[どうぶつえん]ではパンダが 見[み]られます。\",\n            \"japanese\": \"この動物園ではパンダが見られます。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"You can watch this movie at home too.\",\n            \"furigana\": \"この 映画[えいが]は 家[いえ]でも 見[み]られるよ。\",\n            \"japanese\": \"この映画は家でも見られるよ。\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"見る\",\n          \"id\": \"word:見る:みる\",\n          \"meanings\": [\n            \"to see, to look, to watch, to view, to observe\",\n            \"to examine, to look over, to assess, to check, to judge\",\n            \"to look after, to attend to, to take care of, to keep an eye on\",\n            \"to experience, to meet with (misfortune, success, etc.)\",\n            \"to try ..., to have a go at ..., to give ... a try\",\n            \"to see (that) ..., to find (that) ...\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"みる\",\n          \"target_conjugation\": \"見られる\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"ichidan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Can you come on Saturday?\",\n            \"furigana\": \"土曜日[どようび]に 来[こ]られますか。\",\n            \"japanese\": \"土曜日に来られますか。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you come to tomorrow's party?\",\n            \"furigana\": \"明日[あした]のパーティーに 来[こ]られる？\",\n            \"japanese\": \"明日のパーティーに来られる？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"来る\",\n          \"id\": \"word:来る:くる\",\n          \"meanings\": [\n            \"to come (spatially or temporally), to approach, to arrive\",\n            \"to come back, to do ... and come back\",\n            \"to come to be, to become, to get, to grow, to continue\",\n            \"to come from, to be caused by, to derive from\",\n            \"to come to (i.e. \\\"when it comes to spinach ...\\\")\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"くる\",\n          \"target_conjugation\": \"来られる\",\n          \"transitivity\": \"intransitive\",\n          \"verb_group\": \"kuru\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Can you play any instruments?\",\n            \"furigana\": \"何[なに]か 楽器[がっき]ができますか。\",\n            \"japanese\": \"何か楽器ができますか。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you work tomorrow?\",\n            \"furigana\": \"明日[あした]は 仕事[しごと]ができる？\",\n            \"japanese\": \"明日は仕事ができる？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"する\",\n          \"id\": \"word:する:する\",\n          \"meanings\": [\n            \"to do, to carry out, to perform\",\n            \"to cause to become, to make (into), to turn (into)\",\n            \"to serve as, to act as, to work as\",\n            \"to wear (clothes, a facial expression, etc.)\",\n            \"to judge as being, to view as being, to think of as, to treat as, to use as\",\n            \"to decide on, to choose\",\n            \"to be sensed (of a smell, noise, etc.)\",\n            \"to be (in a state, condition, etc.)\",\n            \"to be worth, to cost\",\n            \"to pass (of time), to elapse\",\n            \"to place, or raise, person A to a post or status B\",\n            \"to transform A to B, to make A into B, to exchange A for B\",\n            \"to make use of A for B, to view A as B, to handle A as if it were B\",\n            \"to feel A about B\",\n            \"verbalizing suffix (applies to nouns noted in this dictionary with the part of speech \\\"vs\\\")\",\n            \"creates a humble verb (after a noun prefixed with \\\"o\\\" or \\\"go\\\")\",\n            \"to be just about to, to be just starting to, to try to, to attempt to\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"する\",\n          \"target_conjugation\": \"できる\",\n          \"transitivity\": \"\",\n          \"verb_group\": \"suru\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Can you write your name in hiragana?\",\n            \"furigana\": \"ひらがなで 名前[なまえ]が 書[か]けますか。\",\n            \"japanese\": \"ひらがなで名前が書けますか。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you write this kanji?\",\n            \"furigana\": \"この 漢字[かんじ]、 書[か]ける？\",\n            \"japanese\": \"この漢字、書ける？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"書く\",\n          \"id\": \"word:書く:かく\",\n          \"meanings\": [\n            \"to write, to compose, to pen\",\n            \"to draw, to paint\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"かく\",\n          \"target_conjugation\": \"書ける\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"You can't keep a dog in this apartment.\",\n            \"furigana\": \"このアパートでは 犬[いぬ]が 飼[か]えません。\",\n            \"japanese\": \"このアパートでは犬が飼えません。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"You can keep a cat in this apartment.\",\n            \"furigana\": \"このアパートでは 猫[ねこ]が 飼[か]えるよ。\",\n            \"japanese\": \"このアパートでは猫が飼えるよ。\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"飼う\",\n          \"id\": \"word:飼う:かう\",\n          \"meanings\": [\n            \"to keep (a pet)\",\n            \"to raise (an animal)\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"かう\",\n          \"target_conjugation\": \"飼える\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"I can play the guitar.\",\n            \"furigana\": \"ギターが 弾[ひ]けます。\",\n            \"japanese\": \"ギターが弾けます。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you play the piano too?\",\n            \"furigana\": \"ピアノも 弾[ひ]ける？\",\n            \"japanese\": \"ピアノも弾ける？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"弾く\",\n          \"id\": \"word:弾く:ひく\",\n          \"meanings\": [\n            \"to play (a stringed or keyboard instrument)\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"ひく\",\n          \"target_conjugation\": \"弾ける\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"Can you play the flute too?\",\n            \"furigana\": \"フルートも 吹[ふ]けますか。\",\n            \"japanese\": \"フルートも吹けますか。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you play the saxophone?\",\n            \"furigana\": \"サックスが 吹[ふ]ける？\",\n            \"japanese\": \"サックスが吹ける？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"吹く\",\n          \"id\": \"word:吹く:ふく\",\n          \"meanings\": [\n            \"to play (a wind instrument)\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"ふく\",\n          \"target_conjugation\": \"吹ける\",\n          \"transitivity\": \"\",\n          \"verb_group\": \"godan\"\n        }\n      },\n      {\n        \"current_examples\": [\n          {\n            \"english\": \"I can't play the drums.\",\n            \"furigana\": \"私[わたし]はドラムがたたけません。\",\n            \"japanese\": \"私はドラムがたたけません。\",\n            \"register\": \"polite\"\n          },\n          {\n            \"english\": \"Can you play the drums?\",\n            \"furigana\": \"ドラムがたたける？\",\n            \"japanese\": \"ドラムがたたける？\",\n            \"register\": \"casual\"\n          }\n        ],\n        \"record\": {\n          \"expression\": \"たたく\",\n          \"id\": \"word:たたく:たたく\",\n          \"meanings\": [\n            \"to play (a percussion instrument)\"\n          ],\n          \"part_of_speech\": \"verb\",\n          \"reading\": \"たたく\",\n          \"target_conjugation\": \"たたける\",\n          \"transitivity\": \"transitive\",\n          \"verb_group\": \"godan\"\n        }\n      }\n    ]\n  },\n  \"owner_instruction\": \"test\"\n}\n"
+  },
+  "schema_version": 2,
+  "staged_at": "2026-09-01",
+  "state": "accepted",
+  "target": {
+    "deck_path": "data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml",
+    "deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+    "form": "potential",
+    "selected_record_ids": [
+      "word:話す:はなす",
+      "word:まつ:まつ",
+      "word:およぐ:およぐ",
+      "word:行く:いく",
+      "word:しぬ:しぬ",
+      "word:読む:よむ",
+      "word:あそぶ:あそぶ",
+      "word:買う:かう",
+      "word:見る:みる",
+      "word:来る:くる",
+      "word:する:する",
+      "word:書く:かく",
+      "word:飼う:かう",
+      "word:弾く:ひく",
+      "word:吹く:ふく",
+      "word:たたく:たたく"
+    ],
+    "staging_path": "data/staging/revise-cd116a01aba3-2df519967cad94da.json"
+  }
+}

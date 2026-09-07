@@ -36,78 +36,174 @@ deck:
         furigana: 私[わたし]は 日本語[にほんご]が 話[はな]せます。
         english: I can speak Japanese.
         register: polite
+        audio: audio/janki-3daceb701c03.wav
+      - japanese: 英語も話せる？
+        furigana: 英語[えいご]も 話[はな]せる？
+        english: Can you speak English too?
+        register: casual
+        audio: audio/janki-4871d4ab4a8a.wav
     "word:まつ:まつ":
+      - japanese: もう少しここでまてますか。
+        furigana: もう 少[すこ]しここでまてますか。
+        english: Can you wait here a little longer?
+        register: polite
+        audio: audio/janki-fd9b0107354f.wav
       - japanese: もう少しここでまてる？
         furigana: もう 少[すこ]しここでまてる？
         english: Can you wait here a little longer?
         register: casual
+        audio: audio/janki-3eb6da066130.wav
     "word:およぐ:およぐ":
       - japanese: 私はおよげないんです。
         furigana: 私[わたし]はおよげないんです。
         english: The truth is, I can't swim.
         register: polite
+        audio: audio/janki-e3f245fc2780.wav
+      - japanese: 海でおよげる？
+        furigana: 海[うみ]でおよげる？
+        english: Can you swim in the ocean?
+        register: casual
+        audio: audio/janki-0fc987bc9e9f.wav
     "word:行く:いく":
       - japanese: 雨が降ったので、海に行けませんでした。
         furigana: 雨[あめ]が 降[ふ]ったので、 海[うみ]に 行[い]けませんでした。
         english: We couldn't go to the beach because it rained.
         register: polite
+        audio: audio/janki-7e0c0f147499.wav
+      - japanese: 明日は私も行けるよ。
+        furigana: 明日[あした]は 私[わたし]も 行[い]けるよ。
+        english: I can go tomorrow too.
+        register: casual
+        audio: audio/janki-ddc8831e5dd5.wav
     "word:しぬ:しぬ":
+      - japanese: これで安心してしねます。
+        furigana: これで 安心[あんしん]してしねます。
+        english: Now I can die in peace.
+        register: polite
+        audio: audio/janki-065329b77ec2.wav
       - japanese: これで安心してしねる。
         furigana: これで 安心[あんしん]してしねる。
         english: Now I can die in peace.
         register: casual
+        audio: audio/janki-2440501ca7d7.wav
     "word:読む:よむ":
       - japanese: この漢字が読めますか。
         furigana: この 漢字[かんじ]が 読[よ]めますか。
         english: Can you read this kanji?
         register: polite
+        audio: audio/janki-b1e52ad98f7d.wav
+      - japanese: この字、読める？
+        furigana: この 字[じ]、 読[よ]める？
+        english: Can you read this character?
+        register: casual
+        audio: audio/janki-0623a3ff7465.wav
     "word:あそぶ:あそぶ":
+      - japanese: 明日の午後、あそべますか。
+        furigana: 明日[あした]の 午後[ごご]、あそべますか。
+        english: Can you hang out tomorrow afternoon?
+        register: polite
+        audio: audio/janki-4d4f24caf38d.wav
       - japanese: 明日は公園であそべるよ。
         furigana: 明日[あした]は 公園[こうえん]であそべるよ。
         english: I can play at the park tomorrow.
         register: casual
+        audio: audio/janki-efb7f385e622.wav
     "word:買う:かう":
       - japanese: この店で切符が買えます。
         furigana: この 店[みせ]で 切符[きっぷ]が 買[か]えます。
         english: You can buy tickets at this store.
         register: polite
+        audio: audio/janki-cb9b612fb9b5.wav
+      - japanese: この店ではおみやげも買えるよ。
+        furigana: この 店[みせ]ではおみやげも 買[か]えるよ。
+        english: You can buy souvenirs at this store too.
+        register: casual
+        audio: audio/janki-cac4a37816ed.wav
     "word:見る:みる":
+      - japanese: この動物園ではパンダが見られます。
+        furigana: この 動物園[どうぶつえん]ではパンダが 見[み]られます。
+        english: You can see pandas at this zoo.
+        register: polite
+        audio: audio/janki-a6e59debedfc.wav
       - japanese: この映画は家でも見られるよ。
         furigana: この 映画[えいが]は 家[いえ]でも 見[み]られるよ。
         english: You can watch this movie at home too.
         register: casual
+        audio: audio/janki-2f2f19feae82.wav
     "word:来る:くる":
+      - japanese: 土曜日に来られますか。
+        furigana: 土曜日[どようび]に 来[こ]られますか。
+        english: Can you come on Saturday?
+        register: polite
+        audio: audio/janki-8608767fc949.wav
       - japanese: 明日のパーティーに来られる？
         furigana: 明日[あした]のパーティーに 来[こ]られる？
         english: Can you come to tomorrow's party?
         register: casual
+        audio: audio/janki-2862251a570f.wav
     "word:する:する":
       - japanese: 何か楽器ができますか。
         furigana: 何[なに]か 楽器[がっき]ができますか。
         english: Can you play any instruments?
         register: polite
+        audio: audio/janki-b83def1ab8a2.wav
+      - japanese: 明日は仕事ができる？
+        furigana: 明日[あした]は 仕事[しごと]ができる？
+        english: Can you work tomorrow?
+        register: casual
+        audio: audio/janki-05ebe791696c.wav
     "word:書く:かく":
       - japanese: ひらがなで名前が書けますか。
         furigana: ひらがなで 名前[なまえ]が 書[か]けますか。
         english: Can you write your name in hiragana?
         register: polite
+        audio: audio/janki-3579f2da379f.wav
+      - japanese: この漢字、書ける？
+        furigana: この 漢字[かんじ]、 書[か]ける？
+        english: Can you write this kanji?
+        register: casual
+        audio: audio/janki-c43630d0dccc.wav
     "word:飼う:かう":
       - japanese: このアパートでは犬が飼えません。
         furigana: このアパートでは 犬[いぬ]が 飼[か]えません。
         english: You can't keep a dog in this apartment.
         register: polite
+        audio: audio/janki-b671d14d6843.wav
+      - japanese: このアパートでは猫が飼えるよ。
+        furigana: このアパートでは 猫[ねこ]が 飼[か]えるよ。
+        english: You can keep a cat in this apartment.
+        register: casual
+        audio: audio/janki-8864d96b98aa.wav
     "word:弾く:ひく":
       - japanese: ギターが弾けます。
         furigana: ギターが 弾[ひ]けます。
         english: I can play the guitar.
         register: polite
+        audio: audio/janki-5bc9c549dd6b.wav
+      - japanese: ピアノも弾ける？
+        furigana: ピアノも 弾[ひ]ける？
+        english: Can you play the piano too?
+        register: casual
+        audio: audio/janki-4a7ed50f36ee.wav
     "word:吹く:ふく":
+      - japanese: フルートも吹けますか。
+        furigana: フルートも 吹[ふ]けますか。
+        english: Can you play the flute too?
+        register: polite
+        audio: audio/janki-bcef8ea10d8b.wav
       - japanese: サックスが吹ける？
         furigana: サックスが 吹[ふ]ける？
         english: Can you play the saxophone?
         register: casual
+        audio: audio/janki-55e0a66d58ba.wav
     "word:たたく:たたく":
+      - japanese: 私はドラムがたたけません。
+        furigana: 私[わたし]はドラムがたたけません。
+        english: I can't play the drums.
+        register: polite
+        audio: audio/janki-00a8d303c325.wav
       - japanese: ドラムがたたける？
         furigana: ドラムがたたける？
         english: Can you play the drums?
         register: casual
+        audio: audio/janki-facc62e3fb23.wav

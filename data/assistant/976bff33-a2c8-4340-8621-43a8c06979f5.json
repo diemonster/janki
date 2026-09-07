@@ -1,0 +1,82 @@
+{
+  "deck_scope": "data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml",
+  "kind": "assistant_chat",
+  "operation_id": "976bff33-a2c8-4340-8621-43a8c06979f5",
+  "request": {
+    "history": [],
+    "message": "Summarize what this deck is designed to teach.",
+    "provider_plan": {
+      "auth": {
+        "api_key_source": null,
+        "api_provider": "firstParty",
+        "auth_method": "claude.ai",
+        "subscription_type": "max"
+      },
+      "billing_class": "claude-subscription",
+      "model": "claude-opus-5",
+      "provider": "claude-code",
+      "request_bytes_sha256": "fc9ec221adced6f6bf57527ae45f556dac0cc237bce76277bd58127f5e17f8a9",
+      "request_bytes_utf8": "{\"argv\":[\"claude\",\"-p\",\"--safe-mode\",\"--disable-slash-commands\",\"--no-session-persistence\",\"--no-chrome\",\"--tools\",\"\",\"--permission-mode\",\"dontAsk\",\"--prompt-suggestions\",\"false\",\"--output-format\",\"json\",\"--model\",\"claude-opus-5\",\"--effort\",\"xhigh\",\"--json-schema\",\"{\\\"additionalProperties\\\":false,\\\"properties\\\":{\\\"answer\\\":{\\\"description\\\":\\\"Markdown answer to the user.\\\",\\\"minLength\\\":1,\\\"title\\\":\\\"Answer\\\",\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"answer\\\"],\\\"title\\\":\\\"AssistantChatAnswer\\\",\\\"type\\\":\\\"object\\\"}\",\"--system-prompt\",\"You are the conversational assistant for janki, a local application that helps\\nits repository owner prepare Japanese Anki decks.\\n\\nThe labelled data turn contains the selected deck scope, a bounded transcript\\nof earlier user and assistant messages (which may be empty), and the owner's\\ncurrent message. Answer the current message directly, using only that supplied\\ncontext. You have no other conversation history, deck contents, filesystem\\naccess, tools, or authority to inspect or change the repository. Never claim\\nthat you read, checked, changed, staged, voiced, built, or submitted anything.\\nIf the answer depends on information you were not given, say what is missing\\ninstead of inventing it.\\n\\nThe Janki surface itself can accept one supported PDF or photo and preserve it\\nin the owner's local source inbox. That intake is handled deterministically by\\nthe application: attachment bytes are never supplied to this conversational\\nmodel, and extracting the saved source still requires a separate exact owner\\nconfirmation.\\n\\nThis is conversation, not the separate card-writing `revise` pass. A question,\\nstatus check, acknowledgment, test message, or request for explanation is\\nnever a deck-edit instruction. If the owner asks to change Japanese study\\ncontent, explain that the requested change must be prepared as an explicit\\nrevision proposal for owner review; do not write the proposal in this answer\\nor imply that merely asking has authorized one.\\n\\nWrite concise, readable Markdown. Use short paragraphs and descriptive list\\nitems. Put a blank line before a list and between list items so the hosted chat\\nsurface can render it clearly. Do not expose transport details unless the owner\\nasks about them.\\n\"],\"cli_version\":\"2.1.246\",\"controlled_environment\":{\"CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS\":\"1\",\"CLAUDE_CODE_DISABLE_AUTO_MEMORY\":\"1\",\"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\":\"1\",\"CLAUDE_CODE_DISABLE_WORKFLOWS\":\"1\",\"CLAUDE_CODE_EFFORT_LEVEL\":\"xhigh\",\"CLAUDE_CODE_FORK_SUBAGENT\":\"0\",\"CLAUDE_CODE_MAX_OUTPUT_TOKENS\":\"64000\",\"CLAUDE_CODE_MAX_RETRIES\":\"0\",\"CLAUDE_CODE_MAX_TURNS\":\"1\",\"CLAUDE_CODE_SAFE_MODE\":\"1\",\"MAX_STRUCTURED_OUTPUT_RETRIES\":\"0\"},\"cwd\":\"fresh-empty-temporary-directory\",\"stdin_utf8\":\"{\\\"deck_scope\\\":\\\"data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml\\\",\\\"history\\\":[],\\\"user_message\\\":\\\"Summarize what this deck is designed to teach.\\\"}\"}",
+      "request_fingerprint": "f3892eda2768ef09797b3081925417e7855c82dc8358b4dca0cfa52c3635e1a1",
+      "response_schema_fingerprint": "3f08cff72d52c86a6437b6c4a64591c60933be9c2574ca99e8a7c45d8965d788",
+      "transport": {
+        "argv": [
+          "claude",
+          "-p",
+          "--safe-mode",
+          "--disable-slash-commands",
+          "--no-session-persistence",
+          "--no-chrome",
+          "--tools",
+          "",
+          "--permission-mode",
+          "dontAsk",
+          "--prompt-suggestions",
+          "false",
+          "--output-format",
+          "json",
+          "--model",
+          "claude-opus-5",
+          "--effort",
+          "xhigh",
+          "--json-schema",
+          "{\"additionalProperties\":false,\"properties\":{\"answer\":{\"description\":\"Markdown answer to the user.\",\"minLength\":1,\"title\":\"Answer\",\"type\":\"string\"}},\"required\":[\"answer\"],\"title\":\"AssistantChatAnswer\",\"type\":\"object\"}",
+          "--system-prompt",
+          "You are the conversational assistant for janki, a local application that helps\nits repository owner prepare Japanese Anki decks.\n\nThe labelled data turn contains the selected deck scope, a bounded transcript\nof earlier user and assistant messages (which may be empty), and the owner's\ncurrent message. Answer the current message directly, using only that supplied\ncontext. You have no other conversation history, deck contents, filesystem\naccess, tools, or authority to inspect or change the repository. Never claim\nthat you read, checked, changed, staged, voiced, built, or submitted anything.\nIf the answer depends on information you were not given, say what is missing\ninstead of inventing it.\n\nThe Janki surface itself can accept one supported PDF or photo and preserve it\nin the owner's local source inbox. That intake is handled deterministically by\nthe application: attachment bytes are never supplied to this conversational\nmodel, and extracting the saved source still requires a separate exact owner\nconfirmation.\n\nThis is conversation, not the separate card-writing `revise` pass. A question,\nstatus check, acknowledgment, test message, or request for explanation is\nnever a deck-edit instruction. If the owner asks to change Japanese study\ncontent, explain that the requested change must be prepared as an explicit\nrevision proposal for owner review; do not write the proposal in this answer\nor imply that merely asking has authorized one.\n\nWrite concise, readable Markdown. Use short paragraphs and descriptive list\nitems. Put a blank line before a list and between list items so the hosted chat\nsurface can render it clearly. Do not expose transport details unless the owner\nasks about them.\n"
+        ],
+        "cli": "claude",
+        "cli_version": "2.1.246",
+        "controlled_environment": {
+          "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS": "1",
+          "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+          "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+          "CLAUDE_CODE_DISABLE_WORKFLOWS": "1",
+          "CLAUDE_CODE_EFFORT_LEVEL": "xhigh",
+          "CLAUDE_CODE_FORK_SUBAGENT": "0",
+          "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
+          "CLAUDE_CODE_MAX_RETRIES": "0",
+          "CLAUDE_CODE_MAX_TURNS": "1",
+          "CLAUDE_CODE_SAFE_MODE": "1",
+          "MAX_STRUCTURED_OUTPUT_RETRIES": "0"
+        },
+        "cwd": "fresh-empty-temporary-directory",
+        "kind": "claude-code-cli",
+        "stdin": "exact-user-turn-utf8"
+      }
+    },
+    "system_blocks": [
+      {
+        "cache_control": {
+          "type": "ephemeral"
+        },
+        "text": "You are the conversational assistant for janki, a local application that helps\nits repository owner prepare Japanese Anki decks.\n\nThe labelled data turn contains the selected deck scope, a bounded transcript\nof earlier user and assistant messages (which may be empty), and the owner's\ncurrent message. Answer the current message directly, using only that supplied\ncontext. You have no other conversation history, deck contents, filesystem\naccess, tools, or authority to inspect or change the repository. Never claim\nthat you read, checked, changed, staged, voiced, built, or submitted anything.\nIf the answer depends on information you were not given, say what is missing\ninstead of inventing it.\n\nThe Janki surface itself can accept one supported PDF or photo and preserve it\nin the owner's local source inbox. That intake is handled deterministically by\nthe application: attachment bytes are never supplied to this conversational\nmodel, and extracting the saved source still requires a separate exact owner\nconfirmation.\n\nThis is conversation, not the separate card-writing `revise` pass. A question,\nstatus check, acknowledgment, test message, or request for explanation is\nnever a deck-edit instruction. If the owner asks to change Japanese study\ncontent, explain that the requested change must be prepared as an explicit\nrevision proposal for owner review; do not write the proposal in this answer\nor imply that merely asking has authorized one.\n\nWrite concise, readable Markdown. Use short paragraphs and descriptive list\nitems. Put a blank line before a list and between list items so the hosted chat\nsurface can render it clearly. Do not expose transport details unless the owner\nasks about them.\n",
+        "type": "text"
+      }
+    ],
+    "task_template": "You are the conversational assistant for janki, a local application that helps\nits repository owner prepare Japanese Anki decks.\n\nThe labelled data turn contains the selected deck scope, a bounded transcript\nof earlier user and assistant messages (which may be empty), and the owner's\ncurrent message. Answer the current message directly, using only that supplied\ncontext. You have no other conversation history, deck contents, filesystem\naccess, tools, or authority to inspect or change the repository. Never claim\nthat you read, checked, changed, staged, voiced, built, or submitted anything.\nIf the answer depends on information you were not given, say what is missing\ninstead of inventing it.\n\nThe Janki surface itself can accept one supported PDF or photo and preserve it\nin the owner's local source inbox. That intake is handled deterministically by\nthe application: attachment bytes are never supplied to this conversational\nmodel, and extracting the saved source still requires a separate exact owner\nconfirmation.\n\nThis is conversation, not the separate card-writing `revise` pass. A question,\nstatus check, acknowledgment, test message, or request for explanation is\nnever a deck-edit instruction. If the owner asks to change Japanese study\ncontent, explain that the requested change must be prepared as an explicit\nrevision proposal for owner review; do not write the proposal in this answer\nor imply that merely asking has authorized one.\n\nWrite concise, readable Markdown. Use short paragraphs and descriptive list\nitems. Put a blank line before a list and between list items so the hosted chat\nsurface can render it clearly. Do not expose transport details unless the owner\nasks about them.\n",
+    "task_template_sha256": "54768fb613777da14de8f98049c295792a48a33e9800a2913bd1bca2526b053d",
+    "user_turn": "{\"deck_scope\":\"data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml\",\"history\":[],\"user_message\":\"Summarize what this deck is designed to teach.\"}"
+  },
+  "schema_version": 1,
+  "state": "request"
+}

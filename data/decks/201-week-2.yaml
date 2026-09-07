@@ -1,0 +1,21 @@
+deck:
+  name: "Brandon Japanese::201 Week 2"
+  deck_id: 2059400123
+  # Two strands of one week, and the description says which is which so neither
+  # is mistaken for Genki II Lesson 13's own vocabulary list. Lesson 13 teaches
+  # あむ・がんばる・なく・みがく・約束を守る・かんどうする (textbook pages 24–25); the
+  # workbook's potential chart on page 11 deliberately drills verbs carried over
+  # from earlier lessons, which is why they live here and not in the Lesson 13
+  # Vocabulary deck.
+  description: >-
+    Week 2: the verbs drilled by the Genki II workbook Lesson 13 page 11
+    potential chart, carried over from earlier lessons rather than Lesson 13's
+    own vocabulary, plus words teaching the kanji 物・特・鳥・料・理.
+  output: "201-week-2.apkg"
+  cards:
+    recognition: true
+    production: true
+    reading: false
+  source: ../normalized/vocabulary.json
+  intake_tag: 201-week-2
+  include_tags: [201-week-2]

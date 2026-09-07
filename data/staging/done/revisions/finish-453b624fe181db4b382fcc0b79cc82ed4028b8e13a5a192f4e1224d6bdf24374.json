@@ -1,0 +1,1417 @@
+{
+  "apply_receipt": {
+    "archive_path": "data/staging/done/revisions/revise-cd116a01aba3-2df519967cad94da.json",
+    "archive_sha256": "3e75f756133e103462452f547b38af7d87a07b2ae5db7b911d18c4bd5e89dd6a",
+    "deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+    "operation_id": "105955d8-a38b-4904-92e8-fbec3082be86"
+  },
+  "audio_receipt": {
+    "clips": [
+      {
+        "sha256": "ebcc663c6b5377d516d5c11061546d99759325ba7010b691dd94ca5208d5aae3",
+        "target": "janki-4d4f24caf38d.wav"
+      },
+      {
+        "sha256": "8e18daa5203fccf3c7d941107effbc1e90c61468bce7c0fa138dde074bfb070c",
+        "target": "janki-efb7f385e622.wav"
+      },
+      {
+        "sha256": "7fbbfa088089da33c3e15238048d29cb096496e53f6c173af8bdf5e85a93ede0",
+        "target": "janki-e3f245fc2780.wav"
+      },
+      {
+        "sha256": "d70021d3cc875c000f98e3c2f74cc69c5ab7d71f7f40382895e15c377fb8fb99",
+        "target": "janki-0fc987bc9e9f.wav"
+      },
+      {
+        "sha256": "6f35ccac4819c19b742f76a1a9d948401e20d89c4fb8e3727f947262e686edc9",
+        "target": "janki-065329b77ec2.wav"
+      },
+      {
+        "sha256": "666db919fd27232371d4f43a98552c636e83c5adb78c1da306960a64da8a3168",
+        "target": "janki-2440501ca7d7.wav"
+      },
+      {
+        "sha256": "5af95e1670650e7a1cfdbb5817bee36ca3e26b30353652c9f1c60ec458bf14c3",
+        "target": "janki-b83def1ab8a2.wav"
+      },
+      {
+        "sha256": "3404342779dcfda2d2593beeb2b0e28f37c12837fed7fe20bb95962ad258ab8c",
+        "target": "janki-05ebe791696c.wav"
+      },
+      {
+        "sha256": "d99cf7ab3ebc7b4502ca91530b02b9f063f4a8d23923aecca9e9498a5c73667c",
+        "target": "janki-00a8d303c325.wav"
+      },
+      {
+        "sha256": "946b22d3ff3531c92c34960b0462c7a0fbb9216c5e8866b321c77bdb21b1d094",
+        "target": "janki-facc62e3fb23.wav"
+      },
+      {
+        "sha256": "f975b12ff1ec5ccf7b32d499cc4cb2da2704c8c8ba376f9cf594619526ed9c57",
+        "target": "janki-fd9b0107354f.wav"
+      },
+      {
+        "sha256": "0bf3dd33e9905461507b65ec39a7ccfa2d59fa9e2796b5df2cf629221a07e168",
+        "target": "janki-3eb6da066130.wav"
+      },
+      {
+        "sha256": "f054797312bcf124aa23f7ccd6531c03afd9b40908e91ab8d28682ef39042622",
+        "target": "janki-bcef8ea10d8b.wav"
+      },
+      {
+        "sha256": "95cec14572abd0ef92973c695db520721f1be5516eb43c53a9c3d1e776ece0ab",
+        "target": "janki-55e0a66d58ba.wav"
+      },
+      {
+        "sha256": "6f5ed23a0f65a297042f1f73291aaf87263e66173e1f79658b38b9062a93fca1",
+        "target": "janki-5bc9c549dd6b.wav"
+      },
+      {
+        "sha256": "50b1b2abe8e1219ce2a205bad5ce0898420668b0389409c035db2d01d845f24d",
+        "target": "janki-4a7ed50f36ee.wav"
+      },
+      {
+        "sha256": "3d7d2bef2ea710cb9e96e44a916c3c9a0e4dd2724795c160db72fc070c520fc7",
+        "target": "janki-3579f2da379f.wav"
+      },
+      {
+        "sha256": "4c0f812494767d39ba85d3e13964c9a913f96f7b86e08eb5f4a49981ba0f4ba0",
+        "target": "janki-c43630d0dccc.wav"
+      },
+      {
+        "sha256": "a9a3523544eae1f21dc6e7c5c5ce400350403d03ebb46ff362a48146f8571267",
+        "target": "janki-8608767fc949.wav"
+      },
+      {
+        "sha256": "bbaeb41611c7cfee063d5559258031234c6e037b8ca48d302bc709bb703f7150",
+        "target": "janki-2862251a570f.wav"
+      },
+      {
+        "sha256": "ab0d2babb635ce6370f2ae0937360e97c91e16019b2112656685b2cbad065ae1",
+        "target": "janki-7e0c0f147499.wav"
+      },
+      {
+        "sha256": "b33643771efce0345d8ecc98237508e31c70baa4a24e19b12cc6c0a34422ad40",
+        "target": "janki-ddc8831e5dd5.wav"
+      },
+      {
+        "sha256": "90c139ef708052a20d70c786b42524e436a018d4ca95345be842cdae09c2af32",
+        "target": "janki-a6e59debedfc.wav"
+      },
+      {
+        "sha256": "d482e6671b2393c31c62228280b0ad85fba3e46d02d7e32b0dd8380879508b1a",
+        "target": "janki-2f2f19feae82.wav"
+      },
+      {
+        "sha256": "adf2b514fe36d3a53628006035ce22d886a1a6e0524c8f095aab9bfe2a78f278",
+        "target": "janki-3daceb701c03.wav"
+      },
+      {
+        "sha256": "8674844514d03da4a974be5ad7793edb8cce3d0cfc12ff0d4d4e8ce8db344900",
+        "target": "janki-4871d4ab4a8a.wav"
+      },
+      {
+        "sha256": "5f0c09fee89161be9f9c9c64658adc513dd2ab32e0958cf47515209a62034c54",
+        "target": "janki-b1e52ad98f7d.wav"
+      },
+      {
+        "sha256": "27de3300b95908d2e5363db04201a40e68d15b70a90dba9149d4c011f0a97abd",
+        "target": "janki-0623a3ff7465.wav"
+      },
+      {
+        "sha256": "fa7d8e845a74924fc843d106d3c035a447ed8d47d637a4006bb3009ed7f87b2e",
+        "target": "janki-cb9b612fb9b5.wav"
+      },
+      {
+        "sha256": "648a4501805e7c6b47c50d2502261ffc5a2aa0978d5ca97262cf314072ad8a57",
+        "target": "janki-cac4a37816ed.wav"
+      },
+      {
+        "sha256": "b6c998b0b6dc19d45f1004f4a046eec88fc036a2ea06beba2f9ad3dc7aef00c9",
+        "target": "janki-b671d14d6843.wav"
+      },
+      {
+        "sha256": "fbcdf70c75124714d92cbff1972da35f724e81dc46e406d8f26def7ed5ba9a88",
+        "target": "janki-8864d96b98aa.wav"
+      }
+    ],
+    "deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+    "ledger_sha256": "0b7fbe47646be478036860ebdaa56c0796a6ca6795e5a9889800962038751fde"
+  },
+  "authority": {
+    "audio": {
+      "canonical_path": "data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml",
+      "clips": [
+        {
+          "content_fingerprint": "a5f46cf2e94044536160f7e16c2441290551f6eea3cbb597261019e22a1f410a",
+          "forced_accent": false,
+          "initial_media_sha256": "ebcc663c6b5377d516d5c11061546d99759325ba7010b691dd94ca5208d5aae3",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:あそぶ:あそぶ",
+          "request_input": "明日の午後、あそべますか。",
+          "target": "janki-4d4f24caf38d.wav"
+        },
+        {
+          "content_fingerprint": "4aca165c9fcded0b2d3b0b82f1c38260863da5b02d08b8949693d6659e03de1e",
+          "forced_accent": false,
+          "initial_media_sha256": "8e18daa5203fccf3c7d941107effbc1e90c61468bce7c0fa138dde074bfb070c",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:あそぶ:あそぶ",
+          "request_input": "明日は公園であそべるよ。",
+          "target": "janki-efb7f385e622.wav"
+        },
+        {
+          "content_fingerprint": "0c0470b4564fdbb9c89e09147e8666a31c6ee472eaa85187903f2107ebbdbbc2",
+          "forced_accent": false,
+          "initial_media_sha256": "7fbbfa088089da33c3e15238048d29cb096496e53f6c173af8bdf5e85a93ede0",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:およぐ:およぐ",
+          "request_input": "私はおよげないんです。",
+          "target": "janki-e3f245fc2780.wav"
+        },
+        {
+          "content_fingerprint": "eb90e1a01ce7fd58b69699420513fa1299cc15453e445ba38ab333b00b6a2b96",
+          "forced_accent": false,
+          "initial_media_sha256": "d70021d3cc875c000f98e3c2f74cc69c5ab7d71f7f40382895e15c377fb8fb99",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:およぐ:およぐ",
+          "request_input": "海でおよげる？",
+          "target": "janki-0fc987bc9e9f.wav"
+        },
+        {
+          "content_fingerprint": "dc86739bdbfd50bb58e8226ba7191cc05d2fb4c7504960e48cab0212141aa9c9",
+          "forced_accent": false,
+          "initial_media_sha256": "6f35ccac4819c19b742f76a1a9d948401e20d89c4fb8e3727f947262e686edc9",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:しぬ:しぬ",
+          "request_input": "これで安心してしねます。",
+          "target": "janki-065329b77ec2.wav"
+        },
+        {
+          "content_fingerprint": "80b83057b7b84b581f91c1917e2a8bfd2ed65453f34c1a78c1b95b0c081e30c6",
+          "forced_accent": false,
+          "initial_media_sha256": "666db919fd27232371d4f43a98552c636e83c5adb78c1da306960a64da8a3168",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:しぬ:しぬ",
+          "request_input": "これで安心してしねる。",
+          "target": "janki-2440501ca7d7.wav"
+        },
+        {
+          "content_fingerprint": "8645ba79932b033af33769c4ad915c3959da766c6bfce9a8f3fbaf2cb433eb65",
+          "forced_accent": false,
+          "initial_media_sha256": "5af95e1670650e7a1cfdbb5817bee36ca3e26b30353652c9f1c60ec458bf14c3",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:する:する",
+          "request_input": "何か楽器ができますか。",
+          "target": "janki-b83def1ab8a2.wav"
+        },
+        {
+          "content_fingerprint": "525b8d3d24b85fe09dcb4aab83a0bdf3cb35b998eb95d01a25472133f091137f",
+          "forced_accent": false,
+          "initial_media_sha256": "3404342779dcfda2d2593beeb2b0e28f37c12837fed7fe20bb95962ad258ab8c",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:する:する",
+          "request_input": "明日は仕事ができる？",
+          "target": "janki-05ebe791696c.wav"
+        },
+        {
+          "content_fingerprint": "6e1bdf88154af678ce8d87a96816a277a7613fa630ee3b3049decf1a42c15c12",
+          "forced_accent": false,
+          "initial_media_sha256": "d99cf7ab3ebc7b4502ca91530b02b9f063f4a8d23923aecca9e9498a5c73667c",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:たたく:たたく",
+          "request_input": "私はドラムがたたけません。",
+          "target": "janki-00a8d303c325.wav"
+        },
+        {
+          "content_fingerprint": "e87fa4776455bf70770cab6c87d2a1ec41e484dad1ecbfd3b6e06eab72bff7a3",
+          "forced_accent": false,
+          "initial_media_sha256": "946b22d3ff3531c92c34960b0462c7a0fbb9216c5e8866b321c77bdb21b1d094",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:たたく:たたく",
+          "request_input": "ドラムがたたける？",
+          "target": "janki-facc62e3fb23.wav"
+        },
+        {
+          "content_fingerprint": "98c47fab04526f1d86bf816f7c218e9dd2e7c5b0b94d1cbeb24b61daf0dd6fb4",
+          "forced_accent": false,
+          "initial_media_sha256": "f975b12ff1ec5ccf7b32d499cc4cb2da2704c8c8ba376f9cf594619526ed9c57",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:まつ:まつ",
+          "request_input": "もう少しここでまてますか。",
+          "target": "janki-fd9b0107354f.wav"
+        },
+        {
+          "content_fingerprint": "6a884cac5092e05a9a04ce3302a0e208c2ddbec37f203da6d9804186124e818d",
+          "forced_accent": false,
+          "initial_media_sha256": "0bf3dd33e9905461507b65ec39a7ccfa2d59fa9e2796b5df2cf629221a07e168",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:まつ:まつ",
+          "request_input": "もう少しここでまてる？",
+          "target": "janki-3eb6da066130.wav"
+        },
+        {
+          "content_fingerprint": "e692e0bb6cf7d9e0be93d61ebe98911bb6ba44b66b3c5bee1fc88e252b86231d",
+          "forced_accent": false,
+          "initial_media_sha256": "f054797312bcf124aa23f7ccd6531c03afd9b40908e91ab8d28682ef39042622",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:吹く:ふく",
+          "request_input": "フルートも吹けますか。",
+          "target": "janki-bcef8ea10d8b.wav"
+        },
+        {
+          "content_fingerprint": "92cd34f622f041bda0e4143b652a45c3c459f036a8fce3da457068fc71c575d4",
+          "forced_accent": false,
+          "initial_media_sha256": "95cec14572abd0ef92973c695db520721f1be5516eb43c53a9c3d1e776ece0ab",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:吹く:ふく",
+          "request_input": "サックスが吹ける？",
+          "target": "janki-55e0a66d58ba.wav"
+        },
+        {
+          "content_fingerprint": "d4848a0aaf5341656e78cc45c85d23319300f7c8ad89e725a5b5d8322aed28ec",
+          "forced_accent": false,
+          "initial_media_sha256": "6f5ed23a0f65a297042f1f73291aaf87263e66173e1f79658b38b9062a93fca1",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:弾く:ひく",
+          "request_input": "ギターが弾けます。",
+          "target": "janki-5bc9c549dd6b.wav"
+        },
+        {
+          "content_fingerprint": "4b9c7a22f4371663fe57b8cccf7cd41795548f904bd1029181baf4a150bf6e1d",
+          "forced_accent": false,
+          "initial_media_sha256": "50b1b2abe8e1219ce2a205bad5ce0898420668b0389409c035db2d01d845f24d",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "marin"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:弾く:ひく",
+          "request_input": "ピアノも弾ける？",
+          "target": "janki-4a7ed50f36ee.wav"
+        },
+        {
+          "content_fingerprint": "943b3684926d9578aa0217e598c9cc3cb6b938cbcfabb825a01a6615880c6cf2",
+          "forced_accent": false,
+          "initial_media_sha256": "3d7d2bef2ea710cb9e96e44a916c3c9a0e4dd2724795c160db72fc070c520fc7",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:書く:かく",
+          "request_input": "ひらがなで名前が書けますか。",
+          "target": "janki-3579f2da379f.wav"
+        },
+        {
+          "content_fingerprint": "4feee5b3138174eebb23319b0aebbbfd76e692e3e763ee5bd448171f1b4b8acf",
+          "forced_accent": false,
+          "initial_media_sha256": "4c0f812494767d39ba85d3e13964c9a913f96f7b86e08eb5f4a49981ba0f4ba0",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:書く:かく",
+          "request_input": "この漢字、書ける？",
+          "target": "janki-c43630d0dccc.wav"
+        },
+        {
+          "content_fingerprint": "4e12617f3a8c637713047493c3d777b3d21f9da8c395a18c0e04f290093dd5a0",
+          "forced_accent": false,
+          "initial_media_sha256": "a9a3523544eae1f21dc6e7c5c5ce400350403d03ebb46ff362a48146f8571267",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "ash"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:来る:くる",
+          "request_input": "土曜日に来られますか。",
+          "target": "janki-8608767fc949.wav"
+        },
+        {
+          "content_fingerprint": "dfb5aa8e2667f245cedd3fbd8f7dbcfd2f3e9c9b75ec23ee6b2989a4fa02785f",
+          "forced_accent": false,
+          "initial_media_sha256": "bbaeb41611c7cfee063d5559258031234c6e037b8ca48d302bc709bb703f7150",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "ash"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:来る:くる",
+          "request_input": "明日のパーティーに来られる？",
+          "target": "janki-2862251a570f.wav"
+        },
+        {
+          "content_fingerprint": "50752adc3c9ab0e45c773742bc218b6f71fb32245a3b36d2c8c6087234d4de4e",
+          "forced_accent": false,
+          "initial_media_sha256": "ab0d2babb635ce6370f2ae0937360e97c91e16019b2112656685b2cbad065ae1",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:行く:いく",
+          "request_input": "雨が降ったので、海に行けませんでした。",
+          "target": "janki-7e0c0f147499.wav"
+        },
+        {
+          "content_fingerprint": "7082aa58d444fe149824ca6962ae10301817ab05bb7261e68c7a463abe87d54e",
+          "forced_accent": false,
+          "initial_media_sha256": "b33643771efce0345d8ecc98237508e31c70baa4a24e19b12cc6c0a34422ad40",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:行く:いく",
+          "request_input": "明日は私も行けるよ。",
+          "target": "janki-ddc8831e5dd5.wav"
+        },
+        {
+          "content_fingerprint": "a2e21bed42223e4befd7a93b9d4f5d243670e36ce312f742cc85513324bc2489",
+          "forced_accent": false,
+          "initial_media_sha256": "90c139ef708052a20d70c786b42524e436a018d4ca95345be842cdae09c2af32",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "ash"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:見る:みる",
+          "request_input": "この動物園ではパンダが見られます。",
+          "target": "janki-a6e59debedfc.wav"
+        },
+        {
+          "content_fingerprint": "db9b62bfd8718713422a95aa7a3c3929ab2518ec5765d56f8bc802cf7aecad81",
+          "forced_accent": false,
+          "initial_media_sha256": "d482e6671b2393c31c62228280b0ad85fba3e46d02d7e32b0dd8380879508b1a",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "ash"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:見る:みる",
+          "request_input": "この映画は家でも見られるよ。",
+          "target": "janki-2f2f19feae82.wav"
+        },
+        {
+          "content_fingerprint": "83f69d47b513a4f17950d4dcd14236909c8e2e127225877589561262ca09ec47",
+          "forced_accent": false,
+          "initial_media_sha256": "adf2b514fe36d3a53628006035ce22d886a1a6e0524c8f095aab9bfe2a78f278",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:話す:はなす",
+          "request_input": "私は日本語が話せます。",
+          "target": "janki-3daceb701c03.wav"
+        },
+        {
+          "content_fingerprint": "6c45bb4ef895fb20297686700057cd615c815c063080544df6abef77eb4aa626",
+          "forced_accent": false,
+          "initial_media_sha256": "8674844514d03da4a974be5ad7793edb8cce3d0cfc12ff0d4d4e8ce8db344900",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:話す:はなす",
+          "request_input": "英語も話せる？",
+          "target": "janki-4871d4ab4a8a.wav"
+        },
+        {
+          "content_fingerprint": "64e735a89e9c9e3c54eaddc463d28f4843ebc57d85be542ad3d97a3aec609026",
+          "forced_accent": false,
+          "initial_media_sha256": "5f0c09fee89161be9f9c9c64658adc513dd2ab32e0958cf47515209a62034c54",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:読む:よむ",
+          "request_input": "この漢字が読めますか。",
+          "target": "janki-b1e52ad98f7d.wav"
+        },
+        {
+          "content_fingerprint": "d16d9de8ae79402c276eacb63f27d92df38456a03d2f74c629a8a37ed654e8bf",
+          "forced_accent": false,
+          "initial_media_sha256": "27de3300b95908d2e5363db04201a40e68d15b70a90dba9149d4c011f0a97abd",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:読む:よむ",
+          "request_input": "この字、読める？",
+          "target": "janki-0623a3ff7465.wav"
+        },
+        {
+          "content_fingerprint": "2451afede147514ccce41ec38444bfc1a770aaf09cd2b49ed49206020585e705",
+          "forced_accent": false,
+          "initial_media_sha256": "fa7d8e845a74924fc843d106d3c035a447ed8d47d637a4006bb3009ed7f87b2e",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:買う:かう",
+          "request_input": "この店で切符が買えます。",
+          "target": "janki-cb9b612fb9b5.wav"
+        },
+        {
+          "content_fingerprint": "568ea0b76c1be023ab3f358334cd229b37ba60aaee4c0fa14e857779960f452b",
+          "forced_accent": false,
+          "initial_media_sha256": "648a4501805e7c6b47c50d2502261ffc5a2aa0978d5ca97262cf314072ad8a57",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "verse"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:買う:かう",
+          "request_input": "この店ではおみやげも買えるよ。",
+          "target": "janki-cac4a37816ed.wav"
+        },
+        {
+          "content_fingerprint": "c6ddd4359a7f50d77c27013c23de91dff4c1f9a34cbb59d6f1a070f57609fa1e",
+          "forced_accent": false,
+          "initial_media_sha256": "b6c998b0b6dc19d45f1004f4a046eec88fc036a2ea06beba2f9ad3dc7aef00c9",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:飼う:かう",
+          "request_input": "このアパートでは犬が飼えません。",
+          "target": "janki-b671d14d6843.wav"
+        },
+        {
+          "content_fingerprint": "5fca6d612b83773295474bd14dd7190f8424969a9b3aefcd855f4edba5882779",
+          "forced_accent": false,
+          "initial_media_sha256": "fbcdf70c75124714d92cbff1972da35f724e81dc46e406d8f26def7ed5ba9a88",
+          "initial_recovery_key": null,
+          "initial_recovery_sha256": null,
+          "initial_recovery_source": null,
+          "initial_state": "current",
+          "kind": "example",
+          "provider": {
+            "access": "paid-network",
+            "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+            "name": "openai-realtime",
+            "settings": {
+              "audio_format": "pcm16-24000-mono",
+              "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+              "model": "gpt-realtime-1.5"
+            },
+            "speed": 1.0,
+            "suffix": ".wav",
+            "transport": "japanese_anki.tts.openai_realtime._default_transport",
+            "voice": "cedar"
+          },
+          "record_id": "drill-audio:1047286103:potential:word:飼う:かう",
+          "request_input": "このアパートでは猫が飼えるよ。",
+          "target": "janki-8864d96b98aa.wav"
+        }
+      ],
+      "example_provider": {
+        "access": "paid-network",
+        "destination": "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+        "name": "openai-realtime",
+        "settings": {
+          "audio_format": "pcm16-24000-mono",
+          "instructions": "Read the user's text aloud exactly once as a native speaker of standard Tokyo Japanese. Do not add, omit, translate, answer, or explain anything. Speak clearly at a slower, learner-friendly pace, approximately 75% of normal conversational speed, while preserving natural Japanese intonation and connected phrasing.",
+          "model": "gpt-realtime-1.5",
+          "selector": "framed-sha256-v1",
+          "voice_pool": "cedar,ash,verse,marin"
+        },
+        "speed": 1.0,
+        "suffix": ".wav",
+        "transport": "japanese_anki.tts.openai_realtime.OpenAiRealtimePool",
+        "voice": "per-record"
+      },
+      "examples": true,
+      "force": false,
+      "initial_plan_fingerprint": "ce1208eadf6dc15ee9ab22c0723f036ef23c7b713ff7869d8ef4994360f7737a",
+      "ledger_path": "data/ledger.json",
+      "max_provider_calls": 0,
+      "media_dir": "data/media",
+      "operations_path": "data/operations.json",
+      "projected_deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+      "prune": false,
+      "record_ids": [
+        "drill-audio:1047286103:potential:word:話す:はなす",
+        "drill-audio:1047286103:potential:word:まつ:まつ",
+        "drill-audio:1047286103:potential:word:およぐ:およぐ",
+        "drill-audio:1047286103:potential:word:行く:いく",
+        "drill-audio:1047286103:potential:word:しぬ:しぬ",
+        "drill-audio:1047286103:potential:word:読む:よむ",
+        "drill-audio:1047286103:potential:word:あそぶ:あそぶ",
+        "drill-audio:1047286103:potential:word:買う:かう",
+        "drill-audio:1047286103:potential:word:見る:みる",
+        "drill-audio:1047286103:potential:word:来る:くる",
+        "drill-audio:1047286103:potential:word:する:する",
+        "drill-audio:1047286103:potential:word:書く:かく",
+        "drill-audio:1047286103:potential:word:飼う:かう",
+        "drill-audio:1047286103:potential:word:弾く:ひく",
+        "drill-audio:1047286103:potential:word:吹く:ふく",
+        "drill-audio:1047286103:potential:word:たたく:たたく"
+      ],
+      "targeted": true,
+      "word_provider": null,
+      "words": false
+    },
+    "build": {
+      "card_count": 16,
+      "deck_name": "Brandon Japanese::Genki II::Lesson 13::Potential Practice",
+      "deck_path": "data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml",
+      "deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+      "form": "potential",
+      "media": [
+        {
+          "path": "data/media/audio/janki-00a8d303c325.wav",
+          "sha256": "d99cf7ab3ebc7b4502ca91530b02b9f063f4a8d23923aecca9e9498a5c73667c"
+        },
+        {
+          "path": "data/media/audio/janki-05ebe791696c.wav",
+          "sha256": "3404342779dcfda2d2593beeb2b0e28f37c12837fed7fe20bb95962ad258ab8c"
+        },
+        {
+          "path": "data/media/audio/janki-0623a3ff7465.wav",
+          "sha256": "27de3300b95908d2e5363db04201a40e68d15b70a90dba9149d4c011f0a97abd"
+        },
+        {
+          "path": "data/media/audio/janki-065329b77ec2.wav",
+          "sha256": "6f35ccac4819c19b742f76a1a9d948401e20d89c4fb8e3727f947262e686edc9"
+        },
+        {
+          "path": "data/media/audio/janki-0fc987bc9e9f.wav",
+          "sha256": "d70021d3cc875c000f98e3c2f74cc69c5ab7d71f7f40382895e15c377fb8fb99"
+        },
+        {
+          "path": "data/media/audio/janki-2440501ca7d7.wav",
+          "sha256": "666db919fd27232371d4f43a98552c636e83c5adb78c1da306960a64da8a3168"
+        },
+        {
+          "path": "data/media/audio/janki-2862251a570f.wav",
+          "sha256": "bbaeb41611c7cfee063d5559258031234c6e037b8ca48d302bc709bb703f7150"
+        },
+        {
+          "path": "data/media/audio/janki-2f2f19feae82.wav",
+          "sha256": "d482e6671b2393c31c62228280b0ad85fba3e46d02d7e32b0dd8380879508b1a"
+        },
+        {
+          "path": "data/media/audio/janki-3579f2da379f.wav",
+          "sha256": "3d7d2bef2ea710cb9e96e44a916c3c9a0e4dd2724795c160db72fc070c520fc7"
+        },
+        {
+          "path": "data/media/audio/janki-3daceb701c03.wav",
+          "sha256": "adf2b514fe36d3a53628006035ce22d886a1a6e0524c8f095aab9bfe2a78f278"
+        },
+        {
+          "path": "data/media/audio/janki-3eb6da066130.wav",
+          "sha256": "0bf3dd33e9905461507b65ec39a7ccfa2d59fa9e2796b5df2cf629221a07e168"
+        },
+        {
+          "path": "data/media/audio/janki-4871d4ab4a8a.wav",
+          "sha256": "8674844514d03da4a974be5ad7793edb8cce3d0cfc12ff0d4d4e8ce8db344900"
+        },
+        {
+          "path": "data/media/audio/janki-4a7ed50f36ee.wav",
+          "sha256": "50b1b2abe8e1219ce2a205bad5ce0898420668b0389409c035db2d01d845f24d"
+        },
+        {
+          "path": "data/media/audio/janki-4d4f24caf38d.wav",
+          "sha256": "ebcc663c6b5377d516d5c11061546d99759325ba7010b691dd94ca5208d5aae3"
+        },
+        {
+          "path": "data/media/audio/janki-55e0a66d58ba.wav",
+          "sha256": "95cec14572abd0ef92973c695db520721f1be5516eb43c53a9c3d1e776ece0ab"
+        },
+        {
+          "path": "data/media/audio/janki-5bc9c549dd6b.wav",
+          "sha256": "6f5ed23a0f65a297042f1f73291aaf87263e66173e1f79658b38b9062a93fca1"
+        },
+        {
+          "path": "data/media/audio/janki-7e0c0f147499.wav",
+          "sha256": "ab0d2babb635ce6370f2ae0937360e97c91e16019b2112656685b2cbad065ae1"
+        },
+        {
+          "path": "data/media/audio/janki-8608767fc949.wav",
+          "sha256": "a9a3523544eae1f21dc6e7c5c5ce400350403d03ebb46ff362a48146f8571267"
+        },
+        {
+          "path": "data/media/audio/janki-8864d96b98aa.wav",
+          "sha256": "fbcdf70c75124714d92cbff1972da35f724e81dc46e406d8f26def7ed5ba9a88"
+        },
+        {
+          "path": "data/media/audio/janki-a6e59debedfc.wav",
+          "sha256": "90c139ef708052a20d70c786b42524e436a018d4ca95345be842cdae09c2af32"
+        },
+        {
+          "path": "data/media/audio/janki-b1e52ad98f7d.wav",
+          "sha256": "5f0c09fee89161be9f9c9c64658adc513dd2ab32e0958cf47515209a62034c54"
+        },
+        {
+          "path": "data/media/audio/janki-b671d14d6843.wav",
+          "sha256": "b6c998b0b6dc19d45f1004f4a046eec88fc036a2ea06beba2f9ad3dc7aef00c9"
+        },
+        {
+          "path": "data/media/audio/janki-b83def1ab8a2.wav",
+          "sha256": "5af95e1670650e7a1cfdbb5817bee36ca3e26b30353652c9f1c60ec458bf14c3"
+        },
+        {
+          "path": "data/media/audio/janki-bcef8ea10d8b.wav",
+          "sha256": "f054797312bcf124aa23f7ccd6531c03afd9b40908e91ab8d28682ef39042622"
+        },
+        {
+          "path": "data/media/audio/janki-c43630d0dccc.wav",
+          "sha256": "4c0f812494767d39ba85d3e13964c9a913f96f7b86e08eb5f4a49981ba0f4ba0"
+        },
+        {
+          "path": "data/media/audio/janki-cac4a37816ed.wav",
+          "sha256": "648a4501805e7c6b47c50d2502261ffc5a2aa0978d5ca97262cf314072ad8a57"
+        },
+        {
+          "path": "data/media/audio/janki-cb9b612fb9b5.wav",
+          "sha256": "fa7d8e845a74924fc843d106d3c035a447ed8d47d637a4006bb3009ed7f87b2e"
+        },
+        {
+          "path": "data/media/audio/janki-ddc8831e5dd5.wav",
+          "sha256": "b33643771efce0345d8ecc98237508e31c70baa4a24e19b12cc6c0a34422ad40"
+        },
+        {
+          "path": "data/media/audio/janki-e3f245fc2780.wav",
+          "sha256": "7fbbfa088089da33c3e15238048d29cb096496e53f6c173af8bdf5e85a93ede0"
+        },
+        {
+          "path": "data/media/audio/janki-efb7f385e622.wav",
+          "sha256": "8e18daa5203fccf3c7d941107effbc1e90c61468bce7c0fa138dde074bfb070c"
+        },
+        {
+          "path": "data/media/audio/janki-facc62e3fb23.wav",
+          "sha256": "946b22d3ff3531c92c34960b0462c7a0fbb9216c5e8866b321c77bdb21b1d094"
+        },
+        {
+          "path": "data/media/audio/janki-fd9b0107354f.wav",
+          "sha256": "f975b12ff1ec5ccf7b32d499cc4cb2da2704c8c8ba376f9cf594619526ed9c57"
+        }
+      ],
+      "output_path": "dist/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.apkg",
+      "plan_fingerprint": "e37495ca560eb01110fe7ba10e15b2ebd5d0cea688a904b5fc02cc391d5c2cdb",
+      "source_path": "data/normalized/vocabulary.json",
+      "source_sha256": "31ee81c34d6d0926ed43eb7d01ea5a10fee1474eecd7828cc0eea3c79ee64c0a",
+      "templates": [
+        {
+          "path": "templates/japanese-study/pattern-front.html",
+          "sha256": "bf6d7f2c0970de9eaf9c57e517ec880d79ae0173688b112712df1b402a86ef5f"
+        },
+        {
+          "path": "templates/japanese-study/pattern-back.html",
+          "sha256": "004e6808afa079651aa0327e51c00af8f8e1d8033b7fd197e04a38ab5a3a11eb"
+        },
+        {
+          "path": "templates/japanese-study/style.css",
+          "sha256": "d255792bb07d587ab7440e2de26035756c37e87bf03f0df82599a213d23b52f9"
+        }
+      ]
+    },
+    "revision": {
+      "apply_plan_fingerprint": "79e709b26dc6e7c1f6b433e8b2aaeac983f4b1380e5fb0bbe5b4bf6a284ac6eb",
+      "archive_path": "data/staging/done/revisions/revise-cd116a01aba3-2df519967cad94da.json",
+      "billing_class": "claude-subscription",
+      "canonical_context_fingerprint": "7f5da0994e3ae634c0a2210ff835a7ad199470f224033ff86d7c8db94342d83a",
+      "deck_base_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+      "deck_path": "data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml",
+      "intended_deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+      "model": "claude-opus-5",
+      "operation_id": "105955d8-a38b-4904-92e8-fbec3082be86",
+      "proposal_sha256": "4789c9c1ea6cdf57db5a0cf4e12b8f8cf964e800e1872cb5b90c1d5e1711b8ed",
+      "provider": "claude-code",
+      "request_bytes_sha256": "81aa3b1749ca9c2c1d985484f3a1ba7e38233d75cc88d399515d01cb6ae54daa",
+      "request_fingerprint": "2df519967cad94da8dafbb2c93954c00c8a976313f08152290018d60b3c1242d",
+      "selected_record_ids": [
+        "word:話す:はなす",
+        "word:まつ:まつ",
+        "word:およぐ:およぐ",
+        "word:行く:いく",
+        "word:しぬ:しぬ",
+        "word:読む:よむ",
+        "word:あそぶ:あそぶ",
+        "word:買う:かう",
+        "word:見る:みる",
+        "word:来る:くる",
+        "word:する:する",
+        "word:書く:かく",
+        "word:飼う:かう",
+        "word:弾く:ひく",
+        "word:吹く:ふく",
+        "word:たたく:たたく"
+      ],
+      "staging_path": "data/staging/revise-cd116a01aba3-2df519967cad94da.json"
+    },
+    "version": 1
+  },
+  "authorized_at": "2026-09-02T16:06:16.396271+00:00",
+  "build_binding": {
+    "card_count": 16,
+    "deck_name": "Brandon Japanese::Genki II::Lesson 13::Potential Practice",
+    "deck_path": "data/decks/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.yaml",
+    "deck_sha256": "2fe2f371d5c5b2f2d312be331ae92ea187d798a1e72fbc4517b88c39195d7e06",
+    "form": "potential",
+    "media": [
+      {
+        "path": "data/media/audio/janki-00a8d303c325.wav",
+        "sha256": "d99cf7ab3ebc7b4502ca91530b02b9f063f4a8d23923aecca9e9498a5c73667c"
+      },
+      {
+        "path": "data/media/audio/janki-05ebe791696c.wav",
+        "sha256": "3404342779dcfda2d2593beeb2b0e28f37c12837fed7fe20bb95962ad258ab8c"
+      },
+      {
+        "path": "data/media/audio/janki-0623a3ff7465.wav",
+        "sha256": "27de3300b95908d2e5363db04201a40e68d15b70a90dba9149d4c011f0a97abd"
+      },
+      {
+        "path": "data/media/audio/janki-065329b77ec2.wav",
+        "sha256": "6f35ccac4819c19b742f76a1a9d948401e20d89c4fb8e3727f947262e686edc9"
+      },
+      {
+        "path": "data/media/audio/janki-0fc987bc9e9f.wav",
+        "sha256": "d70021d3cc875c000f98e3c2f74cc69c5ab7d71f7f40382895e15c377fb8fb99"
+      },
+      {
+        "path": "data/media/audio/janki-2440501ca7d7.wav",
+        "sha256": "666db919fd27232371d4f43a98552c636e83c5adb78c1da306960a64da8a3168"
+      },
+      {
+        "path": "data/media/audio/janki-2862251a570f.wav",
+        "sha256": "bbaeb41611c7cfee063d5559258031234c6e037b8ca48d302bc709bb703f7150"
+      },
+      {
+        "path": "data/media/audio/janki-2f2f19feae82.wav",
+        "sha256": "d482e6671b2393c31c62228280b0ad85fba3e46d02d7e32b0dd8380879508b1a"
+      },
+      {
+        "path": "data/media/audio/janki-3579f2da379f.wav",
+        "sha256": "3d7d2bef2ea710cb9e96e44a916c3c9a0e4dd2724795c160db72fc070c520fc7"
+      },
+      {
+        "path": "data/media/audio/janki-3daceb701c03.wav",
+        "sha256": "adf2b514fe36d3a53628006035ce22d886a1a6e0524c8f095aab9bfe2a78f278"
+      },
+      {
+        "path": "data/media/audio/janki-3eb6da066130.wav",
+        "sha256": "0bf3dd33e9905461507b65ec39a7ccfa2d59fa9e2796b5df2cf629221a07e168"
+      },
+      {
+        "path": "data/media/audio/janki-4871d4ab4a8a.wav",
+        "sha256": "8674844514d03da4a974be5ad7793edb8cce3d0cfc12ff0d4d4e8ce8db344900"
+      },
+      {
+        "path": "data/media/audio/janki-4a7ed50f36ee.wav",
+        "sha256": "50b1b2abe8e1219ce2a205bad5ce0898420668b0389409c035db2d01d845f24d"
+      },
+      {
+        "path": "data/media/audio/janki-4d4f24caf38d.wav",
+        "sha256": "ebcc663c6b5377d516d5c11061546d99759325ba7010b691dd94ca5208d5aae3"
+      },
+      {
+        "path": "data/media/audio/janki-55e0a66d58ba.wav",
+        "sha256": "95cec14572abd0ef92973c695db520721f1be5516eb43c53a9c3d1e776ece0ab"
+      },
+      {
+        "path": "data/media/audio/janki-5bc9c549dd6b.wav",
+        "sha256": "6f5ed23a0f65a297042f1f73291aaf87263e66173e1f79658b38b9062a93fca1"
+      },
+      {
+        "path": "data/media/audio/janki-7e0c0f147499.wav",
+        "sha256": "ab0d2babb635ce6370f2ae0937360e97c91e16019b2112656685b2cbad065ae1"
+      },
+      {
+        "path": "data/media/audio/janki-8608767fc949.wav",
+        "sha256": "a9a3523544eae1f21dc6e7c5c5ce400350403d03ebb46ff362a48146f8571267"
+      },
+      {
+        "path": "data/media/audio/janki-8864d96b98aa.wav",
+        "sha256": "fbcdf70c75124714d92cbff1972da35f724e81dc46e406d8f26def7ed5ba9a88"
+      },
+      {
+        "path": "data/media/audio/janki-a6e59debedfc.wav",
+        "sha256": "90c139ef708052a20d70c786b42524e436a018d4ca95345be842cdae09c2af32"
+      },
+      {
+        "path": "data/media/audio/janki-b1e52ad98f7d.wav",
+        "sha256": "5f0c09fee89161be9f9c9c64658adc513dd2ab32e0958cf47515209a62034c54"
+      },
+      {
+        "path": "data/media/audio/janki-b671d14d6843.wav",
+        "sha256": "b6c998b0b6dc19d45f1004f4a046eec88fc036a2ea06beba2f9ad3dc7aef00c9"
+      },
+      {
+        "path": "data/media/audio/janki-b83def1ab8a2.wav",
+        "sha256": "5af95e1670650e7a1cfdbb5817bee36ca3e26b30353652c9f1c60ec458bf14c3"
+      },
+      {
+        "path": "data/media/audio/janki-bcef8ea10d8b.wav",
+        "sha256": "f054797312bcf124aa23f7ccd6531c03afd9b40908e91ab8d28682ef39042622"
+      },
+      {
+        "path": "data/media/audio/janki-c43630d0dccc.wav",
+        "sha256": "4c0f812494767d39ba85d3e13964c9a913f96f7b86e08eb5f4a49981ba0f4ba0"
+      },
+      {
+        "path": "data/media/audio/janki-cac4a37816ed.wav",
+        "sha256": "648a4501805e7c6b47c50d2502261ffc5a2aa0978d5ca97262cf314072ad8a57"
+      },
+      {
+        "path": "data/media/audio/janki-cb9b612fb9b5.wav",
+        "sha256": "fa7d8e845a74924fc843d106d3c035a447ed8d47d637a4006bb3009ed7f87b2e"
+      },
+      {
+        "path": "data/media/audio/janki-ddc8831e5dd5.wav",
+        "sha256": "b33643771efce0345d8ecc98237508e31c70baa4a24e19b12cc6c0a34422ad40"
+      },
+      {
+        "path": "data/media/audio/janki-e3f245fc2780.wav",
+        "sha256": "7fbbfa088089da33c3e15238048d29cb096496e53f6c173af8bdf5e85a93ede0"
+      },
+      {
+        "path": "data/media/audio/janki-efb7f385e622.wav",
+        "sha256": "8e18daa5203fccf3c7d941107effbc1e90c61468bce7c0fa138dde074bfb070c"
+      },
+      {
+        "path": "data/media/audio/janki-facc62e3fb23.wav",
+        "sha256": "946b22d3ff3531c92c34960b0462c7a0fbb9216c5e8866b321c77bdb21b1d094"
+      },
+      {
+        "path": "data/media/audio/janki-fd9b0107354f.wav",
+        "sha256": "f975b12ff1ec5ccf7b32d499cc4cb2da2704c8c8ba376f9cf594619526ed9c57"
+      }
+    ],
+    "output_path": "dist/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.apkg",
+    "plan_fingerprint": "e37495ca560eb01110fe7ba10e15b2ebd5d0cea688a904b5fc02cc391d5c2cdb",
+    "source_path": "data/normalized/vocabulary.json",
+    "source_sha256": "31ee81c34d6d0926ed43eb7d01ea5a10fee1474eecd7828cc0eea3c79ee64c0a",
+    "templates": [
+      {
+        "path": "templates/japanese-study/pattern-front.html",
+        "sha256": "bf6d7f2c0970de9eaf9c57e517ec880d79ae0173688b112712df1b402a86ef5f"
+      },
+      {
+        "path": "templates/japanese-study/pattern-back.html",
+        "sha256": "004e6808afa079651aa0327e51c00af8f8e1d8033b7fd197e04a38ab5a3a11eb"
+      },
+      {
+        "path": "templates/japanese-study/style.css",
+        "sha256": "d255792bb07d587ab7440e2de26035756c37e87bf03f0df82599a213d23b52f9"
+      }
+    ]
+  },
+  "build_receipt": {
+    "card_count": 16,
+    "output_path": "dist/brandon-japanese-genki-ii-lesson-13-potential-pr-221074117d.apkg",
+    "package_sha256": "aba62c3c33a29d996c2bc9c9510b849cbd8e882db308e3798300b4500f88f920",
+    "plan_fingerprint": "e37495ca560eb01110fe7ba10e15b2ebd5d0cea688a904b5fc02cc391d5c2cdb"
+  },
+  "kind": "revision_finish",
+  "paid_clip_reservations": [],
+  "receipt_id": "453b624fe181db4b382fcc0b79cc82ed4028b8e13a5a192f4e1224d6bdf24374",
+  "schema_version": 1,
+  "state": "complete",
+  "updated_at": "2026-09-02T16:06:19.558887+00:00"
+}

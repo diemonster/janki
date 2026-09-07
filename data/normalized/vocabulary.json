@@ -3804,6 +3804,68 @@
     }
   },
   {
+    "id": "word:やめる:やめる",
+    "expression": "やめる",
+    "reading": "やめる",
+    "furigana": "",
+    "romaji": "yameru",
+    "meanings": [
+      "to quit",
+      "to stop",
+      "to give up",
+      "to resign"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "ichidan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "来月、会社をやめます。",
+        "furigana": "来月[らいげつ]、 会社[かいしゃ]をやめます。",
+        "romaji": "raigetsu, kaisha o yamemasu.",
+        "english": "I'm quitting my company next month.",
+        "audio": "audio/janki-b5014949a62e.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "来年、バンドをやめるつもりなんだ。",
+        "furigana": "来年[らいねん]、 バンドをやめるつもりなんだ。",
+        "romaji": "rainen, bando o yameru tsumori na n da.",
+        "english": "I'm planning to quit the band next year.",
+        "audio": "audio/janki-fad309229ba3.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "やめる",
+      "negative": "やめない",
+      "past": "やめた",
+      "past_negative": "やめなかった",
+      "te_form": "やめて",
+      "potential": "やめられる",
+      "passive": "やめられる"
+    },
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "Transitive ichidan verb, so the thing you quit takes を: 仕事をやめる, たばこをやめる. To stop doing an action, nominalize it with の: 夜ふかしするのをやめる (\"stop staying up late\"). In kanji it is written 辞める for jobs and school and 止める for habits and activities. Don't confuse it with intransitive 止[と]まる, which means something stops on its own.",
+    "audio": "audio/janki-d48fc9270e00.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 300,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:dc32cd854c7a0bc269d57c3f1d5ad99a7677a36b191edb22cdc8beb9c0e96f93"
+      }
+    }
+  },
+  {
     "id": "word:よう:よう",
     "expression": "よう",
     "reading": "よう",
@@ -6641,6 +6703,57 @@
     }
   },
   {
+    "id": "word:動物:どうぶつ",
+    "expression": "動物",
+    "reading": "どうぶつ",
+    "furigana": "動[どう] 物[ぶつ]",
+    "romaji": "doubutsu",
+    "meanings": [
+      "animal"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "山でいろいろな動物が見られます。",
+        "furigana": "山[やま]でいろいろな 動物[どうぶつ]が 見[み]られます。",
+        "romaji": "Yama de iroirona doubutsu ga miraremasu.",
+        "english": "You can see all kinds of animals in the mountains.",
+        "audio": "audio/janki-4a6f632f331b.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、どんな動物が好きなの？",
+        "furigana": "ねえ、どんな 動物[どうぶつ]が 好[す]きなの？",
+        "romaji": "Nee, donna doubutsu ga suki na no?",
+        "english": "Hey, what kind of animals do you like?",
+        "audio": "audio/janki-ec3a017f8d3c.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "動物 is the everyday cover term for animals (mostly land mammals and other non-human creatures); use 生[い]き物[もの] for living things in general, including insects and fish. It appears in compounds like 動物園 (zoo) and 動物病院 (veterinary clinic). Count animals with 匹[ひき] for small ones and 頭[とう] for large ones.",
+    "audio": "audio/janki-0fa6b56bcf2f.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2100,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:3433b03b1353ae5471674ccd600d622eb53236e0a9ff1cd5a3d26def047d2dcd"
+      }
+    }
+  },
+  {
     "id": "word:北海道:ほっかいどう",
     "expression": "北海道",
     "reading": "ほっかいどう",
@@ -8721,6 +8834,66 @@
     }
   },
   {
+    "id": "word:持ってくる:もってくる",
+    "expression": "持ってくる",
+    "reading": "もってくる",
+    "furigana": "持[も]ってくる",
+    "romaji": "mottekuru",
+    "meanings": [
+      "to bring (something)",
+      "to bring (something) along"
+    ],
+    "part_of_speech": "expression",
+    "verb_group": "kuru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "明日の会議にノートパソコンを持ってきます。",
+        "furigana": "明日[あした]の 会議[かいぎ]にノートパソコンを 持[も]ってきます。",
+        "romaji": "ashita no kaigi ni nooto pasokon o motte kimasu.",
+        "english": "I'll bring my laptop to tomorrow's meeting.",
+        "audio": "audio/janki-758b03766798.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "傘、持ってきた？",
+        "furigana": "傘[かさ]、 持[も]ってきた？",
+        "romaji": "kasa, motte kita?",
+        "english": "Did you bring an umbrella?",
+        "audio": "audio/janki-b8d70fb97958.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "持ってくる",
+      "negative": "持ってこない",
+      "past": "持ってきた",
+      "past_negative": "持ってこなかった",
+      "te_form": "持ってきて",
+      "potential": "持ってこられる",
+      "passive": "持ってこられる"
+    },
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "持ってくる is 持つ + てくる, so it means bringing an object toward where the speaker is; use 持っていく when you take it away from here. It only works for things — for people, say 連れてくる. It conjugates like くる: 持ってきます, 持ってきた, 持ってこない, 持ってこられる, and the request form 持ってきてください is very common.",
+    "audio": "audio/janki-3d5ca769421a.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1000,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:08d0ef1e609608d6aecddfd0110262728699b51a441d8c8d44bce9601ca4656f"
+      }
+    }
+  },
+  {
     "id": "word:指:ゆび",
     "expression": "指",
     "reading": "ゆび",
@@ -8950,6 +9123,114 @@
         "context": "救急車　ambulance",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:a018feb777048c7b95455bef45ef1babf6c3cd2a461fcb195e104a4a45e8e46b"
+      }
+    }
+  },
+  {
+    "id": "word:料理:りょうり",
+    "expression": "料理",
+    "reading": "りょうり",
+    "furigana": "料[りょう] 理[り]",
+    "romaji": "ryouri",
+    "meanings": [
+      "cooking",
+      "dish",
+      "cuisine"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "週末に日本料理を作るつもりです。",
+        "furigana": "週末[しゅうまつ]に 日本料理[にほんりょうり]を 作[つく]るつもりです。",
+        "romaji": "Shuumatsu ni nihon ryouri o tsukuru tsumori desu.",
+        "english": "I'm planning to make Japanese food this weekend.",
+        "audio": "audio/janki-5b13ddacfa59.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日は僕が料理するよ。",
+        "furigana": "今日[きょう]は 僕[ぼく]が 料理[りょうり]するよ。",
+        "romaji": "Kyou wa boku ga ryouri suru yo.",
+        "english": "I'll do the cooking today.",
+        "audio": "audio/janki-70752354f6d0.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "料理 covers both the act of cooking and the finished dish. As a verb, say 料理する or 料理をする; 料理を作る is just as common for making a meal. It also names a cuisine: 日本料理, イタリア料理. To praise someone's skill, use 料理が上手(です).",
+    "audio": "audio/janki-d1894f363a6e.wav",
+    "image": "",
+    "pitch_accent": [
+      "HHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 800,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:b5f5d49219253f91472101ff05936a131679c354a74ae63e3d2f27599ae93ffb"
+      }
+    }
+  },
+  {
+    "id": "word:料金:りょうきん",
+    "expression": "料金",
+    "reading": "りょうきん",
+    "furigana": "料[りょう] 金[きん]",
+    "romaji": "ryoukin",
+    "meanings": [
+      "fee",
+      "charge",
+      "fare",
+      "rate"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "電車の料金はアプリで確認できます。",
+        "furigana": "電車[でんしゃ]の 料金[りょうきん]は アプリで 確認[かくにん]できます。",
+        "romaji": "Densha no ryoukin wa apuri de kakunin dekimasu.",
+        "english": "You can check the train fare on the app.",
+        "audio": "audio/janki-00e6e1f4f1c4.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "そのライブの料金、高いの？",
+        "furigana": "そのライブの 料金[りょうきん]、 高[たか]いの？",
+        "romaji": "Sono raibu no ryoukin, takai no?",
+        "english": "Is the ticket price for that concert expensive?",
+        "audio": "audio/janki-6d139a9a6bd4.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "料金 is the set charge for a service or utility, not the price of a physical item (that is 値段). It appears in compounds like 電気料金 (electricity bill), 基本料金 (base rate) and 追加料金 (extra charge), and collocates with かかる (料金がかかる, a fee applies) and 払う (料金を払う, to pay the fee).",
+    "audio": "audio/janki-c74fa54e800b.wav",
+    "image": "",
+    "pitch_accent": [
+      "HHLLLL",
+      "LLHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 7900,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:760492becbf098ad60ef767e254995ae9b56a2f50b9b12dca609fdda4679332b"
       }
     }
   },
@@ -10142,6 +10423,65 @@
     }
   },
   {
+    "id": "word:歌う:うたう",
+    "expression": "歌う",
+    "reading": "うたう",
+    "furigana": "歌[うた]う",
+    "romaji": "utau",
+    "meanings": [
+      "to sing"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "土曜日にカラオケで日本の歌を歌います。",
+        "furigana": "土曜日[どようび]にカラオケで 日本[にほん]の 歌[うた]を 歌[うた]います。",
+        "romaji": "Doyoubi ni karaoke de nihon no uta o utaimasu.",
+        "english": "On Saturday I sing Japanese songs at karaoke.",
+        "audio": "audio/janki-e5fe46e77175.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "この歌、日本語で歌えるよ。",
+        "furigana": "この 歌[うた]、 日本語[にほんご]で 歌[うた]えるよ。",
+        "romaji": "Kono uta, nihongo de utaeru yo.",
+        "english": "I can sing this song in Japanese.",
+        "audio": "audio/janki-2267df880fb2.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "歌う",
+      "negative": "歌わない",
+      "past": "歌った",
+      "past_negative": "歌わなかった",
+      "te_form": "歌って",
+      "potential": "歌える",
+      "passive": "歌われる"
+    },
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "Godan verb: 歌わない・歌います・歌った・歌って, potential 歌える. What you sing takes を, and 歌を歌う (\"sing a song\") is the normal collocation, not redundant; the place or accompaniment takes で (カラオケで, ギターで). 歌 is the noun \"song\"; the same kanji read うた.",
+    "audio": "audio/janki-48ee09d40363.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2000,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:ba4852febfe4fdc67f22e3b7b7e8c95247dd0435c8fbc5b7fb7834d3bc6044d4"
+      }
+    }
+  },
+  {
     "id": "word:歌手:かしゅ",
     "expression": "歌手",
     "reading": "かしゅ",
@@ -10794,6 +11134,111 @@
     }
   },
   {
+    "id": "word:無理:むり",
+    "expression": "無理",
+    "reading": "むり",
+    "furigana": "無[む] 理[り]",
+    "romaji": "muri",
+    "meanings": [
+      "impossible",
+      "unreasonable",
+      "to overdo it"
+    ],
+    "part_of_speech": "na-adjective",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "明日までにこのプログラムを直すのは無理です。",
+        "furigana": "明日[あした]までにこのプログラムを 直[なお]すのは 無理[むり]です。",
+        "romaji": "Ashita made ni kono puroguramu o naosu no wa muri desu.",
+        "english": "Fixing this program by tomorrow is impossible.",
+        "audio": "audio/janki-9d6f47e46726.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "ごめん、週末は無理なんだ。",
+        "furigana": "ごめん、 週末[しゅうまつ]は 無理[むり]なんだ。",
+        "romaji": "Gomen, shuumatsu wa muri nan da.",
+        "english": "Sorry, the weekend doesn't work for me.",
+        "audio": "audio/janki-8559275e215e.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "無理です is the standard soft way to turn something down — it says \"that can't be done\" without a blunt いいえ. As a suru verb, 無理する means to push yourself too hard, and 無理しないで(ください) is a very common way to say \"don't overdo it / take care of yourself.\" The adverbial 無理に means \"forcibly, against one's will,\" as in 無理に食べなくてもいいよ.",
+    "audio": "audio/janki-e8e94a2d9ff7.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 300,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:a8cd5399befe986372816cc7816a25363b893a938aef470df2b9e4d1c3c18afa"
+      }
+    }
+  },
+  {
+    "id": "word:焼き鳥:やきとり",
+    "expression": "焼き鳥",
+    "reading": "やきとり",
+    "furigana": "焼[や]き 鳥[とり]",
+    "romaji": "yakitori",
+    "meanings": [
+      "grilled chicken skewer",
+      "yakitori"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "金曜日の夜は、友だちと焼き鳥を食べに行きます。",
+        "furigana": "金曜日[きんようび]の 夜[よる]は、 友[とも]だちと 焼[や]き 鳥[とり]を 食[た]べに 行[い]きます。",
+        "romaji": "Kin'youbi no yoru wa, tomodachi to yakitori o tabe ni ikimasu.",
+        "english": "On Friday nights I go out to eat yakitori with my friends.",
+        "audio": "audio/janki-a50078bd01f6.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、今夜焼き鳥食べに行かない？",
+        "furigana": "ねえ、 今夜[こんや] 焼[や]き 鳥[とり] 食[た]べに 行[い]かない？",
+        "romaji": "Nee, kon'ya yakitori tabe ni ikanai?",
+        "english": "Hey, want to go eat yakitori tonight?",
+        "audio": "audio/janki-f439218bd158.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "Skewers are counted with 本 (一本、二本), and when ordering you usually choose 塩 (salt) or たれ (sauce). The shop itself is a 焼き鳥屋, a casual pub-style place where the food is typically paired with beer. Menus and signs often drop the き and write 焼鳥.",
+    "audio": "audio/janki-8a30c72f2de1.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 22600,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:c5560c759461d9f6aaf9731fd642958edaeea551d80dca4cd9a5c4e3746b5b6d"
+      }
+    }
+  },
+  {
     "id": "word:熱:ねつ",
     "expression": "熱",
     "reading": "ねつ",
@@ -10967,6 +11412,219 @@
         "example_authority": "d11fdd798662,af388a711bac",
         "janki_pitch_accent_source": "jpdb:50e85c00b9d4f3e8d6a4ba16f9b050054f8035c0f388201610586d2511a803ca",
         "provisional_fields": "meanings:e6769a123b6e"
+      }
+    }
+  },
+  {
+    "id": "word:物:もの",
+    "expression": "物",
+    "reading": "もの",
+    "furigana": "物[もの]",
+    "romaji": "mono",
+    "meanings": [
+      "thing",
+      "object",
+      "item"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "この店では、古い物が安く買えます。",
+        "furigana": "この 店[みせ]では、 古[ふる]い 物[もの]が 安[やす]く 買[か]えます。",
+        "romaji": "Kono mise de wa, furui mono ga yasuku kaemasu.",
+        "english": "At this store, you can buy old things cheaply.",
+        "audio": "audio/janki-57dce76088c6.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "山に持って行く物、もう決めた？",
+        "furigana": "山[やま]に 持[も]って 行[い]く 物[もの]、 もう 決[き]めた？",
+        "romaji": "Yama ni motte iku mono, mou kimeta?",
+        "english": "Have you already decided what to take up the mountain?",
+        "audio": "audio/janki-3d459ff2cb23.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "物 is a physical thing you can touch; for intangible matters, facts, or experiences use こと (例: 大事な物 = a valuable object, 大事なこと = an important matter). It is very often written in kana as もの, and it appears in many compounds like 食べ物, 飲み物, 買い物. Note that the homophone 者 (もの) means \"person\" and is a separate word.",
+    "audio": "audio/janki-1cb717258b35.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL",
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 600,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:e68ac14e803f13754d7e607d5ae362649ea80f9f61098fb3cf878a7dd7a56d26"
+      }
+    }
+  },
+  {
+    "id": "word:特に:とくに",
+    "expression": "特に",
+    "reading": "とくに",
+    "furigana": "特[とく]に",
+    "romaji": "tokuni",
+    "meanings": [
+      "especially",
+      "particularly",
+      "in particular"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "新しいアルバムの中で、この曲が特に好きです。",
+        "furigana": "新[あたら]しいアルバムの 中[なか]で、 この 曲[きょく]が 特[とく]に 好[す]きです。",
+        "romaji": "Atarashii arubamu no naka de, kono kyoku ga toku ni suki desu.",
+        "english": "Out of the new album, I especially like this song.",
+        "audio": "audio/janki-2b98ce4dbd4d.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "今週末は特に予定ないんだ。",
+        "furigana": "今週末[こんしゅうまつ]は 特[とく]に 予定[よてい]ないんだ。",
+        "romaji": "Konshuumatsu wa toku ni yotei nai n da.",
+        "english": "I don't have any particular plans this weekend.",
+        "audio": "audio/janki-e176564be024.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "特に is an adverb that singles out one thing from a larger group, so it often follows a general statement (「日本料理が好きですが、特に寿司が…」). With a negative it means \"not particularly / nothing in particular\": 特に予定はない, 特に問題ありません. Don't confuse it with the な-adjective 特別な (\"special\"), which describes a noun rather than modifying a verb or adjective.",
+    "audio": "audio/janki-62aead33475a.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:c2c7db7e738507f68f8e7ce3c356de90891f2329f592ff34a83f113194d6f176"
+      }
+    }
+  },
+  {
+    "id": "word:特別:とくべつ",
+    "expression": "特別",
+    "reading": "とくべつ",
+    "furigana": "特[とく] 別[べつ]",
+    "romaji": "tokubetsu",
+    "meanings": [
+      "special",
+      "particular",
+      "exceptional"
+    ],
+    "part_of_speech": "na-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "今日は特別なメニューがあります。",
+        "furigana": "今日[きょう]は 特別[とくべつ]なメニューがあります。",
+        "romaji": "kyou wa tokubetsu na menyuu ga arimasu.",
+        "english": "Today there is a special menu.",
+        "audio": "audio/janki-c56b635c9635.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "誕生日だから、特別なケーキを作ったんだ。",
+        "furigana": "誕生日[たんじょうび]だから、 特別[とくべつ]なケーキを 作[つく]ったんだ。",
+        "romaji": "tanjoubi da kara, tokubetsu na keeki o tsukutta n da.",
+        "english": "It's her birthday, so I made a special cake.",
+        "audio": "audio/janki-60703b1f4f31.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "な-adjective: 特別な + noun (特別な日 \"a special day\"), and 特別に + verb when it modifies an action (特別に作る \"make it specially\"). It can also stand alone as a noun, as in 特別なことじゃない \"it's nothing special.\" Don't confuse it with the adverb 特に, which means \"especially, particularly\" and never takes な.",
+    "audio": "audio/janki-b56c11095553.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 900,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:0e04e0291b75181b8565ec7e6ee80597c1f1e93f85aadeffbbce8bbcf47c75cb"
+      }
+    }
+  },
+  {
+    "id": "word:理由:りゆう",
+    "expression": "理由",
+    "reading": "りゆう",
+    "furigana": "理[り] 由[ゆう]",
+    "romaji": "riyuu",
+    "meanings": [
+      "reason",
+      "grounds",
+      "motive"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "日本語を勉強する理由を教えてください。",
+        "furigana": "日本語[にほんご]を 勉強[べんきょう]する 理由[りゆう]を 教[おし]えてください。",
+        "romaji": "Nihongo o benkyou suru riyuu o oshiete kudasai.",
+        "english": "Please tell me your reason for studying Japanese.",
+        "audio": "audio/janki-1a56a5e99ca8.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "彼が来なかった理由、知ってる？",
+        "furigana": "彼[かれ]が 来[こ]なかった 理由[りゆう]、 知[し]ってる？",
+        "romaji": "Kare ga konakatta riyuu, shitteru?",
+        "english": "Do you know the reason he didn't come?",
+        "audio": "audio/janki-0f5e9b121b6c.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "理由 is the reason or motive behind someone's action or decision, and it often appears as 「理由は〜からです」 (\"The reason is that…\") or after a plain-form clause, as in 休んだ理由 (\"the reason I took the day off\"). For the physical or technical cause of a problem or accident, Japanese prefers 原因(げんいん) instead.",
+    "audio": "audio/janki-92d60cc8c42e.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 300,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:a18ae88f68bc8c371c65a86942829a5120b3c3a2663256c9b98bb628f339b15d"
       }
     }
   },
@@ -11450,6 +12108,57 @@
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "069a50da057c,31ade4387752",
         "janki_pitch_accent_source": "jpdb:6e7e61e022fac9d8e2c34ab4c0be4fd133d16222dcaed99dd1398ca519b72e54"
+      }
+    }
+  },
+  {
+    "id": "word:白鳥:はくちょう",
+    "expression": "白鳥",
+    "reading": "はくちょう",
+    "furigana": "白[はく] 鳥[ちょう]",
+    "romaji": "hakuchou",
+    "meanings": [
+      "swan"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "冬に、この湖で白鳥が見られます。",
+        "furigana": "冬[ふゆ]に、 この 湖[みずうみ]で 白鳥[はくちょう]が 見[み]られます。",
+        "romaji": "Fuyu ni, kono mizuumi de hakuchou ga miraremasu.",
+        "english": "In winter, you can see swans on this lake.",
+        "audio": "audio/janki-da4a7574d175.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "あの白い鳥、白鳥なの？",
+        "furigana": "あの 白[しろ]い 鳥[とり]、 白鳥[はくちょう]なの？",
+        "romaji": "Ano shiroi tori, hakuchou na no?",
+        "english": "That white bird — is it a swan?",
+        "audio": "audio/janki-4b01d6d05069.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "白鳥 is the everyday word for the bird; birds are counted with 〜羽[わ] (白鳥が二羽). The same kanji read しらとり is mostly a family name or place name, so stick to はくちょう for the animal. Note also 白鳥座[はくちょうざ] \"the constellation Cygnus,\" while the katakana スワン appears mainly in names of things like スワンボート (swan-shaped pedal boats).",
+    "audio": "audio/janki-c340af9b3dbc.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 16900,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:32d73fe4c11bf8fe24bed1f5b4e7c5e0422f2a1168bd00d8336bf88113f0de0c"
       }
     }
   },
@@ -13656,6 +14365,61 @@
     }
   },
   {
+    "id": "word:荷物:にもつ",
+    "expression": "荷物",
+    "reading": "にもつ",
+    "furigana": "荷[に] 物[もつ]",
+    "romaji": "nimotsu",
+    "meanings": [
+      "luggage",
+      "baggage",
+      "bags",
+      "package",
+      "parcel"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "荷物が重くて、一人では持てません。",
+        "furigana": "荷物[にもつ]が 重[おも]くて、 一人[ひとり]では 持[も]てません。",
+        "romaji": "Nimotsu ga omokute, hitori de wa motemasen.",
+        "english": "The luggage is heavy, so I can't carry it by myself.",
+        "audio": "audio/janki-4b71483f688a.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "その荷物、重いの？手伝うよ。",
+        "furigana": "その 荷物[にもつ]、 重[おも]いの？ 手伝[てつだ]うよ。",
+        "romaji": "Sono nimotsu, omoi no? Tetsudau yo.",
+        "english": "Is that bag heavy? I'll give you a hand.",
+        "audio": "audio/janki-9992b61f7530.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "荷物 covers anything you carry or ship: suitcases, shopping bags, and delivered parcels alike. Common collocations are 荷物を持つ (carry bags), 荷物を預ける (check/leave luggage), and 荷物が届く (a package arrives). 手荷物 is specifically hand luggage, and お荷物 can figuratively mean \"a burden\" to others.",
+    "audio": "audio/janki-23efd0580347.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1600,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:7cbfbda748f6a180b899adf43d2664fcda27b968183c984f22f3fbe17776e921"
+      }
+    }
+  },
+  {
     "id": "word:虫歯:むしば",
     "expression": "虫歯",
     "reading": "むしば",
@@ -14555,6 +15319,66 @@
     }
   },
   {
+    "id": "word:走る:はしる",
+    "expression": "走る",
+    "reading": "はしる",
+    "furigana": "走[はし]る",
+    "romaji": "hashiru",
+    "meanings": [
+      "to run",
+      "to travel (of a vehicle)"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "intransitive",
+    "examples": [
+      {
+        "japanese": "毎朝、公園を走ります。",
+        "furigana": "毎朝[まいあさ]、 公園[こうえん]を 走[はし]ります。",
+        "romaji": "maiasa, kouen o hashirimasu.",
+        "english": "I run in the park every morning.",
+        "audio": "audio/janki-22c9bf4adb2d.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "弟は僕より速く走れるんだ。",
+        "furigana": "弟[おとうと]は 僕[ぼく]より 速[はや]く 走[はし]れるんだ。",
+        "romaji": "otouto wa boku yori hayaku hashireru n da.",
+        "english": "My little brother can run faster than me, you know.",
+        "audio": "audio/janki-7bfa08e17292.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "走る",
+      "negative": "走らない",
+      "past": "走った",
+      "past_negative": "走らなかった",
+      "te_form": "走って",
+      "potential": "走れる",
+      "passive": "走られる"
+    },
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "走る looks like a ru-verb but is a u-verb: 走らない・走ります・走った・走って, potential 走れる. It is intransitive, so the person or thing running is marked by が/は; the route or place you run through takes を (公園を走る \"run through the park\"), while 走りに行く means \"go for a run.\" It also describes vehicles moving along: 電車が走っている.",
+    "audio": "audio/janki-3b3957cdaef2.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:e040a3a549bd3d3a14481ce7348dd85676bf19fb14b33f4e5b7ce56575d30e2d"
+      }
+    }
+  },
+  {
     "id": "word:起きる:おきる",
     "expression": "起きる",
     "reading": "おきる",
@@ -14726,6 +15550,67 @@
         "context": "金曜日 うんどうするつもりです。 トヨタ䛾車を買うつもりです。",
         "inclusion_reason": "Basic kanji noun in the Friday plan cell.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:返す:かえす",
+    "expression": "返す",
+    "reading": "かえす",
+    "furigana": "返[かえ]す",
+    "romaji": "kaesu",
+    "meanings": [
+      "to return (something)",
+      "to give back",
+      "to put back"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "明日、図書館に本を返します。",
+        "furigana": "明日[あした]、 図書館[としょかん]に 本[ほん]を 返[かえ]します。",
+        "romaji": "Ashita, toshokan ni hon o kaeshimasu.",
+        "english": "I'm going to return the books to the library tomorrow.",
+        "audio": "audio/janki-376f77112b35.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "借りた本、もう返したの？",
+        "furigana": "借[か]りた 本[ほん]、 もう 返[かえ]したの？",
+        "romaji": "Karita hon, mou kaeshita no?",
+        "english": "Did you already give back the book you borrowed?",
+        "audio": "audio/janki-a67998b2d989.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "返す",
+      "negative": "返さない",
+      "past": "返した",
+      "past_negative": "返さなかった",
+      "te_form": "返して",
+      "potential": "返せる",
+      "passive": "返される"
+    },
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "返す takes を for the thing given back and に for the person or place it goes back to: 友だちにお金を返す. It pairs with 借りる (to borrow) and 貸す (to lend). Don't confuse it with 帰る (to go home, intransitive) or 帰す (to send a person home); 返す is for objects.",
+    "audio": "audio/janki-45fcb8e31b26.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 600,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:d3db48ba8faa89af5c45c7038f1cfc4740d85b508635ab362ef7a36653c7a0d1"
       }
     }
   },
@@ -16229,6 +17114,58 @@
         "context": "魚市場　fish market",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:1b42b2d06376abfcf1d2c24d9e2020edaed2521087ac58f2fcbb4f4ac071393f"
+      }
+    }
+  },
+  {
+    "id": "word:鳥:とり",
+    "expression": "鳥",
+    "reading": "とり",
+    "furigana": "鳥[とり]",
+    "romaji": "tori",
+    "meanings": [
+      "bird",
+      "chicken (meat)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "公園でたくさんの鳥を見ました。",
+        "furigana": "公園[こうえん]でたくさんの 鳥[とり]を 見[み]ました。",
+        "romaji": "Kouen de takusan no tori o mimashita.",
+        "english": "I saw a lot of birds in the park.",
+        "audio": "audio/janki-81e1e0f65259.wav",
+        "register": "polite"
+      },
+      {
+        "japanese": "山で珍しい鳥を見たんだ。",
+        "furigana": "山[やま]で 珍[めずら]しい 鳥[とり]を 見[み]たんだ。",
+        "romaji": "Yama de mezurashii tori o mita n da.",
+        "english": "I saw a rare bird up in the mountains.",
+        "audio": "audio/janki-530c788c4fee.wav",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "201-week-2"
+    ],
+    "usage_notes": "鳥 is the general word for birds, and birds are counted with 羽 (一羽, 二羽). In food contexts it also means chicken meat, as in 焼き鳥 (grilled chicken skewers) and 鳥肉 (chicken); the live bird as livestock is usually written 鶏 (にわとり).",
+    "audio": "audio/janki-81d1f3fd778b.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1800,
+    "source": {
+      "type": "manual",
+      "imported_from": "",
+      "row": null,
+      "raw_fields": {
+        "janki_pitch_accent_source": "jpdb:2b93d1d84a83dc8cb6e1e54a996ca089056984e0b1d5fd438db447f9d9123b11"
       }
     }
   },
