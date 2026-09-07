@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Managed by scripts/install-review-hooks.sh. Keep this shim thin.
+# Git LFS only: the post-commit shim already covers authored commits.
+
+set -uo pipefail
+
+if ! command -v git-lfs >/dev/null 2>&1; then
+  echo "janki: this repository stores audio in Git LFS, but 'git-lfs' was not" >&2
+  echo "  found on your PATH (macOS: brew install git-lfs)." >&2
+  echo "  Install it, then rerun ./scripts/bootstrap.sh." >&2
+  exit 2
+fi
+
+git lfs post-merge "$@"

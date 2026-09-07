@@ -72,19 +72,46 @@ For automation, batch work, and interrupted-call recovery, use the
 
 ## Setup
 
+Install Git LFS once per machine — the repository's audio is stored in it:
+
+```bash
+brew install git-lfs          # macOS; apt-get install git-lfs on Debian/Ubuntu
+```
+
+Then, once per clone:
+
 ```bash
 ./scripts/bootstrap.sh
 source .venv/bin/activate
 ```
 
-That installs janki and its `[dev]` extra into `.venv` — which includes the AI
-support, so the whole command set works — runs the tests, and builds a sample
-deck into `dist/`. It also installs the repository's advisory post-commit review
-and pre-push review gate. Existing unrelated Git hooks are never overwritten;
-resolve the reported conflict by combining the hooks manually. Refresh only the
-review hooks with `./scripts/install-review-hooks.sh`. To disable them in this
-clone, create `.claude/hooks/DISABLED` with a short reason; delete it to
-re-enable them.
+`bootstrap.sh` is the supported fresh-clone setup. It configures this clone's
+LFS filters, installs the hooks, pulls the media so no audio is left as a
+pointer file, installs janki and its `[dev]` extra into `.venv` — which includes
+the AI support, so the whole command set works — runs the tests, and builds a
+sample deck into `dist/`. The hooks it installs are composites: they run
+`git lfs` and the repository's advisory post-commit review and pre-push review
+gate. Existing unrelated Git hooks are never overwritten; resolve the reported
+conflict by combining the hooks manually. Refresh the hooks with
+`./scripts/install-review-hooks.sh` — do not run `git lfs install --force`,
+which would replace the composites with LFS-only hooks and silently drop the
+review step. To disable the review in this clone, create
+`.claude/hooks/DISABLED` with a short reason; delete it to re-enable it. That
+marker stops the review only: LFS keeps running either way.
+
+### Audio and Git LFS
+
+Once bootstrap has run, nothing about day to day work changes: ordinary
+`git add`, `git commit`, `git checkout` and `git push` handle the matching WAV
+files under `data/media/audio/` and their `.pending/*.stage` recovery files
+automatically. The audio stays tracked and durable — the same commits, the same
+recoverable review state — LFS only changes how those bytes are stored and
+transferred. JSON and Markdown remain ordinary Git objects.
+
+Two things worth knowing. The conversion tracks audio from here forward; it does
+not rewrite the binary history already in the repository, so old revisions keep
+their inline blobs. And every LFS version of a file consumes storage on whatever
+remote hosts it, so re-voicing the collection wholesale costs space there.
 
 Installing without bootstrap, add the AI extra for the two card-writing paths
 (`extract` and `enrich --ai`) and the opt-in model-backed coverage approval
@@ -394,7 +421,7 @@ stable media filename stay unchanged. janki never derives the override.
 | `data/inbox/` | The originals every record cites |
 | `data/patterns.json` | Extracted lesson/chart patterns and their human-reviewed marks |
 | `data/ledger.json` | Machine-written: what arrived, shipped, was voiced, or is awaiting exact audio recovery |
-| `data/media/` | Generated media; paid audio may briefly live under `audio/.pending/` until its guarded write finalizes |
+| `data/media/` | Generated media; audio is [stored in Git LFS](#audio-and-git-lfs), and paid audio may briefly live under `audio/.pending/` until its guarded write finalizes |
 | `data/review.json` | Frozen history: what a model said about these cards in August 2026. Nothing reads it |
 | `dist/` | Built `.apkg` files |
 | `templates/japanese-study/` | The card HTML and CSS |

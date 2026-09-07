@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 # Managed by scripts/install-review-hooks.sh. Keep this shim thin.
+# Composite hook: Git LFS bookkeeping first, then the advisory review.
 
 set -uo pipefail
+
+if ! command -v git-lfs >/dev/null 2>&1; then
+  echo "janki: this repository stores audio in Git LFS, but 'git-lfs' was not" >&2
+  echo "  found on your PATH (macOS: brew install git-lfs)." >&2
+  echo "  Install it, then rerun ./scripts/bootstrap.sh." >&2
+  exit 2
+fi
+
+# LFS runs before the review checks below: those gate the reviewer only, and
+# media bookkeeping still has to happen in a clone with reviews turned off.
+git lfs post-commit "$@"
+LFS_STATUS=$?
+[ "$LFS_STATUS" -eq 0 ] || exit "$LFS_STATUS"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)" || exit 0

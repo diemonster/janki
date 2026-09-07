@@ -1,7 +1,29 @@
 #!/usr/bin/env bash
 # Managed by scripts/install-review-hooks.sh. Keep this shim thin.
+# Composite hook: Git LFS uploads the media, then the janki review gate runs.
 
 set -uo pipefail
+
+if ! command -v git-lfs >/dev/null 2>&1; then
+  echo "janki: this repository stores audio in Git LFS, but 'git-lfs' was not" >&2
+  echo "  found on your PATH (macOS: brew install git-lfs)." >&2
+  echo "  Install it, then rerun ./scripts/bootstrap.sh." >&2
+  exit 2
+fi
+
+# Git streams the ref list on stdin, and both git-lfs and the review loop need
+# it. Capture it once so each consumer sees exactly the same bytes.
+REFS="$(mktemp "${TMPDIR:-/tmp}/janki-pre-push.XXXXXX")" || exit 1
+trap 'rm -f "$REFS"' EXIT
+# A short read or write here would hand git-lfs a truncated ref list, so a
+# failed capture has to stop the push instead of falling through.
+cat >"$REFS" || exit $?
+
+git lfs pre-push "$@" <"$REFS"
+LFS_STATUS=$?
+# Missing media is a broken push regardless of whether the reviewer runs, so
+# refuse here even when the reviewer is absent or disabled.
+[ "$LFS_STATUS" -eq 0 ] || exit "$LFS_STATUS"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 REVIEWER="$REPO_ROOT/scripts/janki-review.sh"
@@ -31,6 +53,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
   # The reviewer must not consume the rest of git's ref list.
   "$REVIEWER" gate "$range" "$label" </dev/null || STATUS=1
-done
+done <"$REFS"
 
 exit "$STATUS"
