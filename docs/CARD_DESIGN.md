@@ -34,6 +34,29 @@ and unknowns without normalization. Examples and furigana come from the
 provider's reading-bound entries, not matching or segmentation rules in Janki.
 Vocabulary stroke panels consume the same saved evidence. Builds work offline.
 
+## Reviewing cards in context
+
+The owner prefers **interactive HTML previews of the actual cards** for every
+card-review path, including creation and revision across all card types. The
+reference interaction is `dist/201-week-2-kanji-preview.html`: select a card,
+see its front, use **Show Answer / Show Question**, and open answer disclosures
+independently. Show the deck name, card count, direction and selected card;
+changing cards starts on the question. Use the actual proposed fields, card
+templates and CSS so the review shows the layout, furigana, reading evidence
+and available media in their study context. Represent the enabled directions,
+preserving mobile and dark-mode styling.
+
+Janki Assistant remains the primary workflow and should link or embed this
+preview when presenting cards for review. Summaries, field editors and change
+tables can support that view. Existing scoped confirmation and review actions
+keep their meaning; opening or flipping a card does not approve it.
+
+This is the default presentation for future review work. The reference HTML
+is a generated example, not a durable source file or a claim that every
+existing review surface already uses a shared preview component. The current
+`janki preview` command produces a static vocabulary summary; that output does
+not yet provide this interaction.
+
 ## Stable identity
 
 The record ID normally has this form:

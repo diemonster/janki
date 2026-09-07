@@ -176,6 +176,14 @@ card count shown before apply. The default character flow is dictionary-only
 and has no bare-character audio or paid card-writing call. Character-target
 extraction, character revision and authored mnemonics are separate work.
 
+**Card review shows cards in context.** The owner's preferred format for every
+card type and creation/revision review is an interactive HTML preview using
+the actual proposed fields, templates and CSS, with card navigation, front/answer
+flipping and independent disclosures. Janki Assistant links or embeds that
+preview as part of the conversation. This changes presentation, not the scope
+or meaning of existing approval actions. `docs/CARD_DESIGN.md` records the
+interaction demonstrated by the Week 2 kanji preview.
+
 ## Mechanisms the pipeline rests on
 
 Not stages, but load-bearing: the word database

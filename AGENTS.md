@@ -212,6 +212,16 @@ below is what is left, and it is the loop every other project already uses.*
 
 ## Card-design rules
 
+- **Card review defaults to an interactive HTML preview of the actual cards.**
+  The owner's reference is `dist/201-week-2-kanji-preview.html`: navigate the
+  cards, see their real layout, flip with Show Answer, and use the answer's
+  disclosures independently. Apply this preference to all card types and to
+  creation and revision reviews. Use the proposed fields and real templates/CSS;
+  text summaries, tables and raw fields are supplementary review aids. Keep
+  Janki Assistant as the entry point, linking or embedding the preview. See
+  `docs/CARD_DESIGN.md` for the durable specification; the reference HTML is a
+  generated artifact. This presentation preference does not add approval gates
+  or make viewing a preview count as approval.
 - Recognition cards are enabled by default.
 - Production and reading cards are independently configurable per deck.
 - Avoid producing several nearly identical cards from one note.
