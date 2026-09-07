@@ -45,37 +45,68 @@ to decide that.
 ## Stroke order and kanji readings
 
 ```bash
-janki kanji            # look up every character the collection uses
-janki kanji --refresh  # re-fetch, rather than only what is new
+janki kanji 'word:料理:りょうり'  # references and JPDB facts for this word's characters
+janki kanji                     # every character the vocabulary collection uses
+janki kanji --refresh 'word:料理:りょうり'  # explicitly refresh this scope
 ```
 
-Each card back gains a collapsed block per kanji in the word: stroke order
-drawn one stroke at a time on graph paper, the 音/訓 readings, and a common word
-for each — 音 ゼン → 前線 ぜんせん “front line”, 訓 まえ → 名前 なまえ “name”.
-Collapsed because it is a reminder, not the thing being tested.
+Each vocabulary card back has a collapsed reference block per kanji in the
+word. It shows the stroke sequence, meanings, and saved JPDB reading evidence.
+Dedicated kanji cards show that material immediately after **Show Answer**;
+their front asks for the character's core meaning.
 
 The data is looked up per *character* and shared: 前 is the same 前 in 名前 and
 前線, so it is fetched once into `data/kanji.json` and read by every record that
-contains it. Re-running costs one request per new character. A build never
-needs the network — a character not looked up simply has no block.
+contains it. JPDB reading evidence is shared separately through
+`data/jpdb_readings.json`. A build never needs the network — a character not
+looked up simply has no reference block or percentage evidence to render.
 
-The card's exact spelling-and-reading pair gets the first example row when it
-is present in the reference data. The remaining rows preserve the source order
-derived from JMdict's word-priority tags, with one example per reading before a
-reading gets a second. Untagged entries are dropped rather than ranked last, so
-a rare character shows its readings with no example rather than an obscure one
-that looks endorsed. The four-row display is therefore useful to this card
-first and biased toward common vocabulary after that.
+JPDB's reported common-reading groups and percentages keep their supplied
+order and labels. Examples are copied from each reading's own detail page,
+including the source's explicit word pronunciation and ruby segmentation.
+The first examples in source order are used; Janki does not claim that their
+order is a published word-frequency ranking. Source URLs, retrieval times and
+response hashes travel with the facts.
 
-JMdict's tags are a word-priority signal, not a percentage distribution over a
-kanji's readings. janki does not import jpdb's displayed reading percentages;
-doing that would require a supported data and redistribution contract rather
-than depending on public-page HTML.
+The caption **JPDB reported usage** distinguishes published percentages from
+an independent corpus calculation. Rounded values and explicit bounds are
+preserved, and missing percentages remain unknown. JPDB's contextual reading
+groups are not forced into KANJIDIC's on/kun inventory. Additional readings and
+the dictionary inventory sit behind a separate disclosure on the answer.
 
-Sources are **KANJIDIC2** and **JMdict** (CC BY-SA 4.0, EDRDG) via
-kanjiapi.dev, and **KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is
-fine; a deck you share must credit all three — the same footing as the VOICEVOX
-voice terms.
+The owner selected personal, on-demand HTML acquisition. Requested missing
+pages are fetched during dictionary preparation and retained in a private
+local cache outside Git. Repeated preparation reuses that cache; refresh is
+explicit. Canonical facts and character notes are saved by the confirmed
+apply batch. Full page HTML and unrelated site content are not published in
+this repository.
+
+Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev,
+**KanjiVG** (CC BY-SA 3.0, Ulrich Apel), and source-linked **JPDB** reading
+pages. Dictionary and stroke attribution remains on the card.
+
+## Dedicated character notes
+
+Janki Assistant is the primary flow: name the characters and destination,
+review the exact preview and count, then confirm one apply-and-build batch.
+The CLI uses the same services:
+
+```bash
+janki kanji-notes 物 特 鳥 料 理 --deck-name 'Genki II Kanji' --dry-run
+janki kanji-notes 物 特 鳥 料 理 --deck-name 'Genki II Kanji'
+```
+
+Each argument is one explicit character. Recognition defaults to one card per
+note. `--deck PATH` selects an existing character deck; `--directions` takes a
+comma-separated direction list. Reading uses one fixed source-bound example,
+and production requires an owner-written `--production-cue CHARACTER=TEXT`
+for each target.
+
+Preparation, including `--dry-run`, may cache requested dictionary pages
+locally. Applying saves the curated notes, reference facts and deck definition,
+then builds from those saved files. `--refresh-readings` explicitly replaces
+the selected notes' reading evidence while preserving their fixed reading
+prompts; an ordinary reference refresh does not rewrite curated notes.
 
 ## Nothing checks the sentences
 

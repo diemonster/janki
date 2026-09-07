@@ -240,3 +240,73 @@ def test_execute_refuses_stale_deck_set_and_atomic_overwrite_race(
     with pytest.raises(StudyDeckCreationError, match="Could not create"):
         create_study_deck(config, current)
     assert current.path.read_text(encoding="utf-8") == "intruder\n"
+
+
+def test_a_character_deck_names_its_characters_and_reads_the_curated_store(
+    tmp_path: Path,
+) -> None:
+    """A kanji deck is not a word deck with a different source. It selects by
+    exact character identity rather than by intake tag, pins its notetype id,
+    and ships recognition only unless another direction is asked for."""
+    config = _project(tmp_path)
+
+    plan = plan_study_deck(
+        config,
+        name="Genki II Kanji",
+        kind="kanji",
+        include_ids=["kanji:理", "kanji:料"],
+    )
+    section = yaml.safe_load(plan.yaml_bytes.decode("utf-8"))["deck"]
+
+    assert plan.kind == "kanji"
+    assert section["kind"] == "kanji"
+    assert section["include_ids"] == ["kanji:理", "kanji:料"]
+    assert section["cards"] == {
+        "recognition": True,
+        "production": False,
+        "reading": False,
+    }
+    assert section["source"] == "../data/kanji_notes.json"
+    assert "intake_tag" not in section and "include_tags" not in section
+    assert plan.intake_tag == ""
+    assert section["model_id"] == plan.model_id == config.model_id_base + 9
+
+
+def test_a_character_deck_needs_the_exact_characters_it_holds(
+    tmp_path: Path,
+) -> None:
+    """No tag sweeps cards in later, so an empty list is a deck that can never
+    hold anything — and a repeat would ship one character twice."""
+    config = _project(tmp_path)
+
+    with pytest.raises(StudyDeckCreationError, match="exact characters"):
+        plan_study_deck(config, name="Empty", kind="kanji")
+    with pytest.raises(StudyDeckCreationError, match="more than once"):
+        plan_study_deck(
+            config, name="Doubled", kind="kanji", include_ids=["kanji:理", "kanji:理"]
+        )
+    with pytest.raises(StudyDeckCreationError, match="not by an exact id list"):
+        plan_study_deck(config, name="Words", include_ids=["word:橋:はし"])
+
+
+def test_creating_a_character_deck_leaves_word_deck_arithmetic_alone(
+    tmp_path: Path,
+) -> None:
+    """Its identities are characters, so no intake tag is minted and no word
+    deck's selection is consulted or changed."""
+    config = _project(tmp_path)
+    word_deck = _existing_deck(
+        config, "lesson", intake_tag="janki:deck:lesson", include_tags=["janki:deck:lesson"]
+    )
+    before = word_deck.read_bytes()
+
+    created = create_study_deck(
+        config,
+        plan_study_deck(
+            config, name="Kanji set", kind="kanji", include_ids=["kanji:理"]
+        ),
+    )
+
+    assert word_deck.read_bytes() == before
+    assert created.path.read_bytes() == created.yaml_bytes
+    assert "intake_tag" not in created.yaml_bytes.decode("utf-8")

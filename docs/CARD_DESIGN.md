@@ -2,15 +2,37 @@
 
 ## Note versus card
 
-A canonical vocabulary record becomes one Anki note. The enabled templates on
-that note generate one or more cards.
+A canonical vocabulary record or character record becomes one Anki note. The
+content type determines what is studied; the enabled review directions on that
+note generate one or more cards.
 
-The default configuration creates:
+The default vocabulary configuration creates:
 
 1. Recognition: Japanese -> meaning and reading.
 2. Production: English meaning -> Japanese.
 
 Reading cards are available but disabled by default to avoid redundant reviews.
+
+Kanji decks default to recognition only. Each explicitly selected character
+produces one note, identified by `kanji:<character>`, and one recognition card.
+Its front shows the character; recall the core meaning. **Show Answer** reveals
+meanings, strokes, common JPDB reading groups, their reported percentages, and
+provider-bound contextual examples together. A separate caret on that answer
+holds additional readings and the KANJIDIC inventory. The caret is not Anki's
+answer reveal.
+
+A kanji reading card uses one fixed contextual example. Production needs an
+explicit disambiguating cue. These directions are optional and offered only
+when the prepared note supports them. The Assistant previews the exact card
+count and content before one apply-and-build confirmation. The default flow
+has no paid writing or bare-character audio; a character has no single implied
+pronunciation.
+
+JPDB's contextual groups remain separate from KANJIDIC on/kun readings. The
+caption is **JPDB reported usage**, preserving rounded values, explicit bounds
+and unknowns without normalization. Examples and furigana come from the
+provider's reading-bound entries, not matching or segmentation rules in Janki.
+Vocabulary stroke panels consume the same saved evidence. Builds work offline.
 
 ## Stable identity
 
@@ -23,10 +45,11 @@ word:<expression>:<reading>
 The builder uses the ID to derive the Anki note GUID. Do not edit IDs after a
 record has entered your real deck unless you intentionally want a new note.
 
-Deck IDs and model IDs also need to remain stable. The model ID is derived from
-the configured base model ID plus a bit mask representing enabled card types.
-Changing enabled card types therefore changes the note model. Make that decision
-before accumulating significant review history.
+Deck IDs and model IDs also need to remain stable. Vocabulary model IDs derive
+from the configured base model ID plus a bit mask representing enabled card
+types. Character decks pin their model ID and directions explicitly in the
+deck definition. Choose directions before accumulating review history; a later
+addition must not silently change the questions attached to existing notes.
 
 ## Furigana
 

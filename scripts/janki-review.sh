@@ -42,6 +42,22 @@ fi
 
 command -v claude >/dev/null 2>&1 || exit 0
 
+# The review never starts `claude` itself. scripts/claude-subscription.py is
+# the repository's only model entry point: it hands the CLI an allowlisted
+# environment, verifies through `auth status --json` that the login really is
+# Claude Pro or Max, and refuses outright otherwise. An inherited
+# ANTHROPIC_API_KEY is invisible from here — the reviewer runs, answers, and
+# exits 0 — and the only evidence is a Console bill, so the check has to be
+# structural rather than remembered. There is deliberately no fallback to a
+# bare `claude` call: a review that cannot start is an ERROR verdict, which
+# the advisory path reports and the gate path allows through.
+LAUNCHER="$REPO_ROOT/scripts/claude-subscription.py"
+if [ ! -x "$LAUNCHER" ]; then
+  echo "janki review: ${LAUNCHER#"$REPO_ROOT"/} is missing or not executable." >&2
+  echo "  No review ran. janki never falls back to launching claude directly." >&2
+  exit 0
+fi
+
 # Code review and repository-content review are separate operations. A source,
 # staged card, curated deck, generated media file, or operational ledger under
 # data/ is never sent to the code reviewer merely because it shares a commit or
@@ -117,8 +133,13 @@ PROMPT_EOF
 
 # The model is named explicitly rather than left to a local agent or alias.
 # Keeping the review instructions above in this tracked script means a fresh
-# clone does not depend on an ignored .claude/agents file.
-claude -p "$PROMPT" \
+# clone does not depend on an ignored .claude/agents file — which matters more
+# now that the launcher runs with `--setting-sources ''`, so no settings file
+# supplies a model, an effort, or a provider on its behalf.
+#
+# The launcher execs the CLI, so this is still one process: $CLAUDE_PID below
+# is the reviewer itself and the watchdog's kill reaches it.
+"$LAUNCHER" -p "$PROMPT" \
   --model claude-opus-5 \
   --effort max \
   --permission-mode dontAsk \

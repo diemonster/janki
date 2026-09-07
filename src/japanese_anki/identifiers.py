@@ -4,6 +4,12 @@ import hashlib
 import re
 import unicodedata
 
+from japanese_anki.errors import JankiError
+
+
+class IdentityError(JankiError):
+    """A durable identity cannot be minted from what was supplied."""
+
 
 def normalize_identity_part(value: str) -> str:
     """Normalize text used in durable record identities."""
@@ -116,6 +122,29 @@ def stable_record_id(expression: str, reading: str = "") -> str:
     expression_part = normalize_identity_part(expression)
     reading_part = normalize_identity_part(reading)
     return f"word:{expression_part}:{reading_part}"
+
+
+def character_record_id(character: str) -> str:
+    """The durable identity of one character note: ``kanji:理``.
+
+    Beside :func:`stable_record_id`, normalized the same way, and deliberately
+    *not* built from a reading: 理 is one character whatever it is read as, and
+    a note whose identity moved when its readings were refreshed would strand
+    the review history the GUID exists to keep.
+
+    Exactly one character, refused rather than truncated or split. ``料理`` is
+    two characters and so two notes; minting ``kanji:料理`` would put a word
+    under a character identity, which is the one thing this store must not
+    hold. Nothing here reads the character — a single code point is the whole
+    contract.
+    """
+    part = normalize_identity_part(character)
+    if len(part) != 1:
+        raise IdentityError(
+            f"A character note is one character; {character!r} is "
+            f"{len(part)} after normalization."
+        )
+    return f"kanji:{part}"
 
 
 def short_fingerprint(*values: str, length: int = 12) -> str:

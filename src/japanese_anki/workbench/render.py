@@ -1132,34 +1132,63 @@ def render_finish(
 
     body.extend(
         [
-            '<section class=source><h2>2. Add kanji reference</h2>',
-            "<p><b>Networked · KANJIDIC/KanjiVG sources · no model call.</b> "
-            "This adds meanings, readings, stroke count and available stroke "
-            "diagrams for the characters on these cards.</p>",
+            '<section class=source><h2>2. Add kanji reference and readings</h2>',
+            "<p><b>Networked · KANJIDIC and KanjiVG, plus JPDB kanji pages and "
+            "the reading detail pages they link · no model call.</b> This adds "
+            "meanings, the reading inventory, stroke count and available stroke "
+            "diagrams for the characters on these cards, and saves JPDB's own "
+            "reported reading percentages together with the examples those "
+            "pages bind to each reading.</p>",
         ]
     )
     if kanji_plan.characters:
         body.append(
             f'<p class=ja lang=ja>{_escaped(" ".join(kanji_plan.characters))}</p>'
         )
+    # The two caches are refreshed by one button but are not the same work:
+    # a current KANJIDIC/KanjiVG entry says nothing about whether JPDB reading
+    # facts were ever fetched, so each is reported on its own terms.
     if kanji_plan.to_fetch:
+        body.append(
+            f"<p>{len(kanji_plan.to_fetch)} of {len(kanji_plan.characters)} "
+            "character(s) still need a KANJIDIC/KanjiVG lookup.</p>"
+        )
+    else:
+        body.append(
+            '<p class="status reviewed">The KANJIDIC/KanjiVG reference is '
+            "current for these cards.</p>"
+        )
+    if kanji_plan.readings_to_fetch:
+        body.append(
+            f"<p>{len(kanji_plan.readings_to_fetch)} character(s) still need "
+            "JPDB reading pages: "
+            f'<span class=ja lang=ja>{_escaped(" ".join(kanji_plan.readings_to_fetch))}</span>'
+            "</p>"
+        )
+    else:
+        body.append(
+            '<p class="status reviewed">JPDB reading facts are saved for these '
+            "characters.</p>"
+        )
+    # Which characters get looked up where is the owner's decision here. The
+    # cache fingerprint binds the work and is checked on submit; it is not
+    # something anyone can decide by reading it, so it stays out of the prose.
+    body.append(
+        f"<p>{len(kanji_plan.readings_already_known)} character(s) already have "
+        "saved reading facts, and those are reused.</p>"
+    )
+    if kanji_plan.to_fetch or kanji_plan.readings_to_fetch:
         body.extend(
             [
-                f"<p>{len(kanji_plan.to_fetch)} of {len(kanji_plan.characters)} "
-                "character(s) still need a lookup.</p>",
                 f'<form method=post action="{html.escape(action, quote=True)}">',
                 _hidden("action", "kanji-add"),
                 _hidden("csrf", csrf),
                 _hidden("scope_fingerprint", scope.fingerprint),
                 _hidden("plan_fingerprint", kanji_plan.fingerprint),
-                "<button type=submit>Add the missing kanji reference</button>",
+                "<button type=submit>Add the missing kanji reference and "
+                "readings</button>",
                 "</form>",
             ]
-        )
-    else:
-        body.append(
-            '<p class="status reviewed">The kanji reference is current for '
-            "these cards.</p>"
         )
     body.append("</section>")
 

@@ -38,6 +38,13 @@ selects only its transport. `claude-code` consumes the locally logged-in Claude
 Pro or Max subscription allowance; `anthropic-api` uses Anthropic API billing.
 Neither choice creates a different revision workflow.
 
+Development, planning and code-review launches use the tracked
+`scripts/claude-subscription.py` launcher. It strips inherited provider overrides
+and verifies a Claude Pro/Max subscription under the same environment and
+settings context used for dispatch. An unverified login stops the model call;
+there is no API fallback. This rule does not change the separately authorized
+paid content providers or the owner's subscription extra-usage setting.
+
 An ordinary Janki message is a separate, non-card-writing model turn. Its
 `[assistant]` provider is independent from the revision transport, its model is
 pinned to `claude-opus-5`, and its default is Claude Code using the owner's
@@ -97,6 +104,16 @@ owns:
 - **KANJIDIC** — kanji meanings, readings and stroke *count*. Stroke **order**
   comes from KanjiVG, a separate source under CC BY-SA 3.0 that a shared deck
   must credit.
+- **JPDB kanji pages** — published reading percentages and examples explicitly
+  attached to each reading by the provider. These carry JPDB's own labels,
+  groups, displayed rounding, bounds, source URLs, retrieval times and response
+  fingerprints. They are labelled **JPDB reported usage**; missing percentages,
+  corpus scope and denominators remain unknown. These contextual groups are
+  separate from KANJIDIC's on/kun inventory. Janki copies supplied word readings
+  and ruby segmentation, never assigns a word to a character reading itself.
+  Requested missing pages are fetched on demand; saved facts are reused, and
+  refresh is explicit. Full HTML stays in a local cache outside the repository;
+  extracted facts live in `data/jpdb_readings.json`. Builds are offline.
 - **VOICEVOX** — audio for words, with the pitch accent **forced**. It is the
   only engine here that can force one, which is why it voices the words: left
   to guess, an engine renders 橋 and 箸 identically, and telling those apart is
@@ -140,10 +157,30 @@ convention the deck files keep, checked by a test over the real decks rather
 than enforced by the builder, which filters each deck without looking at the
 others.
 
+**Kanji is a distinct content type.** An explicit character target produces one
+character note with identity `kanji:<character>` and GUID
+`genanki.guid_for(record.id)`, independent of its readings. The curated
+`data/kanji_notes.json` store is separate from both vocabulary and refreshable
+reference caches. Compounds are contextual examples inside character notes;
+they do not mint vocabulary records. Character decks have `kind: kanji` and
+accept only character notes. Existing word identities and enabled card sets
+are not converted by adding kanji study material.
+
+Recognition is the default character direction: the front shows the character,
+and the learner recalls its core meaning. Anki's Show Answer reveals meanings,
+strokes and common contextual reading examples together. A separate disclosure
+on the answer holds additional readings. Reading practice uses one fixed,
+source-bound example; production requires an explicit disambiguating cue.
+Only directions supported by the prepared note are offered, with the exact
+card count shown before apply. The default character flow is dictionary-only
+and has no bare-character audio or paid card-writing call. Character-target
+extraction, character revision and authored mnemonics are separate work.
+
 ## Mechanisms the pipeline rests on
 
 Not stages, but load-bearing: the word database
-(`data/normalized/vocabulary.json`) as the single durable store; stable
+(`data/normalized/vocabulary.json`) as the durable vocabulary store and
+`data/kanji_notes.json` as the separate curated character store; stable
 identities (`word:<expression>:<reading>`) so cards dedup and review history
 survives rebuilds; a human approving what enters the store (staging review);
 a reviewed reading checked against jpdb before it becomes an identity, where
@@ -298,6 +335,17 @@ additional confirmation. A plain instruction may therefore prepare a typed
 staged change or application action without a special deck-capability button,
 but neither the instruction nor the model's plan executes it.
 
+For explicit kanji targets, the Assistant prepares exact dictionary-based
+previews and counts before the one apply confirmation. Bounded preparation
+may look up those requested characters and populate the private raw-response
+cache under the owner's on-demand lookup preference; it is not a general
+network capability. The plan names queried characters and services. Canonical
+reference facts, character notes and a new compatible deck are proposed as
+exact bytes and written only by the confirmed batch. A build uses those saved
+facts, and an interrupted batch resumes from its durable receipt without
+inventing another owner decision. The completed package is offered in the
+same Assistant thread.
+
 Before a protected effect, Janki renders one exact batch and one confirmation,
 not a confirmation ladder. Protected effects are an additional paid call,
 disclosure of private source or card bytes not already bound to the ordinary
@@ -312,7 +360,8 @@ its capture records output provenance after dispatch, and a later
 visible-content batch binds those exact bytes. The browser-only one-use
 capability is bound to the thread, rendered action, optional focus, and complete
 plan. Execution consumes it, reloads configuration, re-plans under the
-application service's locks, compares every binding, and still relies on
+application service's locks (or revalidates the saved exact dictionary plan),
+compares every binding, and still relies on
 `OperationJournal.authorize` under its own lock as the final paid-call gate.
 The model cannot see, mint, widen, reuse, or consume that capability, answer its
 own confirmation, infer an owner review or identity decision, or manufacture a

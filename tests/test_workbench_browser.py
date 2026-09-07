@@ -26,7 +26,7 @@ from test_workbench_dispatch import PDF, _FakeCall, _install_fake
 from test_workbench_promotion import _write_deck
 
 from conftest import seed_prompts
-from japanese_anki import jpdb, kanji, operations
+from japanese_anki import jpdb, jpdb_kanji, kanji, operations
 from japanese_anki.application import audio as audio_application
 from japanese_anki.config import ProjectConfig
 from japanese_anki.io import load_records
@@ -247,6 +247,20 @@ def test_table_source_reaches_a_built_deck_in_real_chrome(
     monkeypatch.setattr(jpdb, "api_key_from_env", lambda: "fixture-key")
     monkeypatch.setattr(jpdb, "JpdbClient", lambda *_a, **_kw: client_for(dictionary))
     monkeypatch.setattr(kanji, "fetch_kanji", lambda character: KanjiInfo(character))
+    # The same button also fetches JPDB's kanji and reading-detail pages, so
+    # stubbing the reference lookup alone would leave this run making real
+    # requests from a browser test.
+    monkeypatch.setattr(
+        jpdb_kanji,
+        "fetch_character",
+        lambda character, **_kwargs: jpdb_kanji.CharacterReadings(
+            character=character,
+            source_url=f"https://jpdb.io/kanji/{character}",
+            fetched_at_utc="2026-09-07T00:00:00Z",
+            sha256="0" * 64,
+            groups=(),
+        ),
+    )
 
     word_voice = _WordVoice()
     example_voice = _ExampleVoice()

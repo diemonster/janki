@@ -35,6 +35,7 @@ anki_collection = pytest.importorskip(
 )
 from anki.import_export_pb2 import ImportAnkiPackageRequest  # noqa: E402
 
+from japanese_anki import jpdb_kanji  # noqa: E402
 from japanese_anki.config import ProjectConfig  # noqa: E402
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck  # noqa: E402
 from japanese_anki.models import ExampleSentence, VocabularyRecord  # noqa: E402
@@ -73,16 +74,26 @@ def _project(root: Path) -> None:
 
 
 def kanji_data(root: Path) -> None:
-    """A kanji entry for 話, so `{{#KanjiInfo}}` can fire.
+    """Both character stores for 話, so `{{#KanjiInfo}}` can fire.
 
-    Without one `kanji.load_store` returns an empty store for a missing file and
-    the block never renders — so the largest thing janki generates, a `<details>`
-    with inline stroke SVG, went unchecked by the file whose whole subject is
-    what Anki draws.
+    Two files because they are two sources, and the card keeps them apart.
+    `kanji.json` is the refreshable reference cache — KANJIDIC's on/kun
+    *inventory* and KanjiVG's strokes — and it carries no example words:
+    `readings[].examples` is retired, and a word reaches a character's card
+    only where a provider bound it to a reading itself. That binding is what
+    `jpdb_readings.json` holds, written here through the same dataclasses and
+    writer a real fetch saves, so the fixture cannot drift from the schema a
+    build reads.
+
+    Without them both, `kanji.load_store` and `jpdb_kanji.load_readings`
+    return empty stores for a missing file and the block never renders — so the
+    largest thing janki generates, a `<details>` with inline stroke SVG, went
+    unchecked by the file whose whole subject is what Anki draws.
     """
     (root / "janki.toml").write_text(
         (root / "janki.toml").read_text(encoding="utf-8")
-        + 'kanji_file = "kanji.json"\n',
+        + 'kanji_file = "kanji.json"\n'
+        + 'jpdb_readings_file = "jpdb_readings.json"\n',
         encoding="utf-8",
     )
     (root / "kanji.json").write_text(
@@ -90,18 +101,67 @@ def kanji_data(root: Path) -> None:
             "話": {
                 "stroke_count": 13,
                 "meanings": ["talk", "speak"],
+                # The inventory as a refresh writes it: display form, with the
+                # okurigana in parentheses rather than KANJIDIC's raw dot.
                 "readings": [
-                    {"kind": "on", "reading": "ワ", "examples": [
-                        {"written": "会話", "pronounced": "かいわ", "gloss": "conversation"}
-                    ]},
-                    {"kind": "kun", "reading": "はな.す", "examples": [
-                        {"written": "話す", "pronounced": "はなす", "gloss": "to speak"}
-                    ]},
+                    {"kind": "on", "reading": "ワ"},
+                    {"kind": "kun", "reading": "はな(す)"},
                 ],
                 "strokes": ["M1,1L2,2", "M3,3L4,4"],
             }
         }, ensure_ascii=False),
         encoding="utf-8",
+    )
+    # Saved facts, not a lookup: the block draws what an explicit fetch already
+    # wrote, and a build never asks jpdb for anything.
+    jpdb_kanji.save_readings(
+        root / "jpdb_readings.json",
+        {
+            "話": jpdb_kanji.CharacterReadings(
+                character="話",
+                source_url="https://jpdb.io/kanji/%E8%A9%B1",
+                fetched_at_utc="2026-09-07T00:00:00Z",
+                sha256="d" * 64,
+                groups=(
+                    jpdb_kanji.ReadingGroup(
+                        source_class="kanji-reading-list-common",
+                        readings=(
+                            jpdb_kanji.ReadingUsage(
+                                label="ワ",
+                                href="https://jpdb.io/kanji/%E8%A9%B1%23ワ",
+                                percent_text="(41%)",
+                                percent=41,
+                                percent_less_than=False,
+                                examples=(
+                                    jpdb_kanji.BoundExample(
+                                        written="会話",
+                                        pronounced="かいわ",
+                                        gloss="conversation",
+                                        furigana="会話[かいわ]",
+                                        source_url="https://jpdb.io/kanji/%E8%A9%B1%23ワ",
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                    # jpdb's other cell: readings it lists and prints no figure
+                    # beside. A separate group in the source, so a separate
+                    # block on the card — never merged into the quantified one.
+                    jpdb_kanji.ReadingGroup(
+                        source_class="kanji-reading-list",
+                        readings=(
+                            jpdb_kanji.ReadingUsage(
+                                label="はなし",
+                                href="https://jpdb.io/kanji/%E8%A9%B1%23はなし",
+                                percent_text=None,
+                                percent=None,
+                                percent_less_than=None,
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        },
     )
 
 
@@ -360,8 +420,56 @@ def test_the_pitch_diagram_and_kanji_block_reach_the_drawn_card(
     # The largest block janki generates, and the one most able to break a card:
     # a `<details>` carrying inline SVG per stroke.
     assert 'class="kanji-info"' in answer
-    assert "会話" in answer, "the reading's example word"
+    assert "JPDB reported usage" in answer and "(41%)" in answer
+    # Not merely "会話 is somewhere on the card": it is drawn as the example
+    # jpdb's own page filed under 話's ワ, inside that reading's row. A card
+    # that showed the word without the reading it proves would pass a bare
+    # substring check and would be janki asserting a link jpdb never made.
+    assert '<span class="kanji-usage-reading">ワ</span>' in answer
+    assert 'class="kanji-bound-example"' in answer
+    assert "会話" in answer, "the word jpdb bound to that reading"
+    assert "かいわ" in answer, "with the reading jpdb printed for it"
+    # Drawn with the ruby the provider supplied. Anki's `furigana:` filter does
+    # not reach notation stored inside another field's HTML, so this is the
+    # only thing that says whether the brackets became ruby or became text.
+    assert "<ruby><rb>会話</rb><rt>かいわ</rt></ruby>" in answer
+    assert "会話[かいわ]" not in answer, "no bracket notation reaches the learner"
     assert answer.count('class="stroke-cell"') == 2, "one cell per stroke"
+
+
+def test_the_two_character_stores_stay_apart_on_the_drawn_card(
+    drawn: list[dict[str, Any]],
+) -> None:
+    """A reported reading group is not an on/kun inventory entry.
+
+    They come from different files and mean different things: `kanji.json`
+    lists what KANJIDIC publishes, `jpdb_readings.json` what a provider
+    reported and bound words to. Merged, the card would state a relationship
+    neither source claims — so the quantified reading is on the face of the
+    block, and jpdb's unquantified readings and KANJIDIC's list each sit behind
+    their own labelled disclosure.
+    """
+    answer = backs(drawn)[0]
+    disclosed = re.findall(r"<details class=\"kanji-more[^\"]*\".*?</details>", answer, re.S)
+    exposed = re.sub(r"<details class=\"kanji-more[^\"]*\".*?</details>", "", answer, flags=re.S)
+
+    assert len(disclosed) == 2, "one for jpdb's other readings, one for KANJIDIC"
+    assert "Other JPDB readings" in answer and "KANJIDIC readings" in answer
+    # The quantified reading and its bound word are not behind a caret.
+    assert '<span class="kanji-usage-reading">ワ</span>' in exposed
+    assert "会話" in exposed
+    # はなし is jpdb's, unquantified; はな(す) is KANJIDIC's. Neither is on the
+    # face of the block, and neither is drawn as the other.
+    assert "はなし" not in exposed and "はな(す)" not in exposed
+    assert any("はなし" in block and "音" not in block for block in disclosed), (
+        "jpdb's unquantified reading carries no on/kun badge"
+    )
+    assert any(
+        '<span class="kanji-reading">はな(す)</span>' in block for block in disclosed
+    ), "KANJIDIC's inventory keeps its own markup"
+    assert "41%" not in "".join(
+        block for block in disclosed if "kanji-inventory-row" in block
+    ), "no provider figure is attached to a dictionary reading"
 
 
 def test_a_failed_build_leaves_no_scratch_tree(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -905,6 +905,12 @@ def plan_action(
                     f"Pattern deck {_deck_name(deck)!r} has no word or sentence "
                     "audio transaction to generate."
                 )
+            if deck_kind == "kanji":
+                raise AssistantActionError(
+                    f"Character deck {_deck_name(deck)!r} is dictionary-only: a "
+                    "bare character has no audio transaction, and Janki will not "
+                    "offer a paid clip it cannot voice."
+                )
             choices = _audio_choices(deck_kind, options)
             _require_safe_audio_directory(config)
             if deck_kind == "conjugation":

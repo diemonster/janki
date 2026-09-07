@@ -12,7 +12,7 @@ from test_promote import FakeJpdb, client_for
 from test_workbench import _request, _running
 from test_workbench_promotion import _form, _promotion_project
 
-from japanese_anki import jpdb, kanji
+from japanese_anki import jpdb, jpdb_kanji, kanji
 from japanese_anki.application.coverage import (
     approve_coverage_as_owner,
     plan_coverage,
@@ -52,6 +52,44 @@ PLAN = "b" * 64
 
 def _body(**fields: str) -> bytes:
     return urlencode(fields).encode("utf-8")
+
+
+def _offline_kanji_sources(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    reference: object = None,
+) -> list[str]:
+    """Keep both networked kanji seams on the finish page offline.
+
+    One button now does two kinds of lookup: the KANJIDIC/KanjiVG reference
+    and JPDB's kanji and reading-detail pages. A test that stubs only the
+    first would still make real requests for the second, so both are stubbed
+    together and the returned list records the reference characters asked for.
+    """
+
+    fetched: list[str] = []
+
+    def fetch_reference(character: str) -> KanjiInfo:
+        fetched.append(character)
+        if reference is not None:
+            return reference(character)  # type: ignore[operator]
+        return KanjiInfo(character=character)
+
+    def fetch_readings(
+        character: str,
+        **_kwargs: object,
+    ) -> jpdb_kanji.CharacterReadings:
+        return jpdb_kanji.CharacterReadings(
+            character=character,
+            source_url=f"https://jpdb.io/kanji/{character}",
+            fetched_at_utc="2026-09-07T00:00:00Z",
+            sha256="0" * 64,
+            groups=(),
+        )
+
+    monkeypatch.setattr(kanji, "fetch_kanji", fetch_reference)
+    monkeypatch.setattr(jpdb_kanji, "fetch_character", fetch_readings)
+    return fetched
 
 
 def _decision() -> DictionaryEnrichmentDecision:
@@ -550,6 +588,10 @@ def test_finish_render_escapes_scope_warning_and_dictionary_diff() -> None:
         refresh=False,
         targeted=True,
         fingerprint="2" * 64,
+        readings_already_known=(),
+        readings_to_fetch=("名",),
+        jpdb_readings_path=Path("/exact/repository/jpdb_readings.json"),
+        readings_fingerprint="3" * 64,
     )
 
     page = render_finish(
@@ -569,6 +611,86 @@ def test_finish_render_escapes_scope_warning_and_dictionary_diff() -> None:
     assert "&lt;script id=&quot;warning&quot;&gt;bad()&lt;/script&gt;" in page
     assert "&lt;img src=x onerror=&quot;bad()&quot;&gt;" in page
     assert "&lt;owner&gt;" in page
+
+
+def test_finish_page_offers_missing_readings_when_the_reference_is_current() -> None:
+    """A current reference cache is not evidence that readings were fetched.
+
+    The two lookups share one button, so deciding whether there is work to do
+    from the reference cache alone would hide every missing JPDB reading page
+    behind a "current" mark.
+    """
+
+    scope = _scope()
+    plan = KanjiAdditionPlan(
+        project_root=Path("/exact/repository"),
+        canonical_path=scope.canonical_path,
+        canonical_fingerprint="1" * 64,
+        kanji_path=Path("/exact/repository/kanji.json"),
+        record_ids=scope.record_ids,
+        characters=("名",),
+        already_known=("名",),
+        to_fetch=(),
+        refresh=False,
+        targeted=True,
+        fingerprint="2" * 64,
+        readings_already_known=(),
+        readings_to_fetch=("名",),
+        jpdb_readings_path=Path("/exact/repository/jpdb_readings.json"),
+        readings_fingerprint="3" * 64,
+    )
+
+    page = render_finish(
+        scope,
+        plan,
+        token="token",
+        csrf="csrf",
+        dictionary_decision=_decision(),
+        dictionary_action="action",
+    )
+
+    assert "KANJIDIC and KanjiVG, plus JPDB kanji pages" in page
+    assert "reading detail pages" in page
+    assert "The KANJIDIC/KanjiVG reference is current" in page
+    assert "1 character(s) still need JPDB reading pages" in page
+    assert "0 character(s) already have saved reading facts" in page
+    assert "Add the missing kanji reference and readings" in page
+    # The bound cache state is checked on submit, not offered as a decision.
+    assert "3" * 64 not in page
+
+
+def test_finish_page_hides_the_kanji_button_only_when_both_caches_are_current() -> None:
+    scope = _scope()
+    plan = KanjiAdditionPlan(
+        project_root=Path("/exact/repository"),
+        canonical_path=scope.canonical_path,
+        canonical_fingerprint="1" * 64,
+        kanji_path=Path("/exact/repository/kanji.json"),
+        record_ids=scope.record_ids,
+        characters=("名",),
+        already_known=("名",),
+        to_fetch=(),
+        refresh=False,
+        targeted=True,
+        fingerprint="2" * 64,
+        readings_already_known=("名",),
+        readings_to_fetch=(),
+        jpdb_readings_path=Path("/exact/repository/jpdb_readings.json"),
+        readings_fingerprint="3" * 64,
+    )
+
+    page = render_finish(
+        scope,
+        plan,
+        token="token",
+        csrf="csrf",
+        dictionary_decision=_decision(),
+        dictionary_action="action",
+    )
+
+    assert "Add the missing kanji reference and readings" not in page
+    assert "The KANJIDIC/KanjiVG reference is current" in page
+    assert "JPDB reading facts are saved for these characters" in page
 
 
 def test_finish_page_previews_exact_cards_and_routes_the_bound_full_build(
@@ -1125,12 +1247,7 @@ def test_stale_kanji_plan_refuses_before_any_fetch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session, finish_url, _promoted_ids = _promoted_finish(tmp_path)
-    fetched: list[str] = []
-    monkeypatch.setattr(
-        kanji,
-        "fetch_kanji",
-        lambda character: fetched.append(character) or KanjiInfo(character=character),
-    )
+    fetched = _offline_kanji_sources(monkeypatch)
     server, _thread = _running(session)
     try:
         status, _headers, page = _request(server, "GET", finish_url)
@@ -1329,7 +1446,7 @@ def test_mixed_kanji_result_reports_exact_saved_and_failed_counts(
             raise kanji.KanjiError("fixture refusal")
         return KanjiInfo(character=character)
 
-    monkeypatch.setattr(kanji, "fetch_kanji", fetch)
+    _offline_kanji_sources(monkeypatch, reference=fetch)
     server, _thread = _running(session)
     try:
         status, _headers, page = _request(server, "GET", finish_url)
@@ -1344,10 +1461,48 @@ def test_mixed_kanji_result_reports_exact_saved_and_failed_counts(
         server.server_close()
 
     assert refused == 409
-    assert b"Saved 2 new kanji lookup(s)" in body
+    assert b"Saved 2 new kanji reference lookup(s)" in body
     assert b"1 lookup(s) failed" in body
-    assert b"\xe9\xa3\x9f: fixture refusal" in body
-    assert set(load_store(session.config.kanji_file).entries) == {"走", "飲"}
+    assert b"\xe9\xa3\x9f reference: fixture refusal" in body
+
+
+def test_failed_reading_pages_are_reported_beside_reference_successes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reference lookup that worked does not account for a reading page that
+    did not, so the refusal has to name both kinds of work separately."""
+
+    session, finish_url, _promoted_ids = _promoted_finish(tmp_path)
+
+    def fetch_readings(character: str, **_kwargs: object) -> object:
+        raise jpdb_kanji.KanjiReadingsError(f"fixture reading refusal for {character}")
+
+    monkeypatch.setattr(
+        kanji,
+        "fetch_kanji",
+        lambda character: KanjiInfo(character=character),
+    )
+    monkeypatch.setattr(jpdb_kanji, "fetch_character", fetch_readings)
+    server, _thread = _running(session)
+    try:
+        status, _headers, page = _request(server, "GET", finish_url)
+        assert status == 200
+        refused, _headers, body = _post_finish(
+            server,
+            finish_url,
+            _form(page, "kanji-add"),
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert refused == 409
+    assert b"kanji reference lookup(s)" in body
+    assert b"readings: fixture reading refusal" in body
+    # Every reference lookup landed; only the reading pages failed, and the
+    # refusal above is what says so.
+    assert set(load_store(session.config.kanji_file).entries) == {"走", "食", "飲"}
 
 
 def test_finish_page_keeps_dictionary_and_kanji_on_the_receipted_ids(
@@ -1393,13 +1548,7 @@ def test_finish_page_keeps_dictionary_and_kanji_on_the_receipted_ids(
         "JpdbClient",
         lambda *_args, **_kwargs: client_for(dictionary),
     )
-    fetched: list[str] = []
-
-    def fetch(character: str) -> KanjiInfo:
-        fetched.append(character)
-        return KanjiInfo(character=character)
-
-    monkeypatch.setattr(kanji, "fetch_kanji", fetch)
+    fetched = _offline_kanji_sources(monkeypatch)
 
     def post(
         server: object, fields: list[tuple[str, str]]

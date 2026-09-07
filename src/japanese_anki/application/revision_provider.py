@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from japanese_anki import claude_client, operations, prompts
+from japanese_anki import claude_client, operations, prompts, subscription_auth
 from japanese_anki.credential_safety import redact_environment_credentials
 from japanese_anki.errors import JankiError
 
@@ -649,8 +649,9 @@ def _controlled_claude_environment(effort: str) -> Mapping[str, str]:
     """
     return MappingProxyType(
         {
-            "CLAUDE_CODE_SAFE_MODE": "1",
-            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            # The two every janki-started Claude Code process runs under,
+            # shared with the tracked development launcher.
+            **subscription_auth.BASE_CONTROLLED_ENVIRONMENT,
             "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
             "CLAUDE_CODE_EFFORT_LEVEL": effort,
             "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(claude_client.DEFAULT_MAX_TOKENS),
@@ -664,30 +665,15 @@ def _controlled_claude_environment(effort: str) -> Mapping[str, str]:
     )
 
 
-_HOST_ENV_ALLOWLIST = frozenset(
-    {
-        "HOME",
-        "LANG",
-        "LC_ALL",
-        "LC_CTYPE",
-        "PATH",
-        "TMPDIR",
-        "USER",
-        "XDG_CONFIG_HOME",
-    }
-)
-
-
 def _sanitized_claude_environment(
     env: Mapping[str, str] | None,
     controlled: Mapping[str, str],
 ) -> dict[str, str]:
+    # One allowlist, shared with scripts/claude-subscription.py: a name that is
+    # safe to inherit for a billed revision is the same name that is safe to
+    # inherit for a development launch, and two copies would drift.
     source = os.environ if env is None else env
-    clean = {
-        name: str(source[name]) for name in _HOST_ENV_ALLOWLIST if name in source
-    }
-    clean.update({str(name): str(value) for name, value in controlled.items()})
-    return clean
+    return subscription_auth.sanitized_environment(source, controlled)
 
 
 def _as_bytes(value: Any) -> bytes:
@@ -769,7 +755,7 @@ def _probe_claude(
         )
         auth_output = _run_probe(
             runner,
-            [executable, "--safe-mode", "auth", "status", "--json"],
+            [executable, "--safe-mode", *subscription_auth.AUTH_STATUS_ARGUMENTS],
             cwd=temporary,
             env=clean,
             label="authentication",
@@ -782,13 +768,8 @@ def _probe_claude(
     version = matched.group(1).decode("ascii")
     auth = _strict_json(auth_output, label="Claude Code authentication status")
     subscription = auth.get("subscriptionType")
-    if (
-        auth.get("loggedIn") is not True
-        or auth.get("authMethod") != "claude.ai"
-        or auth.get("apiProvider") != "firstParty"
-        or subscription not in {"pro", "max"}
-        or auth.get("apiKeySource") is not None
-    ):
+    # The same rule the tracked development launcher enforces, from one place.
+    if not subscription_auth.is_subscription_auth(auth):
         raise RevisionProviderError(
             "Claude Code is not authenticated through a Claude Pro or Max "
             "subscription. Sign in with claude.ai and remove API, Bedrock, Vertex, "

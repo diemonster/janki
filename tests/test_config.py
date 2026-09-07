@@ -719,3 +719,59 @@ def test_a_rate_outside_the_sliders_range_is_accepted(tmp_path: Path, value: str
     _write_config(tmp_path, f"[tts]\nvoicevox_speed = {value}\n")
 
     assert ProjectConfig.load(tmp_path).voicevox_speed == float(value)
+
+
+def test_the_character_stores_default_beside_the_reference_cache(
+    tmp_path: Path,
+) -> None:
+    """Three files, never merged: reference facts, provider facts, and the
+    curated notes a card is built from."""
+    root = _write_config(tmp_path, '[project]\nname = "Test"\n')
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.kanji_file == root / "data/kanji.json"
+    assert config.kanji_notes_file == root / "data/kanji_notes.json"
+    assert config.jpdb_readings_file == root / "data/jpdb_readings.json"
+
+
+def test_the_raw_page_cache_defaults_outside_the_repository(tmp_path: Path) -> None:
+    """`data/**` is deliberately never ignored, so a default under it would
+    make full provider pages committed content."""
+    root = _write_config(tmp_path, '[project]\nname = "Test"\n')
+
+    cache = ProjectConfig.load(tmp_path).jpdb_html_cache
+
+    assert cache.is_absolute()
+    assert root not in cache.parents and cache != root
+    assert cache.name == "jpdb" and cache.parent.name == "janki"
+
+
+def test_an_explicit_raw_page_cache_is_used_as_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The existing proof-of-concept cache is a real directory an owner may
+    keep pointing at, including through `~`."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    (tmp_path / "project").mkdir()
+    _write_config(
+        tmp_path / "project",
+        '[paths]\njpdb_html_cache = "~/Library/Caches/janki/jpdb-readings-poc"\n',
+    )
+
+    config = ProjectConfig.load(tmp_path / "project")
+
+    assert config.jpdb_html_cache == home / "Library/Caches/janki/jpdb-readings-poc"
+
+
+@pytest.mark.parametrize("value", ['".cache/jpdb"', '"data/jpdb-html"'])
+def test_a_raw_page_cache_inside_the_repository_is_refused(
+    tmp_path: Path, value: str
+) -> None:
+    """Enforced rather than documented: the consequence of getting this wrong
+    is a repository full of provider markup nobody reviewed."""
+    _write_config(tmp_path, f"[paths]\njpdb_html_cache = {value}\n")
+
+    with pytest.raises(ConfigError, match="outside the repository"):
+        ProjectConfig.load(tmp_path)

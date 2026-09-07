@@ -28,8 +28,10 @@ from japanese_anki import (
 )
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import build as build_application
+from japanese_anki.application import character_notes as character_notes_application
 from japanese_anki.application import coverage as coverage_application
 from japanese_anki.application import deck_build as deck_build_application
+from japanese_anki.application import deck_package as deck_package_application
 from japanese_anki.application import enrichment as enrichment_application
 from japanese_anki.application import kanji_addition as kanji_application
 from japanese_anki.application import promotion as promotion_application
@@ -62,7 +64,7 @@ from japanese_anki.application.validation import validate_project
 from japanese_anki.collection import read_deck_notes
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters import pattern_cards
+from japanese_anki.exporters import kanji_cards, pattern_cards
 from japanese_anki.exporters.anki import (
     AnkiBuildError,
     build_deck,
@@ -2774,6 +2776,42 @@ def _build_one(
         # Nothing to record: exports track which *records* a deck has shipped,
         # and a pattern deck ships none.
         return False
+    if kind == "kanji":
+        if only_new:
+            # Same shape as a conjugation deck: the flag needs export history,
+            # and a character deck records none because exports track word
+            # records. On a sweep it is a mode applied to every deck rather
+            # than an assertion about each, so say so and build all of it.
+            if sweep:
+                print(
+                    f"note: {deck_path.name} records no exports, so --only-new "
+                    f"cannot narrow it; building all of it."
+                )
+            else:
+                raise AnkiBuildError(
+                    f"{deck_path.name}: --only-new needs export history, and a "
+                    f"character deck records none. Build it without the flag."
+                )
+        if output is not None:
+            # Explicit output overrides are the automation escape hatch, as on
+            # the conjugation path: they stay on the exporter rather than
+            # publishing through the deck's own fingerprinted package plan.
+            result = kanji_cards.build_kanji_deck(deck_path, config, output)
+        else:
+            # The caller already owns the audio-operation lock, so this takes
+            # the locked variant rather than reaching for it a second time.
+            result = deck_package_application.execute_deck_package_locked(
+                config,
+                deck_package_application.plan_deck_package(config, deck_path),
+            )
+        plural = "" if result.note_count == 1 else "s"
+        print(
+            f"Built {result.output_path} — {result.note_count} character "
+            f"note{plural}, cards: {', '.join(result.card_types)}"
+        )
+        # Nothing to record: a character deck ships notes from the curated
+        # character store, and exports track vocabulary records.
+        return False
     _, records = resolve_deck_records(deck_path)
     # Local validation runs for every build shape — the exporters would refuse
     # identically one call later, but running it here surfaces warning-level
@@ -3176,6 +3214,12 @@ def command_kanji(args: argparse.Namespace) -> int:
     is fetched per *character* and shared by every record that contains one.
     Only what is missing is fetched, so re-running after adding words costs one
     request per new character rather than a re-download of everything.
+
+    Two sources, each with its own idea of what is missing. KANJIDIC supplies
+    meanings, the on/kun inventory and strokes; jpdb's kanji pages supply the
+    reading percentages and the words jpdb binds to each reading. A character
+    looked up before janki asked jpdb anything is missing from the second and
+    present in the first, so the two decisions are made separately.
     """
     config = _load_config(args)
     if args.ids and args.refresh:
@@ -3194,10 +3238,11 @@ def command_kanji(args: argparse.Namespace) -> int:
         print(f"No records to read characters from in {plan.canonical_path}.")
         return 0
 
-    if not plan.to_fetch:
+    if not plan.to_fetch and not plan.readings_to_fetch:
         print(
             f"All {len(plan.characters)} character(s) already looked up in "
-            f"{config.kanji_file}."
+            f"{status.display_path(config.kanji_file, config.root)} and "
+            f"{status.display_path(config.jpdb_readings_file, config.root)}."
         )
         return 0
 
@@ -3205,18 +3250,138 @@ def command_kanji(args: argparse.Namespace) -> int:
         config, plan, expected_fingerprint=plan.fingerprint
     )
 
-    print(
-        f"Looked up {len(result.successes)} character(s) into "
-        f"{status.display_path(config.kanji_file, config.root)}."
-    )
-    for failure in result.failures:
+    if plan.to_fetch:
+        print(
+            f"Looked up {len(result.successes)} character(s) into "
+            f"{status.display_path(config.kanji_file, config.root)}."
+        )
+    if plan.readings_to_fetch:
+        print(
+            f"Read {len(result.reading_successes)} character(s)' published "
+            f"readings into "
+            f"{status.display_path(config.jpdb_readings_file, config.root)}."
+        )
+    for failure in (*result.failures, *result.reading_failures):
         print(f"warning: {failure.character}: {failure.message}", file=sys.stderr)
-    # Any loss is a non-zero exit, not only total loss. kanjiapi has no retry or
-    # backoff here, so one 403 or rate limit part-way through leaves most
-    # characters unlooked-up; exiting 0 let a scripted `janki kanji && janki
-    # build` carry straight on and ship cards whose kanji section is missing,
-    # with nothing but a stderr warning to say so.
-    return 1 if result.failures else 0
+    # Any loss is a non-zero exit, not only total loss. Neither source has a
+    # retry or backoff here, so one 403 or rate limit part-way through leaves
+    # most characters unlooked-up; exiting 0 let a scripted `janki kanji &&
+    # janki build` carry straight on and ship cards whose kanji section is
+    # missing, with nothing but a stderr warning to say so.
+    return 1 if result.failures or result.reading_failures else 0
+
+
+def _character_directions(value: str) -> tuple[str, ...]:
+    """``--directions recognition,reading`` as the list the service takes."""
+    names = tuple(part.strip() for part in str(value).split(",") if part.strip())
+    if not names:
+        raise JankiError(
+            "--directions names at least one of: "
+            + ", ".join(kanji_cards.KANJI_CARD_FILES)
+        )
+    return names
+
+
+def _character_cues(values: Sequence[str] | None) -> dict[str, str]:
+    """``--production-cue 理=the 理 of 料理`` for each character named.
+
+    Split on the first ``=`` only: a cue is the owner's own text and may well
+    contain another one.
+    """
+    cues: dict[str, str] = {}
+    for entry in values or ():
+        character, separator, text = str(entry).partition("=")
+        if not separator:
+            raise JankiError(
+                f"--production-cue takes CHARACTER=TEXT; {entry!r} has no '='."
+            )
+        if character in cues:
+            raise JankiError(f"--production-cue was given twice for {character}.")
+        cues[character] = text
+    return cues
+
+
+def _print_character_batch(
+    config: ProjectConfig, plan: character_notes_application.CharacterNotesPlan
+) -> None:
+    """The exact batch, before it is applied and identically for a dry run."""
+    where = status.display_path(plan.deck_path, config.root)
+    print(
+        f"{plan.deck_name} ({'new deck ' if plan.deck_created else ''}{where})"
+        f" — cards: {', '.join(plan.directions)}"
+    )
+    plural = "" if plan.note_count == 1 else "s"
+    print(
+        f"  this batch: {plan.note_count} character note{plural}, "
+        f"{plan.card_count} card(s) — {' '.join(plan.characters)}"
+    )
+    if plan.deck_note_count != plan.note_count:
+        print(
+            f"  the deck will hold: {plan.deck_note_count} note(s), "
+            f"{plan.deck_card_count} card(s)"
+        )
+    if plan.looked_up:
+        print(f"  reference lookups: {' '.join(plan.looked_up)}")
+    if plan.fetched_readings:
+        print(f"  reading pages read: {' '.join(plan.fetched_readings)}")
+    changed = [item for item in plan.changed_files]
+    if not changed:
+        print("  writes: nothing — every file already holds these exact bytes")
+        return
+    for item in changed:
+        print(f"  writes: {status.display_path(item.path, config.root)} ({item.label})")
+
+
+def command_kanji_notes(args: argparse.Namespace) -> int:
+    """Prepare character notes for exact characters, then build their deck.
+
+    Two calls and one confirmation: the preparation looks up what is missing
+    and returns the exact bytes every affected file would hold, and the apply
+    writes exactly those. `--dry-run` stops after the first, which is why it
+    can show real counts rather than an estimate.
+
+    The build is a third call and its order matters: planning the package
+    captures the exact deck and store bytes it will read, the applied state is
+    then verified against the same plan that was confirmed, and only then does
+    the already-captured package plan get executed. An edit that lands between
+    the apply and the build is therefore refused instead of published.
+    """
+    config = _load_config(args)
+    plan = character_notes_application.prepare_character_notes(
+        config,
+        args.characters,
+        deck_path=args.deck,
+        deck_name=args.deck_name,
+        directions=_character_directions(args.directions),
+        refresh_readings=args.refresh_readings,
+        production_cues=_character_cues(args.production_cue),
+    )
+    _print_character_batch(config, plan)
+    if args.dry_run:
+        # Not "nothing was written": preparing this batch may have asked the
+        # provider for a page nobody had, and that response lands in the local
+        # cache. What a dry run promises is that no canonical file moved.
+        print("Dry run: no canonical data changed.")
+        return 0
+
+    result = character_notes_application.execute_character_notes(
+        config, plan, expected_fingerprint=plan.fingerprint
+    )
+    if result.changed:
+        print(f"Wrote: {', '.join(result.changed)}.")
+    else:
+        print("Already applied: every file held these exact bytes.")
+
+    package = deck_package_application.plan_deck_package(config, result.deck_path)
+    character_notes_application.verify_character_notes_applied(config, plan)
+    built = deck_package_application.execute_deck_package(config, package)
+    plural = "" if built.note_count == 1 else "s"
+    print(
+        f"Built {built.output_path} — {built.note_count} character "
+        f"note{plural}, {built.card_count} card(s), cards: "
+        f"{', '.join(built.card_types)}"
+    )
+    return 0
 
 
 def command_operations(args: argparse.Namespace) -> int:
@@ -4252,6 +4417,72 @@ def build_parser() -> argparse.ArgumentParser:
         help="Re-fetch every character, not only the ones not looked up yet.",
     )
     kanji_parser.set_defaults(handler=command_kanji)
+
+    kanji_notes_parser = subparsers.add_parser(
+        "kanji-notes",
+        help="Prepare character notes for exact characters and build their deck.",
+    )
+    kanji_notes_parser.add_argument(
+        "characters",
+        nargs="+",
+        metavar="CHARACTER",
+        help=(
+            "One character per argument. A word is not a character target: "
+            "pass 料 理 as two arguments, because 'kanji:料理' is not an "
+            "identity this store holds."
+        ),
+    )
+    destination = kanji_notes_parser.add_mutually_exclusive_group(required=True)
+    destination.add_argument(
+        "--deck",
+        metavar="PATH",
+        help="An existing character deck to add these notes to.",
+    )
+    destination.add_argument(
+        "--deck-name",
+        metavar="NAME",
+        help=(
+            "Create a character deck with this learner-facing name. The deck "
+            "and its notes land in the same batch."
+        ),
+    )
+    kanji_notes_parser.add_argument(
+        "--directions",
+        default="recognition",
+        metavar="LIST",
+        help=(
+            "Comma-separated card directions: "
+            + ", ".join(kanji_cards.KANJI_CARD_FILES)
+            + ". Fixed once the deck exists (default: recognition)."
+        ),
+    )
+    kanji_notes_parser.add_argument(
+        "--refresh-readings",
+        action="store_true",
+        help=(
+            "Re-read the provider's pages for these characters. The fixed "
+            "reading prompt and every curated value stay as they are."
+        ),
+    )
+    kanji_notes_parser.add_argument(
+        "--production-cue",
+        action="append",
+        metavar="CHARACTER=TEXT",
+        help=(
+            "The disambiguating hint a production card asks from. janki never "
+            "writes one: repeat the flag per character."
+        ),
+    )
+    kanji_notes_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Show the exact batch and its counts without applying it: no "
+            "canonical data changed. A requested page is still fetched and "
+            "cached locally so the counts are real."
+        ),
+    )
+    kanji_notes_parser.set_defaults(handler=command_kanji_notes)
 
     status_parser = subparsers.add_parser(
         "status", help="Summarize records, ledger state, and duplicate candidates"

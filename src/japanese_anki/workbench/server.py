@@ -1462,11 +1462,17 @@ class _WorkbenchHandler(LocalOnlyHandler):
             try:
                 added = max(int(fields.get("added", "0")), 0)
                 current = max(int(fields.get("current", "0")), 0)
+                readings_added = max(int(fields.get("readings_added", "0")), 0)
+                readings_replaced = max(int(fields.get("readings_replaced", "0")), 0)
+                readings_current = max(int(fields.get("readings_current", "0")), 0)
             except ValueError:
                 return ""
             return (
-                f"Saved {added} kanji lookup(s); {current} concurrent/current "
-                "lookup(s) were preserved."
+                f"Saved {added} kanji reference lookup(s); {current} "
+                "concurrent/current lookup(s) were preserved. Saved JPDB "
+                f"reading facts for {readings_added} new and "
+                f"{readings_replaced} refreshed character(s); "
+                f"{readings_current} already had saved readings."
             )
         if fields.get("build") == "complete":
             return "Built every receipted study deck and recorded its export history."
@@ -2665,23 +2671,42 @@ class _WorkbenchHandler(LocalOnlyHandler):
         except (JankiError, TypeError, ValueError) as exc:
             self._error(409, str(exc), truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN)
             return
-        if result.failures:
+        # Reference lookups and JPDB reading pages are separate networked work
+        # under one button. A reading page that failed is not covered by a
+        # reference lookup that succeeded, so both are reported by name.
+        if result.failures or result.reading_failures:
             failures = "; ".join(
-                f"{failure.character}: {failure.message}"
-                for failure in result.failures
+                [
+                    *(
+                        f"{failure.character} reference: {failure.message}"
+                        for failure in result.failures
+                    ),
+                    *(
+                        f"{failure.character} readings: {failure.message}"
+                        for failure in result.reading_failures
+                    ),
+                ]
             )
             self._error(
                 409,
-                f"Saved {len(result.added)} new kanji lookup(s), but "
-                f"{len(result.failures)} lookup(s) failed: {failures}. Reload "
-                "and retry the remaining characters.",
+                f"Saved {len(result.added)} new kanji reference lookup(s) and "
+                f"{len(result.reading_successes)} reading page set(s), but "
+                f"{len(result.failures) + len(result.reading_failures)} "
+                f"lookup(s) failed: {failures}. Reload and retry the remaining "
+                "characters.",
                 truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN,
             )
             return
         current = len(plan.already_known) + len(result.preserved_concurrent)
+        readings_current = len(plan.readings_already_known) + len(
+            result.reading_preserved_concurrent
+        )
         self._redirect(
             f"/{session.token}/finish/{receipt_id}?kanji=saved&"
-            f"added={len(result.added)}&current={current}"
+            f"added={len(result.added)}&current={current}&"
+            f"readings_added={len(result.reading_added)}&"
+            f"readings_replaced={len(result.reading_replaced)}&"
+            f"readings_current={readings_current}"
         )
 
     def _addition(self, name: str, body: bytes) -> None:

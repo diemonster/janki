@@ -12,11 +12,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from japanese_anki import ledger
+from japanese_anki import jpdb_kanji, kanji_notes, ledger
 from japanese_anki.application import deck_build, deck_package
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import BuildResult
+from japanese_anki.identifiers import character_record_id
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 
@@ -34,6 +35,8 @@ def _project(tmp_path: Path) -> tuple[ProjectConfig, dict[str, Path]]:
         'ledger_file = "data/ledger.json"\n'
         'media_dir = "data/media"\n'
         'kanji_file = "data/kanji.json"\n'
+        'kanji_notes_file = "data/kanji_notes.json"\n'
+        'jpdb_readings_file = "data/jpdb_readings.json"\n'
         'patterns_file = "data/patterns.json"\n',
         encoding="utf-8",
     )
@@ -66,6 +69,18 @@ def _project(tmp_path: Path) -> tuple[ProjectConfig, dict[str, Path]]:
     )
     _write_json(config.normalized_file, [record.to_dict()])
     _write_json(config.kanji_file, {})
+    jpdb_kanji.save_readings(config.jpdb_readings_file, {})
+    kanji_notes.save_notes(
+        config.kanji_notes_file,
+        {
+            "話": kanji_notes.CharacterNote(
+                character="話",
+                id=character_record_id("話"),
+                meanings=("talk", "speak"),
+                stroke_count=13,
+            )
+        },
+    )
     config.deck_dir.mkdir(parents=True)
     vocabulary = config.deck_dir / "lesson.yaml"
     vocabulary.write_text(
@@ -109,6 +124,18 @@ def _project(tmp_path: Path) -> tuple[ProjectConfig, dict[str, Path]]:
         },
     )
     conjugation = config.deck_dir / "potential.yaml"
+    character = config.deck_dir / "kanji.yaml"
+    character.write_text(
+        "deck:\n"
+        "  kind: kanji\n"
+        "  name: Character deck\n"
+        "  deck_id: 35\n"
+        "  model_id: 36\n"
+        "  source: ../kanji_notes.json\n"
+        "  output: kanji.apkg\n"
+        "  include_ids: [kanji:話]\n",
+        encoding="utf-8",
+    )
     conjugation.write_text(
         "deck:\n"
         "  kind: conjugation\n"
@@ -125,8 +152,11 @@ def _project(tmp_path: Path) -> tuple[ProjectConfig, dict[str, Path]]:
         "vocabulary": vocabulary,
         "pattern": pattern,
         "conjugation": conjugation,
+        "character": character,
         "source": config.normalized_file,
         "kanji": config.kanji_file,
+        "kanji_notes": config.kanji_notes_file,
+        "readings": config.jpdb_readings_file,
         "media": media,
     }
 
@@ -159,10 +189,12 @@ def test_vocabulary_plan_binds_every_package_input_without_writing(
     assert [item.label for item in plan.source_inputs] == [
         "record source",
         "kanji reference store",
+        "jpdb reading facts",
     ]
     assert tuple(item.path for item in plan.source_inputs) == (
         paths["source"].resolve(),
         paths["kanji"].resolve(),
+        paths["readings"].resolve(),
     )
     assert tuple(item.path.name for item in plan.template_inputs) == (
         "recognition-front.html",
@@ -174,7 +206,9 @@ def test_vocabulary_plan_binds_every_package_input_without_writing(
         assert item.sha256 == hashlib.sha256(item.path.read_bytes()).hexdigest()
 
 
-@pytest.mark.parametrize("changed", ["deck", "source", "template", "media", "kanji"])
+@pytest.mark.parametrize(
+    "changed", ["deck", "source", "template", "media", "kanji", "readings"]
+)
 def test_vocabulary_fingerprint_binds_each_exact_input(
     tmp_path: Path,
     changed: str,
@@ -195,8 +229,23 @@ def test_vocabulary_fingerprint_binds_each_exact_input(
         path.write_text(path.read_text(encoding="utf-8") + "\n<!-- changed -->\n", encoding="utf-8")
     elif changed == "media":
         paths["media"].write_bytes(b"changed exact audio bytes")
-    else:
+    elif changed == "kanji":
         paths["kanji"].write_text("{ }\n", encoding="utf-8")
+    else:
+        # A word card's character block draws these figures, so replacing them
+        # changes the package the same way a template edit does.
+        jpdb_kanji.save_readings(
+            paths["readings"],
+            {
+                "話": jpdb_kanji.CharacterReadings(
+                    character="話",
+                    source_url="https://jpdb.io/kanji/%E8%A9%B1",
+                    fetched_at_utc="2026-09-07T00:00:00Z",
+                    sha256="e" * 64,
+                    groups=(),
+                )
+            },
+        )
 
     after = deck_package.plan_deck_package(config, paths["vocabulary"])
 
@@ -572,3 +621,66 @@ def test_package_refuses_a_configured_deck_replaced_by_an_in_repository_symlink(
 
     with pytest.raises(deck_package.DeckPackageError, match="symlink|regular|safely"):
         deck_package.plan_deck_package(config, deck)
+
+
+def test_character_plan_binds_the_curated_store_and_publishes_once(
+    tmp_path: Path,
+) -> None:
+    """A character package is planned and executed through the same service as
+    every other deck. Its inputs are the curated notes and the character
+    templates — the facts file is not one, because every figure a card shows
+    was copied onto its note when the note was written."""
+    config, paths = _project(tmp_path)
+
+    plan = deck_package.plan_deck_package(config, paths["character"])
+
+    assert plan.kind == "kanji"
+    assert plan.deck_name == "Character deck"
+    assert plan.note_count == 1
+    assert plan.card_count == 1
+    assert plan.card_types == ("recognition",)
+    assert plan.record_ids == ("kanji:話",)
+    assert [item.label for item in plan.source_inputs] == ["character note store"]
+    assert tuple(item.path for item in plan.source_inputs) == (
+        paths["kanji_notes"].resolve(),
+    )
+    assert tuple(item.path.name for item in plan.template_inputs) == (
+        "kanji-recognition-front.html",
+        "kanji-recognition-back.html",
+        "style.css",
+    )
+    assert plan.media_inputs == ()
+
+    result = deck_package.execute_deck_package(config, plan)
+
+    assert result.output_path == (config.dist_dir / "kanji.apkg").resolve()
+    assert result.note_count == 1 and result.card_count == 1
+    assert (
+        result.package_sha256
+        == hashlib.sha256(result.output_path.read_bytes()).hexdigest()
+    )
+
+
+def test_a_character_package_refuses_a_plan_its_notes_no_longer_match(
+    tmp_path: Path,
+) -> None:
+    """The curated store is an input like any other: editing a note after the
+    plan was rendered means the confirmed package is not the one that would be
+    built."""
+    config, paths = _project(tmp_path)
+    stale = deck_package.plan_deck_package(config, paths["character"])
+    kanji_notes.save_notes(
+        paths["kanji_notes"],
+        {
+            "話": kanji_notes.CharacterNote(
+                character="話",
+                id=character_record_id("話"),
+                meanings=("to speak",),
+                stroke_count=13,
+            )
+        },
+    )
+
+    with pytest.raises(deck_package.DeckPackageError, match="changed after"):
+        deck_package.execute_deck_package(config, stale)
+    assert not (config.dist_dir / "kanji.apkg").exists()

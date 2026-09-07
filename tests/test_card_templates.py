@@ -7,11 +7,12 @@ from pathlib import Path
 import pytest
 
 TEMPLATES = Path(__file__).parents[1] / "templates" / "japanese-study"
-#: The *word* card backs. A pattern card is a rule with no word on it, so it
-#: carries no dictionary lookup and is not held to that contract.
+#: The *word* card backs. A pattern card is a rule with no word on it and a
+#: character card is one character, so neither carries a dictionary lookup for
+#: a word and neither is held to that contract.
 BACKS = tuple(
     path for path in sorted(TEMPLATES.glob("*-back.html"))
-    if not path.name.startswith("pattern-")
+    if not path.name.startswith(("pattern-", "kanji-"))
 )
 #: Every card face, not only the backs, and pattern faces included. The
 #: no-JavaScript rule is about what AnkiWeb will strip, and it strips a script
@@ -57,6 +58,12 @@ def test_every_lookup_back_takes_its_query_already_encoded() -> None:
 def test_every_card_face_is_accounted_for() -> None:
     """Same reason as above, for the wider glob the no-JavaScript rule uses."""
     assert [path.name for path in ALL_FACES] == [
+        "kanji-production-back.html",
+        "kanji-production-front.html",
+        "kanji-reading-back.html",
+        "kanji-reading-front.html",
+        "kanji-recognition-back.html",
+        "kanji-recognition-front.html",
         "pattern-back.html",
         "pattern-front.html",
         "production-back.html",
@@ -100,23 +107,33 @@ def test_every_field_a_template_names_exists_on_the_notetype() -> None:
     Checked at source level because the rendered harness can only cover the
     fields its fixtures happen to populate.
 
-    Each face is held to *its own* notetype, not to the union of both. A union
-    is satisfied by `{{Trigger}}` typed into a word-card back, or `{{KanjiInfo}}`
-    into a rule card — each a field the notetype that template belongs to does
-    not have, and so each one card-wide breakage the check would wave through."""
+    Each face is held to *its own* notetype, not to the union of all three. A
+    union is satisfied by `{{Trigger}}` typed into a word-card back, or
+    `{{KanjiInfo}}` into a rule card — each a field the notetype that template
+    belongs to does not have, and so each one card-wide breakage the check
+    would wave through."""
     import re
 
     from japanese_anki.exporters.anki import FIELD_NAMES
 
     # `FrontSide` is Anki's own, and `type:`/`furigana:`/`hint:` are filters
     # applied to a field named after the colon.
+    from japanese_anki.exporters.kanji_cards import KANJI_FIELDS
     from japanese_anki.exporters.pattern_cards import FIELDS as PATTERN_FIELDS
 
-    # Taken from the exporters rather than restated, so a rename in either one
-    # fails here instead of being blessed by a matching literal.
+    # Taken from the exporters rather than restated, so a rename in any one of
+    # them fails here instead of being blessed by a matching literal.
+    notetypes = {"pattern-": PATTERN_FIELDS, "kanji-": KANJI_FIELDS}
     for path in ALL_FACES:
-        pattern_face = path.name.startswith("pattern-")
-        known = {*(PATTERN_FIELDS if pattern_face else FIELD_NAMES), "FrontSide"}
+        fields = next(
+            (
+                names
+                for prefix, names in notetypes.items()
+                if path.name.startswith(prefix)
+            ),
+            FIELD_NAMES,
+        )
+        known = {*fields, "FrontSide"}
         referenced: set[str] = set()
         for raw in re.findall(r"\{\{([^}]+)\}\}", path.read_text(encoding="utf-8")):
             name = raw.strip().lstrip("#^/").split(":")[-1].strip()

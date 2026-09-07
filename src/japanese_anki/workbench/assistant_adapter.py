@@ -37,6 +37,7 @@ from japanese_anki.application import (
     assistant_context,
     assistant_deck_creation,
     assistant_deletion,
+    assistant_kanji_notes,
     assistant_operations,
     assistant_promotion,
     assistant_staging_actions,
@@ -45,6 +46,7 @@ from japanese_anki.application import (
     card_revision_finish,
     describe_extraction,
     dispatch_extraction,
+    kanji_finish,
     revision,
     revision_finish,
 )
@@ -56,6 +58,9 @@ from japanese_anki.models import ExampleSentence
 from japanese_anki.workbench.assistant import (
     AssistantDeckChoice,
     ChatReply,
+    KanjiFinishActionChoice,
+    KanjiFinishChoice,
+    KanjiFinishResumption,
     OperationActionChoice,
     OperationChoice,
     RevisionConfirmation,
@@ -72,6 +77,11 @@ from japanese_anki.workbench.assistant import (
     StagedContentFinishReview,
 )
 from japanese_anki.workbench.assistant import RevisionPlan as AssistantRevisionPlan
+from japanese_anki.workbench.assistant_packages import (
+    AssistantPackageError,
+    AssistantPackageOffer,
+    LocalAssistantPackageStore,
+)
 
 __all__ = [
     "RevisionAssistantAdapter",
@@ -364,6 +374,11 @@ class RevisionAssistantAdapter:
         init=False,
         repr=False,
     )
+    _package_store: LocalAssistantPackageStore | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
     _finish_plans: dict[
         str,
         revision_finish.RevisionFinishPlan
@@ -378,6 +393,145 @@ class RevisionAssistantAdapter:
         init=False,
         repr=False,
     )
+
+    def bind_package_downloads(
+        self,
+        download_prefix: str,
+    ) -> LocalAssistantPackageStore:
+        """Build the store the isolated origin serves finished packages from."""
+
+        store = LocalAssistantPackageStore(
+            config=self.config,
+            download_prefix=download_prefix,
+        )
+        self._package_store = store
+        return store
+
+    def _offer_package(self, receipt_id: str) -> AssistantPackageOffer | None:
+        """Offer the finished deck inline, or say nothing when it cannot be."""
+
+        store = self._package_store
+        if store is None:
+            return None
+        try:
+            return store.offer(receipt_id)
+        except AssistantPackageError:
+            return None
+
+    def list_kanji_finish_choices(self) -> tuple[KanjiFinishChoice, ...]:
+        """List durable character-note receipts a fresh process can act on.
+
+        Nothing here is remembered from before a restart: the receipts on disk
+        are the owner's recorded confirmations, and reading them plans nothing,
+        looks nothing up, and mints no capability.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            receipts = kanji_finish.list_kanji_finishes(fresh_config)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(
+                f"Janki could not read its saved kanji card receipts: {exc}"
+            ) from exc
+        choices: list[KanjiFinishChoice] = []
+        for receipt in receipts:
+            target = self._display_path(fresh_config, receipt.deck_path)
+            package = self._display_path(fresh_config, receipt.output_path)
+            if receipt.succeeded:
+                actions = (
+                    KanjiFinishActionChoice(
+                        action="download",
+                        label="Download the finished package",
+                    ),
+                )
+                detail = (
+                    f"complete · {receipt.card_count} card(s) · {package} · "
+                    f"receipt {receipt.receipt_id}"
+                )
+            else:
+                actions = (
+                    KanjiFinishActionChoice(
+                        action="resume",
+                        label="Resume this exact confirmed batch",
+                    ),
+                )
+                detail = (
+                    f"{receipt.state} · unfinished · {target} · "
+                    f"receipt {receipt.receipt_id}"
+                )
+            choices.append(
+                KanjiFinishChoice(
+                    receipt_id=receipt.receipt_id,
+                    state=receipt.state,
+                    deck_name=receipt.deck_name,
+                    target=target,
+                    characters=assistant_kanji_notes.characters_display(
+                        receipt.characters
+                    ),
+                    detail=detail,
+                    actions=actions,
+                )
+            )
+        return tuple(choices)
+
+    def resume_kanji_finish(
+        self,
+        *,
+        receipt_id: str,
+        action: str,
+        progress: Callable[[str], None],
+    ) -> KanjiFinishResumption:
+        """Continue one durable receipt, or re-offer a completed package.
+
+        The receipt is the authority. This never prepares character notes,
+        plans a replacement batch, mints a consent capability, or makes a
+        provider call: it hands the saved receipt id to the application
+        service, which revalidates it and continues exactly where it stopped.
+        """
+
+        if action not in {"resume", "download"}:
+            raise RevisionRefusal("That kanji card recovery action is not supported.")
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            if action == "download":
+                receipt = kanji_finish.inspect_kanji_finish(fresh_config, receipt_id)
+            else:
+                receipt = kanji_finish.resume_kanji_finish(
+                    fresh_config,
+                    receipt_id,
+                    progress=progress,
+                )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        if not receipt.succeeded:
+            return KanjiFinishResumption(
+                message=(
+                    f"Kanji card receipt {receipt.receipt_id} is in durable state "
+                    f"{receipt.state}. Nothing already written was repeated."
+                ),
+                receipt_id=receipt.receipt_id,
+                state=receipt.state,
+                complete=False,
+            )
+        output = self._display_path(fresh_config, receipt.output_path)
+        message = (
+            f"Kanji cards for {assistant_kanji_notes.characters_display(receipt.characters)} "
+            f"are complete in {receipt.deck_name!r}: {receipt.card_count} card(s) at "
+            f"{output}. Finish receipt: {receipt.receipt_id}. Package SHA-256: "
+            f"{receipt.package_sha256}."
+        )
+        offer = self._offer_package(receipt.receipt_id)
+        if offer is not None:
+            message = (
+                f"{message}\n\n[Download {offer.filename}]({offer.url}) — "
+                f"{offer.byte_count} bytes."
+            )
+        return KanjiFinishResumption(
+            message=message,
+            receipt_id=receipt.receipt_id,
+            state=receipt.state,
+            complete=True,
+        )
 
     def _remember_agent_plan(
         self,
@@ -863,6 +1017,9 @@ class RevisionAssistantAdapter:
                 result=result,
                 deck_scope=deck_scope,
                 owner_message=message,
+                owner_history=tuple(
+                    text for role, text in history if role == "user"
+                ),
             )
         except (RevisionRefusal, JankiError, OSError, TypeError, ValueError) as exc:
             return ChatReply(
@@ -879,6 +1036,7 @@ class RevisionAssistantAdapter:
         result: assistant_agent.AgentRunResult,
         deck_scope: str,
         owner_message: str | None = None,
+        owner_history: tuple[str, ...] = (),
     ) -> ChatReply:
         """Resolve one untrusted model intent through a local Janki planner."""
 
@@ -1337,6 +1495,35 @@ class RevisionAssistantAdapter:
                     ),
                     confirm_label="Create this exact deck",
                     progress_label="Preparing deck",
+                ),
+                action_instruction=intent.instruction,
+            )
+        if intent.kind == "add_kanji_notes":
+            finish = self._prepare_kanji_notes(
+                config,
+                intent=intent,
+                owner_message=owner_message,
+                owner_history=owner_history,
+            )
+            effects, disclosures = self._kanji_notes_description(finish)
+            target = self._display_path(config, finish.deck_path)
+            prepared = _PreparedAgentAction(
+                kind=intent.kind,
+                focus_scope=deck_scope,
+                instruction=intent.instruction,
+                target=target,
+                plan=finish,
+            )
+            self._remember_agent_plan(finish.fingerprint, prepared)
+            return ChatReply(
+                text=result.answer,
+                action=AssistantRevisionPlan(
+                    request_fingerprint=finish.fingerprint,
+                    target=target,
+                    effects=effects,
+                    disclosures=disclosures,
+                    confirm_label="Add these exact character notes",
+                    progress_label="Preparing finish",
                 ),
                 action_instruction=intent.instruction,
             )
@@ -1966,6 +2153,260 @@ class RevisionAssistantAdapter:
             )
         )
 
+    def _kanji_deck_path(
+        self,
+        config: ProjectConfig,
+        broker: assistant_context.AssistantContextBroker,
+        resource_id: str,
+    ) -> Path:
+        """Resolve one opaque destination back to its exact configured file."""
+
+        matches: list[Path] = []
+        for candidate in status.deck_files(config):
+            try:
+                if broker.resource_id_for_deck(candidate) == resource_id:
+                    matches.append(candidate.absolute())
+            except (JankiError, OSError, UnicodeError, ValueError):
+                continue
+        if len(matches) != 1:
+            raise RevisionRefusal(
+                "That destination no longer resolves to one configured deck; "
+                "request a fresh catalog before confirming."
+            )
+        return matches[0]
+
+    def _prepare_kanji_notes(
+        self,
+        config: ProjectConfig,
+        *,
+        intent: assistant_agent.AgentActionIntent,
+        owner_message: str | None,
+        owner_history: tuple[str, ...] = (),
+    ) -> kanji_finish.KanjiFinishPlan:
+        """Validate the closed character intent and prepare one exact batch.
+
+        What the owner decided is in the conversation, not in whichever
+        sentence happened to be last: naming five characters and then
+        answering "Genki II Kanji" is one ordinary exchange, and demanding
+        that every target, the deck name and each direction reappear in the
+        final message would make it impossible. Preparation is prompt-led
+        planning that writes nothing; the confirmation rendered afterwards is
+        the write authority, and it binds the exact batch this returns.
+
+        A production cue is the one exception, because it is study content
+        rather than a choice: it is checked against the owner's own turns.
+        """
+
+        options = dict(intent.options)
+        allowed = {
+            "study_type",
+            "kanji_characters",
+            "card_directions",
+            "deck_name",
+            "destination_resource_id",
+            "refresh_readings",
+            "production_cues",
+        }
+        if not set(options) <= allowed or intent.record_ids or intent.resource_ids:
+            raise RevisionRefusal(
+                "Character notes take only their own closed options; they never "
+                "carry canonical card ids or extra resources."
+            )
+        study_type = options.get("study_type", "kanji")
+        if study_type != "kanji":
+            raise RevisionRefusal(
+                f"Janki has no character-note flow for study type {study_type!r}; "
+                "explicit character targets create kanji notes only."
+            )
+        raw_characters = options.get("kanji_characters")
+        if (
+            not isinstance(raw_characters, list)
+            or not raw_characters
+            or any(not isinstance(item, str) for item in raw_characters)
+        ):
+            raise RevisionRefusal(
+                "Character notes need the owner's exact character targets."
+            )
+        characters = tuple(raw_characters)
+        if any(len(character) != 1 for character in characters):
+            raise RevisionRefusal(
+                "Each character target must be exactly one character; Janki does "
+                "not split or expand a word into characters."
+            )
+        if len(set(characters)) != len(characters):
+            raise RevisionRefusal(
+                "Each requested character may appear only once; one character "
+                "makes exactly one note."
+            )
+
+        raw_directions = options.get("card_directions", [])
+        if not isinstance(raw_directions, list) or any(
+            not isinstance(item, str) for item in raw_directions
+        ):
+            raise RevisionRefusal("The requested card directions are invalid.")
+        directions = tuple(raw_directions) or ("recognition",)
+
+        deck_name = options.get("deck_name")
+        destination = options.get("destination_resource_id")
+        if (deck_name is None) == (destination is None):
+            raise RevisionRefusal(
+                "Send the character notes either to one existing character deck "
+                "or to one new deck name, not both and not neither."
+            )
+        deck_path: Path | None = None
+        if destination is not None:
+            if not isinstance(destination, str) or not destination:
+                raise RevisionRefusal("The destination deck resource is invalid.")
+            broker = assistant_context.AssistantContextBroker(config)
+            try:
+                context = broker.deck_context(destination)
+            except (JankiError, OSError, UnicodeError, ValueError) as exc:
+                raise RevisionRefusal(str(exc)) from exc
+            if context.deck_kind != "kanji":
+                raise RevisionRefusal(
+                    "Character notes need a character deck. That destination is a "
+                    f"{context.deck_kind or 'vocabulary'} deck, and adding kanji "
+                    "study material does not convert its existing note type."
+                )
+            deck_path = self._kanji_deck_path(config, broker, destination)
+        elif not isinstance(deck_name, str):
+            raise RevisionRefusal("The new deck name is invalid.")
+
+        refresh = options.get("refresh_readings", False)
+        if not isinstance(refresh, bool):
+            raise RevisionRefusal(
+                "Refreshing saved readings must be an explicit true-or-false choice."
+            )
+
+        raw_cues = options.get("production_cues", [])
+        if not isinstance(raw_cues, list) or any(
+            not isinstance(item, str) for item in raw_cues
+        ):
+            raise RevisionRefusal("The production cues are invalid.")
+        cues: list[tuple[str, str]] = []
+        for entry in raw_cues:
+            character, separator, cue = entry.partition("=")
+            if not separator or not character.strip() or not cue.strip():
+                raise RevisionRefusal(
+                    "Every production cue must be written as character=cue with "
+                    "the owner's own text."
+                )
+            self._require_owner_authored(
+                owner_message,
+                owner_history,
+                cue.strip(),
+                label="production cue",
+            )
+            cues.append((character.strip(), cue.strip()))
+
+        try:
+            request = assistant_kanji_notes.AssistantKanjiNotesRequest(
+                characters=characters,
+                deck_path=deck_path,
+                deck_name=deck_name if deck_path is None else None,
+                directions=directions,
+                refresh_readings=refresh,
+                production_cues=tuple(cues),
+                instruction=intent.instruction,
+            )
+            notes_plan = assistant_kanji_notes.plan_kanji_notes(config, request)
+            return kanji_finish.plan_kanji_finish(config, notes_plan)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+
+    def _kanji_notes_description(
+        self,
+        plan: kanji_finish.KanjiFinishPlan,
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """Say what the owner is about to make, in the words of the thing.
+
+        Every exact binding — the plan digest, the store path, the receipt id
+        — is recorded in the projection this renders from and in the durable
+        receipt written on confirmation. None of it belongs on the routine
+        card: the decision here is whether to make these cards, and a digest
+        is not something anyone can check by reading it.
+        """
+
+        projection = plan.projection
+        target = projection.get("target")
+        inputs = projection.get("inputs")
+        if not isinstance(target, dict) or not isinstance(inputs, dict):
+            raise RevisionRefusal("The character-note plan is incomplete.")
+        notes = target.get("notes")
+        deck_note_count = target.get("deck_note_count")
+        deck_card_count = target.get("deck_card_count")
+        if (
+            not isinstance(notes, list)
+            or len(notes) != plan.note_count
+            or not isinstance(deck_note_count, int)
+            or not isinstance(deck_card_count, int)
+        ):
+            raise RevisionRefusal("The character-note plan is incomplete.")
+        characters = assistant_kanji_notes.characters_display(plan.characters)
+        effects = [
+            (
+                f"Add {plan.note_count} character note(s) — {characters} — to "
+                f"{plan.deck_name}"
+            ),
+            "Card directions: " + ", ".join(plan.directions),
+        ]
+        effects.append(
+            f"That makes {plan.card_count} new card(s)."
+            if deck_note_count == plan.note_count
+            else (
+                f"That makes {plan.card_count} new card(s); the rebuilt deck will "
+                f"hold {deck_note_count} notes and {deck_card_count} cards "
+                "altogether."
+            )
+        )
+        effects.append(
+            f"Create the deck {plan.deck_name} and build it"
+            if plan.deck_state == "new"
+            else f"Add to the existing deck {plan.deck_name} and rebuild it"
+        )
+        for note in notes:
+            if not isinstance(note, dict):
+                raise RevisionRefusal("A prepared character note is invalid.")
+            cards = note.get("cards")
+            if not isinstance(cards, list) or not cards:
+                raise RevisionRefusal("A prepared character note is invalid.")
+            for card in cards:
+                if not isinstance(card, dict):
+                    raise RevisionRefusal("A prepared character note is invalid.")
+                direction = card.get("direction")
+                front = card.get("front")
+                back = card.get("back")
+                if (
+                    not isinstance(direction, str)
+                    or not isinstance(front, str)
+                    or not isinstance(back, list)
+                ):
+                    raise RevisionRefusal("A prepared character note is invalid.")
+                effects.append(f"{direction.title()} front — {front}")
+                effects.append(
+                    f"{direction.title()} back — "
+                    + " · ".join(str(line) for line in back)
+                )
+        refreshed = inputs.get("refresh_readings") is True
+        disclosures = (
+            (
+                f"Janki looked {characters} up in its dictionary sources "
+                "(KANJIDIC, KanjiVG, and jpdb's kanji and reading pages)."
+            ),
+            (
+                "This refreshes the saved reading figures for those characters."
+                if refreshed
+                else "Saved reading figures are reused; only pages Janki did not "
+                "already have were requested."
+            ),
+            "Dictionary only: no model call, no audio, nothing billed.",
+            (
+                "Confirming writes the notes, creates the deck if it is new, and "
+                "builds the package. You can download it here afterwards."
+            ),
+        )
+        return tuple(effects), disclosures
+
     @staticmethod
     def _require_owner_literal(
         owner_message: str | None,
@@ -1978,6 +2419,29 @@ class RevisionAssistantAdapter:
         if not owner_message or value not in owner_message:
             raise RevisionRefusal(
                 f"The {label} must appear verbatim in the owner's current message; "
+                "the Assistant may not invent or paraphrase it."
+            )
+
+    @staticmethod
+    def _require_owner_authored(
+        owner_message: str | None,
+        owner_history: tuple[str, ...],
+        value: str,
+        *,
+        label: str,
+    ) -> None:
+        """Refuse authored content the owner never actually typed.
+
+        A multi-turn exchange is ordinary, so the owner's earlier turns count
+        as much as the latest one. Only their turns do: an assistant message
+        quoting a cue back is the model's prose, and accepting it would let a
+        model author study content by proposing it and reading it again.
+        """
+
+        turns = [text for text in (*owner_history, owner_message or "") if text]
+        if not any(value in text for text in turns):
+            raise RevisionRefusal(
+                f"The {label} must appear verbatim in something the owner wrote; "
                 "the Assistant may not invent or paraphrase it."
             )
 
@@ -3827,6 +4291,49 @@ class RevisionAssistantAdapter:
                 finish=None,
                 complete=True,
             )
+        if expected.kind == "add_kanji_notes":
+            plan = expected.plan
+            if (
+                not isinstance(plan, kanji_finish.KanjiFinishPlan)
+                or confirmation.expected_fingerprint != plan.fingerprint
+            ):
+                raise RevisionRefusal(
+                    "This character-note action no longer matches the rendered "
+                    "notes. Nothing was written."
+                )
+            try:
+                fresh_config = ProjectConfig.load(self.config.root)
+                result = kanji_finish.execute_kanji_finish(
+                    fresh_config,
+                    plan,
+                    progress=progress,
+                )
+            except (JankiError, OSError, TypeError, ValueError) as exc:
+                try:
+                    durable = kanji_finish.inspect_kanji_finish(
+                        self.config,
+                        plan.fingerprint,
+                    )
+                except (JankiError, OSError, TypeError, ValueError):
+                    recovery = ""
+                else:
+                    recovery = (
+                        f" Durable receipt {durable.receipt_id} is in state "
+                        f"{durable.state}; resume that exact receipt instead of "
+                        "confirming again."
+                    )
+                raise RevisionRefusal(f"{exc}{recovery}") from exc
+            if not result.succeeded:
+                raise RevisionRefusal(
+                    f"Character notes paused in durable state {result.state}. "
+                    f"Resume exact receipt {result.receipt_id}; the notes already "
+                    "written are not repeated."
+                )
+            return RevisionExecution(
+                message=self._kanji_finish_message(fresh_config, plan, result),
+                finish=None,
+                complete=True,
+            )
         if expected.kind == "extract_source":
             plan = expected.plan
             if (
@@ -4269,6 +4776,35 @@ class RevisionAssistantAdapter:
             return path.resolve().relative_to(config.root.resolve()).as_posix()
         except ValueError:
             return str(path)
+
+    def _kanji_finish_message(
+        self,
+        config: ProjectConfig,
+        plan: kanji_finish.KanjiFinishPlan,
+        result: kanji_finish.KanjiFinishResult,
+    ) -> str:
+        """Say what the owner now has, and hand it to them.
+
+        The receipt id, the package digest and the exact paths are all in the
+        durable receipt, which is where a recovery reader looks for them.
+        This is the sentence after "done", so it names the deck, the
+        characters and the download.
+        """
+
+        characters = assistant_kanji_notes.characters_display(plan.characters)
+        message = (
+            f"Added {plan.note_count} character note(s) — {characters} — to "
+            f"{plan.deck_name}. It now holds {result.note_count} note(s) and "
+            f"{result.card_count} card(s)."
+        )
+        offer = self._offer_package(result.receipt_id)
+        if offer is None:
+            output = self._display_path(config, result.output_path)
+            return f"{message} The package is at {output}."
+        return (
+            f"{message}\n\n[Download {offer.filename}]({offer.url}) — "
+            f"{offer.byte_count} bytes."
+        )
 
     @staticmethod
     def _review_example(example: ExampleSentence) -> RevisionExampleReview:

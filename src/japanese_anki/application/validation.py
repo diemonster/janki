@@ -26,7 +26,7 @@ from japanese_anki import patterns
 from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters import pattern_cards
+from japanese_anki.exporters import kanji_cards, pattern_cards
 from japanese_anki.exporters.anki import deck_kind, resolve_deck_records
 from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.validation import ValidationIssue, has_errors, validate_records
@@ -104,6 +104,19 @@ def validate_path(
             ], 0
     else:
         kind = ""
+    if kind == "kanji":
+        # A character deck holds no records, so the ordinary path found none
+        # and called the file clean — leaving every defect the build refuses
+        # invisible to the command whose job is catching one first.
+        return [
+            ValidationIssue(
+                "error",
+                problem,
+                source=str(path),
+                code="validation-kanji-deck-invalid",
+            )
+            for problem in kanji_cards.deck_problems(path, config)
+        ], 0
     if kind in ("pattern", "conjugation"):
         # A pattern or conjugation deck holds no records, so the ordinary path
         # found none and called the file clean — leaving every defect the build

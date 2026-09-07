@@ -99,6 +99,31 @@ review step. To disable the review in this clone, create
 `.claude/hooks/DISABLED` with a short reason; delete it to re-enable it. That
 marker stops the review only: LFS keeps running either way.
 
+### Launching Claude for work on janki
+
+Development, planning and review model launches go through one tracked
+launcher, and the review hooks already use it:
+
+```bash
+scripts/claude-subscription.py --check  # free: verify the login, then stop
+scripts/claude-subscription.py --model 'claude-opus-5[1m]' --effort xhigh -p "..."
+scripts/claude-subscription.py --model 'claude-opus-5[1m]' --effort xhigh  # interactive
+```
+
+Settings files are disabled for these launches, so name the model and effort
+explicitly: `xhigh` for implementation, `max` for planning and review.
+
+It hands the CLI an allowlisted environment, resolves an absolute `claude`, and
+checks `auth status --json` under exactly the environment, working directory
+and `--safe-mode --setting-sources ''` the launch itself uses. Anything short of
+a claude.ai first-party Pro or Max login is refused, with no fallback — an
+`ANTHROPIC_API_KEY` sitting in your shell is otherwise invisible until the
+Console bill arrives. Your environment is left alone; the launcher simply does
+not pass it on. This covers the repository's entry points, not a `claude` you
+type in some other terminal. Paid content calls — `janki extract`, `revise`,
+`promote --accept-coverage`, sentence audio — are unaffected and still ask for
+their own consent.
+
 ### Audio and Git LFS
 
 Once bootstrap has run, nothing about day to day work changes: ordinary
@@ -124,6 +149,7 @@ The first-run guide in the workbench keeps this distinction visible:
 | --- | --- | --- |
 | Anthropic Claude | Reads PDFs and photos, checks a table's completeness when asked, and is the default `enrich --ai` provider for bare-word cards | Networked, paid API. `ANTHROPIC_API_KEY` is required. Claude Pro/Max is a separate subscription. |
 | jpdb | Supplies dictionary facts and witnesses readings | Networked account API, not a model call. `JPDB_API_KEY` is required. |
+| JPDB kanji pages | Supplies published reading percentages and reading-bound word examples | Personal, on-demand page lookups; no account API key. Saved evidence is reused and builds stay offline. |
 | KANJIDIC / KanjiVG | Supplies kanji facts and stroke diagrams | Networked reference sources; no account or API key. |
 | VOICEVOX | Speaks words and, by default, examples | Local service on your computer; no API key or per-call bill. Voice terms still apply. |
 | OpenAI Realtime | Optionally speaks example sentences with a stable per-record voice | Networked, paid API. `OPENAI_API_KEY` is required; ChatGPT billing is separate. |
@@ -140,6 +166,22 @@ Git, or network tools. An active deck is optional conversational focus; it does
 not limit which supported library action Janki can plan. The uncluttered routine
 page does not repeat provider, model and context-provenance details; the exact
 request manifest and operation journal retain them.
+
+For character study, tell Janki the targets and destination, for example:
+“Make a kanji deck called 201 Week 2 Kanji for 物、特、鳥、料、理.” Explicit
+kanji intent goes directly to character-note planning. Janki prepares five
+notes and five recognition cards by default, shows the actual card content and
+count, then uses one confirmation to save the notes, create a compatible deck
+when needed, and build the download. Progress and interruption recovery stay in
+the thread. Dictionary preparation makes no paid card-writing call; ordinary
+Assistant messages still use the configured conversational provider.
+
+Recognition asks for the character's core meaning. **Show Answer** reveals
+meanings, strokes, common reading examples and source-labelled JPDB
+percentages. Additional readings have their own caret on the answer. Character
+notes live separately from vocabulary; compounds in their examples do not
+become word notes. Reading practice needs a fixed source-bound example, and
+production needs an explicit disambiguating cue. These directions are optional.
 
 Attaching one supported source of up to 128 MiB in Janki only saves an immutable
 local copy under `data/inbox/`. Uploading does not add its bytes to the
@@ -346,7 +388,8 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki promote FILE.yaml` | Move a reviewed staging file into the collection |
 | `janki enrich --jpdb [ID...]` | Fill dictionary fields for selected records, or every record when IDs are omitted |
 | `janki enrich --ai` | Propose English glosses, complete the polite/casual example slots, and add a usage note in one bare-word call |
-| `janki kanji [ID...]` | Add missing kanji reference for selected records, or the collection when IDs are omitted |
+| `janki kanji [ID...]` | Add missing character references and JPDB reading evidence for selected vocabulary records, or the collection when IDs are omitted |
+| `janki kanji-notes CHAR... --deck-name NAME` | Prepare explicit character notes, create a character deck and build it; `--deck PATH` adds to an existing character deck, and `--dry-run` previews the batch |
 | `janki audio --words --examples [ID...]` | Voice selected records, or the collection when IDs are omitted |
 | `janki validate [PATH]` | Check records, decks, or a staging file |
 | `janki build [DECK]` | Build one deck, or `--all` |

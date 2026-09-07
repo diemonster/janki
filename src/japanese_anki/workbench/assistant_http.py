@@ -27,6 +27,7 @@ from japanese_anki.localhttp import MAX_BODY_BYTES, LocalOnlyHandler, LocalOnlyS
 from japanese_anki.workbench.assistant import (
     CAPABILITIES_MESSAGE,
     MANAGE_OPERATIONS_MESSAGE,
+    RESUME_KANJI_MESSAGE,
     SHOW_DECKS_MESSAGE,
     SOURCE_HELP_MESSAGE,
     AssistantCore,
@@ -38,6 +39,10 @@ from japanese_anki.workbench.assistant_attachments import (
     MAX_ASSISTANT_ATTACHMENT_BYTES,
     AssistantAttachmentError,
     LocalAssistantAttachmentStore,
+)
+from japanese_anki.workbench.assistant_packages import (
+    AssistantPackageError,
+    LocalAssistantPackageStore,
 )
 
 __all__ = [
@@ -149,7 +154,9 @@ class AssistantHTTPServer(LocalOnlyServer):
     script_path: str
     style_path: str
     upload_path_prefix: str | None
+    download_path_prefix: str
     attachment_store: LocalAssistantAttachmentStore | None
+    package_store: LocalAssistantPackageStore | None
     deck_choices: tuple[AssistantDeckChoice, ...]
 
 
@@ -173,6 +180,7 @@ class _AssistantHandler(LocalOnlyHandler):
         *,
         content_type: str = "text/html; charset=utf-8",
         content_length: int | None = None,
+        content_disposition: str | None = None,
     ) -> None:
         """Use no-referrer on this third-party-script isolation origin."""
 
@@ -180,6 +188,8 @@ class _AssistantHandler(LocalOnlyHandler):
         self.send_header("Content-Type", content_type)
         if content_length is not None:
             self.send_header("Content-Length", str(content_length))
+        if content_disposition is not None:
+            self.send_header("Content-Disposition", content_disposition)
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -204,8 +214,31 @@ class _AssistantHandler(LocalOnlyHandler):
             )
         elif self.path == self.server.style_path:
             self._send(200, _stylesheet(), content_type="text/css; charset=utf-8")
+        elif self.path.startswith(self.server.download_path_prefix):
+            self._send_package(self.path.removeprefix(self.server.download_path_prefix))
         else:
             self._error(404, "This assistant route does not exist.")
+
+    def _send_package(self, token: str) -> None:
+        """Serve only the exact package a complete finish receipt still proves."""
+
+        store = self.server.package_store
+        if store is None or not token or not _TOKEN.fullmatch(token):
+            self._error(404, "This assistant route does not exist.")
+            return
+        try:
+            filename, payload = store.read(token)
+        except AssistantPackageError as error:
+            self._error(409, str(error))
+            return
+        self._start_response(
+            200,
+            content_type="application/octet-stream",
+            content_length=len(payload),
+            content_disposition=f'attachment; filename="{filename}"',
+        )
+        self.wfile.write(payload)
+        self.close_connection = True
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         if self.path != self.server.api_path:
@@ -519,6 +552,11 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
           prompt: {json.dumps(MANAGE_OPERATIONS_MESSAGE)},
           icon: "keys",
         }},
+        {{
+          label: "Resume kanji cards",
+          prompt: {json.dumps(RESUME_KANJI_MESSAGE)},
+          icon: "book-open",
+        }},
       ]"""
     if server.attachment_store is None:
         attachments = "{ enabled: false }"
@@ -699,6 +737,7 @@ def create_assistant_sidecar(
         bind_loopback(server)
         root = f"/{token}/"
         upload_path_prefix = f"{root}attachments/" if inbox_root is not None else None
+        download_path_prefix = f"{root}packages/"
         if upload_path_prefix is not None:
             attachment_store = LocalAssistantAttachmentStore(
                 inbox_root=inbox_root,
@@ -706,6 +745,19 @@ def create_assistant_sidecar(
                     f"http://{server.expected_host}{upload_path_prefix}"
                 ),
             )
+        # The adapter owns the repository config, so it builds the store this
+        # origin serves. A callback set without finished deliverables simply
+        # offers no downloads.
+        binder = getattr(callbacks, "bind_package_downloads", None)
+        package_store: LocalAssistantPackageStore | None = None
+        if callable(binder):
+            package_store = binder(
+                f"http://{server.expected_host}{download_path_prefix}"
+            )
+            if not isinstance(package_store, LocalAssistantPackageStore):
+                raise TypeError(
+                    "bind_package_downloads must return a package store."
+                )
         core = create_assistant_core(
             callbacks,
             deck_choices=deck_choices,
@@ -719,7 +771,9 @@ def create_assistant_sidecar(
         server.script_path = f"{root}application.js"
         server.style_path = f"{root}application.css"
         server.upload_path_prefix = upload_path_prefix
+        server.download_path_prefix = download_path_prefix
         server.attachment_store = attachment_store
+        server.package_store = package_store
         server.deck_choices = tuple(deck_choices)
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:

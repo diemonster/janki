@@ -62,15 +62,46 @@ def assistant_agent_schema() -> Any:
 
         deck_name: NonBlank | None = Field(
             default=None,
-            description="Exact learner-facing name for create_deck only.",
+            description=(
+                "Exact learner-facing name for create_deck, or for a new "
+                "destination deck in add_kanji_notes."
+            ),
         )
         card_directions: list[
             Literal["recognition", "production", "reading"]
         ] = Field(
             default_factory=list,
             description=(
-                "Explicit owner-selected directions for create_deck; never infer "
-                "an omitted direction."
+                "Explicit owner-selected directions for create_deck and "
+                "add_kanji_notes; never infer an omitted direction."
+            ),
+        )
+        study_type: Literal["vocabulary", "kanji"] | None = Field(
+            default=None,
+            description=(
+                "Content type the owner named; null when explicit targets "
+                "already settle it."
+            ),
+        )
+        kanji_characters: list[NonBlank] = Field(
+            default_factory=list,
+            description=(
+                "Single characters copied exactly from the owner's message for "
+                "add_kanji_notes; never expanded, ordered, or invented."
+            ),
+        )
+        refresh_readings: Literal[True, False] | None = Field(
+            default=None,
+            description=(
+                "True only when the owner's current message explicitly asks to "
+                "refresh saved reading facts; never infer it."
+            ),
+        )
+        production_cues: list[NonBlank] = Field(
+            default_factory=list,
+            description=(
+                "Owner-written 'character=cue' entries for a production "
+                "direction; never compose a cue for them."
             ),
         )
         review_patterns: bool | None = Field(
@@ -172,6 +203,7 @@ def assistant_agent_schema() -> Any:
             "revise_cards",
             "revise_deck",
             "create_deck",
+            "add_kanji_notes",
             "assign_cards",
             "review_staging",
             "reidentify_staged_card",

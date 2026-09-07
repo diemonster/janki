@@ -1,8 +1,13 @@
 """Kanji reference data: what a card says about the characters in a word.
 
 Every test drives the transport seam, so none reaches the network. The shapes
-here are the real ones — 前 really does return 740 words that open on 一歩前進,
-and KANJIDIC really does list まえ and -まえ as separate readings.
+here are the real ones — KANJIDIC really does list まえ and -まえ as separate
+readings, and 使 really does have both つか.う and つか.い.
+
+Example words are not here, and that is the point: the ranking that used to
+pick them was janki deciding how Japanese is read. A word reaches a card only
+where a provider bound it to a reading itself, which is
+`tests/test_jpdb_kanji.py`'s subject.
 """
 
 from __future__ import annotations
@@ -12,6 +17,12 @@ from pathlib import Path
 
 import pytest
 
+from japanese_anki.jpdb_kanji import (
+    BoundExample,
+    CharacterReadings,
+    ReadingGroup,
+    ReadingUsage,
+)
 from japanese_anki.kanji import (
     KANJIAPI,
     KANJIVG,
@@ -22,25 +33,28 @@ from japanese_anki.kanji import (
     fetch_kanji,
     kanji_in,
     load_store,
+    render_furigana,
     render_kanji_html,
+    render_stroke_strip,
     save_store,
 )
 
 
-def fake_transport(*, info: dict, words: list | None = None, svg: str | None = None):
-    """Answer the three URLs `fetch_kanji` asks for."""
+def fake_transport(*, info: dict, svg: str | None = None):
+    """Answer the two URLs `fetch_kanji` asks for."""
+    requested: list[str] = []
 
     def send(url: str) -> bytes:
+        requested.append(url)
         if url.startswith(f"{KANJIVG}/"):
             if svg is None:
                 raise KanjiError("no stroke data")
             return svg.encode("utf-8")
-        if "/words/" in url:
-            return json.dumps(words or []).encode("utf-8")
         if url.startswith(f"{KANJIAPI}/kanji/"):
             return json.dumps(info).encode("utf-8")
         raise AssertionError(f"unexpected url {url}")
 
+    send.requested = requested  # type: ignore[attr-defined]
     return send
 
 
@@ -50,15 +64,6 @@ SVG = (
     '<path id="kvg:0524d-s2" kvg:type="b" d="M3,3L4,4"/>'
     "</svg>"
 )
-
-
-def word(written: str, pronounced: str, gloss: str, priorities: list[str]) -> dict:
-    return {
-        "meanings": [{"glosses": [gloss]}],
-        "variants": [
-            {"written": written, "pronounced": pronounced, "priorities": priorities}
-        ],
-    }
 
 
 # --- picking the characters -------------------------------------------------
@@ -111,117 +116,60 @@ def test_a_reading_the_dictionary_never_lists_is_refused(
     assert not assigns_a_known_reading(info, surface)
 
 
-# --- ranking the examples ---------------------------------------------------
+# --- the reading inventory --------------------------------------------------
 
 
-def test_a_common_word_beats_an_obscure_one() -> None:
-    """The raw list for 前 is 740 entries opening on 一歩前進, 前官礼遇, 前駆体 —
-    accurate and useless. JMdict's nfXX band is a frequency decile, and the
-    three a commercial paper card chose all carry one."""
+def test_the_inventory_is_kanjidic_order_on_readings_then_kun() -> None:
+    """No ranking. The old sort asked JMdict's priority tags which readings a
+    learner should see first, which is janki deciding how Japanese is read;
+    KANJIDIC's own order is what the dictionary published."""
     send = fake_transport(
-        info={"stroke_count": 9, "on_readings": ["ゼン"], "kun_readings": []},
-        words=[
-            word("前官礼遇", "ぜんかんれいぐう", "privileges of a former post", []),
-            word("前線", "ぜんせん", "front line", ["news1", "nf08"]),
-            word("午前", "ごぜん", "morning", ["ichi1", "news1", "nf02"]),
-        ],
-    )
-
-    info = fetch_kanji("前", transport=send)
-
-    written = [example.written for example in info.readings[0].examples]
-    assert written == ["午前", "前線"], "commonest first, and the untagged one dropped"
-
-
-def test_an_untagged_word_is_never_chosen_over_a_tagged_one() -> None:
-    send = fake_transport(
-        info={"on_readings": ["ゼン"], "kun_readings": []},
-        words=[
-            word("前駆体", "ぜんくたい", "precursor", []),
-            word("前年", "ぜんねん", "the preceding year", ["news1", "nf12"]),
-        ],
-    )
-
-    info = fetch_kanji("前", transport=send)
-
-    assert [e.written for e in info.readings[0].examples] == ["前年"]
-
-
-def test_common_examples_put_a_beginner_reading_before_a_rare_one() -> None:
-    send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["く.らう", "た.べる"]},
-        words=[
-            word("食らう", "くらう", "to receive", ["nf40"]),
-            word("食べる", "たべる", "to eat", ["nf05"]),
-        ],
+        info={"on_readings": ["ショク", "ジキ"], "kun_readings": ["た.べる", "く.う"]}
     )
 
     info = fetch_kanji("食", transport=send)
 
-    assert [reading.reading for reading in info.readings] == ["た(べる)", "く(らう)"]
+    assert [(r.kind, r.reading) for r in info.readings] == [
+        ("on", "ショク"),
+        ("on", "ジキ"),
+        ("kun", "た(べる)"),
+        ("kun", "く(う)"),
+    ]
 
 
-def test_only_words_that_use_that_reading_are_offered() -> None:
-    """A full-reading substring can still come from somewhere else. The いく
-    in 低空飛行 spans てい + くう while 行 is コウ; it cannot prove 行's い.く."""
-    send = fake_transport(
-        info={"on_readings": ["コウ"], "kun_readings": ["い.く"]},
-        words=[
-            word("低空飛行", "ていくうひこう", "low-altitude flight", ["nf20"]),
-            word("行く", "いく", "to go", ["ichi1", "nf02"]),
-        ],
-    )
+def test_a_reading_kanjidic_writes_twice_is_listed_twice() -> None:
+    """まえ and -まえ are two entries in the source. Whether they are the same
+    reading is a question about Japanese, and the rule that used to answer it
+    (equal once the boundary markers come off) was this module's own invention.
+    The inventory is the dictionary's list, so both stay."""
+    send = fake_transport(info={"on_readings": [], "kun_readings": ["まえ", "-まえ"]})
 
-    info = fetch_kanji("行", transport=send)
+    info = fetch_kanji("前", transport=send)
 
-    by_kind = {r.kind: [e.written for e in r.examples] for r in info.readings}
-    assert by_kind == {"on": ["低空飛行"], "kun": ["行く"]}
+    assert [r.reading for r in info.readings] == ["まえ", "〜まえ"]
 
 
-def test_a_katakana_on_reading_matches_a_hiragana_word() -> None:
-    """KANJIDIC writes on'yomi in katakana and words in hiragana, so a literal
-    containment test finds nothing at all."""
-    send = fake_transport(
-        info={"on_readings": ["ゼン"], "kun_readings": []},
-        words=[word("前線", "ぜんせん", "front line", ["nf08"])],
-    )
+def test_a_kanjidic_reading_carries_no_examples() -> None:
+    """A word is bound to a reading by a provider that says so, never by this
+    module matching kana. There is nowhere on a KANJIDIC reading to put one."""
+    send = fake_transport(info={"on_readings": ["ゼン"], "kun_readings": []})
 
-    assert fetch_kanji("前", transport=send).readings[0].examples[0].written == "前線"
+    (reading,) = fetch_kanji("前", transport=send).readings
 
-
-def test_okurigana_separates_two_readings_that_share_a_stem() -> None:
-    """使 has both つか.う and つか.い. Matching on the stem alone made 使う and
-    使い方 examples of both — and merging them labelled 使う as つか.い, which is
-    the wrong reading for that word. Reported from a real card."""
-    send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["つか.う", "つか.い"]},
-        words=[
-            word("使う", "つかう", "to use", ["ichi1"]),
-            word("使い方", "つかいかた", "way of using", ["nf20"]),
-        ],
-    )
-
-    info = fetch_kanji("使", transport=send)
-
-    got = {r.reading: [e.written for e in r.examples] for r in info.readings}
-    assert got == {"つか(う)": ["使う"], "つか(い)": ["使い方"]}
+    assert not hasattr(reading, "examples")
 
 
-def test_a_stem_match_does_not_reach_into_an_unrelated_word() -> None:
-    """書's か.く matched 教科書 — きょうか*し*ょ contains か — so an on'yomi
-    compound was offered as an example of a kun reading."""
-    send = fake_transport(
-        info={"on_readings": ["ショ"], "kun_readings": ["か.く"]},
-        words=[
-            word("教科書", "きょうかしょ", "textbook", ["ichi1"]),
-            word("書く", "かく", "to write", ["ichi1"]),
-        ],
-    )
+def test_no_word_list_is_requested() -> None:
+    """kanjiapi's /words/ endpoint fed the ranking, and the ranking is gone.
+    Fetching it anyway would spend a request on data nothing reads."""
+    send = fake_transport(info={"on_readings": ["ゼン"]}, svg=SVG)
 
-    info = fetch_kanji("書", transport=send)
+    fetch_kanji("前", transport=send)
 
-    kun = next(r for r in info.readings if r.kind == "kun")
-    assert [e.written for e in kun.examples] == ["書く"]
+    assert send.requested == [
+        f"{KANJIAPI}/kanji/%E5%89%8D",
+        f"{KANJIVG}/0524d.svg",
+    ]
 
 
 def test_the_okurigana_marker_is_not_shown_as_a_dot() -> None:
@@ -229,43 +177,13 @@ def test_the_okurigana_marker_is_not_shown_as_a_dot() -> None:
     information is worth keeping — it is why 使う has one kana after the
     character — but a bare dot on a card reads as a typo, which is how it was
     reported."""
-    send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["つか.う"]}, words=[]
-    )
+    send = fake_transport(info={"on_readings": [], "kun_readings": ["つか.う"]})
 
     assert fetch_kanji("使", transport=send).readings[0].reading == "つか(う)"
 
 
-def test_a_reading_listed_twice_is_shown_once() -> None:
-    """KANJIDIC lists まえ and -まえ — the same reading, marked for a suffix
-    position. Both match the same words, so a row each prints the same example
-    twice."""
-    send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["まえ", "-まえ"]},
-        words=[word("名前", "なまえ", "name", ["ichi1"])],
-    )
-
-    info = fetch_kanji("前", transport=send)
-
-    assert [r.reading for r in info.readings] == ["まえ"]
-    assert [e.written for e in info.readings[0].examples] == ["名前"]
-
-
-def test_boundary_notation_does_not_duplicate_a_spoken_reading() -> None:
-    send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["-い.き", "-いき"]},
-        words=[word("行き", "いき", "going", ["ichi1"])],
-    )
-
-    info = fetch_kanji("行", transport=send)
-
-    assert [r.reading for r in info.readings] == ["〜い(き)"]
-
-
 def test_a_suffix_only_reading_keeps_its_position_marker() -> None:
-    send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["-づか.い"]}, words=[]
-    )
+    send = fake_transport(info={"on_readings": [], "kun_readings": ["-づか.い"]})
 
     assert fetch_kanji("使", transport=send).readings[0].reading == "〜づか(い)"
 
@@ -337,17 +255,288 @@ def test_nothing_at_all_renders_nothing() -> None:
     assert render_kanji_html([]) == ""
 
 
+def test_the_stroke_strip_is_one_renderer_two_callers_can_share() -> None:
+    """The character back and the word-card block draw the same strip. Two
+    copies of this markup would drift, and the ids are document-wide, so the
+    caller supplies the prefix that keeps two strips on one card apart."""
+    strip = render_stroke_strip(_info(strokes=("M1,1", "M2,2")), prefix="back-0")
+
+    assert strip.count('id="back-0-stroke-') == 2
+    assert 'href="#back-0-stage-0"' in strip, "each stage references the one before it"
+    assert render_stroke_strip(_info()) == "", "and nothing to draw draws nothing"
+
+
+def test_a_stroke_path_and_prefix_are_escaped() -> None:
+    strip = render_stroke_strip(_info(strokes=('M1,1"/><script>x</script>',)), prefix='a"b')
+
+    assert "<script>" not in strip
+    assert 'id="a&quot;b-stroke-0"' in strip
+
+
+# --- what a provider reported ------------------------------------------------
+
+
+def _usage(label: str, percent_text: str | None, *examples: BoundExample) -> ReadingUsage:
+    percent = None if percent_text is None else int(percent_text.strip("(%)"))
+    return ReadingUsage(
+        label=label,
+        href=f"/kanji-reading/理/{label}",
+        percent_text=percent_text,
+        percent=percent,
+        percent_less_than=None if percent_text is None else False,
+        examples=examples,
+        detail_source_url=None if percent_text is None else f"https://jpdb.io/x/{label}",
+    )
+
+
+def _example(written: str, pronounced: str, gloss: str) -> BoundExample:
+    return BoundExample(
+        written=written,
+        pronounced=pronounced,
+        gloss=gloss,
+        furigana=f"{written}[{pronounced}]",
+        source_url=f"https://jpdb.io/vocabulary/1/{written}/{pronounced}#a",
+    )
+
+
+def _evidence(*groups: ReadingGroup, character: str = "理") -> dict[str, CharacterReadings]:
+    return {
+        character: CharacterReadings(
+            character=character,
+            source_url="https://jpdb.io/kanji/理",
+            fetched_at_utc="2026-09-07T00:00:00Z",
+            sha256="0" * 64,
+            groups=groups,
+        )
+    }
+
+
+RI_EVIDENCE = _evidence(
+    ReadingGroup(
+        source_class="kanji-reading-list-common",
+        readings=(
+            _usage("り", "(84%)", _example("理由", "りゆう", "reason"),
+                   _example("無理", "むり", "unreasonable")),
+            _usage("わ", "(14%)", _example("理由", "わけ", "reason")),
+        ),
+    ),
+    ReadingGroup(
+        source_class="kanji-reading-list",
+        readings=(_usage("ことわり", None), _usage("め", None)),
+    ),
+)
+
+RI_INFO = KanjiInfo(
+    character="理",
+    stroke_count=11,
+    meanings=("reason", "logic"),
+    readings=(Reading(kind="on", reading="リ"), Reading(kind="kun", reading="ことわり")),
+)
+
+
+def test_every_quantified_reading_is_shown_with_its_printed_figure() -> None:
+    """In jpdb's order, with jpdb's own strings. Nothing is renormalised, and
+    nothing is dropped for being small."""
+    rendered = render_kanji_html([RI_INFO], reading_evidence=RI_EVIDENCE)
+
+    assert "JPDB reported usage" in rendered
+    assert rendered.index("り") < rendered.index("わ")
+    assert "(84%)" in rendered and "(14%)" in rendered
+    assert rendered.count('<div class="kanji-usage">') == 2
+
+
+def test_a_reading_shows_the_words_its_own_page_bound_to_it() -> None:
+    rendered = render_kanji_html([RI_INFO], reading_evidence=RI_EVIDENCE)
+
+    first = rendered.split('<div class="kanji-usage">')[1]
+    assert "理由" in first and "りゆう" in first and "reason" in first
+    assert "無理" in first, "both of the two the page supplied"
+
+
+def test_a_quantified_reading_with_no_bound_word_still_shows_its_figure() -> None:
+    """Hiding the quantity until an example exists would report a different
+    fact from the one jpdb printed."""
+    evidence = _evidence(
+        ReadingGroup(
+            source_class="kanji-reading-list-common",
+            readings=(_usage("り", "(84%)"), _usage("わ", "(14%)")),
+        )
+    )
+
+    rendered = render_kanji_html([RI_INFO], reading_evidence=evidence)
+
+    assert "(84%)" in rendered and "(14%)" in rendered
+    assert rendered.count('<div class="kanji-usage">') == 2
+    assert "kanji-bound-example" not in rendered
+
+
+def test_a_jpdb_reading_never_gets_an_on_or_kun_badge() -> None:
+    """A jpdb reading group is not KANJIDIC's on/kun inventory, and printing
+    one beside the other would say it is."""
+    rendered = render_kanji_html([RI_INFO], reading_evidence=RI_EVIDENCE)
+
+    evidence_block = rendered.split('<div class="kanji-evidence">')[1].split("</details>")[0]
+    assert "音" not in evidence_block and "訓" not in evidence_block
+
+
+def test_the_extra_readings_and_the_inventory_are_separate_disclosures() -> None:
+    """Two different things, from two different sources, behind two labels."""
+    rendered = render_kanji_html([RI_INFO], reading_evidence=RI_EVIDENCE)
+
+    assert "<summary>Other JPDB readings</summary>" in rendered
+    assert "<summary>KANJIDIC readings</summary>" in rendered
+    other = rendered.split("Other JPDB readings</summary>")[1].split("</details>")[0]
+    assert "ことわり" in other and "め" in other
+    inventory = rendered.split("KANJIDIC readings</summary>")[1].split("</details>")[0]
+    assert "リ" in inventory and "音" in inventory
+    assert "(84%)" not in other and "(84%)" not in inventory
+
+
+def test_without_jpdb_facts_the_inventory_is_all_there_is() -> None:
+    """And it stays reference: no reading is promoted, ranked, or presented as
+    the common one."""
+    rendered = render_kanji_html([RI_INFO])
+
+    assert "JPDB reported usage" not in rendered
+    assert "Other JPDB readings" not in rendered
+    assert "<summary>KANJIDIC readings</summary>" in rendered
+    assert "リ" in rendered and "ことわり" in rendered
+
+
+def test_reported_facts_are_escaped_like_everything_else() -> None:
+    evidence = _evidence(
+        ReadingGroup(
+            source_class="kanji-reading-list-common",
+            readings=(
+                _usage("り", "(84%)", _example("<b>理由</b>", "り", "<script>x</script>")),
+            ),
+        )
+    )
+
+    rendered = render_kanji_html([RI_INFO], reading_evidence=evidence)
+
+    assert "<script>" not in rendered and "<b>" not in rendered
+    assert "&lt;script&gt;" in rendered
+
+
+def test_evidence_for_another_character_is_not_borrowed() -> None:
+    rendered = render_kanji_html([RI_INFO], reading_evidence=_evidence(character="王"))
+
+    assert "JPDB reported usage" not in rendered
+
+
+# --- the provider's own ruby ---------------------------------------------------
+
+
+def test_explicit_notation_becomes_ruby_and_leaves_no_brackets() -> None:
+    """Anki does not apply its ``furigana:`` filter to notation stored inside
+    another field's HTML, so the bracket form has to be rendered here or it
+    reaches the card as literal text."""
+    assert render_furigana("理[り] 由[ゆう]") == (
+        "<ruby><rb>理</rb><rt>り</rt></ruby><ruby><rb>由</rb><rt>ゆう</rt></ruby>"
+    )
+
+
+def test_unannotated_kana_and_a_repeated_annotation_both_survive() -> None:
+    """無理やり's やり carries no reading on jpdb's page, and 理論物理学 carries
+    理[り] twice. The notation is the source's: neither is tidied up."""
+    assert render_furigana("無[む] 理[り]やり") == (
+        "<ruby><rb>無</rb><rt>む</rt></ruby><ruby><rb>理</rb><rt>り</rt></ruby>やり"
+    )
+
+    rendered = render_furigana("理[り] 論[ろん] 物[ぶつ] 理[り] 学[がく]")
+
+    assert rendered.count("<rb>理</rb><rt>り</rt>") == 2
+    assert "[" not in rendered and "]" not in rendered
+
+
+def test_only_the_boundary_space_is_consumed() -> None:
+    """The one space Anki writes in front of an annotated run says where the run
+    begins, and goes with it. A second space is text."""
+    assert render_furigana("お 茶[ちゃ]") == "お<ruby><rb>茶</rb><rt>ちゃ</rt></ruby>"
+    assert render_furigana("お  茶[ちゃ]") == "お <ruby><rb>茶</rb><rt>ちゃ</rt></ruby>"
+
+
+def test_markup_in_the_notation_is_escaped_rather_than_rendered() -> None:
+    """Only the brackets are structure. Everything they hold, and everything
+    between them, is text."""
+    rendered = render_furigana("<script>x</script>理[<img src=y onerror=z>]")
+
+    assert rendered == (
+        "&lt;script&gt;x&lt;/script&gt;"
+        "<ruby><rb>理</rb><rt>&lt;img src=y onerror=z&gt;</rt></ruby>"
+    )
+
+
+def test_a_bound_word_is_shown_with_the_ruby_its_page_supplied() -> None:
+    evidence = _evidence(
+        ReadingGroup(
+            source_class="kanji-reading-list-common",
+            readings=(
+                _usage(
+                    "り",
+                    "(84%)",
+                    BoundExample(
+                        written="無理やり",
+                        pronounced="むりやり",
+                        gloss="forcibly",
+                        furigana="無[む] 理[り]やり",
+                        source_url="https://jpdb.io/vocabulary/1531030/x/y#a",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    rendered = render_kanji_html([RI_INFO], reading_evidence=evidence)
+
+    word = rendered.split('<span class="kanji-word">')[1].split("</span>")[0]
+    assert word == (
+        "<ruby><rb>無</rb><rt>む</rt></ruby><ruby><rb>理</rb><rt>り</rt></ruby>やり"
+    )
+    assert "[" not in word and "]" not in word
+    assert '<span class="kanji-kana">むりやり</span>' in rendered, "still stated whole"
+
+
+def test_a_word_with_no_supplied_ruby_falls_back_to_its_spelling() -> None:
+    """Reading the whole-word kana over the whole spelling would be janki
+    deciding which kana sit over which characters — the one thing the reading
+    page exists to state and this renderer must never infer."""
+    evidence = _evidence(
+        ReadingGroup(
+            source_class="kanji-reading-list-common",
+            readings=(
+                _usage(
+                    "り",
+                    "(84%)",
+                    BoundExample(
+                        written="<b>理由</b>",
+                        pronounced="りゆう",
+                        gloss="reason",
+                        furigana="",
+                        source_url="https://jpdb.io/vocabulary/1550140/x/y#a",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    rendered = render_kanji_html([RI_INFO], reading_evidence=evidence)
+
+    word = rendered.split('<span class="kanji-word">')[1].split("</span>")[0]
+    assert word == "&lt;b&gt;理由&lt;/b&gt;"
+    assert "<ruby>" not in rendered, "no ruby guessed from the whole-word reading"
+
+
 # --- the store --------------------------------------------------------------
 
 
 def test_the_store_round_trips(tmp_path: Path) -> None:
-    from japanese_anki.kanji import Example, KanjiStore, Reading
+    from japanese_anki.kanji import KanjiStore
 
     store = KanjiStore(entries={"前": KanjiInfo(
         character="前", stroke_count=9, jlpt=5, meanings=("before",),
-        readings=(Reading(kind="on", reading="ゼン", examples=(
-            Example(written="前線", pronounced="ぜんせん", gloss="front line"),
-        )),),
+        readings=(Reading(kind="on", reading="ゼン"), Reading(kind="kun", reading="まえ")),
         strokes=("M1,1",),
     )})
     path = tmp_path / "kanji.json"
@@ -377,221 +566,3 @@ def test_a_store_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(KanjiError, match="keyed by character"):
         load_store(path)
-
-
-def test_a_character_with_no_common_word_offers_none(tmp_path: Path) -> None:
-    """Ranking alone would bury untagged entries only while something tagged
-    exists to bury them under. For a rare character it would surface
-    前官礼遇-grade words as though they were the ones to learn — better to show
-    the reading with no example than a wrong impression of usefulness."""
-    send = fake_transport(
-        info={"on_readings": ["ゼン"], "kun_readings": []},
-        words=[
-            word("前官礼遇", "ぜんかんれいぐう", "privileges of a former post", []),
-            word("前駆体", "ぜんくたい", "precursor", []),
-        ],
-    )
-
-    info = fetch_kanji("前", transport=send)
-
-    assert info.readings[0].examples == ()
-
-
-def test_every_reading_gets_a_row_before_any_gets_a_second() -> None:
-    """Filling reading by reading spent the whole row budget on the first two:
-    使's card showed つか(い) twice and left out つか(う) — the reading of 使う,
-    the word the card is about."""
-    from japanese_anki.kanji import Example, Reading
-
-    def reading(text: str, *words: str) -> Reading:
-        return Reading(
-            kind="kun",
-            reading=text,
-            examples=tuple(Example(written=w, pronounced="x", gloss="y") for w in words),
-        )
-
-    rendered = render_kanji_html([KanjiInfo(character="使", readings=(
-        reading("シ", "大使", "使用"),
-        reading("つか(い)", "使い方", "使い"),
-        reading("つか(う)", "使う"),
-        reading("づか(い)", "無駄遣い", "言葉遣い"),
-    ))])
-
-    assert "使う" in rendered, "the reading of the word this card is about"
-    for text in ("大使", "使い方", "無駄遣い"):
-        assert text in rendered, f"one example each, so {text} is there too"
-    # The container div is class="kanji-examples", which contains the row
-    # class as a substring — count the rows themselves.
-    assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
-
-
-def test_the_cards_exact_dictionary_pair_wins_the_row_budget() -> None:
-    """The card's own dictionary pair is structural context, not a Japanese
-    guess.  Both halves matter: a homograph with another pronunciation must
-    not take the reserved row."""
-    from japanese_anki.kanji import Example, Reading
-
-    def reading(text: str, written: str, pronounced: str) -> Reading:
-        return Reading(
-            kind="kun",
-            reading=text,
-            examples=(Example(written=written, pronounced=pronounced, gloss="example"),),
-        )
-
-    rendered = render_kanji_html(
-        [
-            KanjiInfo(
-                character="食",
-                readings=(
-                    reading("ショク", "食事", "しょくじ"),
-                    reading("ジキ", "断食", "だんじき"),
-                    reading("く(う)", "食べる", "くう"),  # wrong homograph pair
-                    reading("く(らう)", "食らう", "くらう"),
-                    reading("た(べる)", "食べる", "たべる"),
-                ),
-            )
-        ],
-        record_expression="食べる",
-        record_reading="たべる",
-    )
-
-    first_row = rendered.split('<div class="kanji-example">', 1)[1].split("</div>", 1)[0]
-    assert "た(べる)" in first_row and "たべる" in first_row
-    assert "くう" not in first_row, "spelling alone cannot select a pronunciation"
-    assert rendered.count('<div class="kanji-example">') == 4, "the cap still holds"
-    assert rendered.index("食事") < rendered.index("断食") < rendered.index("くう"), (
-        "the source-ranked commonality order survives after the exact row"
-    )
-
-
-def test_an_example_less_reading_never_takes_a_row_from_one_with_examples() -> None:
-    """The renderer cannot assume the caller sorted anything. `data/kanji.json`
-    is committed and hand-editable, and older copies are in KANJIDIC's kana
-    order — which for 来 puts four example-less readings ahead of く(る), so the
-    four-row budget went to three examples and one blank, and 来る, the reading
-    of the word the card is about, never rendered."""
-    from japanese_anki.kanji import Example, Reading
-
-    def reading(text: str, *words: str) -> Reading:
-        return Reading(
-            kind="kun",
-            reading=text,
-            examples=tuple(Example(written=w, pronounced="x", gloss="y") for w in words),
-        )
-
-    rendered = render_kanji_html([KanjiInfo(character="来", readings=(
-        reading("き(たす)"),          # example-less, and deliberately first
-        reading("き(たる)"),
-        reading("きた(す)"),
-        reading("きた(る)"),
-        reading("ライ", "来年"),
-        reading("く(る)", "来る"),
-    ))])
-
-    assert "来る" in rendered, "the reading of the word this card is about"
-    assert "来年" in rendered
-    assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
-
-
-def test_a_reading_without_a_common_example_is_still_shown() -> None:
-    from japanese_anki.kanji import Reading
-
-    rendered = render_kanji_html([
-        KanjiInfo(character="飲", readings=(Reading(kind="on", reading="オン"),))
-    ])
-
-    assert '<span class="kanji-reading">オン</span>' in rendered
-    assert rendered.count('<div class="kanji-example">') == 1
-
-
-def test_curated_examples_fill_the_render_budget_past_the_fetch_cap() -> None:
-    from japanese_anki.kanji import Example, Reading
-
-    examples = tuple(
-        Example(written=written, pronounced=pronounced, gloss=gloss)
-        for written, pronounced, gloss in (
-            ("午前", "ごぜん", "morning"),
-            ("前線", "ぜんせん", "front line"),
-            ("前年", "ぜんねん", "preceding year"),
-        )
-    )
-    rendered = render_kanji_html([
-        KanjiInfo(
-            character="前",
-            readings=(Reading(kind="on", reading="ゼン", examples=examples),),
-        )
-    ])
-
-    assert all(word in rendered for word in ("午前", "前線", "前年"))
-    assert rendered.count('<div class="kanji-example">') == 3
-
-
-# --- the character has to be provably the one being read --------------------
-
-
-def test_a_word_the_character_is_not_even_in_is_refused() -> None:
-    """JMdict lists spellings together, so 書's word list contains 絵を描く. A
-    substring test over the kana accepted it; the position rule refuses it for
-    the same reason it refuses a buried character — nothing proves the pairing."""
-    send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["か.く"]},
-        words=[
-            word("絵を描く", "えをかく", "to draw a picture", ["ichi1"]),
-            word("書く", "かく", "to write", ["ichi1"]),
-        ],
-    )
-
-    info = fetch_kanji("書", transport=send)
-
-    assert [e.written for e in info.readings[0].examples] == ["書く"]
-
-
-def test_a_character_buried_in_a_compound_cannot_be_pinned() -> None:
-    """書 sits in the middle of 図書館 (としょかん), and しょ really is in there —
-    so containment accepts it. But nothing proves *that* しょ is 書's rather than
-    part of と-しょ-かん's reading of another character, and the card would
-    assert a pairing nobody verified. Refused rather than guessed at.
-
-    The reading here has to be one the pronunciation genuinely contains, or the
-    test passes on the full-reading match and never reaches the position rule."""
-    send = fake_transport(
-        info={"on_readings": ["ショ"], "kun_readings": []},
-        words=[word("図書館", "としょかん", "library", ["ichi1"])],
-    )
-
-    assert fetch_kanji("書", transport=send).readings[0].examples == ()
-
-
-def test_the_reading_must_sit_where_the_character_sits() -> None:
-    """部分 (ぶぶん) ends in 分, so 分's reading must end the pronunciation. ブ
-    does not — the word uses ブン — and the old containment test took it."""
-    send = fake_transport(
-        info={"on_readings": ["ブ"], "kun_readings": []},
-        words=[word("部分", "ぶぶん", "part", ["ichi1"])],
-    )
-
-    assert fetch_kanji("分", transport=send).readings[0].examples == ()
-
-
-def test_the_longest_reading_that_fits_claims_the_word() -> None:
-    """One reading is often a prefix of another: 分's ブ and ブン both open
-    分野 (ぶんや). Offering it under ブ teaches a reading the word does not
-    use."""
-    send = fake_transport(
-        info={"on_readings": ["ブ", "ブン"], "kun_readings": []},
-        words=[word("分野", "ぶんや", "field", ["ichi1"])],
-    )
-
-    info = fetch_kanji("分", transport=send)
-
-    got = {r.reading: [e.written for e in r.examples] for r in info.readings}
-    assert got == {"ブ": [], "ブン": ["分野"]}
-
-
-def test_a_word_the_character_opens_matches_on_its_prefix() -> None:
-    send = fake_transport(
-        info={"on_readings": ["ゼン"], "kun_readings": []},
-        words=[word("前線", "ぜんせん", "front line", ["nf08"])],
-    )
-
-    assert fetch_kanji("前", transport=send).readings[0].examples[0].written == "前線"

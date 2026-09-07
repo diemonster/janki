@@ -228,7 +228,6 @@ def test_repository_agent_returns_only_prose_and_one_closed_intent() -> None:
     assert "at most one closed `action_intent`" in text
     assert "active deck is only a focus" in text
     assert "`revise_cards` changes canonical vocabulary-card fields" in text
-    assert "vocabulary, kanji-review, and other decks" in text
     assert "`revise_deck` is only for specialized" in text
     assert "rich conjugation-practice deck" in text
     assert "`enrich_cards` fills missing rich fields" in text
@@ -248,6 +247,29 @@ def test_repository_agent_returns_only_prose_and_one_closed_intent() -> None:
     assert "never reconstruct recovery from the current deck focus" in text.casefold()
     assert "never execution, Japanese-content authorship, or approval" in text
     assert "`extract`, `enrich --ai`, or `revise`" in text
+
+
+def test_repository_agent_treats_explicit_kanji_targets_as_their_own_type() -> None:
+    """Kanji is a distinct content type, so the asking has to say so.
+
+    Each clause here is a decision the template carries alone: never minting a
+    word record, never asking a settled type question, never inventing a
+    character or a production cue, and never quietly folding a vocabulary
+    request into the same operation.
+    """
+    text = " ".join(prompts.load(REPO_ROOT, "assistant-agent").split())
+
+    assert "`add_kanji_notes` is the dedicated character-note operation" in text
+    assert "one requested character becomes exactly one character note" in text
+    assert "never a vocabulary record" in text
+    assert "that settles the content type" in text
+    assert "do not ask whether they mean words or kanji" in text
+    assert "Copy each character into `kanji_characters` exactly as written" in text
+    assert "never both" in text
+    assert "`refresh_readings` is true only when the owner explicitly asks" in text
+    assert "defaults to recognition alone" in text
+    assert "requires the owner's own `production_cues`" in text
+    assert "that is a separate operation" in text
 
 
 def test_the_three_extraction_modes_are_three_complete_files() -> None:

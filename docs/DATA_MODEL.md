@@ -1,9 +1,12 @@
 # The record schema
 
-One record per word in `data/normalized/vocabulary.json`. Everything else in
-janki — a deck, a card, a staging file you are hand-editing, the fields
-`enrich` fills, the five `--prefer-incoming` refuses — is described in terms of
-these keys.
+Vocabulary uses one record per word in `data/normalized/vocabulary.json`.
+Vocabulary decks, staging files, enrichment fields and import merge choices
+use the keys below. Dedicated character notes live separately in
+`data/kanji_notes.json`, with identity `kanji:<character>` and no vocabulary
+record side effects. Their curated content carries snapshots of reference
+facts and reading-bound examples; refreshing shared dictionary caches does
+not implicitly replace those notes.
 
 Canonical records look like this:
 

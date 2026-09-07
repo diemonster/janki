@@ -402,6 +402,10 @@ def test_claude_planning_does_not_load_the_anthropic_sdk(
         ({"apiProvider": "bedrock"}, None),
         ({"subscriptionType": None}, None),
         ({"subscriptionType": "team"}, None),
+        # Readable JSON whose subscription field is not text: a refusal, not a
+        # TypeError from testing an unhashable value against a frozenset.
+        ({"subscriptionType": ["max"]}, None),
+        ({"subscriptionType": {"plan": "max"}}, None),
         ({"apiKeySource": "ANTHROPIC_API_KEY"}, None),
     ],
 )

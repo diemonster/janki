@@ -1,8 +1,8 @@
 # Reading frequency sources for kanji cards
 
 Research snapshot: 2026-09-07. The owner selected JPDB HTML acquisition for
-personal, on-demand use. The proof of concept is separate from runtime card
-integration; the card-type proposal remains a design discussion.
+personal, on-demand use. Runtime integration follows the verified acquisition
+contract for vocabulary stroke panels and dedicated character notes.
 
 ## What we want to measure
 
@@ -13,9 +13,9 @@ Japanese? A repeatable lookup alone does not establish that measurement:
   10,000 observations. This most closely answers the study question.
 - **Distinct-word counts (types):** that word contributes one observation.
   This describes how many words use a reading, not how often readers meet it.
-- **Example-word priority:** the current Janki stroke panel orders readings
-  using a reading's best JMdict example priority. That does not measure either
-  distribution; it must not be presented as a usage percentage.
+- **Example-word priority:** the former Janki stroke panel ordered readings
+  using a reading's best JMdict example priority. That did not measure either
+  distribution and has been replaced by source-labelled JPDB evidence.
 
 Even actual occurrence counts describe a corpus, not all Japanese. Newspaper,
 fiction, conversation, names, and textbook vocabulary can rank differently.
@@ -52,8 +52,8 @@ saved snapshot, without fetching pages again.
 **Owner decision (2026-09-07):** personal, on-demand scraping is acceptable.
 Fetch only characters requested for a study task, reuse saved responses, and
 refresh only on an explicit request. There is no background crawl or scheduled
-refresh. This settles the acquisition choice for the proof of concept; it does
-not implement kanji notes or change existing cards.
+refresh. The subsequent implementation decision applies that source contract
+to both vocabulary stroke panels and dedicated character notes.
 
 The five main kanji pages publish common-reading percentages in descending
 source order. Additional readings have no percentages on those pages and must
@@ -64,9 +64,18 @@ is outside this five-page proof of concept. General vocabulary examples on a
 kanji page are not tied to a particular reading group.
 
 The [five-character proof of concept](../data/research/jpdb/2026-09-07/README.md)
-records these facts separately from canonical study content. Full HTML stays
-in a local cache; the public repository keeps the extracted reading facts and
-provenance.
+remains historical acquisition evidence. The runtime adapter also reads each
+common reading's own detail page and retains its first supplied examples.
+Their vocabulary URLs supply written expression and whole-word pronunciation;
+their ruby markup supplies display segmentation. General examples elsewhere
+on the kanji page are never assigned to a reading by Janki. No example-frequency
+metric was published on the inspected detail pages, so their source order is
+not described as a word-frequency ranking.
+
+Full HTML stays in a local cache; `data/jpdb_readings.json` holds the extracted
+reading facts and provenance. Curated `data/kanji_notes.json` notes retain their
+own snapshots; refreshing the shared facts does not silently rewrite those
+notes. Builds read saved data only.
 
 ### Tamaoka Kanji Database
 
@@ -162,7 +171,7 @@ reading-usage distribution.
 
 ## Selected direction
 
-**JPDB** is selected for an on-demand acquisition proof of concept. **Tamaoka**
+**JPDB** is selected for on-demand runtime acquisition. **Tamaoka**
 was rejected after investigation failed to obtain a usable corrected export.
 The seven-row diagnostic above remains evidence of that decision, not a
 provider awaiting integration. Jiten remains the strongest convenient API

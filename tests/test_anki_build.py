@@ -15,6 +15,13 @@ from japanese_anki.exporters.anki import (
     resolve_deck_records,
 )
 from japanese_anki.io import DataError
+from japanese_anki.jpdb_kanji import (
+    BoundExample,
+    CharacterReadings,
+    ReadingGroup,
+    ReadingUsage,
+    save_readings,
+)
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -841,19 +848,60 @@ def _kanji_file(root: Path, entries: dict) -> None:
     )
 
 
+def _readings_file(root: Path, entries: dict[str, CharacterReadings]) -> None:
+    """The facts a build may read. Written, never fetched: a build is offline."""
+    save_readings(root / "jpdb_readings.json", entries)
+    config = (root / "janki.toml").read_text(encoding="utf-8")
+    (root / "janki.toml").write_text(
+        config.replace(
+            'dist_dir = "dist"',
+            'dist_dir = "dist"\njpdb_readings_file = "jpdb_readings.json"',
+        ),
+        encoding="utf-8",
+    )
+
+
 KANJI_使 = {
     "使": {
         "stroke_count": 8, "grade": 3, "jlpt": 4,
         "meanings": ["use", "send on a mission"],
         "readings": [
-            {"kind": "on", "reading": "シ",
-             "examples": [{"written": "大使", "pronounced": "たいし", "gloss": "ambassador"}]},
-            {"kind": "kun", "reading": "つか.う",
-             "examples": [{"written": "使う", "pronounced": "つかう", "gloss": "to use"}]},
+            {"kind": "on", "reading": "シ"},
+            {"kind": "kun", "reading": "つか.う"},
         ],
         "strokes": ["M1,1L9,9", "M2,2L8,8", "M3,3L7,7"],
     }
 }
+
+READINGS_使 = CharacterReadings(
+    character="使",
+    source_url="https://jpdb.io/kanji/%E4%BD%BF",
+    fetched_at_utc="2026-09-07T00:00:00Z",
+    sha256="c" * 64,
+    groups=(
+        ReadingGroup(
+            source_class="kanji-reading-list-common",
+            readings=(
+                ReadingUsage(
+                    label="シ",
+                    href="https://jpdb.io/kanji/%E4%BD%BF%23シ",
+                    percent_text="(52%)",
+                    percent=52,
+                    percent_less_than=False,
+                    examples=(
+                        BoundExample(
+                            written="大使",
+                            pronounced="たいし",
+                            gloss="ambassador",
+                            furigana="大使[たいし]",
+                            source_url="https://jpdb.io/kanji/%E4%BD%BF%23シ",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),
+)
 
 
 def test_the_kanji_section_reaches_the_card(tmp_path: Path) -> None:
@@ -871,105 +919,54 @@ def test_the_kanji_section_reaches_the_card(tmp_path: Path) -> None:
     section = values[names.index("KanjiInfo")]
     assert "<summary>使</summary>" in section
     assert "N4" in section and "8画" in section
-    assert "大使" in section and "たいし" in section, "the on'yomi example"
-    assert "使う" in section and "to use" in section, "the kun'yomi example"
+    # KANJIDIC's inventory, kept behind its own disclosure and marked for what
+    # it is. It carries no example words: a dictionary reading is not evidence
+    # that any particular word uses it.
+    inventory = section.split('<details class="kanji-more kanji-inventory">')[1]
+    assert "シ" in inventory and "つか.う" in inventory
+    assert "kanji-bound-example" not in inventory
 
 
-def test_the_exporter_reserves_a_kanji_row_for_the_records_exact_pair(
+def test_a_word_card_shows_what_a_provider_reported_about_its_characters(
     tmp_path: Path,
 ) -> None:
-    """Passing only the shared character entry loses context at the four-row
-    cap.  The exporter must also pass the exact record spelling and reading."""
+    """The exporter hands the facts store to the renderer, so a word card's
+    character block shows the reported figure and the words that provider
+    itself bound to that reading — read from the repository, never fetched."""
     _project(tmp_path)
-    _kanji_file(
-        tmp_path,
-        {
-            "食": {
-                "stroke_count": 9,
-                "meanings": ["eat", "food"],
-                "readings": [
-                    {
-                        "kind": "on",
-                        "reading": "ショク",
-                        "examples": [
-                            {
-                                "written": "食品",
-                                "pronounced": "しょくひん",
-                                "gloss": "food",
-                            },
-                        ],
-                    },
-                    {
-                        "kind": "on",
-                        "reading": "ジキ",
-                        "examples": [
-                            {
-                                "written": "断食",
-                                "pronounced": "だんじき",
-                                "gloss": "fasting",
-                            },
-                        ],
-                    },
-                    {
-                        "kind": "kun",
-                        "reading": "く(う)",
-                        "examples": [
-                            {
-                                "written": "食う",
-                                "pronounced": "くう",
-                                "gloss": "to eat",
-                            },
-                        ],
-                    },
-                    {
-                        "kind": "kun",
-                        "reading": "く(らう)",
-                        "examples": [
-                            {
-                                "written": "食らう",
-                                "pronounced": "くらう",
-                                "gloss": "to eat",
-                            },
-                        ],
-                    },
-                    {
-                        "kind": "kun",
-                        "reading": "た(べる)",
-                        "examples": [
-                            {
-                                "written": "食べる",
-                                "pronounced": "たべる",
-                                "gloss": "to eat",
-                            },
-                        ],
-                    },
-                ],
-                "strokes": [],
-            }
-        }
-    )
-    _write_records(
-        tmp_path,
-        [
-            VocabularyRecord(
-                id="word:食べる:たべる",
-                expression="食べる",
-                reading="たべる",
-                meanings=["to eat"],
-            )
-        ],
-    )
+    _kanji_file(tmp_path, KANJI_使)
+    _readings_file(tmp_path, {"使": READINGS_使})
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+    )])
 
-    build_deck(
-        tmp_path / "decks" / "d.yaml",
-        ProjectConfig.load(tmp_path),
-        tmp_path / "o.apkg",
-    )
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
 
     names, values = _fields(tmp_path / "o.apkg")
     section = values[names.index("KanjiInfo")]
-    assert "食べる" in section and "たべる" in section
-    assert section.count('<div class="kanji-example">') == 4
+    evidence = section.split('<div class="kanji-evidence">')[1].split("<details")[0]
+    assert "JPDB reported usage" in section
+    assert "シ" in evidence and "(52%)" in evidence
+    assert "大使" in evidence and "たいし" in evidence and "ambassador" in evidence
+
+
+def test_a_word_card_shows_no_reported_readings_without_saved_facts(
+    tmp_path: Path,
+) -> None:
+    """A build reads the facts file and never asks for one. A character nobody
+    has looked up on jpdb keeps its reference block and claims nothing."""
+    _project(tmp_path)
+    _kanji_file(tmp_path, KANJI_使)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    section = values[names.index("KanjiInfo")]
+    assert "<summary>使</summary>" in section
+    assert "kanji-evidence" not in section
 
 
 def test_a_stroke_cell_per_stroke_each_adding_one(tmp_path: Path) -> None:
@@ -1047,7 +1044,7 @@ def test_each_kanji_of_a_compound_gets_its_own_block(tmp_path: Path) -> None:
     entries = dict(KANJI_使)
     entries["用"] = {
         "stroke_count": 5, "jlpt": 4, "meanings": ["utilize"],
-        "readings": [{"kind": "on", "reading": "ヨウ", "examples": []}],
+        "readings": [{"kind": "on", "reading": "ヨウ"}],
         "strokes": ["M1,1L9,9"],
     }
     _kanji_file(tmp_path, entries)
@@ -1059,7 +1056,7 @@ def test_each_kanji_of_a_compound_gets_its_own_block(tmp_path: Path) -> None:
 
     names, values = _fields(tmp_path / "o.apkg")
     section = values[names.index("KanjiInfo")]
-    assert section.count("<details") == 2
+    assert section.count('<details class="kanji">') == 2
     assert section.index("<summary>使</summary>") < section.index("<summary>用</summary>"), (
         "in the order the word is written"
     )

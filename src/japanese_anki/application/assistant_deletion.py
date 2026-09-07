@@ -285,9 +285,16 @@ def _deck_source(config: ProjectConfig, deck_path: Path) -> Path | None:
             )
     source = section.get("source")
     if source is None or source == "":
-        if kind != "conjugation":
+        if kind == "conjugation":
+            target = Path(os.path.abspath(config.normalized_file))
+        elif kind == "kanji":
+            # A character deck naming no store reads the project's curated one,
+            # exactly as `resolve_kanji_deck_notes` does. Bound here so the
+            # bytes a deletion was planned against are locked and fingerprinted
+            # whether or not the file spells the path out.
+            target = Path(os.path.abspath(config.kanji_notes_file))
+        else:
             return None
-        target = Path(os.path.abspath(config.normalized_file))
     else:
         if not isinstance(source, str):
             raise AssistantDeletionError(f"Deck source must be text: {deck_path}")
@@ -443,7 +450,12 @@ def _deck_records(
     projected_canonical: Sequence[VocabularyRecord] | None = None,
 ) -> tuple[Mapping[str, Any], tuple[VocabularyRecord, ...]]:
     kind = deck_kind(deck_path)
-    if kind == "pattern":
+    # Neither kind ships a vocabulary record: a pattern deck's cards come from
+    # the pattern store and a character deck's from the curated character
+    # store. Resolving either through the word-deck reader would read that
+    # store as a vocabulary collection and refuse, which is how one character
+    # deck used to break every canonical deletion in the project.
+    if kind in {"pattern", "kanji"}:
         raw = load_structured(deck_path)
         section = raw.get("deck") if isinstance(raw, Mapping) else None
         if not isinstance(section, Mapping):
@@ -769,6 +781,24 @@ def execute_canonical_deletion(
     )
 
 
+def _character_deck_ids(deck_path: Path, section: Mapping[str, Any]) -> set[str]:
+    """The exact character identities one character deck names."""
+
+    declared = section.get("include_ids")
+    if isinstance(declared, str | bytes) or not isinstance(declared, Sequence):
+        raise AssistantDeletionError(
+            f"A character deck names the characters it holds as a list: {deck_path}"
+        )
+    ids: set[str] = set()
+    for item in declared:
+        if not isinstance(item, str) or not item.strip():
+            raise AssistantDeletionError(
+                f"Each character-deck identity must be nonblank text: {deck_path}"
+            )
+        ids.add(item)
+    return ids
+
+
 def _deck_identity_sets(
     config: ProjectConfig,
     deck_path: Path,
@@ -779,6 +809,13 @@ def _deck_identity_sets(
     section = raw.get("deck") if isinstance(raw, Mapping) else None
     if not isinstance(section, Mapping):
         raise AssistantDeletionError(f"The deck section must be a mapping: {deck_path}")
+    if deck_kind(deck_path) == "kanji":
+        # A character deck holds no inline word notes and no vocabulary source.
+        # It names ids into the curated character store, which deleting the
+        # deck never touches, so nothing it declares is inline-only and the two
+        # sets are equal.
+        ids = _character_deck_ids(deck_path, section)
+        return ids, set(ids)
     source = _deck_source(config, deck_path)
     source_ids = set() if source is None else {record.id for record in load_records(source)}
     declared_ids = set(source_ids)

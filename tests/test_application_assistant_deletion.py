@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from japanese_anki import ledger
+from japanese_anki import kanji_notes, ledger
 from japanese_anki.application import assistant_deletion
 from japanese_anki.application.assistant_context import (
     AssistantContextBroker,
@@ -25,6 +25,7 @@ from japanese_anki.application.assistant_deletion import (
     plan_deck_deletion,
 )
 from japanese_anki.config import ProjectConfig
+from japanese_anki.identifiers import character_record_id
 from japanese_anki.io import load_records
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
@@ -110,6 +111,40 @@ def _project(tmp_path: Path) -> tuple[ProjectConfig, tuple[VocabularyRecord, ...
     book.record_source_seen(records[0].id, "manual", "fixture")
     book.save()
     return config, records, deck_path
+
+
+def _character_deck(config: ProjectConfig) -> Path:
+    """One valid character deck beside the word decks, with its curated store.
+
+    Character notes are a separate content type keyed on the character, so this
+    deck reads ``data/kanji_notes.json`` rather than the canonical collection.
+    """
+
+    kanji_notes.save_notes(
+        config.kanji_notes_file,
+        {
+            "話": kanji_notes.CharacterNote(
+                character="話",
+                id=character_record_id("話"),
+                meanings=("talk", "speak"),
+                stroke_count=13,
+            )
+        },
+    )
+    deck_path = config.deck_dir / "kanji.yaml"
+    deck_path.write_text(
+        "deck:\n"
+        "  kind: kanji\n"
+        "  name: Character deck\n"
+        "  deck_id: 1900000009\n"
+        "  model_id: 1900000010\n"
+        "  source: ../kanji_notes.json\n"
+        "  output: kanji.apkg\n"
+        "  include_ids: [kanji:話]\n",
+        encoding="utf-8",
+    )
+    (config.dist_dir / "kanji.apkg").write_bytes(b"existing character package")
+    return deck_path
 
 
 def _resources(config: ProjectConfig, kind: str) -> list[dict[str, object]]:
@@ -840,3 +875,187 @@ def test_deck_deletion_never_follows_a_target_swapped_in_after_replan(
 
     assert external.read_bytes() == expected_external
     assert deck_path.is_symlink()
+
+
+def test_a_character_deck_does_not_convert_word_deletion_into_kanji_work(
+    tmp_path: Path,
+) -> None:
+    """An ordinary canonical word deletion is unaffected by a character deck.
+
+    Character notes are a separate content type: their store is not a
+    vocabulary collection, and reading it as one is how a `kind: kanji` deck
+    beside the word decks used to break every deletion in this module.
+    """
+
+    config, records, _deck = _project(tmp_path)
+    kanji_deck = _character_deck(config)
+    before_store = config.kanji_notes_file.read_bytes()
+
+    plan = plan_canonical_deletion(
+        config,
+        card_resource_ids=(_card_resource(config, "食べる"),),
+        record_ids=(records[0].id,),
+        instruction="Permanently delete the 食べる canonical card.",
+    )
+
+    projection = plan.projection
+    # The character deck ships no vocabulary record, so no word deletion can
+    # change what it holds and it is not an affected deck.
+    assert [item["configured_file"] for item in projection["affected_decks"]] == [
+        "data/decks/lesson.yaml"
+    ]
+    inputs = {
+        item["repository_file"]: item
+        for item in projection["inputs"]["repository_files"]
+    }
+    # Its definition and the curated store it reads are still bound, so an
+    # edit to either is a stale plan rather than an unnoticed one.
+    assert "data/decks/kanji.yaml" in inputs
+    assert inputs["data/kanji_notes.json"]["sha256"] == hashlib.sha256(
+        before_store
+    ).hexdigest()
+
+    result = execute_canonical_deletion(config, plan)
+
+    assert result.removed_record_ids == (records[0].id,)
+    assert config.kanji_notes_file.read_bytes() == before_store
+    assert kanji_deck.exists()
+
+
+def test_a_character_deck_source_edit_stales_a_canonical_deletion(
+    tmp_path: Path,
+) -> None:
+    config, records, _deck = _project(tmp_path)
+    _character_deck(config)
+    plan = plan_canonical_deletion(
+        config,
+        card_resource_ids=(_card_resource(config, "食べる"),),
+        record_ids=(records[0].id,),
+        instruction="Delete this canonical card.",
+    )
+    store = config.kanji_notes_file
+    store.write_text(store.read_text(encoding="utf-8") + " \n", encoding="utf-8")
+    before = config.normalized_file.read_bytes()
+
+    with pytest.raises(AssistantDeletionError, match="changed after it was displayed"):
+        execute_canonical_deletion(config, plan)
+
+    assert config.normalized_file.read_bytes() == before
+
+
+def test_a_character_deck_naming_no_store_still_binds_the_project_store(
+    tmp_path: Path,
+) -> None:
+    """A deck reading the project's store by default binds it just the same."""
+
+    config, records, _deck = _project(tmp_path)
+    kanji_deck = _character_deck(config)
+    kanji_deck.write_text(
+        kanji_deck.read_text(encoding="utf-8").replace(
+            "  source: ../kanji_notes.json\n", ""
+        ),
+        encoding="utf-8",
+    )
+
+    plan = plan_canonical_deletion(
+        config,
+        card_resource_ids=(_card_resource(config, "食べる"),),
+        record_ids=(records[0].id,),
+        instruction="Delete this canonical card.",
+    )
+
+    assert "data/kanji_notes.json" in {
+        item["repository_file"]
+        for item in plan.projection["inputs"]["repository_files"]
+    }
+    store = config.kanji_notes_file
+    store.write_text(store.read_text(encoding="utf-8") + " \n", encoding="utf-8")
+    before = config.normalized_file.read_bytes()
+
+    with pytest.raises(AssistantDeletionError, match="changed after it was displayed"):
+        execute_canonical_deletion(config, plan)
+
+    assert config.normalized_file.read_bytes() == before
+
+
+def test_word_deck_deletion_reads_a_sibling_character_deck_as_kanji(
+    tmp_path: Path,
+) -> None:
+    """A sibling character deck contributes no word identity and no failure."""
+
+    config, _records, deck_path = _project(tmp_path)
+    inline = _record("泳ぐ", "およぐ", tag="inline")
+    deck_path.write_text(
+        yaml.safe_dump(
+            {
+                "deck": {
+                    "kind": "vocabulary",
+                    "name": "Lesson deck",
+                    "deck_id": 1900000001,
+                    "output": "lesson.apkg",
+                },
+                "notes": [inline.to_dict()],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    kanji_deck = _character_deck(config)
+    before_store = config.kanji_notes_file.read_bytes()
+
+    plan = plan_deck_deletion(
+        config,
+        deck_resource_id=_deck_resource(config),
+        instruction="Delete this deck and its inline-only card.",
+    )
+
+    assert plan.projection["consequences"][
+        "inline_only_record_ids_removed_from_library"
+    ] == [inline.id]
+
+    result = execute_deck_deletion(config, plan)
+
+    assert result.removed_deck_path == deck_path
+    assert kanji_deck.exists()
+    assert config.kanji_notes_file.read_bytes() == before_store
+
+
+def test_character_deck_deletion_removes_its_definition_and_keeps_the_store(
+    tmp_path: Path,
+) -> None:
+    """Deleting a character deck is a deck-definition deletion, nothing more.
+
+    The curated character notes are the durable content and outlive any deck
+    that ships them, exactly as the canonical collection outlives a word deck.
+    """
+
+    config, _records, word_deck = _project(tmp_path)
+    kanji_deck = _character_deck(config)
+    before_store = config.kanji_notes_file.read_bytes()
+    before_package = (config.dist_dir / "kanji.apkg").read_bytes()
+
+    plan = plan_deck_deletion(
+        config,
+        deck_resource_id=_deck_resource(config, "Character deck"),
+        instruction="Permanently delete the Character deck definition.",
+    )
+
+    projection = plan.projection
+    assert projection["target"]["kind"] == "kanji"
+    assert projection["target"]["configured_file"] == "data/decks/kanji.yaml"
+    assert projection["consequences"]["canonical_cards_removed"] == []
+    # Nothing leaves the library: every character it names stays in the store.
+    assert projection["consequences"][
+        "inline_only_record_ids_removed_from_library"
+    ] == []
+    assert projection["retained"]["generated_package"] == "dist/kanji.apkg"
+    assert projection["removals"] == ["data/decks/kanji.yaml"]
+
+    result = execute_deck_deletion(config, plan)
+
+    assert result.removed_deck_path == kanji_deck
+    assert not kanji_deck.exists()
+    assert config.kanji_notes_file.read_bytes() == before_store
+    assert (config.dist_dir / "kanji.apkg").read_bytes() == before_package
+    assert word_deck.exists()

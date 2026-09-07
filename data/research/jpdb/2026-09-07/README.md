@@ -1,6 +1,6 @@
-# JPDB reading-percentage proof of concept
+# JPDB reading-percentage acquisition snapshot
 
-The owner selected personal, on-demand acquisition from JPDB. This experiment
+The owner selected personal, on-demand acquisition from JPDB. This historical experiment
 captures the reading groups and percentages published on the five requested
 kanji pages. It does not alter vocabulary, kanji reference data, decks, card
 templates, or the Assistant workflow.
@@ -38,30 +38,24 @@ renormalized to 100%, and 料's displayed 100% does not make its other readings
 zero. The parser can preserve an explicitly supplied `less than 1%` bound;
 it never infers that bound from a missing percentage.
 
-## Run on demand
+## Runtime acquisition
 
-From the repository root, fetch missing pages into the local cache:
-
-```sh
-.venv/bin/python scripts/jpdb_readings_poc.py \
-  --cache-dir "$HOME/Library/Caches/janki/jpdb-readings-poc" \
-  --fetch 物 特 鳥 料 理
-```
-
-Repeat without `--fetch` to reproduce the report offline. Even with `--fetch`,
-valid cached pages are reused. Add `--refresh` alongside `--fetch` only when a
-new download is wanted. There is no background refresh, crawl, or retry loop.
-The command emits JSON on stdout; fetching it does not rewrite this research
-report automatically.
+The standalone experiment has been replaced by
+[`jpdb_kanji.py`](../../../../src/japanese_anki/jpdb_kanji.py). Its parser and
+cache checks are maintained in the runtime provider tests. See
+[kanji enrichment](../../../../docs/ENRICHMENT.md) for the current workflow.
+Requested missing pages are fetched on demand, saved pages are reused, and
+refresh is explicit. There is no background refresh, crawl, or retry loop.
+Runtime acquisition does not rewrite this historical report.
 
 ## Boundary of the result
 
-This establishes acquisition and faithful local reproduction of JPDB's
-published values. Integration into the stroke panel and dedicated kanji cards
-remains a separate implementation step under the agreed Assistant-first card
-design.
+This snapshot established acquisition and faithful local reproduction of
+JPDB's published values before card integration. It contains main-page reading
+groups only. Runtime acquisition adds examples from the corresponding reading
+detail pages for the shared stroke panels and dedicated character notes.
 
-## Verification
+## Original experiment verification
 
 The live run captured five characters and 33 reading entries: 13 have
 published numeric percentages and 20 have unknown percentages. Replaying the

@@ -98,6 +98,32 @@ or second-guesses what came back.
   change cannot silently swap the model. janki's own runtime calls follow the
   same rule (`config.py` defaults, `claude_client.DEFAULT_EFFORT`; only the
   ordinary Assistant turn takes a configured depth, `[assistant] effort`).
+- **Every development, planning, or review model launch goes through
+  `scripts/claude-subscription.py`.** That is the repository's only CLI entry
+  point to a model. It builds the child's environment from an allowlist,
+  resolves an absolute `claude`, and runs `auth status --json` under exactly
+  the environment, working directory and `--safe-mode --setting-sources ''`
+  the launch itself uses — so what it verified is the process that runs. It
+  refuses anything short of a claude.ai first-party Pro or Max login.
+  - `scripts/claude-subscription.py --check` runs that probe alone, free, and
+    prints a summary carrying no account details.
+  - **Not allowed substitutes:** bare `claude -p`, a hand-written `env -u
+    ANTHROPIC_API_KEY claude …`, an Agent SDK or API call standing in for the
+    CLI, or a settings file that re-supplies a provider. `--settings`,
+    `--setting-sources`, `--bare` and any cwd-changing launch form are refused
+    by the launcher rather than overridden.
+  - **A refusal stops the work.** There is no API-billed fallback, and
+    switching to one is not a workaround for a failed login — it is the
+    mistake this exists to prevent. A valid Max login and an inherited
+    `ANTHROPIC_API_KEY` are indistinguishable from the outside: the CLI runs,
+    answers, exits 0, and the only evidence is a Console bill.
+  - The wrapper protects this repository's entry points — the review hooks and
+    anything an agent starts here. It cannot police a `claude` typed in an
+    unrelated terminal; that is what `--check` and this rule are for.
+  - It changes nothing about **paid content calls**. `janki extract`,
+    `revise`, `promote --accept-coverage`, Realtime audio, and the explicit
+    `anthropic-api` revision provider each still need their own exact
+    authorization, and the Max account's extra-usage setting is the owner's.
 - Run `make gates` before considering work complete: it runs ruff, pytest,
   and a sample deck build. Run it rather than its parts. Bare `pytest` and
   bare `janki` resolve through the venv's editable install to the *primary*
@@ -302,6 +328,18 @@ below is what is left, and it is the loop every other project already uses.*
 6. `data/kanji.json`: machine-written kanji reference data — **committed** and
    replaced by `janki kanji --refresh`; do not add fields by hand because the
    source schema does not preserve unknown keys.
+6b. `data/jpdb_readings.json`: machine-written JPDB reading facts — **committed**.
+    Preserve source labels, contextual groups, displayed percentages and bounds,
+    missing values, reading-bound examples, URLs, retrieval times and hashes.
+    Reuse saved facts by default; fetch missing requested characters on demand
+    and refresh only explicitly. Full HTML is a private local cache outside the
+    repository, not committed study content. Builds never fetch it.
+6c. `data/kanji_notes.json`: curated character notes — **committed**, separate
+    from vocabulary and refreshable reference data. Identity is
+    `kanji:<character>` and does not include readings. A refresh must not replace
+    curated notes implicitly. Explicit kanji preparation can populate the local
+    raw cache, but canonical facts, notes and deck creation stay in one exact
+    confirmed apply batch; its durable receipt owns interrupted-work recovery.
 7. `data/patterns.json`: machine-written from `janki extract`'s rich source
    answer — **committed**. `janki patterns` only lists entries and marks them
    reviewed. A reviewed mark is a human judgement: extracting that source again

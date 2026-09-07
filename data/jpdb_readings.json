@@ -1,0 +1,653 @@
+{
+  "schema_version": 1,
+  "source": "jpdb",
+  "metric": "jpdb_reported_usage",
+  "characters": {
+    "料": {
+      "source_url": "https://jpdb.io/kanji/%E6%96%99",
+      "fetched_at_utc": "2026-09-07T20:31:29Z",
+      "sha256": "14ddfd499b7e5f0e8646f884f76ed1399772b0ea4479407b33929d4db0f8c336",
+      "corpus_scope": null,
+      "denominator": null,
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "りょう",
+              "href": "/kanji-reading/料/りょう",
+              "percent_text": "(100%)",
+              "percent": 100,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "料理",
+                  "pronounced": "りょうり",
+                  "gloss": "cooking;  cookery;  cuisine;  dealing with something;  handling;  administration",
+                  "furigana": "料[りょう] 理[り]",
+                  "source_url": "https://jpdb.io/vocabulary/1554310/%E6%96%99%E7%90%86/%E3%82%8A%E3%82%87%E3%81%86%E3%82%8A#a"
+                },
+                {
+                  "written": "資料",
+                  "pronounced": "しりょう",
+                  "gloss": "materials;  data;  document",
+                  "furigana": "資[し] 料[りょう]",
+                  "source_url": "https://jpdb.io/vocabulary/1312820/%E8%B3%87%E6%96%99/%E3%81%97%E3%82%8A%E3%82%87%E3%81%86#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E6%96%99/%E3%82%8A%E3%82%87%E3%81%86",
+              "detail_fetched_at_utc": "2026-09-07T21:41:51Z",
+              "detail_sha256": "3005fdd11c3da6097440b3e14763ae94e0e4a65b6d922367b8c92509ed6bf745"
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "はやし",
+              "href": "/kanji-reading/料/はやし",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "りょ",
+              "href": "/kanji-reading/料/りょ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            }
+          ]
+        }
+      ]
+    },
+    "物": {
+      "source_url": "https://jpdb.io/kanji/%E7%89%A9",
+      "fetched_at_utc": "2026-09-07T20:31:26Z",
+      "sha256": "fb01a7ae51c306ee46c37206c36abc019fdd8e01f22fdfccdaa205e48f8adb7b",
+      "corpus_scope": null,
+      "denominator": null,
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "もの",
+              "href": "/kanji-reading/物/もの",
+              "percent_text": "(51%)",
+              "percent": 51,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "物",
+                  "pronounced": "もの",
+                  "gloss": "thing;  object;  one's things;  possessions;  things;  something;  quality",
+                  "furigana": "物[もの]",
+                  "source_url": "https://jpdb.io/vocabulary/1502390/%E7%89%A9/%E3%82%82%E3%81%AE#a"
+                },
+                {
+                  "written": "魔物",
+                  "pronounced": "まもの",
+                  "gloss": "demon;  devil;  evil spirit;  monster;  goblin;  apparition",
+                  "furigana": "魔[ま] 物[もの]",
+                  "source_url": "https://jpdb.io/vocabulary/1524220/%E9%AD%94%E7%89%A9/%E3%81%BE%E3%82%82%E3%81%AE#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%89%A9/%E3%82%82%E3%81%AE",
+              "detail_fetched_at_utc": "2026-09-07T21:41:41Z",
+              "detail_sha256": "695e5676c9fddf71f8fefe0be2b228733df96ad4889e45935c5e3fb190cdc61a"
+            },
+            {
+              "label": "もん",
+              "href": "/kanji-reading/物/もん",
+              "percent_text": "(34%)",
+              "percent": 34,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "物",
+                  "pronounced": "もん",
+                  "gloss": "thing;  object;  one's things;  possessions;  things;  something;  quality",
+                  "furigana": "物[もん]",
+                  "source_url": "https://jpdb.io/vocabulary/1502390/%E7%89%A9/%E3%82%82%E3%82%93#a"
+                },
+                {
+                  "written": "買い物",
+                  "pronounced": "かいもん",
+                  "gloss": "shopping;  purchased goods",
+                  "furigana": "買[か]い 物[もん]",
+                  "source_url": "https://jpdb.io/vocabulary/1589730/%E8%B2%B7%E3%81%84%E7%89%A9/%E3%81%8B%E3%81%84%E3%82%82%E3%82%93#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%89%A9/%E3%82%82%E3%82%93",
+              "detail_fetched_at_utc": "2026-09-07T21:41:42Z",
+              "detail_sha256": "6872478f5e9d95a8dd2517255e4684e3df5f5bc6be2ceca91a955f69d85f6649"
+            },
+            {
+              "label": "ぶつ",
+              "href": "/kanji-reading/物/ぶつ",
+              "percent_text": "(9%)",
+              "percent": 9,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "人物",
+                  "pronounced": "じんぶつ",
+                  "gloss": "person;  character;  one's character;  one's personality;  able person;  talented person",
+                  "furigana": "人[じん] 物[ぶつ]",
+                  "source_url": "https://jpdb.io/vocabulary/1369070/%E4%BA%BA%E7%89%A9/%E3%81%98%E3%82%93%E3%81%B6%E3%81%A4#a"
+                },
+                {
+                  "written": "怪物",
+                  "pronounced": "かいぶつ",
+                  "gloss": "monster",
+                  "furigana": "怪[かい] 物[ぶつ]",
+                  "source_url": "https://jpdb.io/vocabulary/1200330/%E6%80%AA%E7%89%A9/%E3%81%8B%E3%81%84%E3%81%B6%E3%81%A4#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%89%A9/%E3%81%B6%E3%81%A4",
+              "detail_fetched_at_utc": "2026-09-07T21:41:43Z",
+              "detail_sha256": "aa150aad109a6d9ddd37fc4f63b0e1abe362f98987dde650ad964eb792919f2a"
+            },
+            {
+              "label": "もつ",
+              "href": "/kanji-reading/物/もつ",
+              "percent_text": "(2%)",
+              "percent": 2,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "荷物",
+                  "pronounced": "にもつ",
+                  "gloss": "luggage;  baggage;  burden;  payload (of a packet, cell, etc.)",
+                  "furigana": "荷[に] 物[もつ]",
+                  "source_url": "https://jpdb.io/vocabulary/1195430/%E8%8D%B7%E7%89%A9/%E3%81%AB%E3%82%82%E3%81%A4#a"
+                },
+                {
+                  "written": "書物",
+                  "pronounced": "しょもつ",
+                  "gloss": "book;  volume",
+                  "furigana": "書[しょ] 物[もつ]",
+                  "source_url": "https://jpdb.io/vocabulary/1344150/%E6%9B%B8%E7%89%A9/%E3%81%97%E3%82%87%E3%82%82%E3%81%A4#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%89%A9/%E3%82%82%E3%81%A4",
+              "detail_fetched_at_utc": "2026-09-07T21:41:44Z",
+              "detail_sha256": "8b51f066d37d8e2b6aa656e7ebcb61b86e0ae1fe5fc5ef50ee8dc1f1d02b9613"
+            },
+            {
+              "label": "ぶっ",
+              "href": "/kanji-reading/物/ぶっ",
+              "percent_text": "(1%)",
+              "percent": 1,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "物体",
+                  "pronounced": "ぶったい",
+                  "gloss": "object;  body;  solid",
+                  "furigana": "物[ぶっ] 体[たい]",
+                  "source_url": "https://jpdb.io/vocabulary/1502680/%E7%89%A9%E4%BD%93/%E3%81%B6%E3%81%A3%E3%81%9F%E3%81%84#a"
+                },
+                {
+                  "written": "物質",
+                  "pronounced": "ぶっしつ",
+                  "gloss": "material;  substance;  matter",
+                  "furigana": "物[ぶっ] 質[しつ]",
+                  "source_url": "https://jpdb.io/vocabulary/1502560/%E7%89%A9%E8%B3%AA/%E3%81%B6%E3%81%A3%E3%81%97%E3%81%A4#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%89%A9/%E3%81%B6%E3%81%A3",
+              "detail_fetched_at_utc": "2026-09-07T21:41:45Z",
+              "detail_sha256": "0249ad90ee10afebd3c38edc91519e4feb155463e327d1483ee52bb552b66720"
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "もち",
+              "href": "/kanji-reading/物/もち",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "も",
+              "href": "/kanji-reading/物/も",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "もっ",
+              "href": "/kanji-reading/物/もっ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "のもの",
+              "href": "/kanji-reading/物/のもの",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            }
+          ]
+        }
+      ]
+    },
+    "特": {
+      "source_url": "https://jpdb.io/kanji/%E7%89%B9",
+      "fetched_at_utc": "2026-09-07T20:31:27Z",
+      "sha256": "d68960ef04fb1d2ffd912ccae46186c0d51b440a5799e7907d8861e90f315166",
+      "corpus_scope": null,
+      "denominator": null,
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "とく",
+              "href": "/kanji-reading/特/とく",
+              "percent_text": "(90%)",
+              "percent": 90,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "特に",
+                  "pronounced": "とくに",
+                  "gloss": "particularly;  especially;  in particular;  expressly",
+                  "furigana": "特[とく]に",
+                  "source_url": "https://jpdb.io/vocabulary/1454670/%E7%89%B9%E3%81%AB/%E3%81%A8%E3%81%8F%E3%81%AB#a"
+                },
+                {
+                  "written": "特別",
+                  "pronounced": "とくべつ",
+                  "gloss": "special;  particular;  extraordinary;  exceptional;  especial",
+                  "furigana": "特[とく] 別[べつ]",
+                  "source_url": "https://jpdb.io/vocabulary/1455280/%E7%89%B9%E5%88%A5/%E3%81%A8%E3%81%8F%E3%81%B9%E3%81%A4#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%89%B9/%E3%81%A8%E3%81%8F",
+              "detail_fetched_at_utc": "2026-09-07T21:41:46Z",
+              "detail_sha256": "6e515fc0323aa3296b5017ff549f06278950a6af9c0ebebf4a214560dc5c0fcb"
+            },
+            {
+              "label": "とっ",
+              "href": "/kanji-reading/特/とっ",
+              "percent_text": "(9%)",
+              "percent": 9,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "特訓",
+                  "pronounced": "とっくん",
+                  "gloss": "special training;  intensive training;  crash course",
+                  "furigana": "特[とっ] 訓[くん]",
+                  "source_url": "https://jpdb.io/vocabulary/1454850/%E7%89%B9%E8%A8%93/%E3%81%A8%E3%81%A3%E3%81%8F%E3%82%93#a"
+                },
+                {
+                  "written": "特化",
+                  "pronounced": "とっか",
+                  "gloss": "specialization;  specialisation",
+                  "furigana": "特[とっ] 化[か]",
+                  "source_url": "https://jpdb.io/vocabulary/1648700/%E7%89%B9%E5%8C%96/%E3%81%A8%E3%81%A3%E3%81%8B#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%89%B9/%E3%81%A8%E3%81%A3",
+              "detail_fetched_at_utc": "2026-09-07T21:41:47Z",
+              "detail_sha256": "a782281e0fcfa7fb8f9ddff628df23230f798d97886e60981a39b85448b783f6"
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "どく",
+              "href": "/kanji-reading/特/どく",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "ことい",
+              "href": "/kanji-reading/特/ことい",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "こって",
+              "href": "/kanji-reading/特/こって",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            }
+          ]
+        }
+      ]
+    },
+    "理": {
+      "source_url": "https://jpdb.io/kanji/%E7%90%86",
+      "fetched_at_utc": "2026-09-07T20:31:30Z",
+      "sha256": "5703c3603f9d88fea26330d56088f14ab224674c46e1fcd641c1063601be748a",
+      "corpus_scope": null,
+      "denominator": null,
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "り",
+              "href": "/kanji-reading/理/り",
+              "percent_text": "(84%)",
+              "percent": 84,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "理由",
+                  "pronounced": "りゆう",
+                  "gloss": "reason;  pretext;  motive",
+                  "furigana": "理[り] 由[ゆう]",
+                  "source_url": "https://jpdb.io/vocabulary/1550140/%E7%90%86%E7%94%B1/%E3%82%8A%E3%82%86%E3%81%86#a"
+                },
+                {
+                  "written": "無理",
+                  "pronounced": "むり",
+                  "gloss": "unreasonable;  unnatural;  impossible;  forcible;  forced;  excessive (work, etc.);  immoderate",
+                  "furigana": "無[む] 理[り]",
+                  "source_url": "https://jpdb.io/vocabulary/1530970/%E7%84%A1%E7%90%86/%E3%82%80%E3%82%8A#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%90%86/%E3%82%8A",
+              "detail_fetched_at_utc": "2026-09-07T21:45:19Z",
+              "detail_sha256": "09c8c249a58023e5693b6f1569c7653c7fadac3cfdbd03854b977ff79f514e4e"
+            },
+            {
+              "label": "わ",
+              "href": "/kanji-reading/理/わ",
+              "percent_text": "(14%)",
+              "percent": 14,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "理由",
+                  "pronounced": "わけ",
+                  "gloss": "reason;  pretext;  motive",
+                  "furigana": "理[わ] 由[け]",
+                  "source_url": "https://jpdb.io/vocabulary/1550140/%E7%90%86%E7%94%B1/%E3%82%8F%E3%81%91#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E7%90%86/%E3%82%8F",
+              "detail_fetched_at_utc": "2026-09-07T21:45:20Z",
+              "detail_sha256": "5521d30078b2498cb1979a0f18315ef8d813c62796279dd3a3971d03db1511ba"
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "ことわり",
+              "href": "/kanji-reading/理/ことわり",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "め",
+              "href": "/kanji-reading/理/め",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "ことわ",
+              "href": "/kanji-reading/理/ことわ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            }
+          ]
+        }
+      ]
+    },
+    "鳥": {
+      "source_url": "https://jpdb.io/kanji/%E9%B3%A5",
+      "fetched_at_utc": "2026-09-07T20:31:28Z",
+      "sha256": "24ebcd410ef744fa242588201d84a92444daf0d05f8aa755d56851988579815f",
+      "corpus_scope": null,
+      "denominator": null,
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "とり",
+              "href": "/kanji-reading/鳥/とり",
+              "percent_text": "(70%)",
+              "percent": 70,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "鳥",
+                  "pronounced": "とり",
+                  "gloss": "bird;  bird meat (esp. chicken meat);  fowl;  poultry",
+                  "furigana": "鳥[とり]",
+                  "source_url": "https://jpdb.io/vocabulary/1430250/%E9%B3%A5/%E3%81%A8%E3%82%8A#a"
+                },
+                {
+                  "written": "小鳥",
+                  "pronounced": "ことり",
+                  "gloss": "small bird;  little bird",
+                  "furigana": "小[こ] 鳥[とり]",
+                  "source_url": "https://jpdb.io/vocabulary/1348530/%E5%B0%8F%E9%B3%A5/%E3%81%93%E3%81%A8%E3%82%8A#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E9%B3%A5/%E3%81%A8%E3%82%8A",
+              "detail_fetched_at_utc": "2026-09-07T21:41:48Z",
+              "detail_sha256": "87300d7888b007f40bf2be19dd1807d5d3bdd9d889fddfe9a35937fc1457024d"
+            },
+            {
+              "label": "ちょう",
+              "href": "/kanji-reading/鳥/ちょう",
+              "percent_text": "(21%)",
+              "percent": 21,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "飛鳥",
+                  "pronounced": "ひちょう",
+                  "gloss": "flying bird",
+                  "furigana": "飛[ひ] 鳥[ちょう]",
+                  "source_url": "https://jpdb.io/vocabulary/1626610/%E9%A3%9B%E9%B3%A5/%E3%81%B2%E3%81%A1%E3%82%87%E3%81%86#a"
+                },
+                {
+                  "written": "白鳥",
+                  "pronounced": "はくちょう",
+                  "gloss": "swan (Cygnus spp.);  white-feathered bird",
+                  "furigana": "白[はく] 鳥[ちょう]",
+                  "source_url": "https://jpdb.io/vocabulary/1475330/%E7%99%BD%E9%B3%A5/%E3%81%AF%E3%81%8F%E3%81%A1%E3%82%87%E3%81%86#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E9%B3%A5/%E3%81%A1%E3%82%87%E3%81%86",
+              "detail_fetched_at_utc": "2026-09-07T21:41:49Z",
+              "detail_sha256": "20844ee9988eb74afc2dface96c0290b5654e501f8c4b0d4d7f6d697a4b56720"
+            },
+            {
+              "label": "どり",
+              "href": "/kanji-reading/鳥/どり",
+              "percent_text": "(6%)",
+              "percent": 6,
+              "percent_less_than": false,
+              "examples": [
+                {
+                  "written": "千鳥",
+                  "pronounced": "ちどり",
+                  "gloss": "plover",
+                  "furigana": "千[ち] 鳥[どり]",
+                  "source_url": "https://jpdb.io/vocabulary/1389070/%E5%8D%83%E9%B3%A5/%E3%81%A1%E3%81%A9%E3%82%8A#a"
+                },
+                {
+                  "written": "海鳥",
+                  "pronounced": "うみどり",
+                  "gloss": "sea bird",
+                  "furigana": "海[うみ] 鳥[どり]",
+                  "source_url": "https://jpdb.io/vocabulary/1577410/%E6%B5%B7%E9%B3%A5/%E3%81%86%E3%81%BF%E3%81%A9%E3%82%8A#a"
+                }
+              ],
+              "detail_source_url": "https://jpdb.io/kanji-reading/%E9%B3%A5/%E3%81%A9%E3%82%8A",
+              "detail_fetched_at_utc": "2026-09-07T21:41:50Z",
+              "detail_sha256": "1689e52a8719e64515af2629f6fc3c7872151b448289913f0678302456d07216"
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "とっ",
+              "href": "/kanji-reading/鳥/とっ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "と",
+              "href": "/kanji-reading/鳥/と",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "ちょ",
+              "href": "/kanji-reading/鳥/ちょ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "ちょっ",
+              "href": "/kanji-reading/鳥/ちょっ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "か",
+              "href": "/kanji-reading/鳥/か",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "ら",
+              "href": "/kanji-reading/鳥/ら",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "みとり",
+              "href": "/kanji-reading/鳥/みとり",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            },
+            {
+              "label": "め",
+              "href": "/kanji-reading/鳥/め",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null,
+              "examples": [],
+              "detail_source_url": null,
+              "detail_fetched_at_utc": null,
+              "detail_sha256": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

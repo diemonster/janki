@@ -33,7 +33,7 @@ from japanese_anki.application.journey import (
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters import pattern_cards
+from japanese_anki.exporters import kanji_cards, pattern_cards
 from japanese_anki.exporters.anki import (
     deck_kind,
     resolve_card_types,
@@ -827,6 +827,9 @@ class AssistantContextBroker:
         if kind == "pattern":
             data, count = self._pattern_deck_snapshot(path, section, kind)
             context_records: tuple[VocabularyRecord, ...] = ()
+        elif kind == "kanji":
+            data, count = self._kanji_deck_snapshot(path, section, kind)
+            context_records = ()
         elif kind == "conjugation":
             data, count, context_records = self._conjugation_deck_snapshot(path, before.text)
         else:
@@ -874,6 +877,45 @@ class AssistantContextBroker:
                 "cards": [_pattern_card(card) for card in cards],
             },
             max(1, len(cards)),
+        )
+
+    def _kanji_deck_snapshot(
+        self,
+        path: Path,
+        section: Mapping[str, Any],
+        kind: str,
+    ) -> tuple[dict[str, Any], int]:
+        """Disclose the curated character notes this deck already ships.
+
+        Character notes are their own content type: they are keyed on the
+        character rather than a vocabulary identity, so this snapshot reads the
+        curated store instead of the canonical collection. Nothing here is a
+        vocabulary record, and no word identity is implied by one.
+
+        Through the exporter's own resolver, which is what a build reads: the
+        deck's configured store, its named identities, and its enabled
+        directions. Filtering the project's default store by the deck's ids
+        instead answers a different question the moment a deck names another
+        store, and disclosing notes a build never ships is exactly what this
+        method exists not to do. ``_guard_deck_source`` has already proved that
+        store's path before anything opens it.
+        """
+
+        deck = kanji_cards.resolve_kanji_deck_notes(path, self.config)
+        characters = [
+            {
+                "record_id": note.id,
+                "character": note.character,
+                "meanings": list(note.meanings),
+            }
+            for note in deck.notes
+        ]
+        return (
+            {
+                "configuration": _teaching_configuration(section, kind),
+                "character_notes": characters,
+            },
+            max(1, len(characters)),
         )
 
     def _conjugation_deck_snapshot(
@@ -1396,6 +1438,13 @@ class AssistantContextBroker:
             self._guard_optional_file(target, "deck source")
         elif kind == "conjugation":
             self._guard_optional_file(self.config.normalized_file, "conjugation source")
+        elif kind == "kanji":
+            # A character deck naming no store reads the project's curated one,
+            # which must pass the same containment and no-follow proof as a
+            # store it spells out.
+            self._guard_optional_file(
+                self.config.kanji_notes_file, "character note store"
+            )
 
     def _relative_allowed(
         self,

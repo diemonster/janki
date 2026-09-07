@@ -27,6 +27,22 @@ those fields remains in scope as an artifact contract.
 Unless the user names a narrower **code** target, review the filtered diff
 against `main`.
 
+## Launching a model
+
+Every model launch this review starts — your own and every subagent's — goes
+through `scripts/claude-subscription.py`, the repository's only CLI entry point
+to a model. It verifies a claude.ai first-party Pro or Max login under exactly
+the environment, working directory and `--safe-mode --setting-sources ''` the
+launch itself uses, then execs the CLI; `scripts/janki-review.sh` already calls
+it that way. Bare `claude -p`, a hand-written `env -u ANTHROPIC_API_KEY claude
+…`, and an Agent SDK or API call standing in for the CLI are not allowed
+substitutes. A refusal stops the review — report that nothing was reviewed and
+why; never fall back to API billing. The free probe is
+`scripts/claude-subscription.py --check`. Paid content calls (`extract`,
+`revise`, `promote --accept-coverage`, Realtime audio, the explicit
+`anthropic-api` provider) are a separate matter and still need their own exact
+authorization.
+
 What to look for, in priority order:
 
 1. **Correctness.** Wrong results, unhandled exceptions, off-by-one and boundary math, uninitialized or mutated-shared state, wrong types crossing a boundary, path handling, encoding mistakes (assume UTF-8 with BOM, full-width punctuation, and combining characters in real inputs).

@@ -61,6 +61,16 @@
   opacity: 0.62;
 }
 
+/* The provenance link on a Sources line: a source has to be followable, and
+   the user agent's default blue is the one colour on this card nobody chose —
+   it goes unreadable on the dark ground and fights the dimmed line it sits in.
+   Inheriting keeps it legible in both schemes and still underlined, so it
+   reads as a link. `.actions a` is a button and keeps its own rule. */
+.source a {
+  color: currentColor;
+  text-decoration: underline;
+}
+
 #answer {
   margin: 28px 0 22px;
   border: 0;
@@ -326,34 +336,99 @@
   opacity: 1;
 }
 
-.kanji-examples {
+/* What a source *reported*, on a word card's character block and on a
+   character card's answer alike — one renderer, so one set of rules. The
+   label names the metric: these are the provider's own published shares, and
+   their corpus and denominator are unknown, so a card says whose figure it is
+   showing rather than implying a measurement janki made. */
+.kanji-evidence {
   font-size: 14px;
 }
 
-.kanji-example {
-  display: grid;
-  grid-template-columns: 1.6em 4.5em auto auto 1fr;
-  gap: 8px;
-  align-items: baseline;
-  padding: 4px 0;
+.kanji-evidence-label {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  text-transform: uppercase;
+}
+
+.kanji-usage {
+  padding: 5px 0;
   border-top: 1px dotted rgba(128, 128, 128, 0.35);
 }
 
-.kanji-example .kanji-kind {
+.kanji-usage-reading {
+  font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  font-size: 20px;
+}
+
+.kanji-usage-percent {
+  margin-left: 8px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* A word the provider itself filed under that reading. Never a word janki
+   matched to it. */
+.kanji-bound-example {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 3px;
+  padding-left: 4px;
+}
+
+.kanji-bound-example .kanji-word {
+  font-size: 16px;
+}
+
+.kanji-bound-example .kanji-kana,
+.kanji-bound-example .kanji-gloss {
+  opacity: 0.7;
+}
+
+/* One step further in: the readings the provider printed no figure beside,
+   and KANJIDIC's own inventory. Each keeps its own disclosure and its own
+   label, because neither list is the other. */
+details.kanji-more {
+  margin-top: 8px;
+  padding: 4px 8px;
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+details.kanji-more > summary {
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+details.kanji-more .kanji-usage-reading {
+  margin-right: 10px;
+}
+
+.kanji-inventory-row {
+  display: grid;
+  grid-template-columns: 1.6em auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+
+.kanji-inventory-row .kanji-kind {
   padding: 0 3px;
   border: 1px solid currentColor;
   border-radius: 3px;
   font-size: 11px;
   opacity: 0.75;
+  text-align: center;
 }
 
-.kanji-example .kanji-word {
-  font-size: 16px;
-}
-
-.kanji-example .kanji-kana,
-.kanji-example .kanji-gloss {
-  opacity: 0.7;
+.kanji-inventory-row .kanji-reading {
+  font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
 }
 
 /* Pattern cards: a rule, not a word. Sized like the expression on a
@@ -448,4 +523,27 @@
   .drill-usage {
     padding: 0.75rem 0.8rem;
   }
+}
+
+/* Character cards. The front of a recognition card is one character and
+   nothing else, so it is sized to be read across a room the way an expression
+   is on a word card. The answer shows meanings, the strokes and the reported
+   readings together — an answer split across three disclosures is an answer
+   nobody opens — and everything *additional* sits behind one. */
+.kanji-character {
+  font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  font-size: clamp(96px, 30vw, 190px);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.kanji-strokes {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.kanji-reference {
+  margin-top: 18px;
+  text-align: left;
 }

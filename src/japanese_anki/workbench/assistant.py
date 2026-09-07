@@ -28,12 +28,16 @@ from japanese_anki.errors import JankiError
 __all__ = [
     "CAPABILITIES_MESSAGE",
     "MANAGE_OPERATIONS_MESSAGE",
+    "RESUME_KANJI_MESSAGE",
     "SHOW_DECKS_MESSAGE",
     "SOURCE_HELP_MESSAGE",
     "AssistantDeckChoice",
     "AssistantCore",
     "AssistantRequestContext",
     "ChatReply",
+    "KanjiFinishActionChoice",
+    "KanjiFinishChoice",
+    "KanjiFinishResumption",
     "OperationActionChoice",
     "OperationChoice",
     "RevisionCallbacks",
@@ -60,11 +64,13 @@ _FINISH_ACTION = "janki.revision.finish"
 _EXTRACT_CONFIRM_ACTION = "janki.extraction.confirm"
 _SELECT_DECK_ACTION = "janki.deck.select"
 _PREPARE_OPERATION_ACTION = "janki.operation.prepare"
+_RESUME_KANJI_ACTION = "janki.kanji.resume"
 _ALL_LIBRARY_DECK_ID = "janki:all-library"
 SHOW_DECKS_MESSAGE = "Choose a deck to focus on"
 CAPABILITIES_MESSAGE = "Show me what I can do with my Japanese library"
 SOURCE_HELP_MESSAGE = "How do I add study material?"
 MANAGE_OPERATIONS_MESSAGE = "Manage model calls"
+RESUME_KANJI_MESSAGE = "Resume kanji cards"
 _ASSISTANT_SCOPE = "janki-project"
 _ACTIVE_DECK_ID_KEY = "janki_active_deck_id"
 _ACTIVE_DECK_SCOPE_KEY = "janki_active_deck_scope"
@@ -136,6 +142,7 @@ _PROGRESS_LABELS = frozenset(
         "Preparing finish",
         "Applying reviewed cards",
         "Creating card audio",
+        "Writing character notes",
         "Building Anki package",
         "Saving finish receipt",
     }
@@ -147,6 +154,7 @@ _FINISH_PROGRESS_LABELS = frozenset(
         "Applying reviewed cards",
         "Creating example audio",
         "Creating card audio",
+        "Writing character notes",
         "Building Anki package",
         "Saving finish receipt",
     }
@@ -251,6 +259,42 @@ class OperationChoice:
     has_response_spool: bool
     cleanup_pending: bool
     actions: tuple[OperationActionChoice, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class KanjiFinishActionChoice:
+    """One action a durable character-note receipt still offers."""
+
+    action: Literal["resume", "download"]
+    label: str
+
+
+@dataclass(frozen=True, slots=True)
+class KanjiFinishChoice:
+    """One durable character-note receipt found on disk after a restart.
+
+    This is not a plan and carries no capability: the receipt itself is the
+    owner's already-recorded confirmation, so resuming it needs no fresh
+    consent and no replacement batch.
+    """
+
+    receipt_id: str
+    state: str
+    deck_name: str
+    target: str
+    characters: str
+    detail: str
+    actions: tuple[KanjiFinishActionChoice, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class KanjiFinishResumption:
+    """Truthful durable state after resuming one receipt in the thread."""
+
+    message: str
+    receipt_id: str
+    state: str
+    complete: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -421,6 +465,20 @@ class RevisionCallbacks(Protocol):
     ) -> ChatReply | Awaitable[ChatReply]:
         """Freshly plan one owner-selected journal action without a model call."""
 
+    def list_kanji_finish_choices(
+        self,
+    ) -> tuple[KanjiFinishChoice, ...] | Awaitable[tuple[KanjiFinishChoice, ...]]:
+        """Return the durable character-note receipts still worth acting on."""
+
+    def resume_kanji_finish(
+        self,
+        *,
+        receipt_id: str,
+        action: str,
+        progress: Callable[[str], None],
+    ) -> KanjiFinishResumption | Awaitable[KanjiFinishResumption]:
+        """Continue or re-offer one durable receipt under its recorded authority."""
+
     def chat(
         self,
         *,
@@ -533,6 +591,20 @@ class _OperationSelectorBinding:
     deck_id: str | None
     selection_epoch: int
     actions: frozenset[tuple[str, str, bool]]
+
+
+@dataclass(frozen=True, slots=True)
+class _KanjiResumeBinding:
+    """Which rendered receipt rows this exact widget may act on.
+
+    The binding is a UI anti-replay guard, not authority: the durable receipt
+    carries the owner's confirmation, and the application service revalidates
+    it before continuing.
+    """
+
+    thread_id: str
+    widget_item_id: str
+    actions: frozenset[tuple[str, str]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -867,6 +939,50 @@ def _validate_chat_reply(reply: Any) -> ChatReply:
         ):
             raise ValueError("A planned Assistant action needs its exact instruction.")
     return reply
+
+
+def _validate_kanji_finish_choices(value: Any) -> tuple[KanjiFinishChoice, ...]:
+    if not isinstance(value, tuple) or any(
+        not isinstance(choice, KanjiFinishChoice) for choice in value
+    ):
+        raise TypeError(
+            "list_kanji_finish_choices must return KanjiFinishChoice values"
+        )
+    receipt_ids: set[str] = set()
+    for choice in value:
+        if any(
+            not item.strip()
+            for item in (choice.receipt_id, choice.state, choice.target, choice.detail)
+        ):
+            raise ValueError("Every character-note receipt choice must be complete.")
+        if choice.receipt_id in receipt_ids:
+            raise ValueError("Character-note receipt choices must have unique ids.")
+        receipt_ids.add(choice.receipt_id)
+        seen: set[str] = set()
+        for action in choice.actions:
+            if (
+                not isinstance(action, KanjiFinishActionChoice)
+                or action.action not in {"resume", "download"}
+                or not action.label.strip()
+                or action.action in seen
+            ):
+                raise ValueError(
+                    "Every character-note receipt action must be valid and unique."
+                )
+            seen.add(action.action)
+        if not seen:
+            raise ValueError("A character-note receipt with no action is not offered.")
+    return value
+
+
+def _validate_kanji_resumption(value: Any) -> KanjiFinishResumption:
+    if not isinstance(value, KanjiFinishResumption):
+        raise TypeError("resume_kanji_finish must return KanjiFinishResumption")
+    if not value.message.strip() or not value.receipt_id.strip():
+        raise ValueError("A resumed character-note receipt must report its state.")
+    if not value.state.strip() or not isinstance(value.complete, bool):
+        raise ValueError("A resumed character-note receipt must report its state.")
+    return value
 
 
 def _validate_operation_choices(value: Any) -> tuple[OperationChoice, ...]:
@@ -1698,6 +1814,7 @@ def create_assistant_core(
             super().__init__(store=store, attachment_store=attachment_store)
             self._selectors: dict[str, _SelectorBinding] = {}
             self._operation_selectors: dict[str, _OperationSelectorBinding] = {}
+            self._kanji_resumes: dict[str, _KanjiResumeBinding] = {}
             self._plans: dict[str, _PlanBinding] = {}
             self._finishes: dict[str, _FinishBinding] = {}
             self._extractions: dict[str, _ExtractionBinding] = {}
@@ -1792,6 +1909,7 @@ def create_assistant_core(
             for bindings in (
                 self._selectors,
                 self._operation_selectors,
+                self._kanji_resumes,
                 self._plans,
                 self._finishes,
             ):
@@ -1830,6 +1948,9 @@ def create_assistant_core(
                     "for local intake; extract it; review or organize staged cards; "
                     "promote reviewed proposals; generate audio; and build Anki packages "
                     "through exact action plans.\n\n"
+                    f"- **Pick work back up:** say “{RESUME_KANJI_MESSAGE}” to list the "
+                    "kanji card batches you already confirmed, and finish or download "
+                    "one without confirming it again.\n\n"
                     "Janki uses bounded application actions rather than giving the model a "
                     "raw shell, arbitrary filesystem, Git, or network access."
                 )
@@ -2151,6 +2272,120 @@ def create_assistant_core(
                     ),
                     copy_text=None,
                 )
+            )
+
+        @staticmethod
+        def _kanji_finish_widget(
+            finish_choices: tuple[KanjiFinishChoice, ...],
+            *,
+            capability: str,
+        ) -> Any:
+            rows: list[dict[str, Any]] = []
+            for choice in finish_choices:
+                rows.append(
+                    {
+                        "type": "ListViewItem",
+                        "gap": 2,
+                        "children": [
+                            {
+                                "type": "Box",
+                                "direction": "column",
+                                "gap": 1,
+                                "minWidth": 0,
+                                "children": [
+                                    {
+                                        "type": "Text",
+                                        "value": (
+                                            f"{choice.deck_name} · {choice.characters}"
+                                            if choice.deck_name
+                                            else choice.characters
+                                        ),
+                                        "weight": "semibold",
+                                        "width": "100%",
+                                    },
+                                    {
+                                        "type": "Text",
+                                        "value": choice.detail,
+                                        "size": "sm",
+                                        "color": "secondary",
+                                        "width": "100%",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                )
+                for option in choice.actions:
+                    rows.append(
+                        {
+                            "type": "ListViewItem",
+                            "gap": 2,
+                            "children": [
+                                {
+                                    "type": "Text",
+                                    "value": option.label,
+                                    "width": "100%",
+                                    "color": "primary",
+                                }
+                            ],
+                            "onClickAction": {
+                                "type": _RESUME_KANJI_ACTION,
+                                "payload": {
+                                    "capability": capability,
+                                    "receipt_id": choice.receipt_id,
+                                    "action": option.action,
+                                },
+                                "handler": "server",
+                                "loadingBehavior": "container",
+                                "streaming": True,
+                            },
+                        }
+                    )
+            return DynamicWidgetRoot.model_validate(
+                {
+                    "type": "ListView",
+                    "limit": "auto",
+                    "status": {
+                        "text": "Unfinished kanji cards",
+                        "icon": "book-open",
+                    },
+                    "children": rows,
+                }
+            )
+
+        def _kanji_finish_selector_event(
+            self,
+            thread: Any,
+            request_context: AssistantRequestContext,
+            finish_choices: tuple[KanjiFinishChoice, ...],
+        ) -> Any:
+            capability = secrets.token_urlsafe(32)
+            item_id = store.generate_item_id("message", thread, request_context)
+            self._kanji_resumes[capability] = _KanjiResumeBinding(
+                thread_id=thread.id,
+                widget_item_id=item_id,
+                actions=frozenset(
+                    (choice.receipt_id, option.action)
+                    for choice in finish_choices
+                    for option in choice.actions
+                ),
+            )
+            return ThreadItemDoneEvent(
+                item=WidgetItem(
+                    id=item_id,
+                    thread_id=thread.id,
+                    created_at=datetime.now(),
+                    widget=self._kanji_finish_widget(
+                        finish_choices,
+                        capability=capability,
+                    ),
+                    copy_text=None,
+                )
+            )
+
+        async def _list_kanji_finish_choices(self) -> tuple[KanjiFinishChoice, ...]:
+            return _validate_kanji_finish_choices(
+                await _call_callback(callbacks.list_kanji_finish_choices)
             )
 
         async def _list_operation_choices(self) -> tuple[OperationChoice, ...]:
@@ -2511,6 +2746,38 @@ def create_assistant_core(
                 )
                 return
 
+            if message == RESUME_KANJI_MESSAGE:
+                try:
+                    finish_choices = await self._list_kanji_finish_choices()
+                except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Kanji card recovery unavailable",
+                        message=str(error),
+                    )
+                    return
+                if not finish_choices:
+                    yield self._message_event(
+                        thread,
+                        "No kanji card batch is waiting to finish or download.",
+                    )
+                    return
+                yield self._message_event(
+                    thread,
+                    (
+                        "These kanji card batches are already confirmed and saved. "
+                        "Resuming one continues that exact receipt locally — it asks "
+                        "for nothing again, looks nothing up again, and makes no "
+                        "model call."
+                    ),
+                )
+                yield self._kanji_finish_selector_event(
+                    thread,
+                    request_context,
+                    finish_choices,
+                )
+                return
+
             local_help = self._local_help(message)
             if local_help is not None:
                 yield self._message_event(thread, local_help)
@@ -2802,6 +3069,113 @@ def create_assistant_core(
         ) -> Any:
             if request_context.deck_scope != _ASSISTANT_SCOPE:
                 yield ErrorEvent(message="That assistant action was refused.", allow_retry=False)
+                return
+            if action.type == _RESUME_KANJI_ACTION:
+                payload = action.payload
+                capability = (
+                    payload.get("capability") if isinstance(payload, dict) else None
+                )
+                receipt_id = (
+                    payload.get("receipt_id") if isinstance(payload, dict) else None
+                )
+                receipt_action = (
+                    payload.get("action") if isinstance(payload, dict) else None
+                )
+                binding = (
+                    self._kanji_resumes.get(capability)
+                    if isinstance(capability, str)
+                    else None
+                )
+                if (
+                    not isinstance(payload, dict)
+                    or set(payload) != {"capability", "receipt_id", "action"}
+                    or not isinstance(receipt_id, str)
+                    or receipt_action not in {"resume", "download"}
+                    or binding is None
+                    or binding.thread_id != thread.id
+                    or sender is None
+                    or sender.id != binding.widget_item_id
+                    or (receipt_id, receipt_action) not in binding.actions
+                ):
+                    if isinstance(capability, str):
+                        self._kanji_resumes.pop(capability, None)
+                    yield ErrorEvent(
+                        message=(
+                            "This kanji card recovery action is missing, stale, "
+                            "already used, tampered with, or belongs elsewhere."
+                        ),
+                        allow_retry=False,
+                    )
+                    return
+                if thread.id in self._busy_threads:
+                    yield ErrorEvent(
+                        message="Wait for this thread's current operation to finish.",
+                        allow_retry=False,
+                    )
+                    return
+                self._kanji_resumes.pop(capability, None)
+
+                progress_queue: asyncio.Queue[str] = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def report_resume_progress(label: str) -> None:
+                    normalized = label.strip()
+                    if normalized not in _FINISH_PROGRESS_LABELS:
+                        raise ValueError(
+                            "The character-note finish reported an unknown progress state."
+                        )
+                    loop.call_soon_threadsafe(progress_queue.put_nowait, normalized)
+
+                async def execute_resume() -> KanjiFinishResumption:
+                    result = _validate_kanji_resumption(
+                        await _call_callback(
+                            callbacks.resume_kanji_finish,
+                            receipt_id=receipt_id,
+                            action=receipt_action,
+                            progress=report_resume_progress,
+                        )
+                    )
+                    await self._remember_assistant_result(thread.id, result.message)
+                    return result
+
+                execution_task = asyncio.create_task(execute_resume())
+                release_busy = self._track_durable_task(thread.id, execution_task)
+                try:
+                    try:
+                        while not execution_task.done():
+                            try:
+                                label = await asyncio.wait_for(
+                                    progress_queue.get(), timeout=0.1
+                                )
+                            except TimeoutError:
+                                continue
+                            yield ProgressUpdateEvent(text=label, icon="write")
+                        while not progress_queue.empty():
+                            yield ProgressUpdateEvent(
+                                text=progress_queue.get_nowait(),
+                                icon="write",
+                            )
+                        resumed = await asyncio.shield(execution_task)
+                    except RevisionRefusal as error:
+                        yield NoticeEvent(
+                            level="danger",
+                            title="Kanji card recovery refused",
+                            message=str(error),
+                        )
+                        return
+                    yield self._message_event(thread, resumed.message)
+                    if not resumed.complete:
+                        yield NoticeEvent(
+                            level="warning",
+                            title="Kanji cards still unfinished",
+                            message=(
+                                f"Receipt {resumed.receipt_id} remains in state "
+                                f"{resumed.state}. Its already-written work is kept; "
+                                "resume the same receipt again."
+                            ),
+                        )
+                finally:
+                    release_busy()
                 return
             if action.type == _PREPARE_OPERATION_ACTION:
                 payload = action.payload

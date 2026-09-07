@@ -46,6 +46,7 @@ from japanese_anki.exporters import pattern_cards
 from japanese_anki.exporters.anki import (
     deck_declared_ids,
     deck_declared_record_versions,
+    deck_kind,
     resolve_deck_records,
 )
 from japanese_anki.identifiers import normalize_identity_part
@@ -221,6 +222,16 @@ def collect_records(
     configured_decks = deck_files(config) if deck_paths is None else list(deck_paths)
     for deck_path in configured_decks:
         resolved_path = deck_path.resolve()
+        try:
+            if deck_kind(deck_path) == "kanji":
+                # A character deck holds notes from the curated character
+                # store, not vocabulary records. Reading it here would resolve
+                # that store as a word list and report the deck as unreadable
+                # — a warning about a deck that builds perfectly well.
+                continue
+        except JankiError as exc:
+            warnings.append(f"skipping deck {deck_path}: {exc}")
+            continue
         try:
             structural_owners = pattern_cards.declared_drill_audio_owner_ids(
                 deck_path

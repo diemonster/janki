@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import math
+import os
 import sys
 import tomllib
 from collections.abc import Mapping
@@ -32,6 +33,9 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "media_dir",
         "assistant_dir",
         "kanji_file",
+        "kanji_notes_file",
+        "jpdb_readings_file",
+        "jpdb_html_cache",
         "operations_file",
         "patterns_file",
         "scan_inbox",
@@ -169,6 +173,62 @@ def _anki_collection(data: dict[str, Any], root: Path) -> str:
     return str(expanded if expanded.is_absolute() else (root / expanded).resolve())
 
 
+def _default_html_cache() -> Path:
+    """Where raw provider HTML lives when nothing configures it.
+
+    Outside the repository on purpose. ``data/**`` is deliberately never
+    ignored — everything under it is committed study material — so a full
+    page of provider markup cached beside the facts extracted from it would
+    become repository content nobody reviewed. The platform's own cache
+    directory is where a disposable, re-fetchable copy belongs, and it is the
+    one place a `rm -rf` costs a re-request rather than a record.
+    """
+    try:
+        home = Path.home()
+    except RuntimeError as exc:  # HOME unset and no passwd entry for the uid.
+        raise ConfigError(
+            f"Could not locate a user cache directory for [paths] "
+            f"jpdb_html_cache: {exc}. Set it explicitly."
+        ) from exc
+    if sys.platform == "darwin":
+        return home / "Library" / "Caches" / "janki" / "jpdb"
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA", "").strip()
+        return (Path(base) if base else home / "AppData" / "Local") / "janki" / "jpdb"
+    base = os.environ.get("XDG_CACHE_HOME", "").strip()
+    return (Path(base) if base else home / ".cache") / "janki" / "jpdb"
+
+
+def _jpdb_html_cache(data: dict[str, Any], root: Path) -> Path:
+    """``[paths] jpdb_html_cache`` as an absolute path outside the repository.
+
+    Refused rather than warned about when it lands inside the project: the
+    cache holds complete provider pages, and the repository holds reviewed
+    study content and the facts extracted from those pages. A path that puts
+    the first inside the second is a configuration mistake whose consequence
+    is committed markup, so it fails where every other path setting fails.
+    """
+    value = _str(data, "paths", "jpdb_html_cache", "").strip()
+    if not value:
+        target = _default_html_cache()
+    else:
+        try:
+            expanded = Path(value).expanduser()
+        except RuntimeError as exc:
+            raise ConfigError(
+                f"[paths] jpdb_html_cache: could not expand {value!r}: {exc}"
+            ) from exc
+        target = expanded if expanded.is_absolute() else (root / expanded)
+    resolved = Path(os.path.abspath(os.fspath(target)))
+    if resolved == root or root in resolved.parents:
+        raise ConfigError(
+            f"[paths] jpdb_html_cache must sit outside the repository, and "
+            f"{resolved} is inside {root}. Raw provider pages are a local "
+            "cache, not committed study content."
+        )
+    return resolved
+
+
 def _bool(data: dict[str, Any], section: str, key: str, default: bool) -> bool:
     """Read a boolean setting, refusing values that only look like one.
 
@@ -289,6 +349,16 @@ class ProjectConfig:
     assistant_dir: Path
     #: Looked-up reference data about characters, shared across records.
     kanji_file: Path
+    #: Curated character notes: what a kanji card *is*, separate from both the
+    #: vocabulary store and the refreshable reference caches beside it.
+    kanji_notes_file: Path
+    #: Published reading percentages and their provider-bound examples, kept
+    #: verbatim. Machine-written, committed, and replaced only by an explicit
+    #: refresh — a build reads it and never fetches.
+    jpdb_readings_file: Path
+    #: The private, disposable copy of the raw pages those facts came from.
+    #: Outside the repository, and not committed.
+    jpdb_html_cache: Path
     #: What documents teach, inferred and reviewed before anything uses it.
     patterns_file: Path
     operations_file: Path
@@ -445,6 +515,13 @@ class ProjectConfig:
                 _str(data, "paths", "assistant_dir", "data/assistant")
             ),
             kanji_file=project_path(_str(data, "paths", "kanji_file", "data/kanji.json")),
+            kanji_notes_file=project_path(
+                _str(data, "paths", "kanji_notes_file", "data/kanji_notes.json")
+            ),
+            jpdb_readings_file=project_path(
+                _str(data, "paths", "jpdb_readings_file", "data/jpdb_readings.json")
+            ),
+            jpdb_html_cache=_jpdb_html_cache(data, project_root),
             operations_file=project_path(
                 _str(data, "paths", "operations_file", "data/operations.json")
             ),

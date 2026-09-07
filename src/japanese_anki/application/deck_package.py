@@ -23,7 +23,7 @@ from japanese_anki.application import deck_build
 from japanese_anki.application.build import _record_gaps
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters import pattern_cards
+from japanese_anki.exporters import kanji_cards, pattern_cards
 from japanese_anki.exporters.anki import (
     CARD_FILES,
     build_deck,
@@ -58,7 +58,7 @@ __all__ = [
 ]
 
 
-PackageKind = Literal["vocabulary", "pattern", "conjugation"]
+PackageKind = Literal["vocabulary", "pattern", "conjugation", "kanji"]
 
 
 class DeckPackageError(JankiError):
@@ -397,6 +397,8 @@ def _configuration_fingerprint(config: ProjectConfig) -> str:
             "ledger": _relative(config, config.ledger_file),
             "media": _relative(config, config.media_dir),
             "kanji": _relative(config, config.kanji_file),
+            "kanji_notes": _relative(config, config.kanji_notes_file),
+            "jpdb_readings": _relative(config, config.jpdb_readings_file),
             "patterns": _relative(config, config.patterns_file),
         },
         "defaults": {
@@ -432,6 +434,12 @@ def _plan_vocabulary(config: ProjectConfig, target: Path) -> DeckPackagePlan:
                 config,
                 "kanji reference store",
                 config.kanji_file,
+                optional=True,
+            ),
+            _input(
+                config,
+                "jpdb reading facts",
+                config.jpdb_readings_file,
                 optional=True,
             ),
         ]
@@ -546,12 +554,49 @@ def _wrap_conjugation(
     )
 
 
+def _plan_kanji(config: ProjectConfig, target: Path) -> DeckPackagePlan:
+    """Bind a character package: its curated notes, its templates, nothing else.
+
+    The provider facts file is deliberately not an input. Every figure a
+    character card shows was copied onto its note when the note was written,
+    so a build reads the curated store and the templates — and a refresh of
+    the facts does not silently restate what a built package claims.
+    """
+    deck = kanji_cards.resolve_kanji_deck_notes(target, config)
+    filename = str(deck.section.get("output", f"{target.stem}.apkg"))
+    return _finish_plan(
+        config,
+        repository_root=config.root.resolve(),
+        deck_path=target,
+        output_path=_safe_output(config, config.dist_dir / filename),
+        kind="kanji",
+        deck_name=deck.deck_name,
+        variant="+".join(deck.directions),
+        card_types=deck.directions,
+        note_count=len(deck.notes),
+        card_count=len(deck.notes) * len(deck.directions),
+        record_ids=tuple(note.id for note in deck.notes),
+        deck_input=_input(config, "configured deck", target),
+        source_inputs=(_input(config, "character note store", deck.source_path),),
+        template_inputs=tuple(
+            _text_input(config, "character template", path)
+            for path in kanji_cards.kanji_template_paths(
+                config.template_dir, deck.directions
+            )
+        ),
+        media_inputs=(),
+        conjugation_plan=None,
+    )
+
+
 def _plan_unlocked(config: ProjectConfig, target: Path) -> DeckPackagePlan:
     kind = deck_kind(target)
     if kind in {"", "vocabulary"}:
         return _plan_vocabulary(config, target)
     if kind == "pattern":
         return _plan_pattern(config, target)
+    if kind == "kanji":
+        return _plan_kanji(config, target)
     if kind == "conjugation":
         return _wrap_conjugation(
             config,
@@ -710,6 +755,7 @@ def _plan_vocabulary_revision_unlocked(
         source_inputs=(
             DeckPackageInput("record source", canonical, _sha(revision.text.encode("utf-8"))),
             _input(config, "kanji reference store", config.kanji_file, optional=True),
+            _input(config, "jpdb reading facts", config.jpdb_readings_file, optional=True),
         ),
         template_inputs=_vocabulary_templates(config, card_types),
         media_inputs=tuple(
@@ -840,6 +886,27 @@ def _execute_nonconjugation_locked(
                 ):
                     raise DeckPackageError(
                         "The vocabulary builder reported a result outside the "
+                        "confirmed package plan."
+                    )
+                warnings = result.warnings
+                media_count = result.media_count
+            elif fresh.kind == "kanji":
+                result = kanji_cards.build_kanji_deck(
+                    fresh.deck_path,
+                    config,
+                    output_path=fresh.output_path,
+                    output_expected_revision=fresh.output_revision,
+                    output_expected_identity=fresh.output_identity,
+                    output_expected_absent=fresh.output_revision is None,
+                )
+                package_sha = _verify_package(result.output_path, fresh.output_path)
+                if (
+                    result.note_count != fresh.note_count
+                    or result.card_types != fresh.card_types
+                    or result.record_ids != fresh.record_ids
+                ):
+                    raise DeckPackageError(
+                        "The character builder reported a result outside the "
                         "confirmed package plan."
                     )
                 warnings = result.warnings

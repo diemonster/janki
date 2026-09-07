@@ -1,7 +1,7 @@
 """What a card can say about the *characters* in a word.
 
-Stroke order, on/kun readings, and a common word per reading — the three blocks
-of a paper kanji card. janki's records are words (``word:使う:つかう``), so this
+Stroke order and the readings KANJIDIC lists — the reference half of a paper
+kanji card. janki's records are words (``word:使う:つかう``), so this
 is deliberately *not* record content: 前 is the same 前 in 名前 and 前線, and
 storing its readings on every word that contains it would be the same lookup
 repeated and the same edit needed in several places. It lives in its own file,
@@ -10,46 +10,53 @@ keyed by character, and the exporter reads it when it builds a card.
 **Two sources, both looked up rather than generated.**
 
 * `kanjiapi.dev` serves KANJIDIC2: stroke count, grade, JLPT level, meanings,
-  and on/kun readings — plus the words that use a character.
+  and on/kun readings.
 * KanjiVG supplies the stroke *paths*, in order, which is what makes a
   stroke-by-stroke diagram possible rather than a single glyph.
 
-**Example words need ranking, badly.** The word list for 前 is 740 entries and
-arrives in an order that opens 一歩前進, 前官礼遇, 前駆体 — accurate and useless
-to a learner. JMdict's priority tags are the signal: of those 740, 138 carry
-one, and the three a commercial paper card chose (前線, 名前, 目の前) are all in
-that set with ``nf08``, ``nf02`` and ``nf07``. So candidates are filtered to
-tagged entries and ranked by the ``nfXX`` band, which is a frequency decile.
+**Example words are not this module's to choose.** They used to be: JMdict
+priority tags ranked kanjiapi's word list, and a positional rule decided which
+character in a word a run of kana belonged to. Both are janki deciding how
+Japanese is read, and both are gone. A word reaches a card only where a
+provider bound it to a reading itself — :mod:`japanese_anki.jpdb_kanji` carries
+jpdb's own reading pages, whose links state which reading each word shows. What
+KANJIDIC supplies here is an *inventory*: every reading it lists, in its order,
+with no ranking and no examples attached.
 
-**Attribution.** KANJIDIC2 and JMdict are CC BY-SA 4.0 (EDRDG), and KanjiVG is
-CC BY-SA 3.0 (Ulrich Apel). A personal deck is fine; a deck that is *shared*
-has to credit all three, the same way VOICEVOX's per-character terms apply only
-on sharing.
+**Attribution.** KANJIDIC2 is CC BY-SA 4.0 (EDRDG) and KanjiVG is CC BY-SA 3.0
+(Ulrich Apel). A personal deck is fine; a deck that is *shared* has to credit
+both, the same way VOICEVOX's per-character terms apply only on sharing.
 """
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji
 from japanese_anki.io import read_text_bound
 
+if TYPE_CHECKING:  # the renderer reads these; it never builds one
+    from japanese_anki.jpdb_kanji import BoundExample, CharacterReadings, ReadingUsage
+
 __all__ = [
-    "Example",
     "KanjiError",
     "KanjiInfo",
     "Reading",
     "assigns_a_known_reading",
     "fetch_kanji",
     "kanji_in",
+    "render_furigana",
+    "render_kanji_html",
+    "render_stroke_strip",
     "urllib_transport",
 ]
 
@@ -62,16 +69,6 @@ USER_AGENT = "janki (personal Japanese deck builder)"
 
 DEFAULT_TIMEOUT = 30.0
 
-#: How many example words to keep per reading. Two is what fits a card without
-#: turning the section into a dictionary — the thing the meanings cap exists to
-#: prevent one block higher up.
-EXAMPLES_PER_READING = 2
-
-#: Rows of example words per character. KANJIDIC lists every reading a
-#: character has, including rendaku variants (使: つか.い *and* -づか.い), and
-#: all of them is a dictionary entry rather than a reminder.
-MAX_EXAMPLE_ROWS = 4
-
 #: ``(url) -> bytes``. The seam tests replace, so no test reaches the network.
 Transport = Callable[[str], bytes]
 
@@ -81,21 +78,16 @@ class KanjiError(JankiError):
 
 
 @dataclass(frozen=True, slots=True)
-class Example:
-    """One word that uses the character, for one of its readings."""
-
-    written: str
-    pronounced: str
-    gloss: str
-
-
-@dataclass(frozen=True, slots=True)
 class Reading:
-    """One reading of a character, with the words that show it in use."""
+    """One reading KANJIDIC lists for a character.
+
+    Inventory, not evidence: nothing here says how often the character is read
+    this way or which words show it. Both of those are a provider's to state,
+    and jpdb's reading pages are where janki gets them.
+    """
 
     kind: str  # "on" or "kun"
     reading: str
-    examples: tuple[Example, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,14 +111,7 @@ class KanjiInfo:
             "jlpt": self.jlpt,
             "meanings": list(self.meanings),
             "readings": [
-                {
-                    "kind": reading.kind,
-                    "reading": reading.reading,
-                    "examples": [
-                        {"written": e.written, "pronounced": e.pronounced, "gloss": e.gloss}
-                        for e in reading.examples
-                    ],
-                }
+                {"kind": reading.kind, "reading": reading.reading}
                 for reading in self.readings
             ],
             "strokes": list(self.strokes),
@@ -137,23 +122,13 @@ class KanjiInfo:
         character = str(raw.get("character") or "")
         if not character:
             raise KanjiError("A kanji entry needs its character")
-        readings = []
-        for item in raw.get("readings") or []:
-            examples = tuple(
-                Example(
-                    written=str(e.get("written") or ""),
-                    pronounced=str(e.get("pronounced") or ""),
-                    gloss=str(e.get("gloss") or ""),
-                )
-                for e in (item.get("examples") or [])
+        readings = [
+            Reading(
+                kind=str(item.get("kind") or ""),
+                reading=str(item.get("reading") or ""),
             )
-            readings.append(
-                Reading(
-                    kind=str(item.get("kind") or ""),
-                    reading=str(item.get("reading") or ""),
-                    examples=examples,
-                )
-            )
+            for item in raw.get("readings") or []
+        ]
         return cls(
             character=character,
             stroke_count=int(raw.get("stroke_count") or 0),
@@ -209,18 +184,6 @@ def _match_key(reading: str) -> str:
     hiragana, so the result is converted.
     """
     return _to_hiragana(reading.replace(".", "").replace("-", "").strip())
-
-
-def _dedupe_key(reading: str) -> str:
-    """What makes two KANJIDIC readings the same reading.
-
-    Position and okurigana-boundary markers are notation rather than sounds.
-    Thus ``-い.き`` and ``-いき`` are one reading written twice, while
-    ``つか.う`` and ``つか.い`` remain distinct because their full readings
-    differ. Collapsing those two labelled 使う as つか.い, which is simply the
-    wrong reading for that word.
-    """
-    return _match_key(reading)
 
 
 def assigns_a_known_reading(info: KanjiInfo | None, reading: str) -> bool:
@@ -296,131 +259,19 @@ def _display_reading(reading: str) -> str:
     return f"{position}{shown}"
 
 
-def _priority_rank(priorities: Iterable[str]) -> int:
-    """Lower is commoner. ``None``-ish entries sort last.
-
-    ``nfXX`` is a frequency decile band in JMdict — ``nf01`` is the commonest —
-    and ``ichi1``/``news1``/``spec1`` mark the common lists. Without this the
-    word list for 前 opens on 前官礼遇 and 前駆体.
-    """
-    best = 999
-    for tag in priorities:
-        match = re.fullmatch(r"nf(\d+)", tag)
-        if match:
-            best = min(best, int(match.group(1)))
-        elif tag in {"ichi1", "news1", "spec1", "gai1"}:
-            best = min(best, 50)
-    return best
-
-
-def _shows_reading(character: str, written: str, pronounced: str, stem: str) -> bool:
-    """Can this word *prove* that this character is read this way?
-
-    A substring test cannot. 図書館 contains か, so 書's か.く claimed it as an
-    example — but that か is 館's, and the card then asserted a reading nobody
-    verified. 教科書 answered the same way (か from 科), 部分 answered 分's ブ
-    (it is ブン), and 絵を描く answered 書 without containing 書 at all, because
-    JMdict lists the spellings together.
-
-    What *is* provable is position. If the character opens the word, its reading
-    opens the pronunciation; if it closes the word, its reading closes the
-    pronunciation. A character in the middle of a compound cannot be pinned to
-    any run of kana without knowing how its neighbours are read, so those are
-    refused rather than guessed at — the rule this project applies to every
-    other reading.
-    """
-    # No separate "is the character even in the word" guard: a word the
-    # character neither opens nor closes cannot be proved either way, and that
-    # includes a word it is absent from — 絵を描く, which JMdict lists under 書
-    # because the spellings share an entry.
-    if written.startswith(character):
-        return pronounced.startswith(stem)
-    if written.endswith(character):
-        return pronounced.endswith(stem)
-    return False
-
-
-def _ranked_examples_for(
-    character: str,
-    reading: str,
-    words: list[dict[str, Any]],
-    rivals: Iterable[str] = (),
-) -> tuple[tuple[int, Example], ...]:
-    """Ranked words that show this character being read this way.
-
-    ``rivals`` are the character's other readings. A word goes to the *longest*
-    reading that fits it, because one reading is often a prefix of another: 分's
-    ブ and ブン both open 分野 (ぶんや), and offering 分野 as an example of ブ
-    teaches a reading the word does not use.
-    """
-    stem = _match_key(reading)
-    if not stem:
-        return ()
-    longer = sorted(
-        (other for other in {_match_key(r) for r in rivals} if len(other) > len(stem)),
-        key=len,
-        reverse=True,
-    )
-    scored: list[tuple[int, Example]] = []
-    for entry in words:
-        glosses = entry.get("meanings") or [{}]
-        gloss = (glosses[0].get("glosses") or [""])[0]
-        for variant in entry.get("variants") or []:
-            priorities = variant.get("priorities") or []
-            if not priorities:
-                # Dropped rather than merely ranked last. The sort below would
-                # bury them anyway, but only while something tagged exists to
-                # bury them under — for a rare character with no common words
-                # at all, ranking alone would surface 前官礼遇-grade entries as
-                # though they were the ones to learn.
-                continue
-            pronounced = _to_hiragana(str(variant.get("pronounced") or ""))
-            written = str(variant.get("written") or "")
-            if not _shows_reading(character, written, pronounced, stem):
-                continue
-            if any(
-                _shows_reading(character, written, pronounced, other) for other in longer
-            ):
-                # A longer reading of the same character also fits, so this word
-                # is that reading's example rather than this one's.
-                continue
-            scored.append((
-                _priority_rank(priorities),
-                Example(
-                    written=str(variant.get("written") or ""),
-                    pronounced=pronounced,
-                    gloss=str(gloss),
-                ),
-            ))
-    scored.sort(key=lambda pair: (pair[0], len(pair[1].written)))
-    seen: set[str] = set()
-    kept: list[tuple[int, Example]] = []
-    for rank, example in scored:
-        if example.written in seen:
-            continue
-        seen.add(example.written)
-        kept.append((rank, example))
-        if len(kept) >= EXAMPLES_PER_READING:
-            break
-    return tuple(kept)
-
-
-def _examples_for(
-    character: str,
-    reading: str,
-    words: list[dict[str, Any]],
-    rivals: Iterable[str] = (),
-) -> tuple[Example, ...]:
-    """The capped examples stored for one reading, commonest first."""
-    ranked = _ranked_examples_for(character, reading, words, rivals)
-    return tuple(example for _, example in ranked[:EXAMPLES_PER_READING])
-
-
 def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiInfo:
     """Look one character up, from both sources.
 
     A missing stroke diagram is not a failure: KanjiVG does not cover every
-    character, and readings without strokes are still most of the card.
+    character, and the readings and meanings are still most of the card.
+
+    The readings come back as KANJIDIC lists them — on'yomi then kun'yomi, each
+    in the source's own order, nothing dropped and nothing reordered. まえ and
+    -まえ are two entries there and stay two entries here: whether they are "the
+    same reading" is a question about Japanese, and the answer this module used
+    to give (equal once the boundary markers come off) was a rule of its own
+    making. An inventory that is exactly what the dictionary published needs no
+    such rule.
     """
     if not character or not contains_kanji(character):
         raise KanjiError(f"Not a kanji: {character!r}")
@@ -431,51 +282,13 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
         info = json.loads(send(f"{KANJIAPI}/kanji/{quoted}"))
     except (ValueError, TypeError) as exc:
         raise KanjiError(f"kanjiapi gave no readable answer for {character}") from exc
-    try:
-        words = json.loads(send(f"{KANJIAPI}/words/{quoted}"))
-    except KanjiError:
-        words = []
-    except (ValueError, TypeError):
-        words = []
-    if not isinstance(words, list):
-        words = []
 
-    # Deduplicated by the complete spoken reading: KANJIDIC sometimes writes
-    # the same sound twice with different boundary notation (``-い.き`` and
-    # ``-いき``). The plain-position form wins when both it and a suffix form
-    # exist, while genuinely different okurigana remain separate readings.
-    ranked_readings: list[tuple[int, int, Reading]] = []
-    seen_stems: set[tuple[str, str]] = set()
-    all_readings = [
-        str(value)
-        for key in ("on_readings", "kun_readings")
+    readings = [
+        Reading(kind=kind, reading=_display_reading(str(value)))
+        for kind, key in (("on", "on_readings"), ("kun", "kun_readings"))
         for value in (info.get(key) or [])
+        if _display_reading(str(value))
     ]
-    for kind, key in (("on", "on_readings"), ("kun", "kun_readings")):
-        for value in sorted((info.get(key) or []), key=lambda r: ("-" in r, r)):
-            text = str(value)
-            marker = (kind, _dedupe_key(text))
-            if not marker[1] or marker in seen_stems:
-                continue
-            seen_stems.add(marker)
-            ranked_examples = _ranked_examples_for(
-                character, text, words, all_readings
-            )
-            reading = Reading(
-                kind=kind,
-                reading=_display_reading(text),
-                examples=tuple(
-                    example
-                    for _, example in ranked_examples[:EXAMPLES_PER_READING]
-                ),
-            )
-            best_rank = ranked_examples[0][0] if ranked_examples else 999
-            ranked_readings.append((best_rank, len(ranked_readings), reading))
-
-    # The renderer has a deliberately small row budget. KANJIDIC's kana order
-    # does not express usefulness, so let the best JMdict priority tag decide
-    # which readings reach that budget; source order is the stable tie-breaker.
-    readings = [reading for _, _, reading in sorted(ranked_readings)]
 
     try:
         svg = send(f"{KANJIVG}/{ord(character):05x}.svg").decode("utf-8")
@@ -497,27 +310,110 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
 #: KanjiVG draws on a 109x109 canvas.
 CANVAS = 109
 
+#: Explicit Anki furigana notation — ``word[reading]`` — as a provider supplied
+#: it. This reads *markup*, not Japanese: the displayed run and its reading are
+#: both already named, so rendering it decides nothing about how a word is read.
+#: `exporters.pattern_cards` holds the same expression for deck-authored drill
+#: examples; the two cannot share one, because this module is imported by the
+#: exporter that module imports.
+_FURIGANA = re.compile(r" ?([^>\s\[\]]+?)\[([^\[\]\r\n]+?)\]")
+
+
+def render_stroke_strip(info: KanjiInfo, *, prefix: str = "kanji") -> str:
+    """The graph-paper strip of one character, or ``""`` when it has no paths.
+
+    Each cell shows every stroke drawn so far with the newest picked out, and it
+    does so by *reference*: every (usually long) path is defined once, each
+    stage points at the completed stage before it, and a cell adds only its own
+    newest stroke. The markup this replaced repeated n(n+1)/2 path strings for
+    an n-stroke character.
+
+    Those references are ids, and ids are document-wide. ``prefix`` is how a
+    caller keeps two strips on one card apart; composing a unique one is the
+    caller's job, since only the caller knows what else is on the page.
+    """
+    if not info.strokes:
+        return ""
+    safe_prefix = html.escape(prefix, quote=True)
+    definitions = []
+    cells = []
+    for index, path in enumerate(info.strokes):
+        stroke_id = f"{safe_prefix}-stroke-{index}"
+        stage_id = f"{safe_prefix}-stage-{index}"
+        definitions.append(f'<path id="{stroke_id}" d="{html.escape(path)}"/>')
+        prior = f'<use href="#{safe_prefix}-stage-{index - 1}"/>' if index else ""
+        definitions.append(f'<g id="{stage_id}">{prior}<use href="#{stroke_id}"/></g>')
+        drawn = prior + f'<use class="new" href="#{stroke_id}"/>'
+        cells.append(
+            f'<span class="stroke-cell"><svg viewBox="0 0 {CANVAS} {CANVAS}" '
+            f'xmlns="http://www.w3.org/2000/svg">{drawn}</svg></span>'
+        )
+    return (
+        '<svg class="stroke-defs" aria-hidden="true" width="0" height="0" '
+        f'xmlns="http://www.w3.org/2000/svg"><defs>{"".join(definitions)}'
+        f'</defs></svg><div class="stroke-order">{"".join(cells)}</div>'
+    )
+
+
+def render_furigana(value: str) -> str:
+    """Render explicit ``word[reading]`` notation as safe ruby HTML.
+
+    Anki does not apply its ``furigana:`` filter to notation stored inside
+    another field's HTML, so a card showing a provider's ruby has to render it
+    here or the brackets reach the learner as text.
+
+    Only the brackets are structure, and the single space Anki writes in front
+    of an annotated run is its boundary marker — that one is consumed with the
+    run, and a second is text. Every base, reading and unannotated run is
+    escaped and kept exactly as the notation wrote it, repeated annotations
+    included: nothing here merges, reorders, or infers a segment.
+
+    An empty value renders as ``""``. What a card shows instead is the caller's
+    to decide, because only the caller knows the word.
+    """
+    parts: list[str] = []
+    cursor = 0
+    for match in _FURIGANA.finditer(value):
+        parts.append(html.escape(value[cursor:match.start()]))
+        parts.append(
+            "<ruby><rb>"
+            f"{html.escape(match.group(1))}</rb><rt>"
+            f"{html.escape(match.group(2))}</rt></ruby>"
+        )
+        cursor = match.end()
+    parts.append(html.escape(value[cursor:]))
+    return "".join(parts)
+
 
 def render_kanji_html(
     entries: Iterable[KanjiInfo],
     *,
-    record_expression: str = "",
-    record_reading: str = "",
+    reading_evidence: Mapping[str, CharacterReadings] | None = None,
 ) -> str:
     """The collapsible block a card shows, or ``""`` when there is nothing.
 
     One ``<details>`` per character so a two-kanji word does not force the
     reader to open both, and so the summary can carry the character itself.
-    When the shared reference entry contains the card's exact dictionary pair,
-    that row is reserved before the display cap.  Exact text equality is a
-    structural match; this renderer does not decide how any Japanese is read.
-    """
-    import html as html_mod
 
+    Opening one shows what a provider *reported*: every reading jpdb printed a
+    percentage beside, in jpdb's order, with its label and that percentage
+    exactly as printed and the words jpdb's own page for that reading listed
+    under it. A quantified reading with no listed word still shows its
+    percentage — "84% of uses, and no example on file" is the fact, and hiding
+    the figure until an example exists would report a different one.
+
+    Everything else is one step further in. jpdb's unquantified readings and
+    KANJIDIC's inventory each get their own disclosure, labelled for what they
+    are: a jpdb reading group is not an on/kun reading, so neither list is
+    merged into the other and no on/kun badge is ever printed beside a jpdb
+    label. Without jpdb facts for a character the inventory is all there is, and
+    it stays reference — nothing here promotes a KANJIDIC reading to evidence.
+    """
+    evidence = reading_evidence or {}
     blocks: list[str] = []
     for block_index, info in enumerate(entries):
         parts: list[str] = []
-        header = html_mod.escape("、".join(info.meanings[:3]))
+        header = html.escape("、".join(info.meanings[:3]))
         tags = []
         if info.jlpt:
             tags.append(f"N{info.jlpt}")
@@ -527,111 +423,121 @@ def render_kanji_html(
             tags.append(f"grade {info.grade}")
         parts.append(
             f'<div class="kanji-head"><span class="kanji-gloss">{header}</span>'
-            f'<span class="kanji-tags">{html_mod.escape(" · ".join(tags))}</span></div>'
+            f'<span class="kanji-tags">{html.escape(" · ".join(tags))}</span></div>'
         )
+        parts.append(render_stroke_strip(info, prefix=f"kanji-{block_index}"))
 
-        if info.strokes:
-            # Define every (usually long) path once. Each stage recursively
-            # references the completed stage before it, and each visible cell
-            # adds only its newest stroke. The old cumulative-path markup
-            # repeated n(n+1)/2 path strings for an n-stroke character.
-            definitions = []
-            cells = []
-            for index, path in enumerate(info.strokes):
-                stroke_id = f"kanji-{block_index}-stroke-{index}"
-                stage_id = f"kanji-{block_index}-stage-{index}"
-                definitions.append(
-                    f'<path id="{stroke_id}" d="{html_mod.escape(path)}"/>'
-                )
-                prior = (
-                    f'<use href="#kanji-{block_index}-stage-{index - 1}"/>'
-                    if index
-                    else ""
-                )
-                definitions.append(
-                    f'<g id="{stage_id}">{prior}<use href="#{stroke_id}"/></g>'
-                )
-                drawn = prior + f'<use class="new" href="#{stroke_id}"/>'
-                cells.append(
-                    f'<span class="stroke-cell"><svg viewBox="0 0 {CANVAS} {CANVAS}" '
-                    f'xmlns="http://www.w3.org/2000/svg">{drawn}</svg></span>'
-                )
-            parts.append(
-                '<svg class="stroke-defs" aria-hidden="true" width="0" height="0" '
-                f'xmlns="http://www.w3.org/2000/svg"><defs>{"".join(definitions)}'
-                f'</defs></svg><div class="stroke-order">{"".join(cells)}</div>'
+        reported = evidence.get(info.character)
+        quantified, unquantified = _split_reported(reported)
+        parts.append(_reported_usage_html(quantified))
+        parts.append(
+            _further_disclosure(
+                "Other JPDB readings", "kanji-other", _labels_html(unquantified)
             )
-
-        # Round robin: one example from every reading before any reading gets a
-        # second. Filling reading by reading spent the whole row budget on the
-        # first two — 使's card showed つか(い) twice and left out つか(う),
-        # which is the reading of 使う, the word the card is about.
-        #
-        # A reading with no example at all is placed only after every example
-        # has been placed, whatever order the caller's readings arrived in. The
-        # renderer cannot assume the sort `fetch_kanji` applies: `data/kanji.json`
-        # is committed, hand-editable, and older copies are in KANJIDIC's kana
-        # order. In that order 来's example-less き(たす)/き(たる)/きた(す)/きた(る)
-        # sat ahead of く(る), so the four-row budget went to 出来, 来年, 上出来
-        # and one blank — and 来る, the reading of the word the card is about,
-        # never rendered. That is the same loss the round robin exists to stop.
-        with_examples = [r for r in info.readings if r.examples]
-        without_examples = [r for r in info.readings if not r.examples]
-        rows: list[tuple[Reading, Example | None]] = []
-        depth_limit = max((len(r.examples) for r in with_examples), default=0)
-        for depth in range(depth_limit):
-            for reading in with_examples:
-                if depth >= len(reading.examples):
-                    continue
-                example = reading.examples[depth]
-                rows.append((reading, example))
-
-        # The fetcher orders readings and examples using JMdict's word-priority
-        # evidence. Preserve that evidence-derived order for the ordinary
-        # stream, but first reserve the exact pair this particular vocabulary
-        # card teaches. Both strings are required: spelling alone would select
-        # the wrong member of a homograph pair.
-        focus_index = next(
-            (
-                index
-                for index, (_reading, example) in enumerate(rows)
-                if example is not None
-                and example.written == record_expression
-                and example.pronounced == record_reading
-            ),
-            None,
         )
-        if focus_index is not None:
-            rows.insert(0, rows.pop(focus_index))
-
-        for reading in without_examples:
-            rows.append((reading, None))
-
-        rendered_rows = []
-        for reading, example in rows[:MAX_EXAMPLE_ROWS]:
-            label = "音" if reading.kind == "on" else "訓"
-            written = html_mod.escape(example.written) if example else ""
-            pronounced = html_mod.escape(example.pronounced) if example else ""
-            gloss = html_mod.escape(example.gloss) if example else ""
-            rendered_rows.append(
-                '<div class="kanji-example">'
-                f'<span class="kanji-kind">{label}</span>'
-                f'<span class="kanji-reading">{html_mod.escape(reading.reading)}</span>'
-                f'<span class="kanji-word">{written}</span>'
-                f'<span class="kanji-kana">{pronounced}</span>'
-                f'<span class="kanji-gloss">{gloss}</span>'
-                "</div>"
+        parts.append(
+            _further_disclosure(
+                "KANJIDIC readings", "kanji-inventory", _inventory_html(info.readings)
             )
-        if rendered_rows:
-            parts.append(
-                f'<div class="kanji-examples">{"".join(rendered_rows)}</div>'
-            )
+        )
 
         blocks.append(
-            f'<details class="kanji"><summary>{html_mod.escape(info.character)}</summary>'
+            f'<details class="kanji"><summary>{html.escape(info.character)}</summary>'
             f'{"".join(parts)}</details>'
         )
     return "".join(blocks)
+
+
+def _split_reported(
+    reported: CharacterReadings | None,
+) -> tuple[list[ReadingUsage], list[ReadingUsage]]:
+    """jpdb's readings split by whether jpdb printed a quantity, in its order.
+
+    The split is on the presence of a figure, which is jpdb's own doing. It is
+    not a judgement about which readings matter.
+    """
+    quantified: list[ReadingUsage] = []
+    unquantified: list[ReadingUsage] = []
+    for group in reported.groups if reported else ():
+        for usage in group.readings:
+            (quantified if usage.percent_text is not None else unquantified).append(usage)
+    return quantified, unquantified
+
+
+def _reported_usage_html(readings: list[ReadingUsage]) -> str:
+    """Every quantified reading, its printed figure, and its bound words.
+
+    A bound word is shown with the provider's own ruby over it, which is the
+    point of having followed the reading page at all: the whole-word reading and
+    the English stay beside it as separate statements about the whole word.
+    """
+    if not readings:
+        return ""
+    rows = []
+    for usage in readings:
+        examples = "".join(
+            '<div class="kanji-bound-example">'
+            f'<span class="kanji-word">{_bound_word_html(example)}</span>'
+            f'<span class="kanji-kana">{html.escape(example.pronounced)}</span>'
+            f'<span class="kanji-gloss">{html.escape(example.gloss)}</span>'
+            "</div>"
+            for example in usage.examples
+        )
+        rows.append(
+            '<div class="kanji-usage">'
+            f'<span class="kanji-usage-reading">{html.escape(usage.label)}</span>'
+            f'<span class="kanji-usage-percent">{html.escape(usage.percent_text or "")}'
+            "</span>"
+            f"{examples}</div>"
+        )
+    return (
+        '<div class="kanji-evidence">'
+        '<div class="kanji-evidence-label">JPDB reported usage</div>'
+        f'{"".join(rows)}</div>'
+    )
+
+
+def _bound_word_html(example: BoundExample) -> str:
+    """One bound word: the supplied ruby, or its plain spelling when there is none.
+
+    The fallback is the spelling and never the whole-word reading laid over it.
+    Which kana sit over which characters is what the provider's reading page
+    states, and inventing it here would be janki reading the Japanese.
+    """
+    if not example.furigana:
+        return html.escape(example.written)
+    return render_furigana(example.furigana)
+
+
+def _labels_html(readings: list[ReadingUsage]) -> str:
+    """jpdb's unquantified readings: the labels, and nothing implied by them."""
+    if not readings:
+        return ""
+    return "".join(
+        f'<span class="kanji-usage-reading">{html.escape(usage.label)}</span>'
+        for usage in readings
+    )
+
+
+def _inventory_html(readings: tuple[Reading, ...]) -> str:
+    """KANJIDIC's list, in its order, each entry marked on or kun."""
+    return "".join(
+        '<div class="kanji-inventory-row">'
+        f'<span class="kanji-kind">{"音" if reading.kind == "on" else "訓"}</span>'
+        f'<span class="kanji-reading">{html.escape(reading.reading)}</span>'
+        "</div>"
+        for reading in readings
+    )
+
+
+def _further_disclosure(label: str, css_class: str, body: str) -> str:
+    """One more ``<details>`` inside the character block, or nothing."""
+    if not body:
+        return ""
+    return (
+        f'<details class="kanji-more {css_class}">'
+        f"<summary>{html.escape(label)}</summary>{body}</details>"
+    )
 
 
 @dataclass(slots=True)

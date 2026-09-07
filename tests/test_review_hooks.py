@@ -14,6 +14,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts" / "install-review-hooks.sh"
 REVIEWER = ROOT / "scripts" / "janki-review.sh"
+LAUNCHER = ROOT / "scripts" / "claude-subscription.py"
+AUTH_MODULE = ROOT / "src" / "japanese_anki" / "subscription_auth.py"
 CODE_REVIEWER = ROOT / ".claude" / "agents" / "code-reviewer.md"
 HOOK_SOURCE = ROOT / "scripts" / "git-hooks"
 TRACKED_HOOKS = ("post-checkout", "post-commit", "post-merge", "pre-push")
@@ -22,9 +24,44 @@ ZERO = "0" * 40
 # which loses argument boundaries (`$*` for `"$@"`) cannot pass.
 PUSH_ARGUMENTS = ("origin", "file:///tmp/remote with space.git")
 
+# The reviewer no longer starts `claude` itself; it goes through the mandatory
+# subscription launcher, which enforces these on every child it starts.
+ENFORCED_ARGUMENTS = ["--safe-mode", "--setting-sources", ""]
+AUTH_STATUS = ["auth", "status", "--json"]
+SUBSCRIPTION_STATUS = json.dumps(
+    {
+        "loggedIn": True,
+        "authMethod": "claude.ai",
+        "apiProvider": "firstParty",
+        "subscriptionType": "max",
+        "apiKeySource": None,
+        "email": "owner@example.test",
+        "organizationId": "org-secret-0451",
+    }
+)
+# The incident this launcher exists for: a real, valid Max login that the CLI
+# would nonetheless bill to the Console, because an API key reached it.
+CONSOLE_STATUS = json.dumps(
+    {
+        "loggedIn": True,
+        "authMethod": "claude.ai",
+        "apiProvider": "firstParty",
+        "subscriptionType": "max",
+        "apiKeySource": "ANTHROPIC_API_KEY",
+        "email": "owner@example.test",
+        "organizationId": "org-secret-0451",
+    }
+)
+INHERITED_KEY = "sk-ant-test-DEADBEEF"
+
 # Fakes: no network, no Claude, no real git-lfs. Each records its own argv and
 # stdin as JSON onto one shared log, so a test can assert argument boundaries,
 # byte-exact stdin, and the order the tools ran in.
+#
+# The log path is baked into the source rather than read from FAKE_LOG. The
+# launcher hands `claude` an allowlisted environment, so a fake that needed a
+# variable of its own would either record nothing — a silent pass for a call
+# that really happened — or have to be paid for by weakening the scrub.
 RECORDER = """#!{python}
 import json, os, sys
 
@@ -33,9 +70,38 @@ record = dict(
     argv=sys.argv[1:],
     stdin="" if sys.stdin.isatty() else sys.stdin.read(),
 )
-with open(os.environ["FAKE_LOG"], "a") as log:
+with open({log!r}, "a") as log:
     log.write(json.dumps(record) + "\\n")
-raise SystemExit(int(os.environ.get("{exit_variable}", "0")))
+raise SystemExit(int(os.environ.get("{exit_variable}", "{default_exit}")))
+"""
+
+# A fake Claude that answers the launcher's free subscription probe and then
+# records the review dispatch. Every path it needs is baked in for the same
+# reason.
+FAKE_CLAUDE = """#!{python}
+import json, os, sys
+
+argv = sys.argv[1:]
+with open({log!r}, "a") as log:
+    log.write(
+        json.dumps(
+            dict(
+                tool="claude",
+                argv=argv,
+                env=dict(os.environ),
+                cwd=os.getcwd(),
+                stdin="" if sys.stdin.isatty() else sys.stdin.read(),
+            )
+        )
+        + "\\n"
+    )
+
+if argv[-3:] == ["auth", "status", "--json"]:
+    sys.stdout.write({status!r})
+    raise SystemExit({status_exit})
+
+sys.stdout.write({stdout!r})
+raise SystemExit({exit_code})
 """
 
 
@@ -100,25 +166,67 @@ def path_without_git_lfs(bin_dir: Path) -> str:
     return os.pathsep.join([str(bin_dir), *entries])
 
 
-def recorder(path: Path, tool: str, exit_variable: str) -> Path:
+def recorder(
+    path: Path, tool: str, log: Path, exit_variable: str, default_exit: int = 0
+) -> Path:
     return executable(
         path,
-        RECORDER.format(python=sys.executable, tool=tool, exit_variable=exit_variable),
+        RECORDER.format(
+            python=sys.executable,
+            tool=tool,
+            log=str(log),
+            exit_variable=exit_variable,
+            default_exit=default_exit,
+        ),
     )
+
+
+def python_shim(path: Path) -> Path:
+    """Pin `#!/usr/bin/env python3` in a fixture to the interpreter running the tests."""
+    return executable(path, f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+
+
+def fake_claude(
+    path: Path,
+    *,
+    log: Path,
+    status: str = SUBSCRIPTION_STATUS,
+    status_exit: int = 0,
+    stdout: str = "",
+    exit_code: int = 0,
+) -> Path:
+    return executable(
+        path,
+        FAKE_CLAUDE.format(
+            python=sys.executable,
+            log=str(log),
+            status=status,
+            status_exit=status_exit,
+            stdout=stdout,
+            exit_code=exit_code,
+        ),
+    )
+
+
+def fake_log(tmp_path: Path) -> Path:
+    """The one log every fake in `fake_toolchain` writes to, path baked in."""
+    return tmp_path / "fake-log.jsonl"
 
 
 def fake_toolchain(tmp_path: Path, *, lfs_exit: int = 0) -> tuple[Path, dict[str, str]]:
     """A PATH whose git-lfs records instead of uploading, and no real Claude."""
     bin_dir = tmp_path / "fake-bin"
     bin_dir.mkdir(exist_ok=True)
-    recorder(bin_dir / "git-lfs", "git-lfs", "LFS_EXIT")
-    recorder(bin_dir / "claude", "claude", "CLAUDE_EXIT")
-    log = tmp_path / "fake-log.jsonl"
+    log = fake_log(tmp_path)
+    recorder(bin_dir / "git-lfs", "git-lfs", log, "LFS_EXIT")
+    # Nothing here may reach a paid model, so any call — including the
+    # launcher's free subscription probe — is a test failure that also fails.
+    recorder(bin_dir / "claude", "claude", log, "CLAUDE_EXIT", default_exit=1)
+    python_shim(bin_dir / "python3")
     env = {
         **os.environ,
         "FAKE_LOG": str(log),
         "LFS_EXIT": str(lfs_exit),
-        # Nothing here may reach a paid model; a call is a test failure.
         "CLAUDE_EXIT": "1",
         "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
     }
@@ -157,6 +265,30 @@ def test_manual_code_reviewer_contract_excludes_japanese_content() -> None:
     assert "never judge whether authored Japanese" in contract
     assert "linguistically correct or natural" in contract
     assert "a later pass filters" not in contract
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        ROOT / "AGENTS.md",
+        ROOT / ".claude" / "agents" / "planner.md",
+        ROOT / ".claude" / "agents" / "code-reviewer.md",
+    ],
+    ids=lambda path: path.name,
+)
+def test_every_model_launch_instruction_names_the_mandatory_launcher(document: Path) -> None:
+    """A developer or agent reading only one of these must still not run bare claude."""
+    collapsed = " ".join(document.read_text(encoding="utf-8").lower().split())
+
+    assert "scripts/claude-subscription.py" in collapsed
+    assert "bare `claude -p`" in collapsed
+    assert "not allowed substitutes" in collapsed
+
+
+def test_the_readme_documents_the_launcher_and_its_free_check() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "scripts/claude-subscription.py --check" in readme
 
 
 @pytest.mark.parametrize("conflicting", ["pre-push", "post-checkout"])
@@ -219,12 +351,29 @@ def test_stock_hook_reference_matches_installed_git_lfs(tmp_path: Path) -> None:
         assert (tmp_path / ".git" / "hooks" / name).read_text() == stock_lfs_hook(name)
 
 
-def review_repository(path: Path) -> Path:
-    git_repository(path)
+def install_review_scripts(path: Path) -> Path:
+    """Copy the reviewer *and* everything the mandatory launcher needs.
+
+    The reviewer cannot start Claude by itself any more: it runs
+    `scripts/claude-subscription.py`, which loads
+    `src/japanese_anki/subscription_auth.py` by path so a fresh clone with no
+    venv can still launch. A fixture that copied the reviewer alone would
+    exercise a review that can never start.
+    """
     scripts = path / "scripts"
-    scripts.mkdir()
+    scripts.mkdir(exist_ok=True)
     reviewer = scripts / "janki-review.sh"
     shutil.copy2(REVIEWER, reviewer)
+    shutil.copy2(LAUNCHER, scripts / "claude-subscription.py")
+    module = path / "src" / "japanese_anki" / "subscription_auth.py"
+    module.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(AUTH_MODULE, module)
+    return reviewer
+
+
+def review_repository(path: Path) -> Path:
+    git_repository(path)
+    reviewer = install_review_scripts(path)
 
     tracked = path / "change.txt"
     tracked.write_text("first\n")
@@ -237,10 +386,7 @@ def review_repository(path: Path) -> Path:
 
 def content_review_repository(path: Path, *, mixed: bool = False) -> Path:
     git_repository(path)
-    scripts = path / "scripts"
-    scripts.mkdir()
-    reviewer = scripts / "janki-review.sh"
-    shutil.copy2(REVIEWER, reviewer)
+    reviewer = install_review_scripts(path)
 
     deck = path / "data" / "decks" / "lesson.yaml"
     deck.parent.mkdir(parents=True)
@@ -280,14 +426,76 @@ def test_disabled_marker_is_announced_before_any_review_runs(tmp_path: Path) -> 
     assert "started in background" not in post_commit.stdout
 
 
+def claude_bin(
+    tmp_path: Path, *, log: Path, **claude: object
+) -> tuple[Path, dict[str, str]]:
+    """A PATH with a recording fake Claude, and an inherited Console API key.
+
+    The key is here in every review test on purpose: it is the exact thing that
+    charged the Console through a valid Max login, and the launcher's only job
+    is that it never reaches the child.
+    """
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir(exist_ok=True)
+    fake_claude(fake_bin / "claude", log=log, **claude)  # type: ignore[arg-type]
+    python_shim(fake_bin / "python3")
+    env = {
+        **os.environ,
+        "ANTHROPIC_API_KEY": INHERITED_KEY,
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+    }
+    return fake_bin, env
+
+
+def claude_calls(log: Path) -> list[dict]:
+    return calls(log, "claude")
+
+
+def test_code_review_reaches_claude_only_through_the_subscription_launcher(
+    tmp_path: Path,
+) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "claude-calls.jsonl"
+    _, env = claude_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "wrapped", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0, result.stderr
+    invocations = claude_calls(log)
+    assert len(invocations) == 2, "one free subscription probe, then the review"
+    probe, dispatch = invocations
+    assert probe["argv"] == ENFORCED_ARGUMENTS + AUTH_STATUS
+    assert dispatch["argv"][:4] == [*ENFORCED_ARGUMENTS, "-p"]
+    assert "--model" in dispatch["argv"]
+    for call in invocations:
+        assert "ANTHROPIC_API_KEY" not in call["env"]
+        assert call["env"]["CLAUDE_CODE_SAFE_MODE"] == "1"
+        assert call["env"]["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
+        assert Path(call["cwd"]).resolve() == tmp_path.resolve()
+    report = (tmp_path / ".claude" / "reviews" / "wrapped.md").read_text()
+    assert "VERDICT: CLEAN" in report
+
+
+def test_a_console_billed_login_stops_the_review_without_dispatching(tmp_path: Path) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "claude-calls.jsonl"
+    _, env = claude_bin(tmp_path, log=log, status=CONSOLE_STATUS, stdout="VERDICT: CLEAN\n")
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "console", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0, "a reviewer that could not start must not block a push"
+    assert [call["argv"] for call in claude_calls(log)] == [ENFORCED_ARGUMENTS + AUTH_STATUS]
+    report = (tmp_path / ".claude" / "reviews" / "console.md").read_text()
+    assert report.rstrip().endswith("VERDICT: ERROR")
+    assert "owner@example.test" not in report
+    assert "org-secret-0451" not in report
+    assert INHERITED_KEY not in report
+
+
 def test_failed_reviewer_writes_an_error_verdict_and_allows_push(tmp_path: Path) -> None:
     reviewer = review_repository(tmp_path)
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    claude = fake_bin / "claude"
-    claude.write_text("#!/bin/sh\nexit 7\n")
-    claude.chmod(0o755)
-    env = {**os.environ, "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"}
+    log = tmp_path / "claude-calls.jsonl"
+    _, env = claude_bin(tmp_path, log=log, exit_code=7)
 
     result = run(reviewer, "gate", "HEAD~1..HEAD", "failed", cwd=tmp_path, env=env)
 
@@ -300,17 +508,8 @@ def test_failed_reviewer_writes_an_error_verdict_and_allows_push(tmp_path: Path)
 
 def test_content_only_range_never_starts_the_code_reviewer(tmp_path: Path) -> None:
     reviewer = content_review_repository(tmp_path)
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    called = tmp_path / "claude-was-called"
-    claude = fake_bin / "claude"
-    claude.write_text('#!/bin/sh\ntouch "$CLAUDE_CALLED"\n')
-    claude.chmod(0o755)
-    env = {
-        **os.environ,
-        "CLAUDE_CALLED": str(called),
-        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
-    }
+    log = tmp_path / "claude-calls.jsonl"
+    _, env = claude_bin(tmp_path, log=log)
 
     result = run(
         reviewer,
@@ -323,25 +522,14 @@ def test_content_only_range_never_starts_the_code_reviewer(tmp_path: Path) -> No
 
     assert result.returncode == 0
     assert "repository-content-only change" in result.stdout
-    assert not called.exists()
+    assert claude_calls(log) == [], "not even the free subscription probe"
     assert not (tmp_path / ".claude" / "reviews").exists()
 
 
 def test_mixed_range_prompt_excludes_repository_content(tmp_path: Path) -> None:
     reviewer = content_review_repository(tmp_path, mixed=True)
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    arguments = tmp_path / "claude-arguments"
-    claude = fake_bin / "claude"
-    claude.write_text(
-        '#!/bin/sh\nprintf "%s\\n" "$@" > "$CLAUDE_ARGUMENTS"\nprintf "VERDICT: CLEAN\\n"\n'
-    )
-    claude.chmod(0o755)
-    env = {
-        **os.environ,
-        "CLAUDE_ARGUMENTS": str(arguments),
-        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
-    }
+    log = tmp_path / "claude-calls.jsonl"
+    _, env = claude_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
 
     result = run(
         reviewer,
@@ -353,7 +541,8 @@ def test_mixed_range_prompt_excludes_repository_content(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    prompt = arguments.read_text()
+    dispatch = claude_calls(log)[-1]
+    prompt = "\n".join(dispatch["argv"])
     assert "git diff HEAD~1..HEAD -- . ':(exclude)data/**'" in prompt
     collapsed = " ".join(prompt.lower().split())
     assert "do not open or review any path under `data/`" in collapsed
@@ -366,7 +555,9 @@ def push_repository(tmp_path: Path) -> SimpleNamespace:
     The ref list carries an updated branch, a brand-new branch, and a branch
     deletion, so a hook that only handles the first line is visible.
     """
-    reviewer = recorder(review_repository(tmp_path), "reviewer", "REVIEWER_EXIT")
+    reviewer = recorder(
+        review_repository(tmp_path), "reviewer", fake_log(tmp_path), "REVIEWER_EXIT"
+    )
 
     def sha(revision: str) -> str:
         return run("git", "rev-parse", revision, cwd=tmp_path).stdout.strip()

@@ -1,4 +1,4 @@
-"""Plan and explicitly create one thematic vocabulary deck.
+"""Plan and explicitly create one thematic study deck.
 
 The workbench asks a learner for two things: the name they will see in Anki
 and the card directions they want.  Repository handles are not another naming
@@ -18,6 +18,7 @@ import hashlib
 import os
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,9 @@ class StudyDeckCreationPlan:
     production: bool
     reading: bool
     stem: str
+    #: The one tag an assignment surface may write to place a card here. A
+    #: character deck has none: characters are named one at a time, never swept
+    #: up by a tag a promotion happened to write.
     intake_tag: str
     deck_id: int
     path: Path
@@ -71,6 +75,10 @@ class StudyDeckCreationPlan:
     deck_set_fingerprint: str
     project_root: Path
     canonical_source: Path
+    kind: str = "vocabulary"
+    #: The exact character identities a kanji deck ships, in the order written.
+    include_ids: tuple[str, ...] = ()
+    model_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,29 +264,71 @@ def _deck_id(stem: str, existing: frozenset[int]) -> int:
     raise StudyDeckCreationError("Could not choose a unique Anki deck id.")
 
 
+#: Where character notetype ids start, above the eight a word deck's enabled
+#: direction mask can reach from ``model_id_base``. A character deck pins its
+#: own id in its file; this only decides the first one offered.
+KANJI_MODEL_OFFSET = 8
+
+
+def _model_id(
+    config: ProjectConfig, kind: str, directions: dict[str, bool]
+) -> int | None:
+    """The notetype id a new deck pins, or ``None`` to leave it derived.
+
+    A word deck derives its id from the enabled direction mask at build time
+    and has done since before this service existed; pinning one here would
+    change the notetype of every deck created from now on. A character deck
+    pins, because its directions are fixed once review history exists and a
+    derived id would move the moment one was added.
+    """
+    if kind != "kanji":
+        return None
+    from japanese_anki.exporters.kanji_cards import KANJI_CARD_FILES
+
+    mask = sum(
+        1 << index
+        for index, name in enumerate(KANJI_CARD_FILES)
+        if directions[name]
+    )
+    return config.model_id_base + KANJI_MODEL_OFFSET + mask
+
+
 def _render_deck(
     *,
+    kind: str,
     name: str,
     stem: str,
     intake_tag: str,
     deck_id: int,
+    model_id: int | None,
     directions: dict[str, bool],
     source: str,
+    include_ids: tuple[str, ...],
 ) -> bytes:
-    document = {
-        "deck": {
-            "kind": "vocabulary",
-            "name": name,
-            "deck_id": deck_id,
-            "output": f"{stem}.apkg",
-            "cards": directions,
-            "source": source,
-            "intake_tag": intake_tag,
-            "include_tags": [intake_tag],
-        }
+    """The exact bytes of a new deck file, for the kind that was asked for.
+
+    A word deck selects by its machine-owned intake tag. A character deck
+    names its characters instead and pins its notetype id, because a
+    character notetype's id is what an existing collection matches its notes
+    against and deriving it would move the day a direction is added.
+    """
+    section: dict[str, Any] = {
+        "kind": kind,
+        "name": name,
+        "deck_id": deck_id,
     }
+    if model_id is not None:
+        section["model_id"] = model_id
+    section["output"] = f"{stem}.apkg"
+    section["cards"] = directions
+    section["source"] = source
+    if kind == "kanji":
+        section["include_ids"] = list(include_ids)
+    else:
+        section["intake_tag"] = intake_tag
+        section["include_tags"] = [intake_tag]
     return yaml.safe_dump(
-        document, allow_unicode=True, sort_keys=False
+        {"deck": section}, allow_unicode=True, sort_keys=False
     ).encode("utf-8")
 
 
@@ -289,6 +339,8 @@ def _plan_under_lock(
     recognition: bool,
     production: bool,
     reading: bool,
+    kind: str,
+    include_ids: tuple[str, ...],
 ) -> StudyDeckCreationPlan:
     display_name, stem = _name_parts(name)
     directions = _directions(recognition, production, reading)
@@ -303,22 +355,23 @@ def _plan_under_lock(
 
     intake_tags, deck_ids, word_decks, outputs = _existing_deck_state(config, paths)
     intake_tag = f"janki:deck:{stem}"
-    if intake_tag in intake_tags:
-        raise StudyDeckCreationError(
-            f"A word deck already declares intake tag {intake_tag!r}."
-        )
-    # This is the same structural probe used by the real-corpus W4.0 contract:
-    # if an existing selector also takes a record carrying the new assignment
-    # tag, the creator would mint a destination that cannot own its cards
-    # uniquely. No Japanese content is inspected.
-    probe = _cross_selection_probe(word_decks, intake_tag)
-    if claimers := [
-        deck.path for deck in word_decks if deck.selection.includes(probe)
-    ]:
-        raise StudyDeckCreationError(
-            f"The new intake tag {intake_tag!r} would also select existing word "
-            f"deck {claimers[0]}."
-        )
+    if kind == "vocabulary":
+        if intake_tag in intake_tags:
+            raise StudyDeckCreationError(
+                f"A word deck already declares intake tag {intake_tag!r}."
+            )
+        # This is the same structural probe used by the real-corpus W4.0
+        # contract: if an existing selector also takes a record carrying the
+        # new assignment tag, the creator would mint a destination that cannot
+        # own its cards uniquely. No Japanese content is inspected.
+        probe = _cross_selection_probe(word_decks, intake_tag)
+        if claimers := [
+            deck.path for deck in word_decks if deck.selection.includes(probe)
+        ]:
+            raise StudyDeckCreationError(
+                f"The new intake tag {intake_tag!r} would also select existing word "
+                f"deck {claimers[0]}."
+            )
 
     target = config.deck_dir / f"{stem}.yaml"
     output_path = (config.dist_dir / f"{stem}.apkg").resolve()
@@ -331,15 +384,21 @@ def _plan_under_lock(
             f"Study deck output {output_path} is already declared by "
             f"{collisions[0]}."
         )
-    canonical = config.normalized_file.resolve()
+    canonical = (
+        config.kanji_notes_file if kind == "kanji" else config.normalized_file
+    ).resolve()
     deck_id = _deck_id(stem, deck_ids)
+    model_id = _model_id(config, kind, directions)
     yaml_bytes = _render_deck(
+        kind=kind,
         name=display_name,
         stem=stem,
         intake_tag=intake_tag,
         deck_id=deck_id,
+        model_id=model_id,
         directions=directions,
         source=_source_reference(target.parent, canonical),
+        include_ids=include_ids,
     )
     return StudyDeckCreationPlan(
         name=display_name,
@@ -347,7 +406,7 @@ def _plan_under_lock(
         production=directions["production"],
         reading=directions["reading"],
         stem=stem,
-        intake_tag=intake_tag,
+        intake_tag="" if kind == "kanji" else intake_tag,
         deck_id=deck_id,
         path=target,
         output_path=output_path,
@@ -355,6 +414,9 @@ def _plan_under_lock(
         deck_set_fingerprint=_deck_set_fingerprint(config, paths),
         project_root=config.root.resolve(),
         canonical_source=canonical,
+        kind=kind,
+        include_ids=include_ids,
+        model_id=model_id,
     )
 
 
@@ -365,8 +427,35 @@ def plan_study_deck(
     recognition: bool = True,
     production: bool = False,
     reading: bool = False,
+    kind: str = "vocabulary",
+    include_ids: Sequence[str] = (),
 ) -> StudyDeckCreationPlan:
-    """Return the exact path and YAML for a new vocabulary deck, without writing."""
+    """Return the exact path and YAML for a new study deck, without writing.
+
+    ``kind`` chooses what the deck holds. A vocabulary deck selects records by
+    the intake tag this derives for it; a ``kanji`` deck names the exact
+    character identities it ships and reads the curated character store
+    instead of the word collection.
+    """
+    if kind not in ("vocabulary", "kanji"):
+        raise StudyDeckCreationError(
+            f"A study deck is 'vocabulary' or 'kanji', not {kind!r}."
+        )
+    exact_ids = tuple(include_ids)
+    if kind == "vocabulary" and exact_ids:
+        raise StudyDeckCreationError(
+            "A word deck selects by its intake tag, not by an exact id list."
+        )
+    if kind == "kanji":
+        if not exact_ids:
+            raise StudyDeckCreationError(
+                "A character deck names the exact characters it holds."
+            )
+        repeated = sorted({item for item in exact_ids if exact_ids.count(item) > 1})
+        if repeated:
+            raise StudyDeckCreationError(
+                f"Character {repeated[0]} is listed more than once."
+            )
     with exclusive_path_lock(config.deck_dir):
         return _plan_under_lock(
             config,
@@ -374,6 +463,8 @@ def plan_study_deck(
             recognition=recognition,
             production=production,
             reading=reading,
+            kind=kind,
+            include_ids=exact_ids,
         )
 
 
@@ -381,10 +472,13 @@ def create_study_deck(
     config: ProjectConfig, plan: StudyDeckCreationPlan
 ) -> CreatedStudyDeck:
     """Publish an unchanged plan once, after an explicit create action."""
+    expected_source = (
+        config.kanji_notes_file if plan.kind == "kanji" else config.normalized_file
+    ).resolve()
     if (
         plan.project_root != config.root.resolve()
         or plan.path.parent != config.deck_dir
-        or plan.canonical_source != config.normalized_file.resolve()
+        or plan.canonical_source != expected_source
     ):
         raise StudyDeckCreationError(
             "This study-deck plan belongs to a different project; preview it again."
@@ -396,6 +490,8 @@ def create_study_deck(
             recognition=plan.recognition,
             production=plan.production,
             reading=plan.reading,
+            kind=plan.kind,
+            include_ids=plan.include_ids,
         )
         if fresh != plan:
             raise StudyDeckCreationError(

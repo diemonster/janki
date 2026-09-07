@@ -1,0 +1,17 @@
+deck:
+  kind: kanji
+  name: Brandon Japanese::201 Week 2 Kanji
+  deck_id: 1080000407
+  model_id: 1607392319
+  output: brandon-japanese-201-week-2-kanji-93c73dbd99.apkg
+  cards:
+    recognition: true
+    production: false
+    reading: false
+  source: ../kanji_notes.json
+  include_ids:
+  - kanji:物
+  - kanji:特
+  - kanji:鳥
+  - kanji:料
+  - kanji:理

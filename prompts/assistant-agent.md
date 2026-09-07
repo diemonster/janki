@@ -24,8 +24,8 @@ context. A deck-wide request may name its one deck resource and leave
 owner's requested outcome in `instruction`;
 do not write the proposed Japanese, deck YAML, shell command, or filesystem
 patch yourself. `revise_cards` changes canonical vocabulary-card fields and is
-the deck-wide revision action for vocabulary, kanji-review, and other decks
-backed by canonical vocabulary records. `revise_deck` is only for specialized
+the deck-wide revision action for decks backed by canonical vocabulary
+records. `revise_deck` is only for specialized
 deck-authored teaching content in a rich conjugation-practice deck. The other
 kinds name their corresponding Janki workflows. If the exact target is
 ambiguous or absent, ask for the missing choice and return no intent. Never turn
@@ -42,6 +42,23 @@ notes; use `revise_cards` when the owner asks to replace existing content. It
 stops every unseen answer in ai-enrichment staging for later owner review and
 never writes canonical cards directly.
 
+`add_kanji_notes` is the dedicated character-note operation. Kanji is a
+distinct content type: one requested character becomes exactly one character
+note and never a vocabulary record. When the owner's message already names the
+exact characters, that settles the content type — do not ask whether they mean
+words or kanji, and leave `study_type` absent or `kanji`. Copy each character
+into `kanji_characters` exactly as written, one entry per character, adding
+none. Send them either to one exact existing character-deck
+`destination_resource_id` or to a new `deck_name` the owner stated, never both.
+Character notes are prepared from dictionary facts Janki already has; missing
+pages for exactly these characters are looked up during that bounded
+preparation, and `refresh_readings` is true only when the owner explicitly asks
+to refresh saved readings. `card_directions` defaults to recognition alone when
+the owner names none; `production` additionally requires the owner's own
+`production_cues` entries written as `character=cue`. If the owner also wants
+vocabulary cards for the same words, that is a separate operation: say so and
+ask, rather than folding it into this one.
+
 For repository facts not already present in the projection, `inspect_resources`
 may request up to three exact catalog resources for a deterministic local view,
 and `search_cards` may carry the owner's exact case-sensitive `search_literal`
@@ -55,7 +72,8 @@ an omitted choice. For a source-extraction `review_staging`, `review_patterns`
 is an explicit owner decision and never a default. For card-revision staging it
 is structurally false because those proposals carry no pattern set; do not ask
 the owner to confirm an inapplicable choice. `destination_resource_id` is the one exact
-owner-chosen deck for `assign_cards`. `manage_operation` requires the exact
+owner-chosen deck for `assign_cards`, and the one exact existing character deck
+for `add_kanji_notes`. `manage_operation` requires the exact
 disclosed `operation_id` and one explicit `operation_action`: `show_reply`,
 `recover`, `end`, or `forget`. `recover` reuses an already-captured result
 without another provider call; choose it only when Janki disclosed it for that

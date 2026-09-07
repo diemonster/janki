@@ -164,6 +164,16 @@ def deck_membership(
                     )
                 )
                 continue
+            if kind == "kanji":
+                # Likewise for a character deck: its notes are characters from
+                # the curated character store, and a word never lands in one.
+                found.append(
+                    DeckMembership(
+                        stem=stem, path=path, name=name, kind=kind, takes=False,
+                        refusal="this deck holds character notes, not word cards",
+                    )
+                )
+                continue
             # Vocabulary only: `resolve_deck_records` validates a *word* deck,
             # and running it over a drill deck refuses shapes that deck builds
             # from perfectly well.

@@ -29,6 +29,7 @@ from japanese_anki.io import (
     load_structured,
     read_bytes_bound,
 )
+from japanese_anki.jpdb_kanji import load_readings
 from japanese_anki.kanji import load_store as load_kanji_store
 from japanese_anki.kanji import render_kanji_html
 from japanese_anki.models import ModelError, VocabularyRecord
@@ -658,6 +659,13 @@ def deck_declared_ids(deck_path: Path) -> set[str]:
     lose an inline note a filter happens to drop: the note is still in the file,
     still carries hand-written content, and its GUID may already be in Anki.
     """
+    if deck_kind(deck_path) == "kanji":
+        # A character deck declares `kanji:理` ids against the curated
+        # character store. They are real identities, but they are not
+        # vocabulary record ids: every caller here is asking whether a *word*
+        # still exists in the collection, and answering with a character would
+        # keep a ledger entry alive for a record nothing holds.
+        return set()
     raw = load_structured(deck_path)
     if not isinstance(raw, dict):
         raise DataError(f"Deck file must contain a mapping: {deck_path}")
@@ -907,10 +915,10 @@ def resolve_card_types(
 
 
 #: Every `kind:` a deck file may state. `vocabulary` is the name of the default
-#: for anyone who prefers writing it down; the other two are the card kinds with
+#: for anyone who prefers writing it down; the others are the card kinds with
 #: their own builders. Anything else is a typo, and a typo is refused rather
 #: than run as an ordinary word deck.
-KNOWN_DECK_KINDS = ("", "vocabulary", "pattern", "conjugation")
+KNOWN_DECK_KINDS = ("", "vocabulary", "pattern", "conjugation", "kanji")
 
 
 def deck_kind(deck_path: Path) -> str:
@@ -980,6 +988,22 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
             _identifier(section, "model_id", deck_path),
             str(section.get("model_name") or "Japanese Pattern"),
             len(PATTERN_FIELDS),
+        )
+
+    if kind == "kanji":
+        # Same reason as above, and one more: a character deck's notes are not
+        # records, so `resolve_deck_records` would read its curated store as a
+        # word list and refuse a deck that builds perfectly well.
+        from japanese_anki.exporters.kanji_cards import (
+            DEFAULT_MODEL_NAME,
+            KANJI_FIELDS,
+            _identifier,
+        )
+
+        return (
+            _identifier(section, "model_id", deck_path),
+            str(section.get("model_name") or DEFAULT_MODEL_NAME),
+            len(KANJI_FIELDS),
         )
 
     deck_config, _ = resolve_deck_records(deck_path)
@@ -1084,6 +1108,7 @@ def _media_paths_for_records(
     if deck_max_meanings is None:
         deck_max_meanings = project_config.max_meanings
     kanji_store = load_kanji_store(project_config.kanji_file)
+    reading_evidence = load_readings(project_config.jpdb_readings_file)
     media_files: list[str] = []
     warnings: list[str] = []
     claimed: dict[str, tuple[str, str]] = {}
@@ -1099,8 +1124,7 @@ def _media_paths_for_records(
             deck_max_meanings,
             render_kanji_html(
                 kanji_store.for_text(record.expression),
-                record_expression=record.expression,
-                record_reading=record.reading,
+                reading_evidence=reading_evidence,
             ),
             allowed_missing_media,
         )
@@ -1225,6 +1249,9 @@ def build_deck(
     media_dir = project_config.media_dir.resolve()
     # Looked up once for the whole build: 前 is the same 前 in every word.
     kanji_store = load_kanji_store(project_config.kanji_file)
+    # Read, never fetched: what a word card says about a character is whatever
+    # an explicit lookup already saved, so a build stays offline.
+    reading_evidence = load_readings(project_config.jpdb_readings_file)
     media_files: list[str] = []
     # Packaged basename -> (absolute path, the record that claimed it first).
     claimed: dict[str, tuple[str, str]] = {}
@@ -1244,8 +1271,7 @@ def build_deck(
             deck_max_meanings,
             render_kanji_html(
                 kanji_store.for_text(record.expression),
-                record_expression=record.expression,
-                record_reading=record.reading,
+                reading_evidence=reading_evidence,
             ),
         )
         # `validate_records` refuses this on the record, which is the earlier

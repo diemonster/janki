@@ -22,6 +22,18 @@ Standing constraints your plans must honor:
 - janki's own logic is enrichment, derivation, and artifact structure:
   identifiers, fingerprints, packaging, dedup, provenance.
 - Every behavioral change carries a test; `make gates` is the bar.
+- **Every model launch you or a plan of yours starts for development, planning
+  or review runs through `scripts/claude-subscription.py`.** It verifies a
+  claude.ai first-party Pro or Max login under the exact environment, working
+  directory and `--safe-mode --setting-sources ''` the launch uses, then execs
+  the CLI. Bare `claude -p`, a hand-written `env -u ANTHROPIC_API_KEY claude
+  …`, and an SDK or API call standing in for the CLI are **not allowed
+  substitutes**. If
+  it refuses, the work stops there — never plan an API-billed fallback.
+  `scripts/claude-subscription.py --check` is the free probe. Paid *content*
+  calls (`extract`, `revise`, `promote --accept-coverage`, Realtime audio, the
+  explicit `anthropic-api` provider) are unaffected and still need their own
+  exact authorization.
 
 Deliver plans as ordered steps with the files each touches, what gets deleted
 (named, per the pre-release rule), the tests that change, and the risks worth

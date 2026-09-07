@@ -147,19 +147,7 @@ def _project(tmp_path: Path) -> ProjectConfig:
                 "grade": 2,
                 "jlpt": 5,
                 "meanings": ["eat", "food"],
-                "readings": [
-                    {
-                        "kind": "kun",
-                        "reading": "た(べる)",
-                        "examples": [
-                            {
-                                "written": "食べる",
-                                "pronounced": "たべる",
-                                "gloss": "to eat",
-                            }
-                        ],
-                    }
-                ],
+                "readings": [{"kind": "kun", "reading": "た(べる)"}],
                 "strokes": ["M1 1L2 2"],
             }
         },
@@ -583,19 +571,7 @@ def test_pattern_and_kanji_stores_are_real_bounded_snapshots(tmp_path: Path) -> 
             "grade": 2,
             "jlpt": 5,
             "meanings": ["eat", "food"],
-            "readings": [
-                {
-                    "examples": [
-                        {
-                            "gloss": "to eat",
-                            "pronounced": "たべる",
-                            "written": "食べる",
-                        }
-                    ],
-                    "kind": "kun",
-                    "reading": "た(べる)",
-                }
-            ],
+            "readings": [{"kind": "kun", "reading": "た(べる)"}],
             "stroke_count": 9,
             "strokes": ["M1 1L2 2"],
         }
