@@ -1,6 +1,6 @@
 # Reading frequency sources for kanji cards
 
-Research snapshot: 2026-09-06. This is a source comparison, not an implemented
+Research snapshot: 2026-09-07. This is a source comparison, not an implemented
 provider choice. The card-type proposal remains a separate design discussion.
 
 ## What we want to measure
@@ -24,7 +24,7 @@ fiction, conversation, names, and textbook vocabulary can rank differently.
 | Source | What is actually available | Acquisition | Fit for Janki |
 | --- | --- | --- | --- |
 | JPDB | Published reading percentages and example words | Public HTML; no kanji-reading percentage field found in the documented public API | Closest existing learner-facing presentation; preserve JPDB's reported groups and percentages |
-| Tamaoka Kanji Database | Individual reading occurrence counts in the left/right positions of two-kanji compounds; also aggregate on/kun statistics | Website queries with CSV/XML export | Strong free corpus-based alternative with an explicitly narrower scope |
+| Tamaoka Kanji Database | Individual reading occurrence counts in the left/right positions of two-kanji compounds; also aggregate on/kun statistics | Website queries with CSV/XML export | Promising methodology, but the exported individual-reading frequencies do not reconcile with the same rows' compound totals; not adoptable as exported |
 | CJK Dictionary Institute, `RD_OCCUR` | Corpus occurrence percentages for character readings and written forms | Commercial dataset enquiry | Promising occurrence data; coverage and denominator need clarification before selection |
 | Jiten.moe | Count of dictionary word/form rows associated with each reading and having a positive frequency rank | JSON endpoint in its open-source API | Convenient integration, but its displayed percentages measure word/form counts |
 | ichi.moe / Ichiran | Counts of common dictionary words using each reading | Website and downloadable database; open-source calculation | Transparent, reproducible dictionary prevalence, rather than occurrence frequency |
@@ -62,9 +62,27 @@ mistaken for rankings of individual readings.
 [Available fields](https://www.kanjidatabase.com/kanji_search.php),
 [methodology, especially pp. 704–705](https://tamaoka.org/scholarly/sadokuari/2017/154.pdf).
 
-A suitable display would say **Mainichi compound occurrences**, with the
-position and denominator retained. This is the strongest free candidate found
-for evaluating independently documented occurrence counts.
+A completed seven-row proof of concept exported these fields and checked each
+row's individual-reading frequencies against its own compound occurrence
+totals. In all seven exported rows the individual-reading frequency values
+fail to reconcile with the corresponding compound occurrence totals, so the
+export cannot support trustworthy individual-reading percentages. 理 has
+`Left1freq` 163 and `Right1freq` 205, against `AccLeft` 205212 and `AccRight`
+163378. The exported numeric values also contradict the documented frequency
+ordering: 鳥 has `Left1freq` 1 and `Left2freq` 655. The intended slot order may
+itself be correct while the counts attached to it are wrong; the export alone
+cannot distinguish the two cases. The proof of concept preserves the exported
+values and their slot order exactly as issued, making no repairs.
+[Proof-of-concept report](../data/research/tamaoka/2026-09-07/README.md).
+
+Older Excel versions 2, 3 and 4 were inspected rather than assumed about:
+none contains individual-reading occurrence counts. They carry aggregate
+on/kun figures only, so they are not a substitute table.
+
+The Tamaoka methodology remains promising, and a display would still say
+**Mainichi compound occurrences** with the position and denominator retained.
+This export is not ready for adoption until corrected original data or a
+publisher clarification resolves the mismatch.
 
 ### CJK Dictionary Institute
 
@@ -124,15 +142,24 @@ reading-usage distribution.
 
 ## Recommendation for the next implementation discussion
 
-Keep **JPDB and Tamaoka** on the shortlist. JPDB offers the desired published
-presentation; Tamaoka offers independently documented occurrence counts with
-a narrower newspaper-compound scope. Jiten is the strongest convenient API
-alternative if dictionary prevalence is acceptable. CJKI is a further option
-if broader documented occurrence data justifies a commercial enquiry.
+**JPDB** offers the desired published presentation and is the remaining
+shortlist candidate. **Tamaoka**'s methodology is still the strongest free
+corpus-based approach on paper, but its export is held back rather than
+shortlisted: the seven-row proof of concept above found every row's
+individual-reading frequencies irreconcilable with that row's compound
+occurrence totals. Jiten is the strongest convenient API alternative if
+dictionary prevalence is acceptable. CJKI is a further option if broader
+documented occurrence data justifies a commercial enquiry.
 
-Before choosing, compare the same small set of characters across the two
-shortlisted sources. Record gaps and source groupings as well as numbers.
-This is a comparison of supplied facts, not an LLM rating or a Japanese audit.
+Only Tamaoka's own export was checked this way; no JPDB-versus-Tamaoka or
+other cross-source character comparison has been carried out. That check's
+finding is the mismatch recorded above, so the next step for Tamaoka is not
+another pass over the same export but obtaining corrected original data or a
+publisher clarification of the mismatch. Until one of those arrives, Tamaoka
+stays promising but not ready for adoption. Any further source compared this
+way should have its gaps and source groupings recorded alongside its numbers,
+as a comparison of supplied facts rather than an LLM rating or a Japanese
+audit.
 
 Whichever source is selected, save the source URL/version, retrieval date,
 raw reading label, metric, corpus scope, numeric value or bound, denominator

@@ -256,6 +256,16 @@ the separately selectable API-billed alternative. These settings do not
 inherit from or silently change `[ai].revise_provider`. ChatKit is only the UI;
 it holds no repository authority and supplies no inference or workflow state.
 
+**The target design.** The Janki Assistant conversation is the primary
+end-to-end study workflow. Inline choices, plans, exact card previews and
+counts, content review, consent, progress and status, recovery, and deck
+download all belong in the thread: completing a study task requires no
+navigation to a CLI command, a separate form, or a wizard page. The CLI
+remains a fully supported secondary surface over the same application
+operations and the same authority, not a reduced one. This paragraph states
+the target rather than present capability; the explicit gaps named below and
+elsewhere in this document say where the implementation has not reached it.
+
 Janki is repository-wide for Japanese-library operations. It can inspect and
 plan over configured decks, canonical records, staging proposals, pattern and
 kanji stores, immutable-source catalogues, operation and ledger projections,

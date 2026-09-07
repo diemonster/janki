@@ -1,0 +1,78 @@
+﻿id;"Comp. Word";Frequency;"Grammatical Feature";Pronunciation;"English Translation";Position;Kanji;KanjiID
+132;理事;57001;"general noun";rizi;director;L;理;2038
+162;理由;47954;"general noun";riyuu;reason;L;理;2038
+317;理解;31677;"light-verb -suru attached";rikai;understanding;L;理;2038
+1671;理想;6196;"general noun";risoo;ideal;L;理;2038
+1778;理念;5808;"general noun";rinen;ideal;L;理;2038
+2114;理論;4432;"general noun";riron;theory;L;理;2038
+2995;理科;2659;"general noun";rika;science;L;理;2038
+3250;理系;2347;"general noun";rikei;science;L;理;2038
+3791;理屈;1832;"general noun";rikutu;theory;L;理;2038
+6139;理学;725;"general noun";rigaku;"physical science";L;理;2038
+6661;理性;604;"general noun";risei;reason;L;理;2038
+6796;理工;579;"general noun";rikoo;"science and technology";L;理;2038
+7124;理容;524;"general noun";riyoo;barbering;L;理;2038
+7698;理髪;437;"light-verb -suru attached";rihatu;haircut;L;理;2038
+9433;理数;257;"general noun";risuu;"science and mathematics";L;理;2038
+10710;理財;180;"general noun";rizai;finance;L;理;2038
+13101;理路;95;"general noun";riro;logic;L;理;2038
+17427;理非;29;"general noun";rihi;"judgement of right and wrong";L;理;2038
+19094;理知;18;"general noun";riti;intellect;L;理;2038
+21073;理法;10;"general noun";rihoo;law;L;理;2038
+22809;理窟;6;"general noun";rikutu;theory;L;理;2038
+24906;理会;3;"light-verb -suru attached";rikai;"being aware";L;理;2038
+24907;理智;3;"general noun";riti;intellect;L;理;2038
+26036;理外;2;"general noun";rigai;supra-rational;L;理;2038
+167;管理;46863;"light-verb -suru attached";kanri;control;R;理;2038
+327;処理;31136;"light-verb -suru attached";syori;processing;R;理;2038
+489;料理;22895;"light-verb -suru attached";ryoori;cooking;R;理;2038
+1075;整理;11031;"light-verb -suru attached";seiri;sorting;R;理;2038
+1076;代理;11031;"light-verb -suru attached";dairi;representation;R;理;2038
+1128;無理;10390;"adjectival noun, na-adjective";muri;unreasonable;R;理;2038
+1344;心理;8210;"general noun";sinri;"state of mind";R;理;2038
+1468;倫理;7402;"general noun";rinri;ethics;R;理;2038
+1542;原理;6878;"general noun";genri;principle;R;理;2038
+1637;総理;6360;"general noun";soori;"prime minister";R;理;2038
+1927;修理;5096;"light-verb -suru attached";syuuri;repairing;R;理;2038
+1933;審理;5085;"light-verb -suru attached";sinri;trial;R;理;2038
+2074;合理;4575;"general noun";goori;rational;R;理;2038
+2259;物理;4046;"general noun";buturi;physics;R;理;2038
+2275;論理;4017;"general noun";ronri;logic;R;理;2038
+2523;調理;3485;"light-verb -suru attached";tyoori;cooking;R;理;2038
+2528;経理;3481;"light-verb -suru attached";keiri;management;R;理;2038
+3212;受理;2383;"light-verb -suru attached";zyuri;acceptance;R;理;2038
+3585;地理;2024;"general noun";tiri;geography;R;理;2038
+4412;文理;1385;"general noun";bunri;"literature and science";R;理;2038
+4456;推理;1366;"light-verb -suru attached";suiri;reasoning;R;理;2038
+5363;生理;968;"general noun";seiri;physiology;R;理;2038
+6082;義理;739;"general noun";giri;duty;R;理;2038
+6098;病理;736;"general noun";byoori;pathology;R;理;2038
+6233;監理;700;"light-verb -suru attached";kanri;superintendence;R;理;2038
+6442;天理;651;"general noun";tenri;"natural laws";R;理;2038
+7453;真理;474;"general noun";sinri;truth;R;理;2038
+8388;道理;354;"general noun";doori;reason;R;理;2038
+10040;数理;217;"general noun";suuri;mathematics;R;理;2038
+10249;弁理;205;"general noun";benri;management;R;理;2038
+11139;摂理;160;"general noun";seturi;providence;R;理;2038
+11480;一理;146;"general noun";itiri;principle;R;理;2038
+12049;法理;126;"general noun";hoori;"legal principle";R;理;2038
+12399;薬理;115;"general noun";yakuri;"effects of drugs";R;理;2038
+12463;無理;113;"general noun";muri;unreasonable;R;理;2038
+12679;定理;106;"general noun";teiri;theorem;R;理;2038
+16438;情理;38;"general noun";zyoori;"emotion and reason";R;理;2038
+16928;純理;33;"general noun";zyunri;"pure reason";R;理;2038
+17453;教理;28;"general noun";kyoori;doctrine;R;理;2038
+17724;条理;26;"general noun";zyoori;reason;R;理;2038
+17854;公理;25;"general noun";koori;axiom;R;理;2038
+17910;哲理;25;"general noun";teturi;"philosophic principles";R;理;2038
+18907;連理;19;"general noun";renri;"trees with entwined branches";R;理;2038
+18932;学理;18;"general noun";gakuri;"scholarly principle";R;理;2038
+19473;非理;16;"general noun";hiri;unreasonable;R;理;2038
+21623;事理;8;"general noun";ziri;reason;R;理;2038
+21827;有理;8;"general noun";yuuri;rational;R;理;2038
+22557;掌理;6;"light-verb -suru attached";syoori;"rule of law";R;理;2038
+22722;肌理;6;"general noun";kime;grain;R;理;2038
+24559;節理;3;"general noun";seturi;joint;R;理;2038
+25800;背理;2;"general noun";hairi;absurdity;R;理;2038
+26418;窮理;1;"general noun";kyuuri;"study of natural laws";R;理;2038
+26498;空理;1;"general noun";kuuri;"abstract or impracticable theory";R;理;2038

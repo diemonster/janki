@@ -1,0 +1,6 @@
+{
+  "mode": "Export Jukugo as CSV",
+  "sql": "SELECT `id`, `Comp. Word`, `Frequency`, `Grammatical Feature`, `Pronunciation`, `English Translation`, 'L' AS Position, '理' AS Kanji, '2038' AS KanjiID FROM `JUKUGO6654` WHERE `Comp. Word` LIKE '理%' AND frequency >= '1' AND frequency <= '238663' UNION  SELECT `id`, `Comp. Word`, `Frequency`, `Grammatical Feature`, `Pronunciation`, `English Translation`, 'R' AS Position, '理' AS Kanji, '2038' AS KanjiID FROM `JUKUGO6654` WHERE `Comp. Word` LIKE '%理' AND frequency >= '1' AND frequency <= '238663'",
+  "delimiter": ";",
+  "sendBOM": "on"
+}

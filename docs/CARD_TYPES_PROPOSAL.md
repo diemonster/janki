@@ -109,9 +109,9 @@ whole subject is the character.
   content staged for review — which janki consumes as given rather than inferring
   which reading applies where.
 
-The wizard **previews the exact card count** before anything is written. Once a
-deck has review history, the enabled direction set is frozen: adding a direction
-later is a separate, explicit change.
+Janki **previews the exact card count** in the conversation before anything is
+written. Once a deck has review history, the enabled direction set is frozen:
+adding a direction later is a separate, explicit change.
 
 ### Audio
 
@@ -149,16 +149,33 @@ settle; the owner does not choose them.
 
 ## The wizard
 
+**Owner-confirmed requirement: the whole journey is completed inside the Janki
+Assistant.** The chatbot is the primary workflow, not a doorway into one — it
+reads like an ordinary conversation with this agent. The choices, card previews
+and counts, content staged for review, approvals, progress and status, recovery
+after an interruption, and the finished deck's download all appear inline in that
+thread. No necessary step sends the owner to a separate CLI command, a form, a
+wizard page, or another workbench surface to continue. "Wizard" below names a
+**guided conversational progression** — janki tracks what it still needs and asks
+for it in order — not a sequence of rigid pages. Janki asks normal conversational
+questions, and only for decisions it is genuinely missing: which characters,
+which deck, which directions. Anything it can determine or default it *states* so
+it can be corrected in one sentence. The CLI remains a **secondary** interface
+over the same application operations and the same authority — a second way in,
+never a required detour.
+
 Choosing a study type is **ordinary planning**, not an extra permission — janki
 states its defaults so they can be corrected in one sentence, and does not add a
 consent ladder. The default kanji journey makes **no paid card-writing call**;
 every field is a dictionary lookup. Those lookups do disclose the queried
 characters to the dictionary services, which the plan says plainly.
 
-Flow: explicit kanji intent **skips the type question** → source/targets, a
-**compatible** destination deck, directions → preview of card types and counts →
-one consolidated plan → dictionary work applies directly, while any
-model-written content stages for visible review → apply and finish.
+Flow, all of it in the one thread: explicit kanji intent **skips the type
+question** → source/targets, a **compatible** destination deck, directions →
+preview of card types and counts → one consolidated plan → dictionary work
+applies directly, while any model-written content stages for visible review →
+apply and finish, ending with the built deck offered for download in the
+conversation.
 
 > **Owner:** I want to study these five kanji: 理 …
 >
@@ -174,7 +191,10 @@ model-written content stages for visible review → apply and finish.
 > not yet cached. Dictionary lookups only — no paid card-writing call; the
 > characters are sent to the dictionary services. Then build.
 >
-> **Owner:** *[confirms once]* → apply and finish: apply, audio, build, receipt.
+> **Owner:** *[confirms once]* → apply and finish: apply, audio, build, receipt,
+> with progress and then the finished package offered for download in the same
+> thread. A thread closed mid-build resumes from that receipt on reopening; the
+> owner is never sent to a command line to find out what happened.
 
 A deck named "Kanji" today may well be a vocabulary deck. The wizard offers
 **only compatible destinations**, and never implies an existing word deck can
@@ -204,15 +224,23 @@ Japanese or user prose to infer intent.
 5. **Character notes from targets** — extend `application/kanji_addition.py` from
    "characters in these records" to "these exact characters", reusing its
    fingerprint, lock and additive-merge transaction.
-6. **Wizard** — `prompts/assistant-agent.md`, `application/assistant_agent.py`,
-   `workbench/assistant_adapter.py`: preview, consolidated plan, and **extending
-   the existing apply-and-finish batch** (today it covers several
-   revision/enrichment workflows) to cover kanji.
+6. **The conversational journey** — `prompts/assistant-agent.md`,
+   `application/assistant_agent.py`, `workbench/assistant_adapter.py`: the
+   questions, preview, consolidated plan, approval, progress, resume and deck
+   download all rendered inline in the Assistant thread, and **extending the
+   existing apply-and-finish batch** (today it covers several
+   revision/enrichment workflows) to cover kanji. This step is where the
+   requirement above is *met*, not a description of what chat does today — the
+   kanji apply-and-finish batch does not exist yet. Equivalent CLI commands land
+   over the same application operations, secondary to the conversation.
 
 **Future, not this milestone:** extracting kanji targets from a *source page*
 needs a new complete task template and typed schema inside the existing `extract`
 writing path — today's templates and schema demand vocabulary plus two sentences.
-`revise` scope for character notes is likewise later.
+`revise` scope for character notes is likewise later. Putting the journey in chat
+closes neither gap: until they land, source-extracted kanji targets and
+character-note revision are simply **not offered** in the conversation, rather
+than started there and finished somewhere else.
 
 **Deleted in the same change** (pre-release, no legacy paths): the "kanji-review
 deck backed by canonical vocabulary records" idiom in `prompts/assistant-agent.md`

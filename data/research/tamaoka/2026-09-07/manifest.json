@@ -1,0 +1,45 @@
+{
+  "retrieved_on": "2026-09-07",
+  "source": "Tamaoka, Makioka, Sanders & Verdonschot (2017), www.kanjidatabase.com: A new interactive online database for psychological and linguistic research on Japanese kanji and their compound words. Psychological Research 81, 696–708.",
+  "source_url": "https://www.kanjidatabase.com/",
+  "query_url": "https://www.kanjidatabase.com/kanji_search.php",
+  "export_url": "https://www.kanjidatabase.com/php/export.php",
+  "methodology_url": "https://tamaoka.org/scholarly/sadokuari/2017/154.pdf",
+  "license": "CC BY-NC-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "targets": [
+    "物",
+    "特",
+    "鳥",
+    "料",
+    "理"
+  ],
+  "diagnostic_characters": [
+    "生",
+    "行"
+  ],
+  "corpus": "Mainichi newspaper 2000–2010; individual reading fields cover two-kanji compounds, excluding proper nouns",
+  "acquisition": "Public lookup form, then server-generated CSV export request. Exact response bytes retained. No source values repaired or normalized. Jukugo export supplies independent word-frequency totals for 理.",
+  "files": {
+    "export.csv": {
+      "bytes": 4543,
+      "sha256": "fb79252117f67f94f2f940d13446d1c7e81b78ce10399f5acf0bae66e6cd02ac"
+    },
+    "query.json": {
+      "bytes": 3299,
+      "sha256": "581cfaa157a2bbb3d8f1c2052aceeaed4d280445cbe4273db1b7dc5a114a8e90"
+    },
+    "export-request.json": {
+      "bytes": 1738,
+      "sha256": "d47c859bc1cddebd90d868dd81b63065ab592e0379e374f32469db2919215bdf"
+    },
+    "jukugo-ri.csv": {
+      "bytes": 4998,
+      "sha256": "2b32753da6f1fe2edb4631ae8442ba267eccfaf3b6710dcdedb416488021660a"
+    },
+    "jukugo-ri-request.json": {
+      "bytes": 595,
+      "sha256": "fa7c43f1a2130f7dd5f809cfa9d483e0ce4afd9275931f75bcb98d7db0fb9116"
+    }
+  }
+}
