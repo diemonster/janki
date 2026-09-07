@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "source": "jpdb",
+  "metric": "jpdb_reported_usage",
+  "corpus_scope": null,
+  "denominator": null,
+  "characters": [
+    {
+      "character": "物",
+      "provenance": {
+        "schema_version": 1,
+        "character": "物",
+        "source_url": "https://jpdb.io/kanji/%E7%89%A9",
+        "fetched_at_utc": "2026-09-07T20:31:26Z",
+        "sha256": "fb01a7ae51c306ee46c37206c36abc019fdd8e01f22fdfccdaa205e48f8adb7b"
+      },
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "もの",
+              "href": "/kanji-reading/物/もの",
+              "percent_text": "(51%)",
+              "percent": 51,
+              "percent_less_than": false
+            },
+            {
+              "label": "もん",
+              "href": "/kanji-reading/物/もん",
+              "percent_text": "(34%)",
+              "percent": 34,
+              "percent_less_than": false
+            },
+            {
+              "label": "ぶつ",
+              "href": "/kanji-reading/物/ぶつ",
+              "percent_text": "(9%)",
+              "percent": 9,
+              "percent_less_than": false
+            },
+            {
+              "label": "もつ",
+              "href": "/kanji-reading/物/もつ",
+              "percent_text": "(2%)",
+              "percent": 2,
+              "percent_less_than": false
+            },
+            {
+              "label": "ぶっ",
+              "href": "/kanji-reading/物/ぶっ",
+              "percent_text": "(1%)",
+              "percent": 1,
+              "percent_less_than": false
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "もち",
+              "href": "/kanji-reading/物/もち",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "も",
+              "href": "/kanji-reading/物/も",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "もっ",
+              "href": "/kanji-reading/物/もっ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "のもの",
+              "href": "/kanji-reading/物/のもの",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "character": "特",
+      "provenance": {
+        "schema_version": 1,
+        "character": "特",
+        "source_url": "https://jpdb.io/kanji/%E7%89%B9",
+        "fetched_at_utc": "2026-09-07T20:31:27Z",
+        "sha256": "d68960ef04fb1d2ffd912ccae46186c0d51b440a5799e7907d8861e90f315166"
+      },
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "とく",
+              "href": "/kanji-reading/特/とく",
+              "percent_text": "(90%)",
+              "percent": 90,
+              "percent_less_than": false
+            },
+            {
+              "label": "とっ",
+              "href": "/kanji-reading/特/とっ",
+              "percent_text": "(9%)",
+              "percent": 9,
+              "percent_less_than": false
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "どく",
+              "href": "/kanji-reading/特/どく",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "ことい",
+              "href": "/kanji-reading/特/ことい",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "こって",
+              "href": "/kanji-reading/特/こって",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "character": "鳥",
+      "provenance": {
+        "schema_version": 1,
+        "character": "鳥",
+        "source_url": "https://jpdb.io/kanji/%E9%B3%A5",
+        "fetched_at_utc": "2026-09-07T20:31:28Z",
+        "sha256": "24ebcd410ef744fa242588201d84a92444daf0d05f8aa755d56851988579815f"
+      },
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "とり",
+              "href": "/kanji-reading/鳥/とり",
+              "percent_text": "(70%)",
+              "percent": 70,
+              "percent_less_than": false
+            },
+            {
+              "label": "ちょう",
+              "href": "/kanji-reading/鳥/ちょう",
+              "percent_text": "(21%)",
+              "percent": 21,
+              "percent_less_than": false
+            },
+            {
+              "label": "どり",
+              "href": "/kanji-reading/鳥/どり",
+              "percent_text": "(6%)",
+              "percent": 6,
+              "percent_less_than": false
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "とっ",
+              "href": "/kanji-reading/鳥/とっ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "と",
+              "href": "/kanji-reading/鳥/と",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "ちょ",
+              "href": "/kanji-reading/鳥/ちょ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "ちょっ",
+              "href": "/kanji-reading/鳥/ちょっ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "か",
+              "href": "/kanji-reading/鳥/か",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "ら",
+              "href": "/kanji-reading/鳥/ら",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "みとり",
+              "href": "/kanji-reading/鳥/みとり",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "め",
+              "href": "/kanji-reading/鳥/め",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "character": "料",
+      "provenance": {
+        "schema_version": 1,
+        "character": "料",
+        "source_url": "https://jpdb.io/kanji/%E6%96%99",
+        "fetched_at_utc": "2026-09-07T20:31:29Z",
+        "sha256": "14ddfd499b7e5f0e8646f884f76ed1399772b0ea4479407b33929d4db0f8c336"
+      },
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "りょう",
+              "href": "/kanji-reading/料/りょう",
+              "percent_text": "(100%)",
+              "percent": 100,
+              "percent_less_than": false
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "はやし",
+              "href": "/kanji-reading/料/はやし",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "りょ",
+              "href": "/kanji-reading/料/りょ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "character": "理",
+      "provenance": {
+        "schema_version": 1,
+        "character": "理",
+        "source_url": "https://jpdb.io/kanji/%E7%90%86",
+        "fetched_at_utc": "2026-09-07T20:31:30Z",
+        "sha256": "5703c3603f9d88fea26330d56088f14ab224674c46e1fcd641c1063601be748a"
+      },
+      "groups": [
+        {
+          "source_class": "kanji-reading-list-common",
+          "readings": [
+            {
+              "label": "り",
+              "href": "/kanji-reading/理/り",
+              "percent_text": "(84%)",
+              "percent": 84,
+              "percent_less_than": false
+            },
+            {
+              "label": "わ",
+              "href": "/kanji-reading/理/わ",
+              "percent_text": "(14%)",
+              "percent": 14,
+              "percent_less_than": false
+            }
+          ]
+        },
+        {
+          "source_class": "kanji-reading-list",
+          "readings": [
+            {
+              "label": "ことわり",
+              "href": "/kanji-reading/理/ことわり",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "め",
+              "href": "/kanji-reading/理/め",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            },
+            {
+              "label": "ことわ",
+              "href": "/kanji-reading/理/ことわ",
+              "percent_text": null,
+              "percent": null,
+              "percent_less_than": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

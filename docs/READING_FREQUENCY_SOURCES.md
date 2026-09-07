@@ -1,7 +1,8 @@
 # Reading frequency sources for kanji cards
 
-Research snapshot: 2026-09-07. This is a source comparison, not an implemented
-provider choice. The card-type proposal remains a separate design discussion.
+Research snapshot: 2026-09-07. The owner selected JPDB HTML acquisition for
+personal, on-demand use. The proof of concept is separate from runtime card
+integration; the card-type proposal remains a design discussion.
 
 ## What we want to measure
 
@@ -47,6 +48,25 @@ and HTML can change. A chosen
 adapter should fetch only requested characters, cache results, refresh
 explicitly, and leave existing data intact on failure. Builds should use the
 saved snapshot, without fetching pages again.
+
+**Owner decision (2026-09-07):** personal, on-demand scraping is acceptable.
+Fetch only characters requested for a study task, reuse saved responses, and
+refresh only on an explicit request. There is no background crawl or scheduled
+refresh. This settles the acquisition choice for the proof of concept; it does
+not implement kanji notes or change existing cards.
+
+The five main kanji pages publish common-reading percentages in descending
+source order. Additional readings have no percentages on those pages and must
+remain unknown. For example, 料 lists りょう at 100% alongside additional
+readings; rounding must not turn those additional readings into zeroes. The
+reading-specific pages can supply further details, but following those links
+is outside this five-page proof of concept. General vocabulary examples on a
+kanji page are not tied to a particular reading group.
+
+The [five-character proof of concept](../data/research/jpdb/2026-09-07/README.md)
+records these facts separately from canonical study content. Full HTML stays
+in a local cache; the public repository keeps the extracted reading facts and
+provenance.
 
 ### Tamaoka Kanji Database
 
@@ -140,26 +160,19 @@ inventories and word-priority marks do not themselves establish a character's
 reading-usage distribution.
 [JMdict word priority documentation](https://www.edrdg.org/wiki/JMdict-EDICT_Dictionary_Project.html#Word_Priority_Marking).
 
-## Recommendation for the next implementation discussion
+## Selected direction
 
-**JPDB** offers the desired published presentation and is the remaining
-shortlist candidate. **Tamaoka**'s methodology is still the strongest free
-corpus-based approach on paper, but its export is held back rather than
-shortlisted: the seven-row proof of concept above found every row's
-individual-reading frequencies irreconcilable with that row's compound
-occurrence totals. Jiten is the strongest convenient API alternative if
-dictionary prevalence is acceptable. CJKI is a further option if broader
-documented occurrence data justifies a commercial enquiry.
+**JPDB** is selected for an on-demand acquisition proof of concept. **Tamaoka**
+was rejected after investigation failed to obtain a usable corrected export.
+The seven-row diagnostic above remains evidence of that decision, not a
+provider awaiting integration. Jiten remains the strongest convenient API
+alternative if dictionary prevalence becomes acceptable. CJKI is a further
+option if documented occurrence data justifies a commercial enquiry.
 
-Only Tamaoka's own export was checked this way; no JPDB-versus-Tamaoka or
-other cross-source character comparison has been carried out. That check's
-finding is the mismatch recorded above, so the next step for Tamaoka is not
-another pass over the same export but obtaining corrected original data or a
-publisher clarification of the mismatch. Until one of those arrives, Tamaoka
-stays promising but not ready for adoption. Any further source compared this
-way should have its gaps and source groupings recorded alongside its numbers,
-as a comparison of supplied facts rather than an LLM rating or a Japanese
-audit.
+JPDB acquisition captures what its pages report; it does not independently
+reproduce the publisher's corpus calculation. Its gaps and contextual reading
+groups travel alongside the numbers, as supplied facts rather than an LLM
+rating or a Japanese audit.
 
 Whichever source is selected, save the source URL/version, retrieval date,
 raw reading label, metric, corpus scope, numeric value or bound, denominator

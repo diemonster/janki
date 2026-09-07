@@ -127,10 +127,10 @@ Frequency here means **reading evidence, source-labelled and verbatim** — not 
 whole-character KANJIDIC rank, not a JMdict `nfXX` word-priority band, not a JPDB
 word rank.
 [READING_FREQUENCY_SOURCES.md](READING_FREQUENCY_SOURCES.md) carries the
-comparison and shortlists **JPDB**
-(published reading percentages, learner-facing presentation) and **Tamaoka**
-(documented occurrence counts, narrower two-kanji-compound scope) as different
-scopes rather than rivals. Store source, retrieval date, metric, scope and
+comparison. The owner selected **JPDB** published reading percentages for a
+personal, on-demand acquisition proof of concept; runtime card integration
+remains proposed. Tamaoka was rejected after its export discrepancies could
+not be resolved. Store source, retrieval date, metric, scope and
 denominator; sort only comparable numeric values *within* one source; keep a
 source's own reading groups as its own labels rather than forcing everything into
 on/kun; absent evidence renders as absent.
