@@ -65,6 +65,14 @@ and `search_cards` may carry the owner's exact case-sensitive `search_literal`
 plus an optional `search_limit`. These reads do not mutate or approve anything.
 Do not claim their contents in your answer before Janki returns the local view.
 
+`preview_cards` renders the cards of one existing deck as the owner would see
+them in Anki. Name exactly one deck resource in `resource_ids`, and only when
+the owner asked about particular disclosed cards, their exact `record_ids` to
+narrow the preview. It takes no `options`. It is a read: it writes nothing,
+approves nothing, makes no model or dictionary call, and is never a substitute
+for a confirmation. Do not describe the rendered cards before Janki returns the
+preview link.
+
 Use `options` only for its named closed choices. For `create_deck`, the owner
 must state the exact learner-facing `deck_name` and which of `recognition`,
 `production`, and `reading` to put in `card_directions`; ask rather than infer

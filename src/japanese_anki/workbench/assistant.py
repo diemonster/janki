@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, TypeVar
+from urllib.parse import urlsplit
 
 from japanese_anki.errors import JankiError
 
@@ -307,6 +308,11 @@ class RevisionPlan:
     disclosures: tuple[str, ...] = ()
     confirm_label: str = "Confirm exact action"
     progress_label: str = "Preparing revision"
+    #: One local link to the exact cards this plan renders, when Janki could
+    #: draw them. Looking at a preview is not an approval, and a plan without
+    #: one is complete: its written effects remain the decision.
+    preview_url: str | None = None
+    preview_label: str = "Preview these cards"
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,6 +370,14 @@ class RevisionFinishReview:
     audio_provider_required: int
     output_path: str
     card_count: int
+    #: The reviewed cards as Anki draws them, rendered from the exact proposed
+    #: content already staged. Never an approval, and never required.
+    preview_url: str | None = None
+    preview_label: str = "Preview these cards"
+    #: Why there is no link, when Janki tried and could not draw them. The
+    #: review itself stays complete and usable; this says what is missing
+    #: instead of leaving a silent gap where the cards would be.
+    preview_unavailable_message: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,6 +390,8 @@ class StagedContentFinishReview:
     effects: tuple[str, ...]
     disclosures: tuple[str, ...]
     confirm_label: str = "Apply and finish"
+    preview_url: str | None = None
+    preview_label: str = "Preview these cards"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1045,7 +1061,41 @@ def _validate_plan(plan: Any) -> RevisionPlan:
         raise ValueError("The action plan must have a confirmation label.")
     if plan.progress_label not in _PROGRESS_LABELS:
         raise ValueError("The action plan has an unknown progress state.")
+    _validate_preview_link(plan.preview_url, plan.preview_label)
     return plan
+
+
+def _validate_preview_link(url: str | None, label: str) -> None:
+    """Refuse a preview link that is not a plain loopback HTTP URL.
+
+    A preview link is written into a widget the owner clicks, so this parses
+    the URL rather than matching its prefix: ``http://localhost:80@evil/`` has
+    the right first characters and a different host entirely. This is a
+    loopback-shape check, not proof of a particular origin — the exact port
+    belongs to the running sidecar, which mints these URLs itself.
+    """
+
+    if url is None:
+        return
+    if not url.strip() or not label.strip():
+        raise ValueError("A card-preview link needs its exact URL and label.")
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise ValueError(f"The card-preview link is not a usable URL: {exc}") from exc
+    if (
+        parsed.scheme != "http"
+        or parsed.username is not None
+        or parsed.password is not None
+        or hostname not in {"127.0.0.1", "localhost", "::1"}
+        or port is None
+    ):
+        raise ValueError(
+            "A card-preview link must be a loopback http:// URL with a port and "
+            "no embedded credentials."
+        )
 
 
 def _validate_source_extraction_plan(plan: Any) -> SourceExtractionPlan:
@@ -1188,6 +1238,15 @@ def _validate_finish_review(review: Any) -> RevisionFinishReview:
         or review.card_count <= 0
     ):
         raise ValueError("Revision finish must name a positive package card count.")
+    _validate_preview_link(review.preview_url, review.preview_label)
+    if review.preview_unavailable_message is not None:
+        if not review.preview_unavailable_message.strip():
+            raise ValueError("An absent card preview must say why it is absent.")
+        if review.preview_url is not None:
+            raise ValueError(
+                "A revision finish review cannot both offer a card preview and "
+                "explain why there is none."
+            )
     return review
 
 
@@ -1220,6 +1279,7 @@ def _validate_staged_content_finish_review(
         raise ValueError(
             "A staged content aggregate must name its one Apply and finish action."
         )
+    _validate_preview_link(review.preview_url, review.preview_label)
     return review
 
 
@@ -1268,6 +1328,35 @@ def _validate_source_extraction_execution(result: Any) -> SourceExtractionExecut
     return result
 
 
+def _preview_link_body(url: str, label: str) -> dict[str, Any]:
+    """One link to the actual cards, above the written consequences.
+
+    The owner's preferred review is the cards themselves (``docs/DESIGN.md``),
+    so it comes first — but opening it is not the decision, which is why the
+    exact effects below it are unchanged and the confirm button is elsewhere.
+    """
+
+    return {
+        "type": "Col",
+        "id": "confirmation-preview",
+        "gap": 1,
+        "width": "100%",
+        "minWidth": 0,
+        "children": [
+            {"type": "Markdown", "value": f"[{label}]({url})"},
+            {
+                "type": "Text",
+                "value": (
+                    "Opens the real cards in a new tab. Looking is not approving."
+                ),
+                "size": "xs",
+                "color": "tertiary",
+                "width": "100%",
+            },
+        ],
+    }
+
+
 def _confirmation_body(
     *,
     title: str,
@@ -1278,6 +1367,8 @@ def _confirmation_body(
     fingerprint: str,
     one_use_note: str,
     instruction: str | None = None,
+    preview_url: str | None = None,
+    preview_label: str = "Preview these cards",
 ) -> dict[str, Any]:
     """Build one readable, full-width confirmation body without changing its facts."""
 
@@ -1324,6 +1415,8 @@ def _confirmation_body(
                 ],
             }
         )
+    if preview_url is not None:
+        sections.append(_preview_link_body(preview_url, preview_label))
     effect_rows = [
         {
             "type": "Row",
@@ -1553,6 +1646,35 @@ def _finish_review_body(review: RevisionFinishReview) -> dict[str, Any]:
                 },
             ],
         },
+        *(
+            (_preview_link_body(review.preview_url, review.preview_label),)
+            if review.preview_url is not None
+            else ()
+        ),
+        *(
+            (
+                {
+                    "type": "Col",
+                    "id": "revision-finish-preview-unavailable",
+                    "gap": 1,
+                    "width": "100%",
+                    "minWidth": 0,
+                    "children": [
+                        {
+                            "type": "Text",
+                            "value": (
+                                "Janki could not draw these cards for review: "
+                                f"{review.preview_unavailable_message}"
+                            ),
+                            "color": "secondary",
+                            "width": "100%",
+                        }
+                    ],
+                },
+            )
+            if review.preview_unavailable_message is not None
+            else ()
+        ),
         {"type": "Divider", "spacing": 2},
         {
             "type": "Col",
@@ -2502,6 +2624,8 @@ def create_assistant_core(
                                 "Confirm is one-use. At the click, janki re-plans and "
                                 "refuses if the target or request changed."
                             ),
+                            preview_url=plan.preview_url,
+                            preview_label=plan.preview_label,
                         )
                     ],
                     "confirm": {
@@ -2580,6 +2704,8 @@ def create_assistant_core(
                         "and refuses if the reviewed proposal, audio, or build "
                         "inputs changed."
                     ),
+                    preview_url=review.preview_url,
+                    preview_label=review.preview_label,
                 )
                 confirm_label = review.confirm_label
             else:

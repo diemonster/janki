@@ -216,6 +216,7 @@ def assistant_agent_schema() -> Any:
             "manage_operation",
             "inspect_resources",
             "search_cards",
+            "preview_cards",
         ] = Field(description="One closed Janki application operation to plan.")
         resource_ids: list[NonBlank] = Field(
             description="Exact opaque repository resource ids needed by the operation."

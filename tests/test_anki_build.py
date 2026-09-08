@@ -1173,12 +1173,15 @@ def test_two_casual_examples_leave_the_main_slot_empty(tmp_path: Path) -> None:
     assert values[names.index("CasualJapanese")] == "使う？"
 
 
-def test_the_preview_shows_the_sentence_the_deck_will(tmp_path: Path) -> None:
-    """`janki preview` is billed as a stand-in for the card. It read
-    `first_example` while the exporter had moved on, so for a record whose
-    casual example comes first the two showed different sentences."""
-    from japanese_anki.preview import build_preview
+def test_each_register_reaches_its_own_slot_whatever_the_order(tmp_path: Path) -> None:
+    """A record whose casual example comes first still fills both slots right.
 
+    This used to assert the same thing about the retired static-HTML preview,
+    which read `first_example` while the exporter had moved on. That preview is
+    gone — `janki preview` renders the real cards through Anki now, and
+    `tests/test_card_preview.py` checks what it draws — so what is left here is
+    the exporter contract the two used to disagree about.
+    """
     _project(tmp_path)
     _write_records(tmp_path, [VocabularyRecord(
         id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
@@ -1190,16 +1193,10 @@ def test_the_preview_shows_the_sentence_the_deck_will(tmp_path: Path) -> None:
 
     build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
     names, values = _fields(tmp_path / "o.apkg")
-    page = build_preview(tmp_path / "decks" / "d.yaml", tmp_path / "p.html").read_text(
-        encoding="utf-8"
-    )
 
     # Both slots, in the same places the card puts them.
     assert values[names.index("ExampleJapanese")] == "使います。"
     assert values[names.index("CasualJapanese")] == "使う？"
-    main, _, casual_block = page.partition('class="example-casual"')
-    assert "使います。" in main, "the main slot holds the polite sentence"
-    assert "使う？" in casual_block, "and the casual one is labelled as casual"
 
 
 def test_an_example_that_reaches_no_slot_is_reported(tmp_path: Path) -> None:
@@ -1230,26 +1227,6 @@ def test_an_example_that_reaches_no_slot_is_reported(tmp_path: Path) -> None:
         "使うの？" in warning and "reaches no field" in warning
         for warning in result.warnings
     ), result.warnings
-
-
-def test_the_preview_shows_a_casual_only_record(tmp_path: Path) -> None:
-    """`enrich --ai` returns a polite and a casual sentence, and the polite one
-    can fail `qc.example_contains_target` and be dropped — leaving a record
-    whose only example is casual. The card shows it under "Casually"; a preview
-    built on the main slot alone showed nothing at all."""
-    from japanese_anki.preview import build_preview
-
-    _project(tmp_path)
-    _write_records(tmp_path, [VocabularyRecord(
-        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
-        examples=[ExampleSentence(japanese="使う？", english="casual", register="casual")],
-    )])
-
-    page = build_preview(tmp_path / "decks" / "d.yaml", tmp_path / "p.html").read_text(
-        encoding="utf-8"
-    )
-
-    assert "使う？" in page
 
 
 def test_the_build_says_when_a_sentence_ships_silent(tmp_path: Path) -> None:

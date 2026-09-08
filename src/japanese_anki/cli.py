@@ -61,6 +61,12 @@ from japanese_anki.application.promotion_action import (
     resolve_promotion_for_execution,
 )
 from japanese_anki.application.validation import validate_project
+from japanese_anki.card_preview import (
+    CardPreviewError,
+    preview_unavailable,
+    render_card_preview,
+    write_card_preview,
+)
 from japanese_anki.collection import read_deck_notes
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -90,7 +96,6 @@ from japanese_anki.io import (
     save_records_json,
 )
 from japanese_anki.models import VocabularyRecord
-from japanese_anki.preview import build_preview
 from japanese_anki.staging import (
     AI_ENRICHMENT_KEY,
     StagingError,
@@ -3936,10 +3941,37 @@ def command_jpdb_ping(args: argparse.Namespace) -> int:
 
 
 def command_preview(args: argparse.Namespace) -> int:
+    """Render this deck's real cards into one interactive HTML page.
+
+    The cards are the ones Anki draws from the deck's own notetype, templates
+    and stylesheet — not a summary of the fields. Nothing is written except the
+    output page: no canonical file is touched, and viewing a preview approves
+    nothing.
+    """
     config = _load_config(args)
+    unavailable = preview_unavailable()
+    if unavailable is not None:
+        raise CardPreviewError(unavailable)
+    scope = tuple(args.record_id) if args.record_id else None
+    preview = render_card_preview(
+        config,
+        args.deck.resolve(),
+        scope_record_ids=scope,
+        subtitle=args.subtitle or "",
+    )
     output = args.output or (config.dist_dir / f"{args.deck.stem}-preview.html")
-    built = build_preview(args.deck.resolve(), output.resolve())
-    print(f"Wrote preview to {built}")
+    written = write_card_preview(preview, output.resolve())
+    print(f"Wrote preview to {written}")
+    print(
+        f"{preview.card_count} card(s) from {preview.note_count} note(s) "
+        f"in {preview.deck_name} ({preview.deck_kind}; "
+        f"{', '.join(preview.directions)})."
+    )
+    if preview.note_count != preview.deck_note_count:
+        print(
+            f"The whole deck holds {preview.deck_note_count} note(s) and "
+            f"{preview.deck_card_count} card(s)."
+        )
     return 0
 
 
@@ -4618,9 +4650,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     jpdb_ping_parser.set_defaults(handler=command_jpdb_ping)
 
-    preview_parser = subparsers.add_parser("preview", help="Build a static HTML preview")
+    preview_parser = subparsers.add_parser(
+        "preview",
+        help="Render a deck's real cards into an interactive HTML preview",
+        description=(
+            "Build this deck, render every card with Anki's own template "
+            "engine, and write one self-contained page: navigate the cards, "
+            "flip with Show Answer, and open the answer's disclosures. Needs "
+            "the optional 'preview' extra."
+        ),
+    )
     preview_parser.add_argument("deck", type=_path)
     preview_parser.add_argument("--output", type=_path)
+    preview_parser.add_argument(
+        "--record-id",
+        action="append",
+        metavar="ID",
+        help=(
+            "Preview only this card identity; repeatable. Order is kept, and "
+            "an unknown or repeated id refuses rather than showing a different "
+            "set. Omit to preview the whole deck."
+        ),
+    )
+    preview_parser.add_argument(
+        "--subtitle",
+        help="One line of context to print under the deck name.",
+    )
     preview_parser.set_defaults(handler=command_preview)
 
     return parser

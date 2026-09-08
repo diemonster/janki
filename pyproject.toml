@@ -44,9 +44,21 @@ ai = [
 # Agents package itself, while janki also names its types at the integration
 # boundary, so both direct dependencies are declared rather than relying on a
 # transitive install.
+# Rendering real cards needs Anki itself: `card_preview.py` builds a package,
+# imports it into a scratch collection and asks Anki to draw the cards, which
+# is the only thing that resolves `{{furigana:}}`, a `{{#Field}}` section and a
+# `[sound:]` tag the way a reviewer sees them. It is an extra rather than a
+# dependency because the base build/import path must stay Anki-free —
+# `preview_unavailable()` reports the absence instead of importing it.
+preview = [
+  "anki>=25.2",
+]
 assistant = [
   "openai-chatkit>=1.6.5,<2",
   "openai-agents>=0.22,<0.23",
+  # The Assistant links card previews into the conversation, so it needs the
+  # renderer's dependency rather than a second copy of the decision.
+  "japanese-anki[preview]",
 ]
 # dev pulls in ai on purpose. The *runtime* promise is that non-AI commands
 # work without the extra, and the lazy imports keep that true; the *test suite*
@@ -67,22 +79,23 @@ dev = [
   "japanese-anki[ai]",
   "japanese-anki[assistant]",
   # Anki itself, so `tests/test_rendered_cards.py` can ask *Anki* what the
-  # templates draw instead of reading their HTML off disk. Nothing in janki
-  # imports it at runtime — `collection.py` reads a collection through plain
-  # sqlite precisely so a build needs no Anki install — but a furigana filter
-  # that puts the reading over the wrong characters, a `{{Field}}` that no
-  # longer resolves, and a `[sound:]` Anki does not recognise are all invisible
-  # to a test that reads the template source, and all visible on the card.
+  # templates draw instead of reading their HTML off disk. The ordinary build
+  # and import path still never imports it — `collection.py` reads a collection
+  # through plain sqlite precisely so a build needs no Anki install — but a
+  # furigana filter that puts the reading over the wrong characters, a
+  # `{{Field}}` that no longer resolves, and a `[sound:]` Anki does not
+  # recognise are all invisible to a test that reads the template source, and
+  # all visible on the card.
   #
-  # In `dev` rather than its own extra for the reason stated above: a suite that
-  # skips this reports green for the one thing no other test can see.
+  # Taken via `[preview]` rather than pinned again here, so the renderer and
+  # the tests that check it can never disagree about which Anki they mean.
   #
   # It is a *hard* requirement of the extra, and `scripts/bootstrap.sh` installs
   # `.[dev]` under `set -e`: on a platform with no anki wheel, bootstrap fails at
   # the install rather than skipping a test. The `importorskip` in
   # tests/test_rendered_cards.py covers the other case — a checkout that
   # installed the project without `[dev]` and runs pytest anyway.
-  "anki>=25.2",
+  "japanese-anki[preview]",
 ]
 
 [project.scripts]

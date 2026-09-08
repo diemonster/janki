@@ -46,16 +46,28 @@ templates and CSS so the review shows the layout, furigana, reading evidence
 and available media in their study context. Represent the enabled directions,
 preserving mobile and dark-mode styling.
 
-Janki Assistant remains the primary workflow and should link or embed this
-preview when presenting cards for review. Summaries, field editors and change
-tables can support that view. Existing scoped confirmation and review actions
-keep their meaning; opening or flipping a card does not approve it.
+Janki Assistant remains the primary workflow. Its **Preview these cards** link
+opens a snapshot alongside the kanji wizard's confirmation and the existing
+staged-card and revision review actions. Proposed cards need their destination
+deck and complete proposed content before they can be rendered. Summaries,
+field editors and change tables support that view. Existing scoped confirmation
+and review actions keep their meaning; opening or flipping a card does not
+approve it.
 
-This is the default presentation for future review work. The reference HTML
-is a generated example, not a durable source file or a claim that every
-existing review surface already uses a shared preview component. The current
-`janki preview` command produces a static vocabulary summary; that output does
-not yet provide this interaction.
+The Assistant's read-only `preview_cards` action previews a selected existing
+deck, optionally limited to explicit record IDs. `janki preview DECK` writes the
+same interactive format as a standalone file. Both use the real exporters and
+Anki's renderer in a temporary collection for vocabulary, kanji, grammar-pattern
+and conjugation decks. Proposed file contents overlay only that temporary
+snapshot; canonical records stay untouched. Every enabled direction is shown,
+with selection counts distinguished from the whole deck.
+
+Previews reuse existing media and make no dictionary, model or audio-generation
+calls. The browser document carries its media and allows only its own viewer
+script. Assistant links identify immutable previews held for the running server
+session, separately from the plan's confirmation. They may expire; a standalone
+CLI preview remains available as a generated file in `dist/`. Anki's core
+library is a lazy `[preview]` dependency included by `[assistant]` and `[dev]`.
 
 ## Stable identity
 

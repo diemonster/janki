@@ -14,11 +14,12 @@ import json
 import re
 import secrets
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any
 
-from japanese_anki import status
+from japanese_anki import card_preview, kanji_notes, staging, status
 from japanese_anki.application import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
@@ -29,6 +30,7 @@ from japanese_anki.application import (
     ExtractionDispatchError,
     ExtractionDispatchExpectation,
     ai_enrichment,
+    assignment,
     assistant_actions,
     assistant_agent,
     assistant_ai_enrichment_review,
@@ -44,17 +46,20 @@ from japanese_anki.application import (
     assistant_staging_review,
     card_revision,
     card_revision_finish,
+    character_notes,
     describe_extraction,
     dispatch_extraction,
     kanji_finish,
     revision,
+    revision_apply,
     revision_finish,
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.exporters.pattern_cards import read_drill_deck_content
-from japanese_anki.models import ExampleSentence
+from japanese_anki.io import load_records, merge_records, read_bytes_bound
+from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.workbench.assistant import (
     AssistantDeckChoice,
     ChatReply,
@@ -82,6 +87,11 @@ from japanese_anki.workbench.assistant_packages import (
     AssistantPackageOffer,
     LocalAssistantPackageStore,
 )
+from japanese_anki.workbench.assistant_previews import (
+    AssistantPreviewError,
+    AssistantPreviewOffer,
+    LocalAssistantPreviewStore,
+)
 
 __all__ = [
     "RevisionAssistantAdapter",
@@ -93,6 +103,20 @@ _DRILL_EXAMPLES_REQUIRED = (
     "This conjugation deck needs complete rich drill examples before Janki can "
     "select it for changes."
 )
+
+
+def _records_text(records: Sequence[VocabularyRecord]) -> str:
+    """Serialize a prospective collection exactly as the canonical store holds it."""
+
+    return (
+        json.dumps(
+            [record.to_dict() for record in sorted(records, key=lambda item: item.id)],
+            ensure_ascii=False,
+            indent=2,
+            allow_nan=False,
+        )
+        + "\n"
+    )
 
 
 def _canonical_json(value: object) -> str:
@@ -379,6 +403,11 @@ class RevisionAssistantAdapter:
         init=False,
         repr=False,
     )
+    _preview_store: LocalAssistantPreviewStore | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
     _finish_plans: dict[
         str,
         revision_finish.RevisionFinishPlan
@@ -417,6 +446,110 @@ class RevisionAssistantAdapter:
             return store.offer(receipt_id)
         except AssistantPackageError:
             return None
+
+    def bind_preview_links(
+        self,
+        preview_prefix: str,
+    ) -> LocalAssistantPreviewStore:
+        """Build the store the isolated origin serves rendered previews from."""
+
+        store = LocalAssistantPreviewStore(preview_prefix=preview_prefix)
+        self._preview_store = store
+        return store
+
+    def _render_preview(
+        self,
+        config: ProjectConfig,
+        *,
+        deck_path: Path,
+        proposed: tuple[Any, ...] = (),
+        new_record_ids: tuple[str, ...] = (),
+        scope_record_ids: tuple[str, ...] | None = None,
+        subtitle: str = "",
+    ) -> Any:
+        """Render one read-only preview, or refuse with the exact reason.
+
+        ``preview_unavailable`` is the renderer's own cheap check for its
+        optional Anki dependency; asking it first keeps a checkout without the
+        preview extra out of an import error.
+        """
+
+        unavailable = card_preview.preview_unavailable()
+        if unavailable is not None:
+            raise RevisionRefusal(unavailable)
+        return card_preview.render_card_preview(
+            config,
+            deck_path,
+            proposed=proposed,
+            new_record_ids=new_record_ids,
+            scope_record_ids=scope_record_ids,
+            subtitle=subtitle,
+        )
+
+    def _offer_preview(
+        self,
+        config: ProjectConfig,
+        *,
+        deck_path: Path,
+        label: str,
+        proposed: tuple[Any, ...] = (),
+        new_record_ids: tuple[str, ...] = (),
+        scope_record_ids: tuple[str, ...] | None = None,
+        subtitle: str = "",
+        plan_fingerprint: str | None = None,
+        focus_scope: str | None = None,
+    ) -> tuple[AssistantPreviewOffer | None, str | None]:
+        """Offer a preview beside a plan, and say why when there is none.
+
+        A preview is a convenience over a decision the owner must still read
+        in full: a rendering failure leaves the written effects exactly as
+        they were and returns its reason, so the confirmation stays usable and
+        says what could not be drawn. Only rendering, store and repository
+        failures are absorbed here — a mistake in Janki's own code is not one
+        of them and still raises.
+        """
+
+        store = self._preview_store
+        if store is None:
+            # No assistant origin is serving previews, so there is no link to
+            # offer and nothing about this plan to explain.
+            return None, None
+        try:
+            preview = self._render_preview(
+                config,
+                deck_path=deck_path,
+                proposed=proposed,
+                new_record_ids=new_record_ids,
+                scope_record_ids=scope_record_ids,
+                subtitle=subtitle,
+            )
+            offer = store.offer(
+                preview,
+                label=label,
+                plan_fingerprint=plan_fingerprint,
+                focus_scope=focus_scope or None,
+            )
+        except (
+            RevisionRefusal,
+            AssistantPreviewError,
+            JankiError,
+            OSError,
+            UnicodeError,
+            ValueError,
+        ) as exc:
+            return None, str(exc)
+        return offer, None
+
+    @staticmethod
+    def _preview_disclosure(reason: str | None) -> tuple[str, ...]:
+        """One truthful line when the cards could not be drawn for review."""
+
+        if reason is None:
+            return ()
+        return (
+            f"Janki could not draw these cards for review: {reason} The exact "
+            "effects above are unchanged and still describe what confirming does.",
+        )
 
     def list_kanji_finish_choices(self) -> tuple[KanjiFinishChoice, ...]:
         """List durable character-note receipts a fresh process can act on.
@@ -1041,6 +1174,13 @@ class RevisionAssistantAdapter:
         """Resolve one untrusted model intent through a local Janki planner."""
 
         [intent] = result.action_intents
+        if intent.kind == "preview_cards":
+            return self._preview_existing_deck(
+                config,
+                intent=intent,
+                answer=result.answer,
+                deck_scope=deck_scope,
+            )
         if intent.kind in {"inspect_resources", "search_cards"}:
             broker = assistant_context.AssistantContextBroker(config)
             if intent.record_ids:
@@ -1499,13 +1639,22 @@ class RevisionAssistantAdapter:
                 action_instruction=intent.instruction,
             )
         if intent.kind == "add_kanji_notes":
-            finish = self._prepare_kanji_notes(
+            finish, notes_plan = self._prepare_kanji_notes(
                 config,
                 intent=intent,
                 owner_message=owner_message,
                 owner_history=owner_history,
             )
-            effects, disclosures = self._kanji_notes_description(finish)
+            preview, preview_problem = self._offer_kanji_preview(
+                config,
+                notes_plan,
+                deck_scope=deck_scope,
+            )
+            effects, disclosures = self._kanji_notes_description(
+                finish,
+                preview=preview,
+            )
+            disclosures = (*disclosures, *self._preview_disclosure(preview_problem))
             target = self._display_path(config, finish.deck_path)
             prepared = _PreparedAgentAction(
                 kind=intent.kind,
@@ -1524,6 +1673,7 @@ class RevisionAssistantAdapter:
                     disclosures=disclosures,
                     confirm_label="Add these exact character notes",
                     progress_label="Preparing finish",
+                    preview_url=None if preview is None else preview.url,
                 ),
                 action_instruction=intent.instruction,
             )
@@ -1628,10 +1778,31 @@ class RevisionAssistantAdapter:
                 effects, disclosures = self._card_revision_finish_description(
                     config, plan
                 )
+                preview, preview_problem = self._offer_card_finish_preview(
+                    config,
+                    plan,
+                    deck_scope=deck_scope,
+                )
+                disclosures = (
+                    *disclosures,
+                    *self._preview_disclosure(preview_problem),
+                )
                 confirm_label = "Apply and finish"
                 progress_label = "Preparing finish"
             else:
                 effects = self._staging_review_description(plan)
+                preview, preview_problem = (
+                    self._offer_staging_review_preview(
+                        config,
+                        plan,
+                        deck_scope=deck_scope,
+                    )
+                    if isinstance(
+                        plan,
+                        assistant_staging_review.AssistantStagingReviewPlan,
+                    )
+                    else (None, None)
+                )
                 disclosures = (
                     (
                         "This click is the owner's review decision for exactly "
@@ -1641,6 +1812,7 @@ class RevisionAssistantAdapter:
                         "It makes no provider call and does not promote cards, "
                         "generate audio, or build a package."
                     ),
+                    *self._preview_disclosure(preview_problem),
                 )
                 confirm_label = "Approve this exact review"
                 progress_label = "Saving review"
@@ -1661,6 +1833,7 @@ class RevisionAssistantAdapter:
                     disclosures=disclosures,
                     confirm_label=confirm_label,
                     progress_label=progress_label,
+                    preview_url=None if preview is None else preview.url,
                 ),
                 action_instruction=intent.instruction,
             )
@@ -2153,7 +2326,82 @@ class RevisionAssistantAdapter:
             )
         )
 
-    def _kanji_deck_path(
+    def _preview_existing_deck(
+        self,
+        config: ProjectConfig,
+        *,
+        intent: assistant_agent.AgentActionIntent,
+        answer: str,
+        deck_scope: str,
+    ) -> ChatReply:
+        """Render one existing deck exactly as it is, and link the result.
+
+        This is a deterministic local read of an already-configured deck: it
+        mints no capability, prepares no plan, makes no provider or dictionary
+        call, and writes nothing. The deck is named by one opaque catalog
+        resource resolved server-side; a model never supplies a path.
+        """
+
+        if len(intent.resource_ids) != 1 or intent.options:
+            raise RevisionRefusal(
+                "A card preview names exactly one deck resource and, optionally, "
+                "exact card ids from that deck. It takes no other options."
+            )
+        broker = assistant_context.AssistantContextBroker(config)
+        try:
+            deck = broker.deck_context(intent.resource_ids[0])
+            deck_path = self._configured_deck_path(
+                config, broker, intent.resource_ids[0]
+            )
+        except (JankiError, OSError, UnicodeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        store = self._preview_store
+        if store is None:
+            raise RevisionRefusal(
+                "Card previews are offered only inside the running Janki "
+                "Assistant page."
+            )
+        scope = tuple(intent.record_ids) or None
+        try:
+            preview = self._render_preview(
+                config,
+                deck_path=deck_path,
+                scope_record_ids=scope,
+                subtitle="These cards as they are now",
+            )
+            offer = store.offer(
+                preview,
+                label="Preview these cards",
+                focus_scope=deck_scope or None,
+            )
+        except (JankiError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            if isinstance(exc, RevisionRefusal):
+                raise
+            raise RevisionRefusal(
+                f"Janki could not render that deck preview: {exc} Nothing was "
+                "changed."
+            ) from exc
+        lines = [
+            f"[{offer.label}]({offer.url})",
+            (
+                f"{preview.deck_name} · {deck.deck_kind or 'vocabulary'} deck · "
+                f"{preview.note_count} note(s) · {preview.card_count} card(s) · "
+                f"directions: {', '.join(preview.directions)}"
+            ),
+        ]
+        if preview.note_count != preview.deck_note_count:
+            lines.append(
+                f"That is the selection you named; the whole deck holds "
+                f"{preview.deck_note_count} note(s) and "
+                f"{preview.deck_card_count} card(s)."
+            )
+        lines.append(
+            "This preview is a local read of the existing deck: nothing was "
+            "changed, approved, or built."
+        )
+        return ChatReply(text=f"{answer}\n\n" + "\n\n".join(lines))
+
+    def _configured_deck_path(
         self,
         config: ProjectConfig,
         broker: assistant_context.AssistantContextBroker,
@@ -2182,7 +2430,10 @@ class RevisionAssistantAdapter:
         intent: assistant_agent.AgentActionIntent,
         owner_message: str | None,
         owner_history: tuple[str, ...] = (),
-    ) -> kanji_finish.KanjiFinishPlan:
+    ) -> tuple[
+        kanji_finish.KanjiFinishPlan,
+        assistant_kanji_notes.AssistantKanjiNotesPlan,
+    ]:
         """Validate the closed character intent and prepare one exact batch.
 
         What the owner decided is in the conversation, not in whichever
@@ -2268,7 +2519,7 @@ class RevisionAssistantAdapter:
                     f"{context.deck_kind or 'vocabulary'} deck, and adding kanji "
                     "study material does not convert its existing note type."
                 )
-            deck_path = self._kanji_deck_path(config, broker, destination)
+            deck_path = self._configured_deck_path(config, broker, destination)
         elif not isinstance(deck_name, str):
             raise RevisionRefusal("The new deck name is invalid.")
 
@@ -2310,13 +2561,284 @@ class RevisionAssistantAdapter:
                 instruction=intent.instruction,
             )
             notes_plan = assistant_kanji_notes.plan_kanji_notes(config, request)
-            return kanji_finish.plan_kanji_finish(config, notes_plan)
+            return kanji_finish.plan_kanji_finish(config, notes_plan), notes_plan
         except (JankiError, OSError, TypeError, ValueError) as exc:
             raise RevisionRefusal(str(exc)) from exc
+
+    def _offer_card_finish_preview(
+        self,
+        config: ProjectConfig,
+        plan: card_revision_finish.CardRevisionFinishPlan,
+        *,
+        deck_scope: str = "",
+    ) -> tuple[AssistantPreviewOffer | None, str | None]:
+        """Draw the reviewed cards from the projection the finish plan holds.
+
+        That projection is the reviewed proposal already merged into the
+        canonical collection by the finish service. It is overlaid in memory,
+        never applied, and no dictionary or model call is repeated to render
+        it. Clips the finish has not created yet are not in it, so no card
+        claims audio that does not exist.
+        """
+
+        if self._preview_store is None:
+            return None, None
+        return self._offer_preview(
+            config,
+            deck_path=Path(plan.deck_path).resolve(),
+            label="Preview these reviewed cards",
+            proposed=(
+                card_preview.ProposedText(
+                    path=config.normalized_file.resolve(),
+                    text=plan.projected_canonical_text,
+                ),
+            ),
+            scope_record_ids=tuple(plan.record_ids),
+            subtitle="Reviewed proposal — nothing is applied yet",
+            plan_fingerprint=plan.fingerprint,
+            focus_scope=deck_scope,
+        )
+
+    def _offer_staging_review_preview(
+        self,
+        config: ProjectConfig,
+        plan: assistant_staging_review.AssistantStagingReviewPlan,
+        *,
+        deck_scope: str = "",
+    ) -> tuple[AssistantPreviewOffer | None, str | None]:
+        """Draw the selected staged rows in the deck that would take them.
+
+        Prospective and side-effect-free. The exact proposal bytes this review
+        bound are parsed in full, the selected rows are merged into the
+        canonical collection through the same merge the promotion transaction
+        uses, and that projection is overlaid in memory. Ownership is the real
+        selector verdict, not a guess from a tag. Nothing is promoted, no
+        review, coverage or identity decision is invented, no dictionary is
+        asked, and no file is written.
+        """
+
+        if self._preview_store is None:
+            return None, None
+        try:
+            payload = read_bytes_bound(plan.proposal_path)
+            if hashlib.sha256(payload).hexdigest() != plan.staging_snapshot:
+                return None, (
+                    "the staged proposal changed after this review was prepared, "
+                    "so its cards cannot be drawn from the bytes under review"
+                )
+            staged, _meta = staging.read_staging_text(
+                payload.decode("utf-8"),
+                source=str(plan.proposal_path),
+            )
+            wanted = set(plan.record_ids)
+            selected = [record for record in staged if record.id in wanted]
+            if len(selected) != len(wanted):
+                return None, (
+                    "the reviewed rows are no longer all present in that proposal"
+                )
+            existing = load_records(config.normalized_file)
+            merged, _outcomes = merge_records(existing, selected)
+            evaluations = assignment.evaluate_deck_ownership(config, selected, merged)
+            stem, problem = self._single_prospective_owner(evaluations)
+            if stem is None:
+                return None, problem
+            deck_path = next(
+                (
+                    candidate.absolute()
+                    for candidate in status.deck_files(config)
+                    if candidate.stem == stem
+                ),
+                None,
+            )
+            if deck_path is None:
+                return None, (
+                    f"the deck {stem} that would take these cards is no longer "
+                    "one of the configured decks"
+                )
+            deck_config, _records = resolve_deck_records(deck_path)
+            source = deck_config.get("source") if isinstance(deck_config, dict) else None
+            canonical = config.normalized_file.resolve()
+            resolved = (
+                (deck_path.parent / str(source)).resolve()
+                if source
+                else canonical
+            )
+            if resolved != canonical:
+                return None, (
+                    f"the deck {stem} reads its cards from {source}, not the "
+                    "canonical collection, so a staged row cannot be shown in it "
+                    "before promotion"
+                )
+            known = {record.id for record in existing}
+            new_record_ids = tuple(
+                record.id for record in selected if record.id not in known
+            )
+            overlay = _records_text(merged)
+        except (JankiError, OSError, UnicodeError, ValueError) as exc:
+            return None, str(exc)
+        return self._offer_preview(
+            config,
+            deck_path=deck_path,
+            label="Preview these proposed cards",
+            proposed=(card_preview.ProposedText(path=canonical, text=overlay),),
+            new_record_ids=new_record_ids,
+            scope_record_ids=tuple(plan.record_ids),
+            subtitle="Proposed — nothing is promoted yet",
+            plan_fingerprint=plan.fingerprint,
+            focus_scope=deck_scope,
+        )
+
+    @staticmethod
+    def _single_prospective_owner(
+        evaluations: tuple[assignment.DeckOwnershipEvaluation, ...],
+    ) -> tuple[str | None, str | None]:
+        """The one deck every selected row lands in, or the exact reason there is none."""
+
+        stems: set[str] = set()
+        for evaluation in evaluations:
+            if evaluation.state == "unassigned":
+                return None, (
+                    f"{evaluation.record_id} would land in no configured word deck "
+                    "yet, and a card's layout comes from the deck it lands in. "
+                    "Assign these cards to a deck first."
+                )
+            if evaluation.state == "multiple":
+                return None, (
+                    f"{evaluation.record_id} would land in more than one configured "
+                    f"word deck ({', '.join(evaluation.owner_stems)})"
+                )
+            if evaluation.state != "exactly_one":
+                detail = "; ".join(evaluation.unreadable_decks) or evaluation.state
+                return None, f"the configured word decks could not be read: {detail}"
+            stems.update(evaluation.owner_stems)
+        if len(stems) != 1:
+            return None, (
+                "the selected cards would land in different decks ("
+                + ", ".join(sorted(stems))
+                + "); review one deck's cards at a time to preview them"
+            )
+        return stems.pop(), None
+
+    def _offer_deck_revision_preview(
+        self,
+        config: ProjectConfig,
+        apply_plan: revision_apply.RevisionApplyPlan,
+        *,
+        deck_scope: str = "",
+    ) -> tuple[AssistantPreviewOffer | None, str | None]:
+        """Draw a reviewed whole-deck revision from its exact intended bytes."""
+
+        if self._preview_store is None:
+            return None, None
+        deck_path = Path(apply_plan.deck_path).resolve()
+        return self._offer_preview(
+            config,
+            deck_path=deck_path,
+            label="Preview this revised deck",
+            proposed=(
+                card_preview.ProposedText(
+                    path=deck_path,
+                    text=apply_plan.intended_deck_text,
+                ),
+            ),
+            subtitle="Reviewed revision — nothing is applied yet",
+            plan_fingerprint=apply_plan.plan_fingerprint,
+            focus_scope=deck_scope,
+        )
+
+    def _offer_kanji_preview(
+        self,
+        config: ProjectConfig,
+        notes_plan: assistant_kanji_notes.AssistantKanjiNotesPlan,
+        *,
+        deck_scope: str,
+    ) -> tuple[AssistantPreviewOffer | None, str | None]:
+        """Render the prepared character batch from its own proposed bytes.
+
+        The overlay is exactly what the deck's exporter reads — the proposed
+        character-note store and the proposed deck definition — taken from the
+        plan already prepared. The refreshable dictionary caches this batch
+        would also write are not deck inputs and are not overlaid, and nothing
+        canonical is applied to draw the cards.
+        """
+
+        if self._preview_store is None:
+            # No origin is serving previews, so there is nothing to render for
+            # and no proposed bytes to gather.
+            return None, None
+        service = notes_plan.service_plan
+        deck_path = Path(service.deck_path).resolve()
+        inputs = {deck_path, config.kanji_notes_file.resolve()}
+        proposed = tuple(
+            card_preview.ProposedText(
+                path=Path(item.path).resolve(),
+                text=item.after_text,
+            )
+            for item in service.changed_files
+            if item.after_text is not None and Path(item.path).resolve() in inputs
+        )
+        return self._offer_preview(
+            config,
+            deck_path=deck_path,
+            label="Preview these character cards",
+            proposed=proposed,
+            new_record_ids=self._kanji_new_record_ids(config, service),
+            scope_record_ids=tuple(service.record_ids),
+            subtitle="Proposed — nothing is written yet",
+            plan_fingerprint=notes_plan.fingerprint,
+            focus_scope=deck_scope,
+        )
+
+    @staticmethod
+    def _kanji_new_record_ids(
+        config: ProjectConfig,
+        service: character_notes.CharacterNotesPlan,
+    ) -> tuple[str, ...]:
+        """Which selected characters are genuinely new character notes.
+
+        A new identity is one the curated note store does not have yet. That
+        is not the same question as whether the *deck* is new: an existing
+        note placed in a freshly created deck is still an existing note, and
+        saying otherwise would tell the owner they are writing cards they
+        already curated. The comparison is made against the exact before-state
+        this batch bound; if the store has moved since, Janki claims no
+        addition rather than guessing.
+        """
+
+        notes_path = config.kanji_notes_file.resolve()
+        bound = next(
+            (
+                item
+                for item in service.files
+                if Path(item.path).resolve() == notes_path
+            ),
+            None,
+        )
+        if bound is None:
+            return ()
+        try:
+            payload = notes_path.read_bytes() if notes_path.exists() else None
+            current = None if payload is None else hashlib.sha256(payload).hexdigest()
+            if current != bound.before_sha256:
+                return ()
+            existing = (
+                set()
+                if payload is None
+                else {note.id for note in kanji_notes.load_notes(notes_path).values()}
+            )
+        except (JankiError, OSError, UnicodeError, ValueError):
+            return ()
+        return tuple(
+            record_id
+            for record_id in service.record_ids
+            if record_id not in existing
+        )
 
     def _kanji_notes_description(
         self,
         plan: kanji_finish.KanjiFinishPlan,
+        *,
+        preview: AssistantPreviewOffer | None = None,
     ) -> tuple[tuple[str, ...], tuple[str, ...]]:
         """Say what the owner is about to make, in the words of the thing.
 
@@ -2370,6 +2892,12 @@ class RevisionAssistantAdapter:
             cards = note.get("cards")
             if not isinstance(cards, list) or not cards:
                 raise RevisionRefusal("A prepared character note is invalid.")
+            if preview is not None:
+                # The preview above *is* this review: it draws these same
+                # prepared sides with the deck's real template and CSS. Both
+                # would be the same content twice, and the flat copy is the
+                # weaker one.
+                continue
             for card in cards:
                 if not isinstance(card, dict):
                     raise RevisionRefusal("A prepared character note is invalid.")
@@ -3984,13 +4512,15 @@ class RevisionAssistantAdapter:
             record_ids=(record_id,),
         )
         effects, disclosures = self._card_revision_finish_description(config, plan)
+        preview, preview_problem = self._offer_card_finish_preview(config, plan)
         preparation_id = secrets.token_urlsafe(32)
         review = StagedContentFinishReview(
             preparation_id=preparation_id,
             request_fingerprint=plan.fingerprint,
             target=self._display_path(config, plan.deck_path),
             effects=effects,
-            disclosures=disclosures,
+            disclosures=(*disclosures, *self._preview_disclosure(preview_problem)),
+            preview_url=None if preview is None else preview.url,
         )
         with self._plan_lock:
             while len(self._finish_plans) >= 256:
@@ -4843,6 +5373,10 @@ class RevisionAssistantAdapter:
             for record_id in plan.revision.selected_record_ids
         )
         counts = plan.audio.example_counts
+        preview, preview_problem = self._offer_deck_revision_preview(
+            config,
+            plan.revision,
+        )
         return RevisionFinishReview(
             preparation_id=preparation_id,
             request_fingerprint=plan.fingerprint,
@@ -4859,6 +5393,8 @@ class RevisionAssistantAdapter:
             audio_provider_required=counts.provider_required,
             output_path=self._display_path(config, plan.build.output_path),
             card_count=plan.build.card_count,
+            preview_url=None if preview is None else preview.url,
+            preview_unavailable_message=preview_problem,
         )
 
     def consume_replan_and_finish(

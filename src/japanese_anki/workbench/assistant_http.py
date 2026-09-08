@@ -44,6 +44,10 @@ from japanese_anki.workbench.assistant_packages import (
     AssistantPackageError,
     LocalAssistantPackageStore,
 )
+from japanese_anki.workbench.assistant_previews import (
+    AssistantPreviewError,
+    LocalAssistantPreviewStore,
+)
 
 __all__ = [
     "AssistantHTTPServer",
@@ -155,8 +159,10 @@ class AssistantHTTPServer(LocalOnlyServer):
     style_path: str
     upload_path_prefix: str | None
     download_path_prefix: str
+    preview_path_prefix: str
     attachment_store: LocalAssistantAttachmentStore | None
     package_store: LocalAssistantPackageStore | None
+    preview_store: LocalAssistantPreviewStore | None
     deck_choices: tuple[AssistantDeckChoice, ...]
 
 
@@ -181,8 +187,15 @@ class _AssistantHandler(LocalOnlyHandler):
         content_type: str = "text/html; charset=utf-8",
         content_length: int | None = None,
         content_disposition: str | None = None,
+        content_security_policy: str | None = None,
     ) -> None:
-        """Use no-referrer on this third-party-script isolation origin."""
+        """Use no-referrer on this third-party-script isolation origin.
+
+        ``content_security_policy`` overrides the shell policy for exactly one
+        response. A rendered card preview ships the policy its own bytes were
+        built for; the ChatKit shell's policy is never widened to accommodate
+        it.
+        """
 
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -195,7 +208,10 @@ class _AssistantHandler(LocalOnlyHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        self.send_header("Content-Security-Policy", self.content_security_policy)
+        self.send_header(
+            "Content-Security-Policy",
+            content_security_policy or self.content_security_policy,
+        )
         self.send_header("Connection", "close")
         self.end_headers()
         self.close_connection = True
@@ -216,8 +232,36 @@ class _AssistantHandler(LocalOnlyHandler):
             self._send(200, _stylesheet(), content_type="text/css; charset=utf-8")
         elif self.path.startswith(self.server.download_path_prefix):
             self._send_package(self.path.removeprefix(self.server.download_path_prefix))
+        elif self.path.startswith(self.server.preview_path_prefix):
+            self._send_preview(self.path.removeprefix(self.server.preview_path_prefix))
         else:
             self._error(404, "This assistant route does not exist.")
+
+    def _send_preview(self, token: str) -> None:
+        """Serve one retained preview document under its own exact policy.
+
+        This is a read. It consumes no capability, writes no receipt, and
+        touches no repository file: the bytes were rendered before the link
+        existed and are served back unchanged.
+        """
+
+        store = self.server.preview_store
+        if store is None or not token or not _TOKEN.fullmatch(token):
+            self._error(404, "This assistant route does not exist.")
+            return
+        try:
+            snapshot = store.read(token)
+        except AssistantPreviewError as error:
+            self._error(409, str(error))
+            return
+        self._start_response(
+            200,
+            content_type="text/html; charset=utf-8",
+            content_length=len(snapshot.html),
+            content_security_policy=snapshot.content_security_policy,
+        )
+        self.wfile.write(snapshot.html)
+        self.close_connection = True
 
     def _send_package(self, token: str) -> None:
         """Serve only the exact package a complete finish receipt still proves."""
@@ -738,6 +782,7 @@ def create_assistant_sidecar(
         root = f"/{token}/"
         upload_path_prefix = f"{root}attachments/" if inbox_root is not None else None
         download_path_prefix = f"{root}packages/"
+        preview_path_prefix = f"{root}previews/"
         if upload_path_prefix is not None:
             attachment_store = LocalAssistantAttachmentStore(
                 inbox_root=inbox_root,
@@ -758,6 +803,16 @@ def create_assistant_sidecar(
                 raise TypeError(
                     "bind_package_downloads must return a package store."
                 )
+        # Card previews are held by the same adapter, for the same reason: the
+        # isolated origin may hold opaque tokens, never repository paths.
+        preview_binder = getattr(callbacks, "bind_preview_links", None)
+        preview_store: LocalAssistantPreviewStore | None = None
+        if callable(preview_binder):
+            preview_store = preview_binder(
+                f"http://{server.expected_host}{preview_path_prefix}"
+            )
+            if not isinstance(preview_store, LocalAssistantPreviewStore):
+                raise TypeError("bind_preview_links must return a preview store.")
         core = create_assistant_core(
             callbacks,
             deck_choices=deck_choices,
@@ -772,8 +827,10 @@ def create_assistant_sidecar(
         server.style_path = f"{root}application.css"
         server.upload_path_prefix = upload_path_prefix
         server.download_path_prefix = download_path_prefix
+        server.preview_path_prefix = preview_path_prefix
         server.attachment_store = attachment_store
         server.package_store = package_store
+        server.preview_store = preview_store
         server.deck_choices = tuple(deck_choices)
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:

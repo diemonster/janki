@@ -180,9 +180,13 @@ extraction, character revision and authored mnemonics are separate work.
 card type and creation/revision review is an interactive HTML preview using
 the actual proposed fields, templates and CSS, with card navigation, front/answer
 flipping and independent disclosures. Janki Assistant links or embeds that
-preview as part of the conversation. This changes presentation, not the scope
-or meaning of existing approval actions. `docs/CARD_DESIGN.md` records the
-interaction demonstrated by the Week 2 kanji preview.
+preview as part of its wizard confirmations and proposal reviews, and offers a
+read-only action for existing decks. Rendering uses the real exporters and
+Anki in a temporary collection, with exact proposed content overlaid there.
+Opening the immutable HTML snapshot makes no paid call, changes no canonical
+content and grants no approval. `janki preview` provides the same interaction
+as a standalone file. `docs/CARD_DESIGN.md` records the interaction demonstrated
+by the Week 2 kanji preview.
 
 ## Mechanisms the pipeline rests on
 

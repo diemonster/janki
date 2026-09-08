@@ -80,9 +80,12 @@ Janki asks only for missing decisions and states useful defaults.
 1. **Targets and destination:** the owner names the characters and a compatible
    character deck, or a name for a new one. Recognition is the default.
 2. **Preparation and preview:** janki acquires requested missing dictionary
-   facts into its private cache, then shows the actual proposed note content,
-   directions, count and destination. No canonical data changes during this
-   preparation.
+   facts into its private cache, then offers **Preview these cards** directly
+   in the conversation. The interactive HTML shows the actual proposed cards,
+   directions and count, with question/answer flipping and separate disclosures.
+   The plan names the destination. No canonical data changes during this
+   preparation, and rendering the preview makes no further network or model
+   call.
 3. **One confirmation:** one exact plan covers saving reference facts and
    character notes, creating a compatible deck when needed, and building it.
 4. **Finish in the thread:** progress, interruption recovery and the completed

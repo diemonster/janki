@@ -176,6 +176,21 @@ when needed, and build the download. Progress and interruption recovery stay in
 the thread. Dictionary preparation makes no paid card-writing call; ordinary
 Assistant messages still use the configured conversational provider.
 
+The wizard's **Preview these cards** link opens an interactive HTML snapshot
+of the proposed cards before you confirm. Select a card, use **Show Answer**,
+and open its disclosures just as you would while studying. You can also ask
+Janki to “Preview this deck” or preview selected cards in an existing deck.
+Vocabulary, kanji, grammar-pattern and conjugation decks use their actual Anki
+templates and available media. Generating and opening a preview runs locally;
+it makes no additional model or audio call and does not accept the proposal.
+
+The same preview accompanies staged-card and revision reviews once a study
+deck is assigned and the proposed content is available. Links belong to the
+running Assistant session; older previews may expire. For a standalone file, run
+`janki preview data/decks/201-week-2.yaml`; it writes into `dist/` by default.
+The renderer uses Anki's core library without opening the Anki app. Setup and
+the `[assistant]` extra include it; a minimal install can add `[preview]`.
+
 Recognition asks for the character's core meaning. **Show Answer** reveals
 meanings, strokes, common reading examples and source-labelled JPDB
 percentages. Additional readings have their own caret on the answer. Character
@@ -394,7 +409,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki validate [PATH]` | Check records, decks, or a staging file |
 | `janki build [DECK]` | Build one deck, or `--all` |
 | `janki build --receipt ID` | Resume the workbench's exact finish batch and build every complete owner deck it touches |
-| `janki preview DECK` | A browser preview, no Anki needed |
+| `janki preview DECK` | Interactive HTML of the actual cards; uses the `[preview]` extra, no Anki app needed |
 | `janki status` | Records, ledger, what is missing |
 | `janki operations` | Paid calls that block spending or need cleanup. `--show-reply ID` writes a complete reply byte-for-byte or a frame-preserving JSON view of an incomplete stream; `--end ID` settles one that will never finish and adopts its sole valid crash-extension frame; an exact provider rerun may still seal already-durable terminal frames without redispatch. `--forget ID` records the final decision, unblocks spending, and retires still-bound exact recovery names without adopting a replaced pending namespace. Uncommitted replies or frames from a possibly sent call require `--force`. |
 | `janki refresh` | enrich → audio → build, in order. The jpdb-backed
