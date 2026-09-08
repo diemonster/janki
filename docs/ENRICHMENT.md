@@ -274,6 +274,7 @@ tokens.
 
 ```toml
 [ai]
+extract_provider = "claude-code"
 extract_model = "claude-opus-5"
 enrich_provider = "anthropic"      # or "codex" for immediate --ai
 enrich_model = "claude-opus-5"

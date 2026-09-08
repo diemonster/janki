@@ -1,13 +1,19 @@
 """Suite-wide guards.
 
-Two rules, both about the machine rather than the code: **no test touches the
-developer's real Anki collection**, and **no test opens a billed API client.**
+Three rules, all about the machine rather than the code: **no test touches the
+developer's real Anki collection**, **no test opens a billed API client**, and
+**no test runs the Claude CLI installed on this machine.**
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
 import shutil
+import subprocess
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -98,6 +104,143 @@ def _no_billed_client(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRe
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+# --- no live Claude CLI -------------------------------------------------------
+#
+# The API guard above catches a billed *API* client. It cannot see the other
+# paid path: the subscription transport spends the owner's Claude Pro/Max
+# allowance by spawning the `claude` binary installed on this machine, and it
+# reaches that binary through `subprocess`, not through `claude_client`.
+#
+# That path is now a *default*. `[ai] extract_provider` defaults to
+# `claude-code`, so an extraction fixture that fakes `claude_client.parse_call`
+# and says nothing about the provider no longer fakes the path its code takes —
+# it dispatches a real content call. This is the same shape of failure the API
+# guard exists for, one transport along, and the same argument applies: the test
+# that breaks when a default moves is one nobody edited, so a convention cannot
+# catch it and this can.
+
+#: The real constructor, captured once at import so a guarded test cannot lose
+#: it. Patching `subprocess.Popen.__init__` rather than `subprocess.Popen` is
+#: deliberate: `application/revision_provider.py` binds `spawn=subprocess.Popen`
+#: as a *function default*, which is evaluated at def time, so rebinding the
+#: module attribute leaves that dispatch seam pointing at the real class.
+_REAL_POPEN_INIT = subprocess.Popen.__init__
+
+
+def _installed_claude() -> frozenset[Path]:
+    """This machine's real `claude`, by every path that reaches it.
+
+    Both the name on PATH and what it resolves to: an install is version-named
+    and reached through a symlink whose target may be called something else
+    entirely, so neither path alone identifies it.
+    """
+    found = shutil.which("claude")
+    if not found:
+        return frozenset()
+    launcher = Path(found)
+    with contextlib.suppress(OSError):  # resolve() is total on this platform
+        return frozenset({launcher, launcher.resolve()})
+    return frozenset({launcher})
+
+
+#: Resolved once, at import. Tests that exercise the guard replace it with a
+#: synthetic installation so the suite behaves the same on a machine that has
+#: the CLI and one that does not.
+INSTALLED_CLAUDE = _installed_claude()
+
+
+def _programs(args: Any, executable: Any) -> Iterator[str]:
+    """Every string this `Popen` call could name a program with."""
+    if executable is not None:
+        yield os.fsdecode(executable)
+    if isinstance(args, str | bytes | os.PathLike):
+        text = os.fsdecode(args)
+        words = text.split()
+        yield words[0] if words else text
+        return
+    try:
+        first = next(iter(args))
+    except (TypeError, StopIteration):
+        return
+    yield os.fsdecode(first)
+
+
+def names_the_installed_claude_cli(
+    args: Any, executable: Any = None, env: Any = None
+) -> str | None:
+    """The program this call would run, when that program is the real CLI.
+
+    The question is not what the program is *called* — a bare `claude` says
+    nothing about where it goes, an install's real binary is often not called
+    `claude` at all, and a fixture's fake is called exactly that. It is whether
+    the file this call would execute is the file `shutil.which` found. So
+    resolve the call the way the OS will: a bare name through PATH, then
+    symlinks, and compare against the installation.
+    """
+    path = None
+    if env is not None:
+        try:
+            path = env.get("PATH")
+        except AttributeError:
+            path = None
+    if path is None:
+        path = os.environ.get("PATH")
+    for program in _programs(args, executable):
+        if os.path.dirname(program):
+            target: str | None = program
+        else:
+            target = shutil.which(program, path=path)
+            if target is None:
+                # Unresolvable here, but PATH at exec time is not this PATH.
+                # A bare `claude` that proves to be nothing is still refused;
+                # anything else would fail with FileNotFoundError regardless.
+                if Path(program).name == "claude":
+                    return program
+                continue
+        candidates = {Path(target)}
+        with contextlib.suppress(OSError):  # resolve() is total on this platform
+            candidates.add(Path(target).resolve())
+        if candidates & INSTALLED_CLAUDE:
+            return program
+    return None
+
+
+@pytest.fixture(autouse=True)
+def _no_live_claude_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse to spawn the Claude CLI this machine has installed.
+
+    A test that injects a fake runner or a fake `spawn` never reaches here, and
+    neither does one whose fixture builds its own `claude`. What this catches
+    is a real dispatch — including the refusal paths, which must be exercised
+    against a fake rather than by starting the CLI to watch it decline.
+
+    There is no opt-out marker. No test in this suite is authorized to spend
+    the owner's subscription allowance, so an escape hatch here would be the
+    only thing between a typo and a billed content call.
+    """
+
+    def guarded_init(self: Any, args: Any = (), *rest: Any, **kwargs: Any) -> None:
+        program = names_the_installed_claude_cli(
+            args, kwargs.get("executable"), kwargs.get("env")
+        )
+        if program is not None:
+            raise AssertionError(
+                f"This test spawned the installed Claude CLI ({program}). That "
+                "spends the owner's subscription allowance on a real content "
+                "call. The subscription transport is the *default* now, so a "
+                "fixture that fakes only claude_client.parse_call no longer "
+                "covers the path its code takes: set [ai] extract_provider "
+                "(or revise_provider) to 'anthropic-api' in the fixture's "
+                "janki.toml if this test means to exercise the API path, or "
+                "inject the fake transport the subscription path takes — a "
+                "runner= (FakeClaudeRunner) or spawn= — if it means to "
+                "exercise that one."
+            )
+        _REAL_POPEN_INIT(self, args, *rest, **kwargs)
+
+    monkeypatch.setattr(subprocess.Popen, "__init__", guarded_init)
 
 
 def seed_prompts(root: Path) -> Path:

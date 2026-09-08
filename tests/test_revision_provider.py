@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
 import errno
 import hashlib
 import io
 import json
 import subprocess
+import sys
 import threading
+import time
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -34,6 +37,60 @@ BLOCKS = (
 )
 USER_TURN = "Use 食べられる。"
 MODEL = "claude-opus-5"
+#: The exact prepared-input block shape input preparation hands this transport.
+#: The bytes are deliberately not a valid PDF or PNG: this module transports
+#: whatever preparation already proved, and re-deriving that here would test the
+#: fixture instead of the wire.
+PDF_DATA = base64.b64encode(b"%PDF-1.7 GENKI page \xe3\x81\x82").decode("ascii")
+PNG_DATA = base64.b64encode(b"\x89PNG\r\n\x1a\nscan").decode("ascii")
+JPEG_DATA = base64.b64encode(b"\xff\xd8\xff\xe0photo").decode("ascii")
+
+
+def _document_block(data: str = PDF_DATA) -> dict[str, Any]:
+    return {
+        "type": "document",
+        "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": data,
+        },
+    }
+
+
+def _image_block(media_type: str, data: str) -> dict[str, Any]:
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": media_type, "data": data},
+    }
+
+
+def _input_blocks() -> list[dict[str, Any]]:
+    return [
+        _document_block(),
+        _image_block("image/png", PNG_DATA),
+        _image_block("image/jpeg", JPEG_DATA),
+    ]
+
+
+def _expected_frame(
+    blocks: list[dict[str, Any]], user_turn: str = USER_TURN
+) -> bytes:
+    """One canonical stream-json user message, exactly one newline long."""
+    return (
+        json.dumps(
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [*blocks, {"type": "text", "text": user_turn}],
+                },
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
 #: One real ``claude -p --output-format stream-json`` capture, redacted. Frame
 #: order, event shapes, and the gap between the streamed prose and the final
 #: structured answer are all the CLI's, not this suite's guess at them.
@@ -247,8 +304,10 @@ def _cli_plan(
     env: Mapping[str, str] | None = None,
     effort: str = "medium",
     schema: Any = Answer,
+    input_blocks: Any = None,
 ) -> tuple[revision_provider.RevisionProviderPlan, FakeClaudeRunner]:
     used = runner or FakeClaudeRunner()
+    attachments = {} if input_blocks is None else {"input_blocks": input_blocks}
     plan = revision_provider.plan_provider(
         "claude-code",
         model=MODEL,
@@ -261,6 +320,7 @@ def _cli_plan(
         env=env or {"PATH": "/bin", "BENIGN": "kept"},
         runner=used,
         which=_which,
+        **attachments,
     )
     return plan, used
 
@@ -857,6 +917,148 @@ def test_claude_prompt_write_failure_still_closes_stdin() -> None:
     assert process.stdin.closed
 
 
+#: A child that writes its whole reply from a thread, waits a bounded moment for
+#: that write to land, and then force-exits zero whatever is left unwritten.
+#: That is the shape of the installed CLI's own shutdown: it writes stdout
+#: without awaiting backpressure, drains for a capped interval, and exits with
+#: the requested code even when the drain timed out. Nothing here is a model,
+#: a network call, or a Node dependency — it is stdlib Python over a real pipe.
+BOUNDED_DRAIN_CHILD = """
+import os, sys, threading
+
+blob = open(sys.argv[1], "rb").read()
+
+
+def pump():
+    view = memoryview(blob)
+    while view:
+        view = view[os.write(1, view[:65536]):]
+
+
+writer = threading.Thread(target=pump, daemon=True)
+writer.start()
+writer.join(float(sys.argv[2]))
+os._exit(0)
+"""
+
+
+def _synthetic_ndjson(frames: int) -> bytes:
+    """Synthetic ASCII NDJSON far larger than any pipe buffer, plus a result.
+
+    The prose frames are the shape the preview decoder reads, so this proves
+    frame order and preview order on the same bytes it proves the byte count on.
+    """
+    lines = [
+        json.dumps({"type": "system", "subtype": "init"}),
+        json.dumps(
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {"type": "text", "text": ""},
+                },
+            }
+        ),
+        *(
+            json.dumps(
+                {
+                    "type": "stream_event",
+                    "event": {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": f"chunk-{number} "},
+                    },
+                }
+            )
+            for number in range(2)
+        ),
+        *(
+            json.dumps({"type": "filler", "index": number, "text": "A" * 96})
+            for number in range(frames)
+        ),
+        json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "structured_output": {"answer": "done"},
+            }
+        ),
+    ]
+    return "".join(line + "\n" for line in lines).encode("ascii")
+
+
+def test_claude_stream_drains_a_real_pipe_while_a_frame_is_made_durable(
+    tmp_path: Path,
+) -> None:
+    """A slow durable frame must not cost the reply bytes it was paid for.
+
+    The CLI writes its stream without waiting for anyone to read it and drains
+    only briefly before force-exiting zero, so a reader that stops reading
+    while it makes one frame durable loses everything past the pipe buffer —
+    and the loss arrives as a clean exit with a truncated capture, which is
+    indistinguishable from a short reply. Stdout is therefore drained
+    independently of what the frame callback is doing; here the very first
+    callback deliberately blocks until the child is gone, and every byte the
+    child wrote still arrives, in order, terminal frame included.
+    """
+    payload = _synthetic_ndjson(24000)
+    assert len(payload) > 2 * 1024 * 1024
+    reply = tmp_path / "reply.ndjson"
+    reply.write_bytes(payload)
+    process = subprocess.Popen(  # noqa: S603 - stdlib child, no shell, no network
+        [sys.executable, "-c", BOUNDED_DRAIN_CHILD, str(reply), "1.0"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        cwd=tmp_path,
+    )
+    order: list[tuple[str, str]] = []
+    frames: list[str] = []
+    exited: list[bool] = []
+
+    def durable(payload_text: str) -> None:
+        if not frames:
+            # The blocked fsync this exists to survive: nothing is read while
+            # it runs. The failsafe only bounds a hang; the child's own drain
+            # budget is what ends the wait.
+            deadline = time.monotonic() + 30.0
+            while process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.005)
+            exited.append(process.poll() is not None)
+        frames.append(payload_text)
+        order.append(("frame", payload_text))
+
+    threads = threading.active_count()
+    returncode, chunks, unreadable = revision_provider._stream_claude_reply(
+        process,
+        b"{}\n",
+        frame=durable,
+        preview=lambda text: order.append(("preview", text)),
+    )
+
+    assert exited == [True]
+    assert unreadable is None
+    assert returncode == 0
+    assert b"".join(chunks) == payload
+    assert chunks == payload.splitlines(keepends=True)
+    assert "".join(frames).encode("utf-8") == payload
+    assert json.loads(frames[-1])["type"] == "result"
+    # Every preview is the frame that immediately preceded it: nothing is read
+    # out of the queue before its own durable callback returned.
+    for index, (kind, _text) in enumerate(order):
+        if kind == "preview":
+            assert order[index - 1][0] == "frame"
+    assert [text for kind, text in order if kind == "preview"] == [
+        "chunk-0 ",
+        "chunk-1 ",
+    ]
+    assert process.stdout.closed
+    assert process.stdin.closed
+    assert threading.active_count() == threads
+
+
 def test_claude_preview_receives_only_first_text_block_deltas() -> None:
     """The live preview is the streamed prose, and nothing else on the wire.
 
@@ -1364,3 +1566,399 @@ def test_api_reconstruction_uses_the_stored_thinking_contract() -> None:
     )
 
     assert recovered.transport["thinking"] == {"type": "disabled"}
+
+
+SUCCESS_REPLY = (
+    json.dumps(
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "structured_output": {"examples": ["食べられます。"]},
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    + b"\n"
+)
+
+
+def _attachment_dispatch(
+    blocks: list[dict[str, Any]],
+    *,
+    reply: bytes = SUCCESS_REPLY,
+) -> tuple[
+    revision_provider.RevisionProviderPlan,
+    FakeClaudeRunner,
+    revision_provider.RevisionProvider,
+    revision_provider.PreparedRevisionProvider,
+]:
+    plan, runner = _cli_plan(FakeClaudeRunner(reply=reply), input_blocks=blocks)
+    provider = revision_provider.provider_for("claude-code")
+    prepared = provider.prepare(plan, runner=runner, which=_which)
+    return plan, runner, provider, prepared
+
+
+def test_claude_sends_prepared_input_blocks_as_one_stream_json_stdin_frame() -> None:
+    """The attachment turn is one canonical frame, blocks first and text last.
+
+    The CLI reads a document or image only from a stream-json user message, so
+    the exact base64 preparation produced has to reach stdin unaltered and in
+    order — anything else silently sends a text-only turn the owner did not
+    plan, at full subscription cost.
+    """
+    blocks = _input_blocks()
+    _, runner, provider, prepared = _attachment_dispatch(blocks)
+    captured: list[bytes] = []
+
+    result = provider.dispatch(prepared, capture=captured.append, spawn=runner.spawn)
+
+    assert result.parsed == Answer(examples=["食べられます。"])
+    assert captured == [SUCCESS_REPLY]
+    command, kwargs = runner.spawned[-1]
+    written = runner.processes[-1].stdin.written
+    assert written == _expected_frame(blocks)
+    assert written.count(b"\n") == 1 and written.endswith(b"\n")
+    assert runner.processes[-1].stdin.closed
+    # The exact bytes preparation produced, never re-encoded on the way through.
+    for data in (PDF_DATA, PNG_DATA, JPEG_DATA):
+        assert data.encode("ascii") in written
+    frame = json.loads(written)
+    assert frame["type"] == "user"
+    assert frame["message"]["role"] == "user"
+    assert frame["message"]["content"] == [*blocks, {"type": "text", "text": USER_TURN}]
+    assert command[command.index("--input-format") + 1] == "stream-json"
+    assert command[command.index("--output-format") + 1] == "stream-json"
+    # ``-p`` is already the print flag; a second one would be a duplicate.
+    assert command.count("-p") == 1
+    assert "--print" not in command
+    assert command[command.index("--tools") + 1] == ""
+    assert command[command.index("--permission-mode") + 1] == "dontAsk"
+    assert "--safe-mode" in command
+    assert "input" not in kwargs and "shell" not in kwargs
+    # The child still runs in a fresh empty directory: FakeClaudeRunner.spawn
+    # asserts that, and the plan says so.
+    assert kwargs["cwd"] != ""
+
+
+def test_claude_text_only_turn_keeps_its_exact_plain_stdin_and_command() -> None:
+    """No attachment means no new flag and no framing — the same bytes as before."""
+    plain, _ = _cli_plan()
+    empty, runner = _cli_plan(FakeClaudeRunner(reply=SUCCESS_REPLY), input_blocks=[])
+
+    assert empty.request_bytes == plain.request_bytes
+    assert empty.request_fingerprint == plain.request_fingerprint
+    assert empty.input_blocks == ()
+    assert plain.input_blocks == ()
+    assert "--input-format" not in tuple(plain.transport["argv"])
+    assert json.loads(plain.request_bytes)["stdin_utf8"] == USER_TURN
+
+    provider = revision_provider.provider_for("claude-code")
+    prepared = provider.prepare(empty, runner=runner, which=_which)
+    provider.dispatch(prepared, capture=lambda _raw: None, spawn=runner.spawn)
+
+    assert runner.processes[-1].stdin.written == USER_TURN.encode("utf-8")
+    assert "--input-format" not in runner.spawned[-1][0]
+
+
+def test_input_blocks_are_frozen_and_bound_into_the_request_fingerprint() -> None:
+    """A caller that keeps its blocks cannot edit a plan already rendered.
+
+    The plan is what the owner confirms and what the fingerprint covers, so the
+    source bytes it will send must stop being the caller's to change — and two
+    different documents must never look like the same paid request.
+    """
+    blocks = _input_blocks()
+    plan, _ = _cli_plan(input_blocks=blocks)
+    before = plan.request_bytes
+
+    blocks[0]["source"]["data"] = base64.b64encode(b"swapped").decode("ascii")
+    blocks.append(_image_block("image/png", PNG_DATA))
+
+    assert plan.request_bytes == before
+    assert json.loads(plan.request_bytes)["stdin_utf8"] == _expected_frame(
+        _input_blocks()
+    ).decode("utf-8")
+    assert len(plan.input_blocks) == 3
+    assert plan.input_blocks[0]["source"]["data"] == PDF_DATA
+    with pytest.raises(TypeError):
+        plan.input_blocks[0]["source"]["data"] = "other"  # type: ignore[index]
+
+    other, _ = _cli_plan(
+        input_blocks=[_document_block(base64.b64encode(b"other pages").decode("ascii"))]
+    )
+    text_only, _ = _cli_plan()
+    assert (
+        len(
+            {
+                plan.request_fingerprint,
+                other.request_fingerprint,
+                text_only.request_fingerprint,
+            }
+        )
+        == 3
+    )
+
+
+def test_stored_attachment_manifest_only_reconstructs_with_its_own_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recovery replays the stored request or refuses, and never probes to do it.
+
+    The manifest keeps its existing field set because the request bytes already
+    carry the frame; the blocks are supplied back in. Blocks that are missing or
+    different rebuild a different stdin, which is a different call than the one
+    that was paid for.
+    """
+    blocks = _input_blocks()
+    plan, _ = _cli_plan(input_blocks=blocks)
+    manifest = json.loads(json.dumps(plan.persistent_manifest()))
+    assert set(manifest) == set(revision_provider.PERSISTENT_MANIFEST_KEYS)
+    monkeypatch.setattr(
+        revision_provider,
+        "_probe_claude",
+        lambda **_kwargs: pytest.fail("recovery probed the CLI"),
+    )
+    monkeypatch.setattr(
+        revision_provider,
+        "_resolve_claude",
+        lambda *_args: pytest.fail("recovery looked for an executable"),
+    )
+    monkeypatch.setattr(
+        claude_client,
+        "prepare_paid_client",
+        lambda *_args, **_kwargs: pytest.fail("recovery built an API client"),
+    )
+
+    def recover(**changes: Any) -> revision_provider.RevisionProviderPlan:
+        return revision_provider.provider_plan_from_manifest(
+            manifest,
+            model=MODEL,
+            style_guide="Style\n",
+            task_template="Task\n",
+            system_blocks=BLOCKS,
+            user_turn=changes.pop("user_turn", USER_TURN),
+            schema=Answer,
+            **changes,
+        )
+
+    recovered = recover(input_blocks=blocks)
+    assert recovered.request_bytes == plan.request_bytes
+    assert recovered.request_fingerprint == plan.request_fingerprint
+    assert recovered.input_blocks == plan.input_blocks
+
+    with pytest.raises(revision_provider.RevisionProviderError, match="prompt channels"):
+        recover()
+    with pytest.raises(revision_provider.RevisionProviderError, match="prompt channels"):
+        recover(input_blocks=blocks[:2])
+    with pytest.raises(revision_provider.RevisionProviderError, match="prompt channels"):
+        recover(
+            input_blocks=[
+                _document_block(base64.b64encode(b"other pages").decode("ascii")),
+                *blocks[1:],
+            ]
+        )
+    with pytest.raises(revision_provider.RevisionProviderError, match="prompt channels"):
+        recover(input_blocks=blocks, user_turn="A different unconfirmed instruction")
+
+
+def test_replaced_plan_input_blocks_cannot_escape_the_bound_request_bytes() -> None:
+    """A plan whose blocks were swapped after rendering is refused before spawn."""
+    blocks = _input_blocks()
+    plan, runner = _cli_plan(input_blocks=blocks)
+    provider = revision_provider.provider_for("claude-code")
+
+    forged = replace(
+        plan,
+        input_blocks=(_document_block(base64.b64encode(b"forged").decode("ascii")),),
+    )
+    with pytest.raises(revision_provider.RevisionProviderError, match="prompt channels"):
+        provider.prepare(forged, runner=runner, which=_which)
+
+    stripped = replace(plan, input_blocks=())
+    with pytest.raises(revision_provider.RevisionProviderError, match="prompt channels"):
+        provider.prepare(stripped, runner=runner, which=_which)
+    assert runner.spawned == []
+
+
+def test_attachment_call_refused_without_subscription_never_falls_back_to_the_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Attachments do not widen the transport: no subscription, no call at all."""
+    for name in ("prepare_paid_client", "parse_call", "load_anthropic"):
+        monkeypatch.setattr(
+            claude_client,
+            name,
+            lambda *_args, **_kwargs: pytest.fail("an attachment reached the API"),
+        )
+    runner = FakeClaudeRunner(auth=_auth(subscriptionType="team"), reply=SUCCESS_REPLY)
+
+    with pytest.raises(revision_provider.RevisionProviderError, match="Pro or Max"):
+        _cli_plan(runner, input_blocks=_input_blocks())
+
+    assert runner.spawned == []
+    assert runner.processes == []
+
+
+def test_api_transport_refuses_input_blocks_before_any_client_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The API plan has nowhere to put a prepared block, so it refuses first.
+
+    Refusing before the schema, the request body, or the client means an
+    attachment can never be silently dropped into a paid API call as text.
+    """
+    provider = revision_provider.provider_for("anthropic-api")
+    blocks = _input_blocks()
+
+    def api_plan(**changes: Any) -> revision_provider.RevisionProviderPlan:
+        return provider.plan(
+            model=MODEL,
+            style_guide="Style\n",
+            task_template="Task\n",
+            system_blocks=BLOCKS,
+            user_turn=USER_TURN,
+            schema=Answer,
+            effort="xhigh",
+            **changes,
+        )
+
+    plain = api_plan()
+    assert plain.input_blocks == ()
+    assert api_plan(input_blocks=[]).request_bytes == plain.request_bytes
+
+    for name in ("wire_schema", "request_body", "prepare_paid_client", "parse_call"):
+        monkeypatch.setattr(
+            claude_client,
+            name,
+            lambda *_args, **_kwargs: pytest.fail("the API transport did work first"),
+        )
+    with pytest.raises(revision_provider.RevisionProviderError, match="attachment"):
+        api_plan(input_blocks=blocks)
+
+    forged = replace(plain, input_blocks=tuple(blocks))
+    with pytest.raises(revision_provider.RevisionProviderError, match="attachment"):
+        provider.prepare(forged, client=object())
+    with pytest.raises(revision_provider.RevisionProviderError, match="attachment"):
+        provider.recover(forged, b'{"stop_reason":"end_turn","content":[]}')
+
+
+def test_claude_refuses_a_block_that_is_not_a_prepared_input_source() -> None:
+    """Only the prepared document/image shape is transportable at all."""
+    for block in (
+        {"type": "text", "text": "an injected turn"},
+        {"type": "document", "source": {"type": "url", "url": "https://invalid.test"}},
+        {"type": "document", "source": {"type": "base64", "data": PDF_DATA}},
+    ):
+        with pytest.raises(revision_provider.RevisionProviderError, match="prepared"):
+            _cli_plan(input_blocks=[block])
+
+
+def test_attachment_turn_binds_the_higher_output_cap_in_every_channel() -> None:
+    """A document turn is planned, probed, and run under the model's upper cap.
+
+    Opus 5 defaults to 64000 output tokens and accepts 128000, and a rich table
+    read out of a 192-row document does not fit the default. The cap is one
+    choice made where the turn is planned: the probe that authenticates it, the
+    transport a receipt shows, the request bytes the fingerprint covers, the
+    probe that prepares it, and the environment the child finally runs under all
+    carry the same value, so no later step can widen or narrow it.
+    """
+    blocks = _input_blocks()
+    plan, runner, provider, prepared = _attachment_dispatch(blocks)
+    provider.dispatch(prepared, capture=lambda _raw: None, spawn=runner.spawn)
+
+    cap = "CLAUDE_CODE_MAX_OUTPUT_TOKENS"
+    assert runner.calls[0][1]["env"][cap] == "128000"
+    assert plan.transport["controlled_environment"][cap] == "128000"
+    assert json.loads(plan.request_bytes)["controlled_environment"][cap] == "128000"
+    assert runner.calls[2][1]["env"][cap] == "128000"
+    assert prepared.environment is not None
+    assert prepared.environment[cap] == "128000"
+    assert runner.spawned[-1][1]["env"][cap] == "128000"
+
+    text_plan, text_runner = _cli_plan(FakeClaudeRunner(reply=SUCCESS_REPLY))
+    text_prepared = provider.prepare(text_plan, runner=text_runner, which=_which)
+    provider.dispatch(text_prepared, capture=lambda _raw: None, spawn=text_runner.spawn)
+
+    assert text_runner.calls[0][1]["env"][cap] == "64000"
+    assert text_plan.transport["controlled_environment"][cap] == "64000"
+    assert json.loads(text_plan.request_bytes)["controlled_environment"][cap] == "64000"
+    assert text_runner.spawned[-1][1]["env"][cap] == "64000"
+    assert plan.request_fingerprint != text_plan.request_fingerprint
+
+
+def test_stored_output_cap_must_agree_with_the_turn_that_was_planned() -> None:
+    """A manifest whose cap does not match its own turn describes no real call.
+
+    The cap follows from the turn, not from an environment somebody supplies
+    later, so a re-signed manifest that keeps the attachment frame but stores
+    the text cap is refused rather than run under it.
+    """
+    blocks = _input_blocks()
+    plan, _ = _cli_plan(input_blocks=blocks)
+    manifest = json.loads(json.dumps(plan.persistent_manifest()))
+    cap = "CLAUDE_CODE_MAX_OUTPUT_TOKENS"
+    assert manifest["transport"]["controlled_environment"][cap] == "128000"
+    manifest["transport"]["controlled_environment"][cap] = "64000"
+    request = json.loads(manifest["request_bytes_utf8"])
+    request["controlled_environment"][cap] = "64000"
+    manifest["request_bytes_utf8"] = revision_provider._canonical_json(request)
+    manifest["request_bytes_sha256"] = hashlib.sha256(
+        manifest["request_bytes_utf8"].encode("utf-8")
+    ).hexdigest()
+    manifest["request_fingerprint"] = revision_provider._request_identity(
+        provider=manifest["provider"],
+        billing_class=manifest["billing_class"],
+        auth=manifest["auth"],
+        model=manifest["model"],
+        transport=manifest["transport"],
+        request_bytes=manifest["request_bytes_utf8"].encode("utf-8"),
+        response_schema_fingerprint=manifest["response_schema_fingerprint"],
+    )
+
+    with pytest.raises(
+        revision_provider.RevisionProviderError, match="bound model, prompts"
+    ):
+        revision_provider.provider_plan_from_manifest(
+            manifest,
+            model=MODEL,
+            style_guide="Style\n",
+            task_template="Task\n",
+            system_blocks=BLOCKS,
+            user_turn=USER_TURN,
+            schema=Answer,
+            input_blocks=blocks,
+        )
+
+
+def test_attachment_reply_is_captured_before_it_is_read(
+    tmp_path: Path,
+) -> None:
+    """An attachment turn is paid for whatever it replies, so bytes come first.
+
+    The stream is spooled frame by frame and captured whole before any JSON or
+    schema decoding refuses it — the same lifecycle a text turn already has.
+    """
+    del tmp_path
+    unreadable = b'{"type":"result","subtype":"success"\n'
+    mismatched = (
+        b'{"type":"result","subtype":"success","is_error":false,'
+        b'"structured_output":{"examples":"wrong"}}\n'
+    )
+    for reply in (unreadable, mismatched):
+        blocks = _input_blocks()
+        _, runner, provider, prepared = _attachment_dispatch(blocks, reply=reply)
+        captured: list[bytes] = []
+        frames: list[str] = []
+
+        with pytest.raises(revision_provider.RevisionProviderError):
+            provider.dispatch(
+                prepared,
+                capture=captured.append,
+                spawn=runner.spawn,
+                frame=frames.append,
+            )
+
+        assert captured == [reply]
+        assert "".join(frames).encode("utf-8") == reply
+        assert runner.processes[-1].stdin.written == _expected_frame(blocks)

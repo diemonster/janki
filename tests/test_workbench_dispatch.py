@@ -345,6 +345,7 @@ def _dispatch_expectation(
     source = session.source_path("lesson.pdf")
     assert source is not None
     return ExtractionDispatchExpectation(
+        provider="anthropic-api",
         source=source,
         model=consent.model,
         mode=consent.mode,

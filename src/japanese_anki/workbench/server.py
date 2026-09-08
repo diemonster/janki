@@ -3278,6 +3278,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         expected = ExtractionDispatchExpectation(
             source=source,
+            provider=action.provider,
             model=action.model,
             mode=action.mode,
             source_sha256=action.source_sha256,

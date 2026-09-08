@@ -250,6 +250,20 @@ def candidate_schema() -> Any:
                 "candidate."
             ),
         )
+        conjugations: dict[str, str] = Field(
+            default_factory=dict,
+            description=(
+                "Source conjugation columns: each printed column label to that "
+                "row's supplied form, in printed order. Empty when none."
+            ),
+        )
+        source_chapters: list[str] = Field(
+            default_factory=list,
+            description=(
+                "Chapter labels teaching this word, exactly as printed, in "
+                "printed order. Empty when none."
+            ),
+        )
 
         @model_validator(mode="after")
         def has_source_kind_evidence(self) -> Any:
@@ -372,6 +386,20 @@ def _text_fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _plain_provenance(value: Any) -> Any:
+    """Plain JSON types for a durable record.
+
+    The provider hands back read-only mappings and tuples, which describe the
+    request exactly and serialize to nothing. Converted once here so both the
+    staged provenance and the captured envelope hold the same plain shape.
+    """
+    if isinstance(value, Mapping):
+        return {str(key): _plain_provenance(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain_provenance(item) for item in value]
+    return value
+
+
 def prompt_provenance(
     prepared: PreparedInput,
     *,
@@ -381,12 +409,23 @@ def prompt_provenance(
     mode: str | None,
     known: Sequence[str] = (),
     source_sha256: str | None = None,
+    provider_plan: Any | None = None,
 ) -> dict[str, Any]:
-    """The stable inputs needed to explain a later model-output change."""
+    """The stable inputs needed to explain a later model-output change.
+
+    ``provider_plan`` is the immutable request the shared provider registry
+    planned for this source. When it is given, its identity *is* this
+    provenance's identity — provider, model, schema and request fingerprints
+    are copied from the object that will be sent rather than recomputed
+    beside it, because a provenance that describes a second, similar request
+    cannot explain the call that was actually made. Its durable manifest and
+    exact planned channels ride along so the same request can be rebuilt,
+    and its answer re-read, without re-planning from today's prompts.
+    """
     user = prompt_for(prepared.origin_path.name, known)
     schema = candidate_schema()
     wire_schema = claude_client.wire_schema(schema)
-    return {
+    provenance: dict[str, Any] = {
         "source_sha256": source_sha256 or source_fingerprint(prepared.origin_path),
         "mode": mode or "auto",
         "provider": "anthropic",
@@ -405,6 +444,30 @@ def prompt_provenance(
             schema=wire_schema,
         ),
     }
+    if provider_plan is None:
+        return provenance
+    provenance["provider"] = provider_plan.provider
+    provenance["model"] = provider_plan.model
+    # `response_schema_fingerprint` stays janki's own, computed above over the
+    # wire schema: it is what a later reader compares its current decoder
+    # against. The provider's neutral fingerprint for the same contract is
+    # kept inside the manifest, where its own validation uses it.
+    provenance["request_fingerprint"] = provider_plan.request_fingerprint
+    provenance["provider_manifest"] = _plain_provenance(
+        provider_plan.persistent_manifest()
+    )
+    # The channels the manifest alone cannot rebuild. Larger than the rest of
+    # this record — a document rides in `input_blocks` — and kept anyway: a
+    # recovery that regenerated them from today's prompt would reconstruct a
+    # different request and call it the one that was paid for.
+    provenance["provider_channels"] = _plain_provenance(
+        {
+            "system_blocks": list(provider_plan.system_blocks),
+            "user_turn": provider_plan.user_turn,
+            "input_blocks": list(provider_plan.input_blocks),
+        }
+    )
+    return provenance
 
 
 def extract_candidates(
@@ -417,6 +480,7 @@ def extract_candidates(
     known: Sequence[str] = (),
     client: Any | None = None,
     capture: Any | None = None,
+    provenance: dict[str, Any] | None = None,
 ) -> ExtractionResult:
     """The normalized response one file yields, or a stable diagnostic.
 
@@ -428,7 +492,7 @@ def extract_candidates(
     this whole command is arranged to avoid.
     """
     try:
-        parsed, stop_reason, refusal = claude_client.parse_call(
+        call = claude_client.parse_call(
             model,
             claude_client.system_blocks(style_guide, system),
             [
@@ -463,6 +527,41 @@ def extract_candidates(
             code="extract-model-call-failed",
         ) from exc
 
+    if provenance is None:
+        provenance = prompt_provenance(
+            prepared,
+            model=model,
+            style_guide=style_guide,
+            system=system,
+            mode=mode,
+            known=known,
+            source_sha256=prepared.source_sha256 or None,
+        )
+    return extraction_result_from_call(
+        call, prepared, model=model, mode=mode, provenance=provenance
+    )
+
+
+def extraction_result_from_call(
+    call: Any,
+    prepared: PreparedInput,
+    *,
+    model: str,
+    mode: str | None,
+    provenance: dict[str, Any],
+) -> ExtractionResult:
+    """The normalized result one already-paid-for answer yields.
+
+    Shared by every transport: the subscription's streamed reply, its pure
+    recovery from captured bytes, and the explicit Anthropic API call all
+    arrive here with an answer in hand. Splitting it out is what keeps them
+    one content pass — a second reader would be a second set of rules about
+    what counts as a complete answer.
+
+    ``provenance`` is passed in rather than computed, so what is written
+    beside the proposals describes the request that was actually sent.
+    """
+    parsed, stop_reason, refusal = call.parsed, call.stop_reason, call.refusal
     if stop_reason == "refusal":
         detail = ""
         if refusal is not None:
@@ -489,22 +588,11 @@ def extract_candidates(
             code="extract-response-missing",
         )
     result = normalize_response(parsed, mode, prepared.origin_path.name)
-    provenance = prompt_provenance(
-        prepared,
-        model=model,
-        style_guide=style_guide,
-        system=system,
-        mode=mode,
-        known=known,
-        source_sha256=prepared.source_sha256 or None,
-    )
     return ExtractionResult(
         candidates=result.candidates,
         source_units=result.source_units,
         model_reported_unit_count=result.model_reported_unit_count,
-        pattern_set=patterns.with_prompt_provenance(
-            result.pattern_set, provenance
-        ),
+        pattern_set=patterns.with_prompt_provenance(result.pattern_set, provenance),
     )
 
 
@@ -690,7 +778,14 @@ _PARSED_CANDIDATE_FIELDS = {
     "source_kind",
     "section",
     "ordinal",
+    "conjugations",
+    "source_chapters",
 }
+#: Fields a stored proposal may omit entirely. Candidate accounting is an
+#: immutable record of what was paid for: a proposal written before these two
+#: existed is complete as written, and both default to empty, so absence is
+#: readable rather than something to backfill or adapt.
+_OPTIONAL_PARSED_CANDIDATE_FIELDS = {"conjugations", "source_chapters"}
 _PARSED_EXAMPLE_FIELDS = {
     "japanese",
     "speech_level",
@@ -710,7 +805,24 @@ def _is_integer(value: Any, *, minimum: int | None = None) -> bool:
 
 def _is_parsed_schema_proposal(value: Any) -> bool:
     """Validate the JSON shape without loading optional AI dependencies."""
-    if not isinstance(value, Mapping) or set(value) != _PARSED_CANDIDATE_FIELDS:
+    if not isinstance(value, Mapping):
+        return False
+    present = set(value)
+    if not present <= _PARSED_CANDIDATE_FIELDS or not present >= (
+        _PARSED_CANDIDATE_FIELDS - _OPTIONAL_PARSED_CANDIDATE_FIELDS
+    ):
+        return False
+    conjugations = value.get("conjugations", {})
+    chapters = value.get("source_chapters", [])
+    if (
+        not isinstance(conjugations, Mapping)
+        or any(
+            not isinstance(label, str) or not isinstance(form, str)
+            for label, form in conjugations.items()
+        )
+        or not isinstance(chapters, list)
+        or any(not isinstance(item, str) for item in chapters)
+    ):
         return False
     text_fields = {
         "usage_notes",
@@ -1069,6 +1181,23 @@ def _raw_fields(candidate: Any, prepared: PreparedInput) -> dict[str, str]:
         value = str(getattr(candidate, name, "") or "").strip()
         if value:
             fields[name] = value
+    # The witness for what the source's own conjugation table said. The record
+    # field beside it is the canonical *display* map, and reading a staging
+    # file back through ``VocabularyRecord.from_dict`` trims its cells and
+    # drops the blank ones — established behaviour that suits a card and loses
+    # evidence. So the whole transcription is kept here as text: every printed
+    # label, every supplied value including a blank or clipped one, in printed
+    # order. Nothing is generated, sorted, or repaired on the way in.
+    conjugations = dict(getattr(candidate, "conjugations", None) or {})
+    if conjugations:
+        fields["source_conjugations"] = json.dumps(conjugations, ensure_ascii=False)
+    # The chapters the source itself printed, copied in printed order. Written
+    # only when there are some: an empty list is the ordinary case and says
+    # nothing. No tag is minted here — which labels become deck tags is a
+    # decision made later, over the exact labels this preserves.
+    chapters = list(getattr(candidate, "source_chapters", None) or [])
+    if chapters:
+        fields["source_chapters"] = json.dumps(chapters, ensure_ascii=False)
     return fields
 
 
@@ -1112,6 +1241,27 @@ def build_records(
             meanings=list(content.meanings),
             part_of_speech=str(getattr(candidate, "part_of_speech", "") or "").strip(),
             examples=list(content.examples),
+            # The columns the source printed, in the order it printed them.
+            # Deciding which forms a word *has* is reading Japanese; copying
+            # the ones a page supplies is not.
+            #
+            # ``VocabularyRecord`` has one canonical spelling for this field —
+            # labels and values trimmed, an empty cell absent — and `repairs`
+            # refuses a record that does not survive that round trip. Read the
+            # canonical spelling from the model layer that owns the rule
+            # rather than restating it here; the untouched transcription,
+            # blank and clipped cells included, stays in
+            # ``raw_fields["source_conjugations"]``.
+            conjugations=VocabularyRecord.from_dict(
+                {
+                    "id": candidate_id,
+                    "expression": expression,
+                    "reading": reading,
+                    "conjugations": dict(
+                        getattr(candidate, "conjugations", None) or {}
+                    ),
+                }
+            ).conjugations,
             usage_notes=content.usage_notes,
             source=SourceReference(
                 type="extract",

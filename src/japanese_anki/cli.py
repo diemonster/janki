@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import json
 import shlex
 import sys
@@ -46,6 +47,8 @@ from japanese_anki.application.extraction import (
     complete_extraction,
     durable_inbox_root,
     plan_extraction,
+    prepare_extraction_transport,
+    run_extraction_call,
 )
 from japanese_anki.application.finish import resolve_finish_scope
 from japanese_anki.application.promotion import (
@@ -1860,16 +1863,22 @@ def _report_batch_ledger_failure(
 
 
 def _confirm_live_model(
-    prepared: Sequence[Any], model: str, assume_yes: bool
+    prepared: Sequence[Any], model: str, assume_yes: bool, billing: str
 ) -> bool:
-    """Ask before a private document leaves this machine for a billed API."""
-    if assume_yes:
-        return True
+    """Ask before a private document leaves this machine.
+
+    ``billing`` is the planned provider's own words for who pays. Named even
+    on the ``--yes`` path: consenting in advance to "a paid API call" is not
+    consent to spend a subscription allowance, and the reverse is worse.
+    """
     names = [item.origin_path.name for item in prepared]
     listed = "\n".join(f"  {name}" for name in names)
+    if assume_yes:
+        print(f"Sending {len(names)} file(s) to {model} — {billing}.")
+        return True
     print(
-        f"About to send {len(names)} file(s) to {model}, which is a paid API "
-        f"call and leaves this machine:\n{listed}"
+        f"About to send {len(names)} file(s) to {model}, billed to {billing}, "
+        f"leaving this machine:\n{listed}"
     )
     if not sys.stdin.isatty():
         print(
@@ -1926,7 +1935,11 @@ def command_extract(args: argparse.Namespace) -> int:
         system=system,
         force=args.force,
     )
-    if not _confirm_live_model(prepared, model, args.yes):
+    if not _confirm_live_model(
+        prepared, model, args.yes, plan.targets[0].billing_display
+        if plan.targets
+        else "no call",
+    ):
         # Says what was *kept*, not only what was not sent. `prepare_inputs`
         # ran above and copied any outside file into the durable inbox, which
         # is tracked — so "Nothing was sent." alone reads as "nothing
@@ -1951,36 +1964,40 @@ def command_extract(args: argparse.Namespace) -> int:
         print("\n".join(told))
         return 1
 
-    # The SDK otherwise discovers a missing key only as it begins dispatch.
-    # Bind it before the journal can say money may have been spent, and reuse
-    # this no-network client construction for every target in the consented
-    # batch.
-    try:
-        client = claude_client.prepare_paid_client()
-    except JankiError as exc:
-        print(f"Refusing before dispatch: {exc}", file=sys.stderr)
-        return 1
-
     written = 0
     journal = operations.OperationJournal.load(config.operations_file)
     for planned in plan.targets:
         item = planned.item
-        operation_id = authorize_dispatch(journal, planned, model=plan.model)
+        # The same selected transport the service uses, proved before the
+        # journal can say money may have been spent. A local failure here is a
+        # refusal on the chosen transport, never a switch to the other one.
+        try:
+            transport = prepare_extraction_transport(plan, planned)
+        except JankiError as exc:
+            print(f"Refusing before dispatch: {exc}", file=sys.stderr)
+            return 1
+        operation_id = authorize_dispatch(
+            journal,
+            planned,
+            model=plan.model,
+            stream=transport.prepared is not None,
+        )
         try:
             # From the plan, not from locals that happen to hold the same
             # values. The journal entry above records *this* plan's request
             # fingerprint, and it is only true that the journal names the call
             # that was made while the call is built from what the journal
             # described.
-            result = extract.extract_candidates(
-                item,
-                model=plan.model,
-                style_guide=plan.style_guide,
-                system=plan.system,
-                mode=plan.mode,
-                known=plan.skip_list,
-                client=client,
-                capture=capture_hook(config, journal, operation_id),
+            result = run_extraction_call(
+                transport,
+                plan,
+                planned,
+                capture=capture_hook(
+                    config, journal, operation_id, provenance=planned.provenance
+                ),
+                frame=functools.partial(
+                    journal.append_response_frame, operation_id
+                ),
             )
         except JankiError as exc:
             # The journal is settled by the service; what is left here is

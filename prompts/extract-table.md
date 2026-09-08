@@ -14,6 +14,16 @@ ordinal, and context. Every other unit gives a reason and has no candidate. Keep
 repeated rows as separate units. Preserve the rows as the source states them;
 if a supplied reading appears uncertain, transcribe it and use low confidence.
 
+When the same expression and reading appear in more than one row, return one
+complete candidate for that identity carrying every sense, chapter, and
+supplied form the source teaches it, anchored to one retained row's page,
+section, ordinal, and verbatim context. The other rows remain their own
+source_units with the disposition duplicate, and each of those reasons names
+the retained candidate's page, section, and ordinal. Never join text from
+different rows into one context. When repeated rows disagree, keep each row's
+text verbatim in its own unit and say so in usage_notes rather than silently
+choosing one.
+
 Return a complete study card for every candidate. Give the expression and
 reading. The English gloss list is the few senses this candidate actually
 carries in this source, ordered with the most common relevant sense first, in
@@ -56,6 +66,31 @@ space after the comma.
 Give every example Hepburn romaji with word spaces. Spell particles as spoken:
 は is wa, へ is e, and を is o. Write long vowels out as ou, uu, and ii; write
 ん as n, with an apostrophe before a vowel or y.
+
+When the source supplies conjugated forms for a candidate, copy them into
+conjugations: every printed column label as its key and that row's supplied
+cell as its value, in the source's printed order. A source may print thirteen
+columns or any other number; keep every one of them. Do not substitute a
+familiar set of derived forms, drop a column whose label you do not recognise,
+reorder the columns, or fill a cell the source leaves blank — a blank cell
+stays an empty value under its label. Copy a clipped, misprinted, or otherwise
+doubtful cell exactly as printed and leave the same evidence verbatim in
+context; explain the doubt in usage_notes and use low confidence rather than
+correcting it. Leave conjugations empty when the source supplies no forms.
+
+When a table's headers are grouped — one printed header spanning several
+columns, with leaf headers repeating under each group — combine the printed
+group header and the printed leaf header into one key, written the same way
+throughout, as in `group · leaf`. Take both halves from the source's own header
+text. Every physical column keeps its own key that way, in printed order, so
+two columns sharing a leaf label stay separate instead of collapsing into one
+and discarding a column the source printed.
+
+When the source states which chapter, lesson, or unit teaches a candidate, copy
+those labels into source_chapters exactly as printed and in printed order. When
+one identity is taught in more than one place, list every chapter that supports
+it. Never infer a chapter from the vocabulary itself or from a page number.
+Leave source_chapters empty when the source states none.
 
 Choose exactly one document_kind from the whole source's primary teaching
 purpose, not from an isolated page or whichever output arrays are non-empty.

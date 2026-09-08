@@ -377,10 +377,10 @@ def test_table_source_reaches_a_built_deck_in_real_chrome(
 
                 first_action.click()
                 exact_model = session.config.extract_model
-                paid = page.get_by_role("button", name="paid API call")
+                paid = page.get_by_role("button", name="Anthropic API billing")
                 assert " ".join(paid.inner_text().split()) == (
-                    f"Send lesson.pdf to Anthropic using {exact_model} to propose "
-                    "vocabulary cards and grammar — paid API call"
+                    f"Send lesson.pdf to Claude using {exact_model} to propose "
+                    "vocabulary cards and grammar — Anthropic API billing"
                 )
                 disclosure = page.locator("main").inner_text()
                 for named_fact in (
@@ -388,7 +388,7 @@ def test_table_source_reaches_a_built_deck_in_real_chrome(
                     "Anthropic",
                     exact_model,
                     "propose vocabulary cards and grammar",
-                    "paid API call",
+                    "Anthropic API billing",
                 ):
                     assert named_fact in disclosure
 

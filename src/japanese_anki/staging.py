@@ -326,6 +326,25 @@ _PROMPT_PROVENANCE_FIELDS = {
     "request_fingerprint",
 }
 
+#: What a request sent on a shared-provider transport saves beside its answer.
+#: Named, not a general escape hatch: the durable manifest and the exact
+#: channels are what let an already-paid-for reply be read again after the
+#: prompts and the schema have moved on. A source read through the legacy
+#: Anthropic API path keeps its historical field set exactly.
+_PROMPT_PROVENANCE_PROVIDER_FIELDS = {"provider_manifest", "provider_channels"}
+_PROVIDER_MANIFEST_FIELDS = {
+    "provider",
+    "billing_class",
+    "auth",
+    "model",
+    "transport",
+    "request_bytes_utf8",
+    "request_fingerprint",
+    "request_bytes_sha256",
+    "response_schema_fingerprint",
+}
+_PROVIDER_CHANNEL_FIELDS = {"system_blocks", "user_turn", "input_blocks"}
+
 
 def new_review_run_id() -> str:
     """Mint the persisted identity of one newly written model-review artifact."""
@@ -1181,11 +1200,42 @@ def _validate_prompt_provenance(
     expected = (
         _PROMPT_PROVENANCE_FIELDS if version >= 3 else _PROMPT_PROVENANCE_V2_FIELDS
     )
+    # A shared-provider request carries its durable manifest and channels; the
+    # legacy Anthropic API path does not have one to carry.
+    if version >= 3 and provenance.get("provider") != "anthropic":
+        expected = expected | _PROMPT_PROVENANCE_PROVIDER_FIELDS
     if set(provenance) != expected:
         raise StagingError(
             "[prompt-provenance-invalid] an M7.4 coverage block needs the exact "
             "prompt provenance schema"
         )
+    if set(provenance) >= _PROMPT_PROVENANCE_PROVIDER_FIELDS:
+        manifest = provenance.get("provider_manifest")
+        channels = provenance.get("provider_channels")
+        if (
+            not isinstance(manifest, Mapping)
+            or set(manifest) != _PROVIDER_MANIFEST_FIELDS
+            or not isinstance(channels, Mapping)
+            or set(channels) != _PROVIDER_CHANNEL_FIELDS
+        ):
+            raise StagingError(
+                "[prompt-provenance-invalid] a provider request record needs the "
+                "exact saved manifest and channels"
+            )
+        if manifest.get("request_fingerprint") != provenance.get(
+            "request_fingerprint"
+        ):
+            raise StagingError(
+                "[prompt-provenance-stale] the saved provider request and this "
+                "provenance name different requests"
+            )
+        if not isinstance(channels.get("user_turn"), str) or not isinstance(
+            channels.get("input_blocks"), list
+        ):
+            raise StagingError(
+                "[prompt-provenance-invalid] a provider request record needs the "
+                "exact planned channels"
+            )
     if provenance.get("source_sha256") != block.get("source_fingerprint"):
         raise StagingError(
             "[prompt-provenance-stale] prompt provenance and coverage name different sources"

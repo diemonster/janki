@@ -94,10 +94,10 @@ def test_the_page_names_the_file_the_model_and_the_charge(tmp_path: Path) -> Non
 
     assert "genki-8.pdf" in body
     assert "claude-opus-5" in body
-    assert "paid API call" in body
+    assert "Anthropic API billing" in body
     assert (
-        "Send genki-8.pdf to Anthropic using claude-opus-5 to propose vocabulary "
-        "cards and grammar — paid API call"
+        "Send genki-8.pdf to Claude using claude-opus-5 to propose vocabulary "
+        "cards and grammar — Anthropic API billing"
         in body
     )
 
@@ -683,7 +683,7 @@ def test_an_unreadable_journal_refuses_rather_than_killing_the_page(
     # Not a crash, and not blamed on the source: the disclosures stay, and
     # the reason lands where "janki will not start a run right now" lives.
     assert status == 200
-    assert "paid API call" in body
+    assert "Anthropic API billing" in body
     assert "cannot tell whether a paid call is already running" in body
 
 
@@ -697,8 +697,8 @@ def test_a_sendable_page_offers_one_named_paid_action(tmp_path: Path) -> None:
     assert "<form method=post" in body
     assert '<button type=submit name="dispatch"' in body
     assert '<input type=hidden name=dispatch' not in body
-    assert "Send genki-8.pdf to Anthropic using claude-opus-5" in body
-    assert "paid API call" in body
+    assert "Send genki-8.pdf to Claude using claude-opus-5" in body
+    assert "Anthropic API billing" in body
     assert "not built yet" not in body
 
 

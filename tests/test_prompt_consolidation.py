@@ -327,7 +327,14 @@ def test_anthropic_wire_schema_requires_every_complete_candidate_field() -> None
     example = wire["$defs"]["GeneratedExample"]
     bare = claude_client.wire_schema(enrich.ai_schema())
 
-    assert set(candidate["required"]) == set(candidate["properties"])
+    # Every field a complete card needs is still required. The two source
+    # transcriptions are not: a page that prints no conjugation table and
+    # names no chapter has nothing to copy, and both default to empty.
+    assert set(candidate["required"]) == set(candidate["properties"]) - {
+        "conjugations",
+        "source_chapters",
+    }
+    assert {"conjugations", "source_chapters"} <= set(candidate["properties"])
     assert set(example["required"]) == set(example["properties"])
     assert set(bare["required"]) == {"meanings", "examples", "usage_notes"}
     assert set(bare["$defs"]["GeneratedExample"]["required"]) == set(
@@ -405,6 +412,14 @@ def test_response_schema_descriptions_are_only_the_terse_structural_labels() -> 
         ),
         "$defs.CandidateRecord.ordinal": (
             "One-based row ordinal within the section. Required for a table candidate."
+        ),
+        "$defs.CandidateRecord.conjugations": (
+            "Source conjugation columns: each printed column label to that "
+            "row's supplied form, in printed order. Empty when none."
+        ),
+        "$defs.CandidateRecord.source_chapters": (
+            "Chapter labels teaching this word, exactly as printed, in "
+            "printed order. Empty when none."
         ),
         "$defs.GeneratedExample.japanese": "Japanese sentence.",
         "$defs.GeneratedExample.speech_level": "Speech level.",

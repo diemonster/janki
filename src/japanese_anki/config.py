@@ -50,6 +50,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
     "cards": ("recognition", "production", "reading", "max_meanings"),
     "ai": (
         "extract_model",
+        "extract_provider",
         "enrich_provider",
         "enrich_model",
         "enrich_reasoning_effort",
@@ -378,6 +379,11 @@ class ProjectConfig:
     #: its dictionary entry. 0 means show them all.
     max_meanings: int
     extract_model: str
+    #: How the extraction pass reaches Claude. The owner's Claude Code login
+    #: is the default: reading a lesson they already pay a subscription for
+    #: should not require a second, metered account. ``anthropic-api`` is
+    #: available only by writing it down, never by falling back to it.
+    extract_provider: str
     enrich_provider: str
     enrich_model: str
     enrich_reasoning_effort: str
@@ -461,6 +467,13 @@ class ProjectConfig:
             "enrich_model",
             "claude-opus-5" if enrich_provider == "anthropic" else "gpt-5.6-sol",
         )
+        extract_provider = _choice(
+            data,
+            "ai",
+            "extract_provider",
+            "claude-code",
+            ("claude-code", "anthropic-api"),
+        )
         revise_provider = _choice(
             data,
             "ai",
@@ -541,6 +554,7 @@ class ProjectConfig:
             },
             max_meanings=_int(data, "cards", "max_meanings", 4),
             extract_model=_str(data, "ai", "extract_model", "claude-opus-5"),
+            extract_provider=extract_provider,
             enrich_provider=enrich_provider,
             enrich_model=enrich_model,
             enrich_reasoning_effort=_str(

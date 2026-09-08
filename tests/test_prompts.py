@@ -998,7 +998,11 @@ def _wiring_project(tmp_path: Path) -> Path:
 
     (tmp_path / "janki.toml").write_text(
         '[paths]\nnormalized_file = "vocabulary.json"\nstaging_dir = "staging"\n'
-        'scan_inbox = "inbox"\npatterns_file = "patterns.json"\n',
+        'scan_inbox = "inbox"\npatterns_file = "patterns.json"\n'
+        # These tests fake the API `parse_call` to read back the exact bytes
+        # sent. The default transport is the owner's subscription, which
+        # would spawn the CLI instead of the seam they inspect.
+        '[ai]\nextract_provider = "anthropic-api"\n',
         encoding="utf-8",
     )
     (tmp_path / "vocabulary.json").write_text(

@@ -46,7 +46,12 @@ from japanese_anki.workbench.assistant_http import create_assistant_sidecar
 
 def _config(tmp_path: Path, *, enabled: bool = True) -> ProjectConfig:
     (tmp_path / "janki.toml").write_text(
-        f"[assistant]\nenabled = {'true' if enabled else 'false'}\n",
+        f"[assistant]\nenabled = {'true' if enabled else 'false'}\n"
+        # These fixtures drive the explicit Anthropic API extraction path:
+        # a faked ``parse_call``. The default transport is the owner's
+        # subscription, and choosing it here would probe a real login.
+        "[ai]\n"
+        'extract_provider = "anthropic-api"\n',
         encoding="utf-8",
     )
     return ProjectConfig.load(tmp_path)
@@ -971,6 +976,7 @@ def _seeded_extraction_confirmation(
     preparation_id = "prepared-source"
     expected = ExtractionDispatchExpectation(
         source=source,
+        provider="anthropic-api",
         model="claude-opus-5",
         mode=None,
         source_sha256="a" * 64,
@@ -5307,6 +5313,10 @@ def test_adapter_prepares_then_dispatches_one_exact_saved_source_only_after_clic
     consent = SimpleNamespace(
         sendable=True,
         scope_id="",
+        # These fakes stand in for a consent planned on the explicit API
+        # transport, which is what the faked ``parse_call`` below answers.
+        provider="anthropic-api",
+        billing_display="Anthropic API billing",
         target=target,
         refusal="",
         busy="",
@@ -5358,7 +5368,10 @@ def test_adapter_prepares_then_dispatches_one_exact_saved_source_only_after_clic
     assert "paid Anthropic API call" in " ".join(plan.disclosures)
     assert "Claude Pro or Max does not pay" in " ".join(plan.disclosures)
     assert plan.replaces is False
-    assert plan.confirm_label == "Send lesson.pdf using claude-opus-5 — paid API call"
+    assert (
+        plan.confirm_label
+        == "Send lesson.pdf using claude-opus-5 — Anthropic API billing"
+    )
 
     seen_progress: list[str] = []
     result = adapter.consume_replan_and_extract(
@@ -5416,6 +5429,8 @@ def test_adapter_replacement_button_is_the_only_event_that_grants_force(
     consent = SimpleNamespace(
         sendable=True,
         scope_id="",
+        provider="anthropic-api",
+        billing_display="Anthropic API billing",
         target=SimpleNamespace(
             source_sha256="a" * 64,
             staging_path=config.staging_dir / "lesson.yaml",

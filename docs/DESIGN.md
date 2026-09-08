@@ -22,7 +22,7 @@ with provenance. Nothing ever edits a source.
 bare-record enrichment).** One rich template per input shape asks
 for the complete card: Japanese, natural English glosses, examples, furigana
 giving each kanji's *contextual* reading in that sentence, romaji, usage, and
-register. There are three paid card-writing paths. `extract` reads a preserved
+register. There are three external card-writing paths. `extract` reads a preserved
 source once and returns candidates, coverage facts, complete card proposals,
 and the grammar patterns that source teaches in the same answer; its auto,
 table, and prose modes remain three complete source templates. `enrich --ai`
@@ -32,11 +32,28 @@ owner's requested change and returns a fingerprinted staging proposal; it never
 writes canonical content directly. Janki's ChatKit agent may prepare typed
 plans and, after exact owner authority where required, dispatch these same
 application operations. Conversation is a repository-wide surface over the
-three paths, not a fourth writing path. Revision has one shared
-plan/consent/journal/recovery/staging/review/apply pipeline; configuration
-selects only its transport. `claude-code` consumes the locally logged-in Claude
-Pro or Max subscription allowance; `anthropic-api` uses Anthropic API billing.
-Neither choice creates a different revision workflow.
+three paths, not a fourth writing path. Extraction and revision share that
+transport selection, each with its own plan/consent/journal/recovery/staging
+pipeline; configuration selects only who is billed, never a different
+workflow. `claude-code` consumes the locally logged-in Claude Pro or Max
+subscription allowance, guarded as first-party Pro/Max; `anthropic-api` uses
+Anthropic API billing and has to be written down, because a missing CLI, a
+logged-out login or any failure is a refusal rather than a fallback. Each
+source call is separately, exactly consented to on the transport it names, and
+extraction's existing staging and journal flow is unchanged by the choice.
+
+A subscription reply is captured inside its own operation artifact as a
+versioned wrapper holding the original request manifest and channels beside
+the exact raw provider bytes, written before anything parses them. `janki
+operations --show-reply` exports the complete captured artifact byte for
+byte, retaining the manifest and the raw reply that recovery needs; pure
+helpers unwrap it for internal viewing and classification. Recovery needs no
+prompt file — the request is read back from what was saved — but it does need
+the current response contract to match the saved one; a changed schema refuses
+and preserves both the request and the reply rather than reinterpreting them.
+A stream interrupted before its terminal capture still has its exact frames
+and request fingerprint, but not yet that stored manifest, so it is not
+replayable across a later contract change.
 
 Development, planning and code-review launches use the tracked
 `scripts/claude-subscription.py` launcher. It strips inherited provider overrides

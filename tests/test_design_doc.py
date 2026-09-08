@@ -76,7 +76,7 @@ def test_it_describes_the_consolidated_rich_template_contract_in_the_present() -
     assert all(prompts.load(REPO_ROOT, name) for name in rich_templates)
     flat = " ".join(DESIGN.lower().split())
     assert "one rich template per input shape" in flat
-    assert "three paid card-writing paths" in flat
+    assert "three external card-writing paths" in flat
     assert "four passes" not in flat
     assert "--polish-meanings" not in flat
     assert "`patterns`" not in flat
@@ -86,7 +86,7 @@ def test_it_distinguishes_card_writing_from_opt_in_coverage_approval() -> None:
     """Coverage is paid and model-backed, but it never authors card content."""
     flat = " ".join(DESIGN.lower().split())
 
-    assert "three paid card-writing paths" in flat
+    assert "three external card-writing paths" in flat
     assert "`promote --accept-coverage`" in flat
     assert "two paid call paths" not in flat
 

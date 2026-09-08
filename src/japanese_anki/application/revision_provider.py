@@ -14,6 +14,7 @@ import contextlib
 import hashlib
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
@@ -222,6 +223,80 @@ def _frozen_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
     return frozen
 
 
+#: The exact prepared-input shapes this transport can put on a wire. Input
+#: preparation owns whether the bytes really are a PDF or an image; this is only
+#: the envelope, so a block that is not one of these is refused rather than
+#: reshaped.
+_PREPARED_INPUT_MEDIA_TYPES: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "document": frozenset({"application/pdf"}),
+        "image": frozenset({"image/png", "image/jpeg"}),
+    }
+)
+
+
+def _frozen_input_blocks(
+    blocks: Sequence[Mapping[str, Any]],
+) -> tuple[Mapping[str, Any], ...]:
+    """Freeze the prepared input blocks a turn carries, in the order given.
+
+    The base64 is preparation's and is never touched: it is copied, compared,
+    and sent exactly as handed over. Only the envelope is checked, so a text
+    turn or a URL source cannot arrive here disguised as an attachment.
+    """
+    frozen: list[Mapping[str, Any]] = []
+    for block in blocks:
+        source = block.get("source") if isinstance(block, Mapping) else None
+        media_types = (
+            _PREPARED_INPUT_MEDIA_TYPES.get(str(block.get("type")))
+            if isinstance(block, Mapping)
+            else None
+        )
+        if (
+            media_types is None
+            or not isinstance(source, Mapping)
+            or set(block) != {"type", "source"}
+            or set(source) != {"type", "media_type", "data"}
+            or source.get("type") != "base64"
+            or source.get("media_type") not in media_types
+            or not isinstance(source.get("data"), str)
+        ):
+            raise RevisionProviderError(
+                "A revision turn carries only prepared base64 document or image "
+                "input blocks."
+            )
+        frozen.append(_frozen_mapping(block))
+    return tuple(frozen)
+
+
+#: The upper output limit Claude Code's native entry for this model accepts. A
+#: turn that carries a document is read out of pages rather than composed from a
+#: prompt, so the rich table one asks for can exceed the 64000-token default a
+#: text revision has always been capped at.
+_ATTACHMENT_MAX_OUTPUT_TOKENS = 128000
+
+
+def _max_output_tokens(blocks: Sequence[Mapping[str, Any]]) -> str:
+    """The output cap the planned turn runs under, decided by the turn alone.
+
+    Derived here and nowhere else, so the probe, the stored transport, the
+    request bytes, and the dispatched environment cannot disagree — and no
+    caller environment can raise or lower it.
+    """
+    if blocks:
+        return str(_ATTACHMENT_MAX_OUTPUT_TOKENS)
+    return str(claude_client.DEFAULT_MAX_TOKENS)
+
+
+def _refuse_api_input_blocks(blocks: Sequence[Mapping[str, Any]]) -> None:
+    """The API transport of this module sends one text turn and nothing else."""
+    if blocks:
+        raise RevisionProviderError(
+            "The Anthropic API revision transport cannot send input attachments; "
+            "plan attachment revisions on the Claude Code subscription transport."
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class RevisionProviderPlan:
     """Safe, exact provider identity rendered before owner confirmation."""
@@ -237,6 +312,9 @@ class RevisionProviderPlan:
     system_blocks: tuple[Mapping[str, Any], ...] = field(repr=False)
     user_turn: str = field(repr=False)
     schema: Any = field(repr=False, compare=False)
+    #: Prepared document or image blocks this turn sends before its text, frozen
+    #: with the rest of the plan. Empty for every text-only revision.
+    input_blocks: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
 
     @property
     def billing_display(self) -> str:
@@ -284,6 +362,7 @@ class RevisionProvider(Protocol):
         user_turn: str,
         schema: Any,
         effort: str | None,
+        input_blocks: Sequence[Mapping[str, Any]] = (),
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
@@ -336,6 +415,9 @@ def _validate_plan(plan: RevisionProviderPlan, provider: str) -> None:
 
 
 def _validate_api_channels(plan: RevisionProviderPlan) -> None:
+    # An API plan that acquired attachments after it was rendered is refused
+    # before its bytes are read: this transport has nowhere to send them.
+    _refuse_api_input_blocks(plan.input_blocks)
     request = _strict_json(plan.request_bytes, label="Anthropic API request")
     output = request.get("output_config")
     output_format = output.get("format") if isinstance(output, Mapping) else None
@@ -383,7 +465,10 @@ def _validate_cli_channels(plan: RevisionProviderPlan) -> Mapping[str, Any]:
             plan.transport.get("controlled_environment")
         ),
         "cwd": plan.transport.get("cwd"),
-        "stdin_utf8": plan.user_turn,
+        # Regenerated from the plan's own blocks and turn by the helper that
+        # wrote them, so a replaced attachment — or one dropped on recovery —
+        # rebuilds different bytes than the ones the fingerprint covers.
+        "stdin_utf8": _claude_stdin(plan.input_blocks, plan.user_turn),
     }
     if _canonical_json(request) != _canonical_json(expected):
         raise RevisionProviderError(
@@ -437,10 +522,16 @@ def _validate_cli_channels(plan: RevisionProviderPlan) -> Mapping[str, Any]:
             system_prompt=_combined_system_prompt(plan.system_blocks),
             schema_json=option("--json-schema"),
             effort=str(stored_effort),
+            stream_input=bool(plan.input_blocks),
         )
         or stored_effort not in claude_client.EFFORT_LEVELS
         or len(bound_effort) != 1
         or invalid_response_contract
+        # The output cap follows from the turn the plan carries, so a stored
+        # environment that raised it for a text call — or kept the default for
+        # an attachment — is refused rather than run.
+        or plan.transport["controlled_environment"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"]
+        != _max_output_tokens(plan.input_blocks)
     ):
         raise RevisionProviderError(
             "The Claude Code plan's bound model, prompts, or response contract "
@@ -502,11 +593,15 @@ class _AnthropicAPIRevisionProvider:
         user_turn: str,
         schema: Any,
         effort: str | None,
+        input_blocks: Sequence[Mapping[str, Any]] = (),
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
     ) -> RevisionProviderPlan:
         del style_guide, task_template, env, runner, which
+        # Before the schema, the request body, and any client or credential
+        # work, so an attachment can never be dropped into a paid API call.
+        _refuse_api_input_blocks(input_blocks)
         _require_supported_model(model)
         wire_schema = claude_client.wire_schema(schema)
         blocks = tuple(_frozen_mapping(block) for block in system_blocks)
@@ -639,7 +734,9 @@ def _required_effort(effort: str | None) -> str:
     return effort
 
 
-def _controlled_claude_environment(effort: str) -> Mapping[str, str]:
+def _controlled_claude_environment(
+    effort: str, max_output_tokens: str = str(claude_client.DEFAULT_MAX_TOKENS)
+) -> Mapping[str, str]:
     """The exact environment one planned Claude Code call runs under.
 
     Built per plan rather than held as a module constant because the depth is
@@ -654,7 +751,7 @@ def _controlled_claude_environment(effort: str) -> Mapping[str, str]:
             **subscription_auth.BASE_CONTROLLED_ENVIRONMENT,
             "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
             "CLAUDE_CODE_EFFORT_LEVEL": effort,
-            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(claude_client.DEFAULT_MAX_TOKENS),
+            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": max_output_tokens,
             "MAX_STRUCTURED_OUTPUT_RETRIES": "0",
             "CLAUDE_CODE_MAX_TURNS": "1",
             "CLAUDE_CODE_MAX_RETRIES": "0",
@@ -799,14 +896,54 @@ def _combined_system_prompt(blocks: Sequence[Mapping[str, Any]]) -> str:
     return "\n\n".join(texts)
 
 
+def _claude_stdin(
+    input_blocks: Sequence[Mapping[str, Any]], user_turn: str
+) -> str:
+    """The exact text one planned Claude Code call writes to the child's stdin.
+
+    One owner for both uses: planning stores what this returns and validation
+    regenerates it from the plan's own blocks and turn, so a stored or replaced
+    plan proves the prompt it will send rather than asserting it.
+
+    A text-only turn stays the plain user turn it has always been.  A turn with
+    prepared input is the only shape the CLI accepts them in: one stream-json
+    user message, its blocks ahead of its text, ending in a single newline.
+    """
+    if not input_blocks:
+        return user_turn
+    return (
+        _canonical_json(
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        *(_plain_value(block) for block in input_blocks),
+                        {"type": "text", "text": user_turn},
+                    ],
+                },
+            }
+        )
+        + "\n"
+    )
+
+
 def _cli_argv(
-    *, model: str, system_prompt: str, schema_json: str, effort: str
+    *,
+    model: str,
+    system_prompt: str,
+    schema_json: str,
+    effort: str,
+    stream_input: bool = False,
 ) -> tuple[str, ...]:
     # ``--verbose`` is not optional decoration: with ``--print`` the CLI exits 1
-    # on ``--output-format=stream-json`` without it.
+    # on ``--output-format=stream-json`` without it.  ``-p`` is already that
+    # print flag, so an attachment turn adds only the input format: the same
+    # command otherwise, reading one framed message instead of plain text.
     return (
         "claude",
         "-p",
+        *(("--input-format", "stream-json") if stream_input else ()),
         "--safe-mode",
         "--disable-slash-commands",
         "--no-session-persistence",
@@ -841,18 +978,22 @@ def _claude_code_plan(
     effort: str,
     auth: Mapping[str, Any],
     version: str,
+    input_blocks: Sequence[Mapping[str, Any]] = (),
 ) -> RevisionProviderPlan:
     _require_supported_model(model)
     response_contract = _neutral_wire_schema(schema)
     schema_json = _canonical_json(response_contract)
     blocks = tuple(_frozen_mapping(block) for block in system_blocks)
+    inputs = _frozen_input_blocks(input_blocks)
     argv = _cli_argv(
         model=model,
         system_prompt=_combined_system_prompt(blocks),
         schema_json=schema_json,
         effort=effort,
+        stream_input=bool(inputs),
     )
-    controlled = _controlled_claude_environment(effort)
+    controlled = _controlled_claude_environment(effort, _max_output_tokens(inputs))
+    stdin = _claude_stdin(inputs, user_turn)
     transport = _frozen_mapping(
         {
             "kind": "claude-code-cli",
@@ -860,7 +1001,9 @@ def _claude_code_plan(
             "cli_version": version,
             "argv": argv,
             "cwd": "fresh-empty-temporary-directory",
-            "stdin": "exact-user-turn-utf8",
+            "stdin": (
+                "stream-json-user-message-utf8" if inputs else "exact-user-turn-utf8"
+            ),
             "effort": effort,
             "controlled_environment": controlled,
         }
@@ -871,7 +1014,7 @@ def _claude_code_plan(
             "cli_version": version,
             "controlled_environment": dict(controlled),
             "cwd": "fresh-empty-temporary-directory",
-            "stdin_utf8": user_turn,
+            "stdin_utf8": stdin,
         }
     ).encode("utf-8")
     billing_class = "claude-subscription"
@@ -896,6 +1039,7 @@ def _claude_code_plan(
         system_blocks=blocks,
         user_turn=user_turn,
         schema=schema,
+        input_blocks=inputs,
     )
 
 
@@ -1020,6 +1164,32 @@ def _send_claude_prompt(process: Any, prompt: bytes) -> None:
             process.stdin.close()
 
 
+def _drain_claude_stdout(process: Any, pending: queue.Queue[Any]) -> None:
+    """Move exact stdout bytes off the pipe as fast as the child writes them.
+
+    Nothing here reads what the bytes say: this hands on the same line objects
+    the spool would have held, followed by one terminator that is either EOF or
+    the exception the read tore with, so the reading side sees them in the
+    order the child wrote them.
+
+    It exists because the CLI writes stdout without waiting for a reader and
+    then force-exits zero once its own short drain window closes.  Any pause on
+    the reading side — a frame being made durable, a preview being rendered —
+    is therefore paid for in dropped reply bytes and a clean exit code, which
+    is a truncated capture nobody can tell from a short reply.
+    """
+    try:
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                break
+            pending.put(line)
+    except BaseException as exc:  # noqa: BLE001 - re-raised on the reading side
+        pending.put(exc)
+        return
+    pending.put(None)
+
+
 def _stream_claude_reply(
     process: Any,
     prompt: bytes,
@@ -1031,30 +1201,44 @@ def _stream_claude_reply(
 
     The reply is the child's, paid for whatever it says, so a line joins the
     spool before anything looks at it.  The frame callback makes that line
-    durable elsewhere and runs before the next read; a failure there means
+    durable elsewhere and runs before that line is read; a failure there means
     janki can no longer prove it holds what it is about to be told, so the
     call ends where it stands and dispatch captures nothing.  A line that is
     not UTF-8 is reported instead: the spool keeps growing to EOF so the exact
     reply is still captured, and the returned marker names the frame that
     cannot be read.
 
+    The bytes come off the pipe on their own thread so that none of that work
+    holds up the child, which drains for only a bounded moment before exiting.
+    Only whole lines already taken off the pipe are read here, and each is made
+    durable before the next one is looked at, so read-ahead changes what the
+    child is waiting on and nothing about the order janki commits to.
+
     However this ends, the child is killed on the way out and always waited
     for — before the writer is joined, since a writer blocked on a full stdin
-    pipe is released by EPIPE only once the child is dead.
+    pipe is released by EPIPE only once the child is dead — and the reader is
+    joined first of all, since it is the one still holding stdout.
     """
     writer = threading.Thread(
         target=_send_claude_prompt, args=(process, prompt), daemon=True
     )
     writer.start()
+    pending: queue.Queue[Any] = queue.Queue()
+    reader = threading.Thread(
+        target=_drain_claude_stdout, args=(process, pending), daemon=True
+    )
+    reader.start()
     watcher = None if preview is None else _FirstTextPreview(preview)
     chunks: list[bytes] = []
     unreadable: tuple[int, UnicodeDecodeError] | None = None
     returncode: int
     try:
         while True:
-            line = process.stdout.readline()
-            if not line:
+            line = pending.get()
+            if line is None:
                 break
+            if isinstance(line, BaseException):
+                raise line
             chunks.append(line)
             if unreadable is not None:
                 # Nothing downstream can read this stream any more; only its
@@ -1076,9 +1260,12 @@ def _stream_claude_reply(
             if watcher is not None:
                 watcher.observe(line)
     except BaseException:
+        # Killing the child is also what ends the reader: a blocked read is
+        # released by the child's death, not by this side giving up on it.
         process.kill()
         raise
     finally:
+        reader.join()
         with contextlib.suppress(OSError):
             process.stdout.close()
         returncode = process.wait()
@@ -1099,6 +1286,7 @@ class _ClaudeCodeRevisionProvider:
         user_turn: str,
         schema: Any,
         effort: str | None,
+        input_blocks: Sequence[Mapping[str, Any]] = (),
         env: Mapping[str, str] | None = None,
         runner: Runner = subprocess.run,
         which: Which = shutil.which,
@@ -1108,11 +1296,16 @@ class _ClaudeCodeRevisionProvider:
         # Before the probe, because the probe already runs under the depth the
         # planned call will use.
         depth = _required_effort(effort)
+        # The free probe already runs under the cap the planned turn will use,
+        # so nothing about the environment changes between proving the
+        # subscription and spending it.
         _, _, auth, version = _probe_claude(
             env=env,
             runner=runner,
             which=which,
-            controlled=_controlled_claude_environment(depth),
+            controlled=_controlled_claude_environment(
+                depth, _max_output_tokens(input_blocks)
+            ),
         )
         return _claude_code_plan(
             model=model,
@@ -1122,6 +1315,7 @@ class _ClaudeCodeRevisionProvider:
             effort=depth,
             auth=auth,
             version=version,
+            input_blocks=input_blocks,
         )
 
     def prepare(
@@ -1271,6 +1465,7 @@ def provider_plan_from_manifest(
     system_blocks: Sequence[Mapping[str, Any]],
     user_turn: str,
     schema: Any,
+    input_blocks: Sequence[Mapping[str, Any]] = (),
 ) -> RevisionProviderPlan:
     """Purely reconstruct and verify stored provider provenance.
 
@@ -1361,6 +1556,10 @@ def provider_plan_from_manifest(
         system_blocks=tuple(_frozen_mapping(block) for block in system_blocks),
         user_turn=user_turn,
         schema=schema,
+        # The manifest's field set is unchanged: the stored request bytes
+        # already carry the frame, so the blocks are supplied back in and the
+        # channel check refuses any set that rebuilds different stdin.
+        input_blocks=_frozen_input_blocks(input_blocks),
     )
     _validate_plan(candidate, provider_name)
     billing_display(provider_name, billing_class, auth)

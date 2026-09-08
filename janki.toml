@@ -31,6 +31,10 @@ production = true
 reading = false
 
 [ai]
+# Reading a source uses this machine's Claude Pro/Max login. Switch to
+# "anthropic-api" to use ANTHROPIC_API_KEY instead; janki never falls back to
+# it when the subscription transport is unavailable.
+extract_provider = "claude-code"
 extract_model = "claude-opus-5"
 enrich_provider = "anthropic"
 enrich_model = "claude-opus-5"

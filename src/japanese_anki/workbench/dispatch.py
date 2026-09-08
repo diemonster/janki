@@ -45,6 +45,9 @@ class ExtractionAction:
     """The scalar consent snapshot one random capability is bound to."""
 
     name: str
+    #: The transport the rendered page named. Carried so the dispatch binds
+    #: the account the owner saw, not whichever one the config holds later.
+    provider: str
     model: str
     mode: str | None
     source_sha256: str
@@ -73,6 +76,7 @@ class ExtractionActions:
             return ""
         action = ExtractionAction(
             name=consent.name,
+            provider=consent.provider,
             model=consent.model,
             mode=consent.mode,
             source_sha256=target.source_sha256,

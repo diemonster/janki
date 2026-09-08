@@ -891,7 +891,12 @@ def project(tmp_path: Path, records: list[VocabularyRecord] | None = None) -> Pa
         'normalized_file = "vocabulary.json"\n'
         'ledger_file = "ledger.json"\n'
         'staging_dir = "staging"\n'
-        'scan_inbox = "inbox"\n',
+        'scan_inbox = "inbox"\n'
+        # These fixtures drive the explicit Anthropic API extraction path:
+        # a faked ``parse_call``. The default transport is the owner's
+        # subscription, and choosing it here would probe a real login.
+        "[ai]\n"
+        'extract_provider = "anthropic-api"\n',
         encoding="utf-8",
     )
     seed_prompts(tmp_path)
@@ -1094,7 +1099,9 @@ def test_the_consent_prompt_names_the_files_and_the_model(
     out = capsys.readouterr().out
     assert "lesson.pdf" in out, "the file is named"
     assert "claude-haiku-4-5" in out, "and the model it would go to"
-    assert "paid" in out
+    # Who pays, in the selected provider's own words. This project chose the
+    # metered API; a subscription run must not be described as a paid API call.
+    assert "Anthropic API billing" in out
 
 
 def test_extract_writes_one_staging_file_per_input(

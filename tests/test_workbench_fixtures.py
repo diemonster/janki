@@ -27,6 +27,7 @@ from japanese_anki.application.extraction import (
     authorize_dispatch,
     complete_extraction,
 )
+from japanese_anki.claude_client import CallResult
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.identifiers import stable_record_id
@@ -95,7 +96,12 @@ def materialize(tmp_path: Path, scenario: str, *, filename: str | None = None) -
             'deck_dir = "decks"\nledger_file = "ledger.json"\n'
             'media_dir = "media"\nstaging_dir = "staging"\n'
             'patterns_file = "patterns.json"\nscan_inbox = "inbox"\n'
-            'operations_file = "operations.json"\n',
+            'operations_file = "operations.json"\n'
+            # These fixtures drive the explicit Anthropic API extraction path:
+            # a faked ``parse_call``. The default transport is the owner's
+            # subscription, and choosing it here would probe a real login.
+            "[ai]\n"
+            'extract_provider = "anthropic-api"\n',
             encoding="utf-8",
         )
 
@@ -356,8 +362,8 @@ def test_blank_and_disputed_reading_are_held_for_different_reasons(
 def test_truncated_response_writes_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def fake_parse_call(*_args: object, **_kwargs: object) -> tuple[None, str, None]:
-        return None, "max_tokens", None
+    def fake_parse_call(*_args: object, **_kwargs: object) -> CallResult:
+        return CallResult(None, "max_tokens", None)
 
     monkeypatch.setattr(extract.claude_client, "parse_call", fake_parse_call)
     item = _prepared(tmp_path, "truncated.pdf")

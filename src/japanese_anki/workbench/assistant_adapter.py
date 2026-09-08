@@ -377,6 +377,24 @@ def _extraction_refusal(error: ExtractionDispatchError) -> RevisionRefusal:
     )
 
 
+def _extraction_billing_disclosure(provider: str, billing: str) -> str:
+    """One sentence naming the account this extraction spends.
+
+    Derived from the planned provider rather than written into the wizard: a
+    confirmation that says "paid API call" while a subscription allowance is
+    spent describes an act nobody agreed to, and so does the reverse.
+    """
+    if provider == "claude-code":
+        return (
+            f"This is one {billing} call; it spends that subscription's "
+            "allowance and charges no Anthropic API credit."
+        )
+    return (
+        f"This is one paid Anthropic API call ({billing}); Claude Pro or Max "
+        "does not pay for it."
+    )
+
+
 @dataclass(slots=True)
 class RevisionAssistantAdapter:
     """Project intake plus exact allowlisted revision targets behind ChatKit."""
@@ -4341,6 +4359,10 @@ class RevisionAssistantAdapter:
         request_fingerprint = str(target.provenance["request_fingerprint"])
         expectation = ExtractionDispatchExpectation(
             source=source_path,
+            # The transport this consent was planned on. Bound like every
+            # other value here: a config edit between describing and clicking
+            # must refuse, not quietly move who is billed.
+            provider=consent.provider,
             model=consent.model,
             mode=consent.mode,
             source_sha256=target.source_sha256,
@@ -4414,8 +4436,9 @@ class RevisionAssistantAdapter:
                 "Permanently replace the named review: "
                 f"{card_review}{grammar}. That work is not recoverable"
             )
+        billing = consent.billing_display
         disclosures = (
-            "This is one paid Anthropic API call; Claude Pro or Max does not pay for it.",
+            _extraction_billing_disclosure(consent.provider, billing),
             (
                 "Only the named source (and the existing expression list in prose "
                 "mode) leaves this computer; the saved local copy stays in the inbox."
@@ -4437,9 +4460,9 @@ class RevisionAssistantAdapter:
             ),
         )
         confirm_label = (
-            f"Replace the named review and send {consent.name} — paid API call"
+            f"Replace the named review and send {consent.name} — {billing}"
             if replaces
-            else f"Send {consent.name} using {consent.model} — paid API call"
+            else f"Send {consent.name} using {consent.model} — {billing}"
         )
         return SourceExtractionPlan(
             preparation_id=preparation_id,

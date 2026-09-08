@@ -70,7 +70,12 @@ def _project(
         'normalized_file = "vocabulary.json"\n'
         'ledger_file = "ledger.json"\n'
         'staging_dir = "staging"\n'
-        'scan_inbox = "inbox"\n',
+        'scan_inbox = "inbox"\n'
+        # These fixtures drive the explicit Anthropic API extraction path:
+        # a faked ``parse_call``. The default transport is the owner's
+        # subscription, and choosing it here would probe a real login.
+        "[ai]\n"
+        'extract_provider = "anthropic-api"\n',
         encoding="utf-8",
     )
     seed_prompts(tmp_path)
@@ -128,6 +133,7 @@ def _expectation(
     target = consent.target
     assert target is not None
     return ExtractionDispatchExpectation(
+        provider="anthropic-api",
         source=source,
         model=consent.model,
         mode=consent.mode,

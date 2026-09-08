@@ -2766,10 +2766,15 @@ def render_consent(
         )
         return "".join(body)
 
+    # Who pays comes from the planned request, not from this page. A consent
+    # button that named the wrong account would be describing a different act
+    # from the one it authorizes.
+    billing = consent.billing_display
+    subscription = consent.provider == "claude-code"
     body.append(
         '<p class=lead>Send <strong>' + name + "</strong> to "
         f"<strong>{_escaped(consent.model)}</strong> to propose vocabulary "
-        "cards and grammar — <strong>a paid API call</strong>.</p>"
+        f"cards and grammar — <strong>{_escaped(billing)}</strong>.</p>"
     )
     # Four separate sentences rather than one paragraph: each answers a
     # different wrong belief, and a reader skimming one block absorbs none.
@@ -2781,10 +2786,18 @@ def render_consent(
         "it.</li>"
         "<li>The whole document is sent — janki cannot yet send only some "
         "pages.</li>"
-        "<li>This spends <strong>Anthropic API credits</strong>, billed to "
-        "your API account.</li>"
-        "<li>A Claude Pro or Max subscription is a different thing and does "
-        "not pay for this.</li>"
+        + (
+            "<li>This spends your <strong>Claude subscription</strong> "
+            "allowance through the Claude Code login on this computer. No "
+            "Anthropic API credit is charged.</li>"
+            if subscription
+            else (
+                "<li>This spends <strong>Anthropic API credits</strong>, "
+                "billed to your API account.</li>"
+                "<li>A Claude Pro or Max subscription is a different thing "
+                "and does not pay for this.</li>"
+            )
+        )
         + (
             # Prose mode puts every expression already in the collection into
             # the prompt so the model can skip them. "Only this one file"
@@ -2866,8 +2879,8 @@ def render_consent(
         body.append(
             '<button type=submit name="dispatch" '
             f'value="{html.escape(dispatch, quote=True)}">Send {name} to '
-            f"Anthropic using {_escaped(consent.model)} to propose vocabulary "
-            "cards and grammar — paid API call</button></form>"
+            f"Claude using {_escaped(consent.model)} to propose vocabulary "
+            f"cards and grammar — {_escaped(billing)}</button></form>"
         )
     body.append("</main></body></html>")
     return "".join(body)

@@ -26,9 +26,13 @@ somebody who then declines.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
+import json
 import os
+import shutil
+import subprocess
 import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -45,6 +49,7 @@ from japanese_anki import (
     prompts,
     staging,
 )
+from japanese_anki.application import revision_provider
 from japanese_anki.application.journey import (
     GRAMMAR_NEEDS_REVIEW,
     GRAMMAR_REVIEWED,
@@ -93,6 +98,14 @@ __all__ = [
     "describe_extraction",
     "dispatch_extraction",
     "durable_inbox_root",
+    "extraction_capture_envelope",
+    "extraction_capture_parts",
+    "extraction_provider",
+    "extraction_provider_plan",
+    "prepare_extraction_transport",
+    "recover_extraction",
+    "recover_extraction_from_capture",
+    "run_extraction_call",
     "extraction_replacement_revision",
     "plan_corpus_extraction",
     "plan_extraction",
@@ -120,11 +133,35 @@ class ExtractionTarget:
     #: given: without it, planning refuses instead. W3 confirms a replacement
     #: separately and has to name the review it invalidates.
     replaces: Path | None = None
+    #: The immutable request the shared provider registry planned for this
+    #: source, on the subscription transport. Carried rather than re-planned
+    #: at dispatch: preparing a second request would authenticate one call and
+    #: send another. ``None`` on the explicit Anthropic API path, which builds
+    #: its request inside the client.
+    provider_plan: Any | None = None
 
     @property
     def name(self) -> str:
         """The permanent filename, which is what a person recognizes."""
         return self.item.origin_path.name
+
+    @property
+    def provider(self) -> str:
+        """Which transport this request was planned for."""
+        if self.provider_plan is None:
+            return revision_provider.ANTHROPIC_API_PROVIDER
+        return str(self.provider_plan.provider)
+
+    @property
+    def billing_display(self) -> str:
+        """Who pays for this call, in the provider's own durable words."""
+        if self.provider_plan is None:
+            return revision_provider.billing_display(
+                revision_provider.ANTHROPIC_API_PROVIDER,
+                "anthropic-platform-api",
+                {"auth_method": "environment-api-key"},
+            )
+        return str(self.provider_plan.billing_display)
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +194,10 @@ class ExtractionDispatchExpectation:
     """
 
     source: Path
+    #: The transport the owner confirmed. Bound separately from the request
+    #: fingerprint because "who is billed for this" is part of what they
+    #: agreed to, and a config edit between render and click can change it.
+    provider: str
     model: str
     mode: str | None
     source_sha256: str
@@ -327,6 +368,9 @@ class ExtractionPlan:
     #: The record namespace both of those were computed in: one deck's scope,
     #: or ``""`` for the shared collection.
     scope_id: str = ""
+    #: How this run reaches Claude: the owner's subscription by default, or
+    #: the metered API when a project wrote that down.
+    provider: str = revision_provider.CLAUDE_CODE_PROVIDER
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -347,6 +391,347 @@ class ExtractionPlan:
         return tuple(
             target.item.origin_path for target in self.targets if target.item.copied
         )
+
+
+#: The transports an extraction may use. The subscription is the default; the
+#: metered API is reached only by writing it down. Nothing in this module may
+#: move between them because one was unavailable — a missing CLI, a logged-out
+#: login or a raised exception is a refusal, never a switch to the paid key.
+EXTRACTION_PROVIDERS = (
+    revision_provider.CLAUDE_CODE_PROVIDER,
+    revision_provider.ANTHROPIC_API_PROVIDER,
+)
+
+#: The durable capture wrapper is the journal's, so one decoder reads it.
+EXTRACTION_CAPTURE_VERSION = operations.CAPTURED_REPLY_VERSION
+EXTRACTION_CAPTURE_KEY = operations.CAPTURED_REPLY_KEY
+
+
+def extraction_provider(config: ProjectConfig, provider: str | None = None) -> str:
+    """Which transport this run uses: the configured one unless one is named.
+
+    An explicit argument is a caller stating a transport, not inferring one.
+    In particular the presence of a test client says nothing: a fake object
+    must not be able to redirect a real request onto a billed account.
+    """
+    chosen = provider if provider else config.extract_provider
+    if chosen not in EXTRACTION_PROVIDERS:
+        choices = ", ".join(EXTRACTION_PROVIDERS)
+        raise extract.ExtractError(
+            f"Unknown extraction provider {chosen!r}; choose one of: {choices}.",
+            code="extract-provider-unknown",
+        )
+    return chosen
+
+
+def extraction_provider_plan(
+    item: PreparedInput,
+    *,
+    provider: str,
+    model: str,
+    style_guide: str,
+    system: str,
+    known: Sequence[str] = (),
+    env: Mapping[str, str] | None = None,
+    runner: Callable[..., Any] = subprocess.run,
+    which: Callable[..., str | None] = shutil.which,
+) -> Any | None:
+    """The exact provider request for one source, or None on the API path.
+
+    The source rides as an input block, so the document is part of the
+    request identity the owner confirms and the journal records. The explicit
+    Anthropic API path keeps building its request inside the client, which is
+    what its existing recovery and tests describe.
+    """
+    if provider == revision_provider.ANTHROPIC_API_PROVIDER:
+        return None
+    return revision_provider.plan_provider(
+        provider,
+        model=model,
+        style_guide=style_guide,
+        task_template=system,
+        system_blocks=tuple(claude_client.system_blocks(style_guide, system)),
+        user_turn=extract.prompt_for(item.origin_path.name, known),
+        schema=extract.candidate_schema(),
+        effort=claude_client.effort_for(model),
+        input_blocks=(item.content_block(),),
+        env=env,
+        runner=runner,
+        which=which,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionTransport:
+    """A proved way to make one extraction call, before any authority exists."""
+
+    provider: str
+    #: The prepared subscription handle: a resolved executable and a checked
+    #: login, both proved before the journal can say money may have gone.
+    prepared: Any | None = None
+    #: The Anthropic API client, on the explicit API path only.
+    client: Any | None = None
+
+    @property
+    def billing_display(self) -> str:
+        if self.prepared is not None:
+            return str(self.prepared.plan.billing_display)
+        return revision_provider.billing_display(
+            revision_provider.ANTHROPIC_API_PROVIDER,
+            "anthropic-platform-api",
+            {"auth_method": "environment-api-key"},
+        )
+
+
+def prepare_extraction_transport(
+    plan: ExtractionPlan,
+    target: ExtractionTarget | None = None,
+    *,
+    client: Any | None = None,
+    env: Mapping[str, str] | None = None,
+    runner: Callable[..., Any] = subprocess.run,
+    which: Callable[..., str | None] = shutil.which,
+) -> ExtractionTransport:
+    """Prove the selected transport can make this call, before authorizing it.
+
+    Preparation precedes the journal on both paths, for the same reason: a
+    local credential or login failure must not leave an entry saying a call
+    may have been billed.
+    """
+    chosen = plan.provider
+    if chosen not in EXTRACTION_PROVIDERS:
+        choices = ", ".join(EXTRACTION_PROVIDERS)
+        raise extract.ExtractError(
+            f"Unknown extraction provider {chosen!r}; choose one of: {choices}.",
+            code="extract-provider-unknown",
+        )
+    if chosen == revision_provider.ANTHROPIC_API_PROVIDER:
+        return ExtractionTransport(
+            provider=chosen,
+            client=client if client is not None else claude_client.prepare_paid_client(),
+        )
+    if target is None:
+        targets = plan.targets
+        if len(targets) != 1:
+            raise extract.ExtractError(
+                "A subscription extraction is prepared one source at a time.",
+                code="extract-provider-unprepared",
+            )
+        target = targets[0]
+    if target.provider_plan is None:
+        raise extract.ExtractError(
+            f"{target.name}: no subscription request was planned for this source.",
+            code="extract-provider-unprepared",
+        )
+    prepared = revision_provider.provider_for(chosen).prepare(
+        target.provider_plan,
+        env=env,
+        runner=runner,
+        which=which,
+    )
+    return ExtractionTransport(provider=chosen, prepared=prepared)
+
+
+def run_extraction_call(
+    transport: ExtractionTransport,
+    plan: ExtractionPlan,
+    target: ExtractionTarget,
+    *,
+    capture: Callable[[Any], None],
+    frame: Callable[[str], None] | None = None,
+    spawn: Any = subprocess.Popen,
+) -> extract.ExtractionResult:
+    """Make the one content call this target was planned for.
+
+    The only place either transport is driven. The subscription sends the
+    bytes it planned — not a request built again here — and both paths hand
+    their answer to the same response adapter, so there is exactly one set of
+    rules about what a complete extraction is.
+    """
+    if transport.provider == revision_provider.ANTHROPIC_API_PROVIDER:
+        return extract.extract_candidates(
+            target.item,
+            model=plan.model,
+            style_guide=plan.style_guide,
+            system=plan.system,
+            mode=plan.mode,
+            known=plan.skip_list,
+            client=transport.client,
+            capture=capture,
+            provenance=dict(target.provenance),
+        )
+    if transport.prepared is None:
+        raise extract.ExtractError(
+            f"{target.name}: the subscription transport was not prepared.",
+            code="extract-provider-unprepared",
+        )
+    call = revision_provider.provider_for(transport.provider).dispatch(
+        transport.prepared,
+        capture=capture,
+        spawn=spawn,
+        frame=frame,
+    )
+    return extract.extraction_result_from_call(
+        call,
+        target.item,
+        model=plan.model,
+        mode=plan.mode,
+        provenance=dict(target.provenance),
+    )
+
+
+def extraction_capture_envelope(
+    provenance: Mapping[str, Any], raw: bytes
+) -> bytes:
+    """Wrap one paid subscription reply with the request that produced it.
+
+    Written before anything reads the bytes, because the interval where an
+    answer is worth most is the one before it has been understood. The reply
+    is kept exactly, base64 so no decoder touches it, beside the manifest and
+    channels needed to rebuild the same request. No new store: this is the
+    operation's own captured artifact.
+    """
+    return json.dumps(
+        {
+            operations.CAPTURED_REPLY_KEY: operations.CAPTURED_REPLY_VERSION,
+            "provenance": json.loads(json.dumps(provenance, ensure_ascii=False)),
+            "reply_base64": base64.b64encode(raw).decode("ascii"),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def extraction_capture_parts(
+    payload: bytes,
+) -> tuple[bytes, Mapping[str, Any] | None]:
+    """The exact reply inside a captured artifact, and its request if present.
+
+    One decoder, shared with the journal's own readers: anything that is not
+    one of these wrappers is returned unchanged, which is what keeps every
+    captured Anthropic API reply readable by the same code.
+    """
+    try:
+        return operations.unwrap_captured_reply(payload)
+    except operations.OperationError as exc:
+        raise extract.ExtractError(
+            str(exc), code="extract-capture-unreadable"
+        ) from exc
+
+
+def provider_plan_from_provenance(provenance: Mapping[str, Any]) -> Any:
+    """Rebuild the exact planned request from what was saved beside a reply.
+
+    Purely: no executable lookup, no login probe, no client, and no reading of
+    today's prompt files. What was sent is read back from the saved manifest
+    and channels, so an edited prompt cannot change the request this says was
+    made.
+
+    The response contract is a different matter. Decoding still runs through
+    the current candidate schema, so a reply saved under an older contract is
+    refused rather than reinterpreted: the bytes and the request stay exactly
+    as captured, and a person is told the shape janki now expects is not the
+    shape that was asked for.
+    """
+    manifest = provenance.get("provider_manifest")
+    channels = provenance.get("provider_channels")
+    if not isinstance(manifest, Mapping) or not isinstance(channels, Mapping):
+        raise extract.ExtractError(
+            "This extraction has no saved provider request to recover from.",
+            code="extract-request-unavailable",
+        )
+    stored_contract = str(provenance.get("response_schema_fingerprint") or "")
+    current_contract = prompts.schema_fingerprint(
+        claude_client.wire_schema(extract.candidate_schema())
+    )
+    if stored_contract and stored_contract != current_contract:
+        raise extract.ExtractError(
+            "This captured answer and the request that produced it are "
+            "preserved exactly, but janki's extraction response contract has "
+            "changed since that call, so the current reader must not parse it "
+            "under a different contract.",
+            code="extract-response-contract-changed",
+        )
+    return revision_provider.provider_plan_from_manifest(
+        manifest,
+        model=str(manifest["model"]),
+        style_guide="",
+        task_template="",
+        system_blocks=tuple(dict(block) for block in channels["system_blocks"]),
+        user_turn=str(channels["user_turn"]),
+        schema=extract.candidate_schema(),
+        input_blocks=tuple(dict(block) for block in channels["input_blocks"]),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _RecoveredSource:
+    """Just enough of a prepared input to name the file a reply belongs to."""
+
+    origin_path: Path
+
+
+def recover_extraction(
+    target: ExtractionTarget,
+    *,
+    model: str,
+    mode: str | None,
+    raw_reply: bytes,
+) -> extract.ExtractionResult:
+    """Read an already-paid-for reply again, without making a second call."""
+    plan = target.provider_plan
+    if plan is None:
+        plan = provider_plan_from_provenance(target.provenance)
+    call = revision_provider.provider_for(plan.provider).recover(plan, raw_reply)
+    return extract.extraction_result_from_call(
+        call,
+        target.item,
+        model=model,
+        mode=mode,
+        provenance=dict(target.provenance),
+    )
+
+
+def recover_extraction_from_capture(
+    payload: bytes,
+    *,
+    source_name: str,
+    mode: str | None = None,
+) -> extract.ExtractionResult:
+    """Recover one extraction from its captured artifact alone.
+
+    The wrapper carries both halves — the request as planned and the reply as
+    received — so this needs no prompt file, no login and no second call. The
+    saved mode is the mode: a caller may name it to be sure, but naming a
+    different one is refused rather than silently restating the answer as
+    something it was not read for.
+    """
+    raw, provenance = extraction_capture_parts(payload)
+    if provenance is None:
+        raise extract.ExtractError(
+            f"The captured reply for {source_name} has no saved request beside "
+            "it, so it cannot be recovered on its own.",
+            code="extract-request-unavailable",
+        )
+    plan = provider_plan_from_provenance(provenance)
+    saved_mode = provenance.get("mode")
+    # "auto" is how an unforced run is written down; None is how it is asked
+    # for. The same thing, said by two layers.
+    effective = None if saved_mode in (None, "auto") else str(saved_mode)
+    if mode is not None and mode != effective:
+        raise extract.ExtractError(
+            f"The captured reply for {source_name} was read in "
+            f"{saved_mode or 'auto'} mode; it cannot be recovered as {mode}.",
+            code="extract-recovery-mode-mismatch",
+        )
+    call = revision_provider.provider_for(plan.provider).recover(plan, raw)
+    return extract.extraction_result_from_call(
+        call,
+        _RecoveredSource(origin_path=Path(source_name)),
+        model=str(provenance.get("model") or plan.model),
+        mode=effective,
+        provenance=dict(provenance),
+    )
 
 
 def durable_inbox_root(config: ProjectConfig) -> Path:
@@ -377,6 +762,10 @@ def plan_extraction(
     system: str,
     force: bool = False,
     scope_id: str = "",
+    provider: str | None = None,
+    provider_env: Mapping[str, str] | None = None,
+    provider_runner: Callable[..., Any] = subprocess.run,
+    provider_which: Callable[..., str | None] = shutil.which,
 ) -> ExtractionPlan:
     """Resolve everything a run can know before it spends anything.
 
@@ -413,6 +802,7 @@ def plan_extraction(
         else ()
     )
 
+    chosen_provider = extraction_provider(config, provider)
     targets = extract.staging_targets(config.staging_dir, prepared, force=force)
     fingerprints = [
         item.source_sha256 or extract.source_fingerprint(item.origin_path)
@@ -424,10 +814,26 @@ def plan_extraction(
     # under the writer lock rather than replacing it from this stale snapshot.
     patterns.load_store(config.patterns_file)
 
-    return ExtractionPlan(
-        model=model,
-        mode=mode,
-        targets=tuple(
+    planned: list[ExtractionTarget] = []
+    for item, staging_path, fingerprint in zip(
+        prepared, targets, fingerprints, strict=True
+    ):
+        # One provider request per source, planned once. The subscription
+        # transport probes the local login here — before consent, and long
+        # before authority — so a logged-out machine is a refusal rather than
+        # a discovery made with a source already sent.
+        provider_plan = extraction_provider_plan(
+            item,
+            provider=chosen_provider,
+            model=model,
+            style_guide=style_guide,
+            system=system,
+            known=skip_list,
+            env=provider_env,
+            runner=provider_runner,
+            which=provider_which,
+        )
+        planned.append(
             ExtractionTarget(
                 item=item,
                 staging_path=staging_path,
@@ -442,17 +848,22 @@ def plan_extraction(
                     mode=mode,
                     known=skip_list,
                     source_sha256=fingerprint,
+                    provider_plan=provider_plan,
                 ),
+                provider_plan=provider_plan,
             )
-            for item, staging_path, fingerprint in zip(
-                prepared, targets, fingerprints, strict=True
-            )
-        ),
+        )
+
+    return ExtractionPlan(
+        model=model,
+        mode=mode,
+        targets=tuple(planned),
         style_guide=style_guide,
         system=system,
         skip_list=skip_list,
         known=known,
         scope_id=scope_id,
+        provider=chosen_provider,
     )
 
 
@@ -464,6 +875,10 @@ def plan_corpus_extraction(
     model: str,
     force: bool = False,
     scope_id: str = "",
+    provider: str | None = None,
+    provider_env: Mapping[str, str] | None = None,
+    provider_runner: Callable[..., Any] = subprocess.run,
+    provider_which: Callable[..., str | None] = shutil.which,
 ) -> ExtractionPlan:
     """Freshly plan one source that must already be in the durable corpus.
 
@@ -483,6 +898,10 @@ def plan_corpus_extraction(
         system=prompts.load(config.root, extract.prompt_name(mode)),
         force=force,
         scope_id=scope_id,
+        provider=provider,
+        provider_env=provider_env,
+        provider_runner=provider_runner,
+        provider_which=provider_which,
     )
 
 
@@ -672,6 +1091,16 @@ class ExtractionConsent:
     scope_id: str = ""
 
     @property
+    def provider(self) -> str:
+        """The transport this consent is about, or empty when nothing is."""
+        return "" if self.target is None else self.target.provider
+
+    @property
+    def billing_display(self) -> str:
+        """Who pays, taken from the planned request rather than written here."""
+        return "" if self.target is None else self.target.billing_display
+
+    @property
     def sendable(self) -> bool:
         return self.target is not None and not self.refusal and not self.busy
 
@@ -683,6 +1112,10 @@ def describe_extraction(
     mode: str | None = None,
     model: str | None = None,
     scope_id: str = "",
+    provider: str | None = None,
+    provider_env: Mapping[str, str] | None = None,
+    provider_runner: Callable[..., Any] = subprocess.run,
+    provider_which: Callable[..., str | None] = shutil.which,
 ) -> ExtractionConsent:
     """What sending one corpus source to a model would mean, before agreeing.
 
@@ -711,6 +1144,10 @@ def describe_extraction(
             # value never sends anything.
             force=True,
             scope_id=scope_id,
+            provider=provider,
+            provider_env=provider_env,
+            provider_runner=provider_runner,
+            provider_which=provider_which,
         )
         replaces = plan.targets[0].replaces if plan.targets else None
         state, cards, grammar = "", 0, ""
@@ -795,6 +1232,7 @@ def authorize_dispatch(
     target: ExtractionTarget,
     *,
     model: str,
+    stream: bool = False,
 ) -> str:
     """Record the authority for one call and mark it dispatching.
 
@@ -822,19 +1260,50 @@ def authorize_dispatch(
         request_fp=str(target.provenance["request_fingerprint"]),
         model=model,
     )
+    if stream:
+        # A streaming transport spools its exact frames as they arrive, so an
+        # interrupted call still leaves what was received. Bound between the
+        # authority and the dispatch state, which is the only window the
+        # journal accepts one in.
+        journal.begin_response_capture(operation_id)
     journal.advance(operation_id, "dispatching")
     return operation_id
+
+
+def _capture_payload(
+    response: Any, provenance: Mapping[str, Any] | None
+) -> bytes:
+    """The durable bytes for one captured answer.
+
+    ``serialize_response`` is deliberately forgiving about unfamiliar objects,
+    and what it makes of a ``bytes`` is that object's repr — quotes, escapes
+    and all — which is not the reply anybody was billed for. A transport that
+    hands over raw bytes has already given the exact answer, so it is written
+    exactly, wrapped with the request that produced it when one is known.
+    """
+    if isinstance(response, bytes | bytearray):
+        raw = bytes(response)
+        return raw if provenance is None else extraction_capture_envelope(
+            provenance, raw
+        )
+    return operations.serialize_response(response)
 
 
 def capture_hook(
     config: ProjectConfig,
     journal: operations.OperationJournal,
     operation_id: str,
+    *,
+    provenance: Mapping[str, Any] | None = None,
 ) -> Callable[[Any], None]:
     """The client's capture callback: persist the exact reply, then journal it.
 
     In that order. The bytes are what a person can still act on if parsing
     refuses, so they reach disk before anything says they arrived.
+
+    ``provenance`` saves the request beside those bytes, so an interrupted or
+    rejected answer can be read again later without asking today's prompts
+    what was sent.
     """
 
     def _capture(response: Any) -> None:
@@ -843,7 +1312,7 @@ def capture_hook(
             lambda: operations.capture_artifact(
                 config.operations_file,
                 operation_id,
-                operations.serialize_response(response),
+                _capture_payload(response, provenance),
             ),
         )
 
@@ -1351,6 +1820,10 @@ def dispatch_extraction(
     *,
     client: Any | None = None,
     progress: Callable[[str], None] | None = None,
+    provider_env: Mapping[str, str] | None = None,
+    provider_runner: Callable[..., Any] = subprocess.run,
+    provider_which: Callable[..., str | None] = shutil.which,
+    provider_spawn: Any = subprocess.Popen,
 ) -> ExtractionOutcome:
     """Re-plan and run one exact owner-confirmed corpus extraction.
 
@@ -1390,6 +1863,9 @@ def dispatch_extraction(
             model=expected.model,
             force=force,
             scope_id=expected.scope_id,
+            provider_env=provider_env,
+            provider_runner=provider_runner,
+            provider_which=provider_which,
         )
     except JankiError as exc:
         raise ExtractionDispatchError(exc, phase="binding") from exc
@@ -1400,6 +1876,11 @@ def dispatch_extraction(
         raise ExtractionDispatchError(cause, phase="binding")
 
     target = plan.targets[0]
+    if not expected.provider or plan.provider != expected.provider:
+        cause = staging.StagingError(
+            "The extraction transport changed after this page was rendered."
+        )
+        raise ExtractionDispatchError(cause, phase="binding")
     fresh_fingerprint = str(target.provenance["request_fingerprint"])
     if (
         fresh_fingerprint != expected.request_fingerprint
@@ -1456,25 +1937,44 @@ def dispatch_extraction(
 
     _require_current_destination(expected)
 
-    if client is None:
-        try:
-            client = claude_client.prepare_paid_client()
-        except JankiError as exc:
-            raise ExtractionDispatchError(exc, phase="preparation") from exc
+    # One selected transport, proved before the journal can record authority.
+    # A local failure here — no CLI, a logged-out login, a missing key — is a
+    # refusal on the transport that was chosen; it is never a reason to reach
+    # the other one.
+    try:
+        transport = prepare_extraction_transport(
+            plan,
+            target,
+            client=client,
+            env=provider_env,
+            runner=provider_runner,
+            which=provider_which,
+        )
+    except JankiError as exc:
+        raise ExtractionDispatchError(exc, phase="preparation") from exc
 
     try:
         journal = operations.OperationJournal.load(config.operations_file)
         # `busy_refusal` is a render-time display.  The real one-call gate is
         # OperationJournal.authorize inside authorize_dispatch, under its own
         # file lock, so two stale pages cannot both spend.
-        operation_id = authorize_dispatch(journal, target, model=plan.model)
+        operation_id = authorize_dispatch(
+            journal, target, model=plan.model, stream=transport.prepared is not None
+        )
     except JankiError as exc:
         raise ExtractionDispatchError(exc, phase="authorization") from exc
 
     _report_extraction_progress(progress, "Preparing pages")
     _report_extraction_progress(progress, "Reading the source")
-    captured = capture_hook(config, journal, operation_id)
+    captured = capture_hook(
+        config, journal, operation_id, provenance=target.provenance
+    )
     shape_reported = False
+
+    def frame(payload: str) -> None:
+        # The exact streamed text, spooled as it arrives and before anything
+        # parses it: an interrupted call still leaves what was received.
+        journal.append_response_frame(operation_id, payload)
 
     def capture(response: object) -> None:
         nonlocal shape_reported
@@ -1484,15 +1984,13 @@ def dispatch_extraction(
             shape_reported = True
 
     try:
-        result = extract.extract_candidates(
-            target.item,
-            model=plan.model,
-            style_guide=plan.style_guide,
-            system=plan.system,
-            mode=plan.mode,
-            known=plan.skip_list,
-            client=client,
+        result = run_extraction_call(
+            transport,
+            plan,
+            target,
             capture=capture,
+            frame=frame,
+            spawn=provider_spawn,
         )
     except Exception as exc:  # noqa: BLE001 - settle every dispatched call
         try:

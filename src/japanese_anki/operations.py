@@ -29,6 +29,7 @@ enforced by refusing the transition rather than documented as a convention.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -250,19 +251,88 @@ def serialize_response(response: Any) -> bytes:
         return repr(response).encode("utf-8")
 
 
+#: The versioned wrapper an extraction writes around one paid provider reply,
+#: inside this operation's own captured artifact. The reply is kept exactly;
+#: the request that produced it rides beside it so an answer that arrives
+#: before anything can read it is still recoverable.
+CAPTURED_REPLY_KEY = "janki_extraction_capture"
+CAPTURED_REPLY_VERSION = 1
+
+
+def unwrap_captured_reply(
+    payload: bytes,
+) -> tuple[bytes, Mapping[str, Any] | None]:
+    """The exact provider reply inside a captured artifact, and its request.
+
+    The one decoder. Anything that is not one of these wrappers — every
+    Anthropic API reply ever captured — comes back byte for byte with no
+    saved request, which is what keeps the older artifacts readable by the
+    same readers.
+    """
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeError, ValueError):
+        return payload, None
+    if not isinstance(decoded, Mapping) or CAPTURED_REPLY_KEY not in decoded:
+        return payload, None
+    if decoded.get(CAPTURED_REPLY_KEY) != CAPTURED_REPLY_VERSION:
+        raise OperationError(
+            "This captured reply was wrapped by a different version of janki "
+            "and cannot be unwrapped safely."
+        )
+    encoded = decoded.get("reply_base64")
+    if not isinstance(encoded, str):
+        raise OperationError("This captured reply has no exact provider bytes.")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError) as exc:
+        raise OperationError("This captured reply is unreadable.") from exc
+    saved = decoded.get("provenance")
+    return raw, saved if isinstance(saved, Mapping) else None
+
+
+def _streamed_answer_text(payload_bytes: bytes) -> str:
+    """The structured answer a streaming CLI reply carries, if it carries one.
+
+    Only the terminal result frame counts. The prose frames before it are the
+    model thinking aloud, and calling those an answer would report a reply
+    that holds nothing as though it held cards.
+    """
+    answer = ""
+    for line in payload_bytes.splitlines():
+        if not line.strip():
+            continue
+        try:
+            frame = json.loads(line)
+        except (UnicodeError, ValueError):
+            continue
+        if not isinstance(frame, Mapping) or frame.get("type") != "result":
+            continue
+        structured = frame.get("structured_output")
+        if structured is not None:
+            answer = json.dumps(structured, ensure_ascii=False, sort_keys=True)
+        elif isinstance(frame.get("result"), str):
+            answer = str(frame["result"])
+    return answer
+
+
 def response_answer_text(payload_bytes: bytes | None) -> str:
     """Concatenate provider text blocks from already-bound response bytes."""
     if payload_bytes is None:
         return ""
     try:
+        payload_bytes, _saved = unwrap_captured_reply(payload_bytes)
+    except OperationError:
+        return ""
+    try:
         payload = json.loads(payload_bytes)
     except (UnicodeError, ValueError):
-        return ""
+        return _streamed_answer_text(payload_bytes)
     if not isinstance(payload, Mapping):
         return ""
     blocks = payload.get("content")
     if not isinstance(blocks, list):
-        return ""
+        return _streamed_answer_text(payload_bytes)
     return "".join(
         str(block.get("text", ""))
         for block in blocks

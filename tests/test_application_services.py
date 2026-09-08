@@ -71,6 +71,12 @@ media_dir = "media"
 staging_dir = "staging"
 patterns_file = "patterns.json"
 scan_inbox = "inbox"
+
+# These fixtures drive the explicit Anthropic API extraction path: a faked
+# ``parse_call``. The default transport is the owner's subscription, and
+# choosing it here would probe a real login and spend the allowance.
+[ai]
+extract_provider = "anthropic-api"
 """
 
 
