@@ -5,14 +5,27 @@ Selecting a candidate commits you to completing its entire card in this
 response. Populate every required card field, and complete all candidate cards
 before writing patterns.
 
-This page is a list or table. Account for every row in source_units, in source
-order. Give each row a stable page, section slug, and ordinal. Copy its full text
+This source is a list or table, and its scope is the whole supplied document:
+every supplied page and every table block on those pages, in source order.
+Account for every row in source_units, in source order, across all of them. Give
+each row a stable page, section slug, and ordinal. Copy its full text
 to context. Give it exactly one disposition: candidate, duplicate,
 non-vocabulary, or unreadable. A vocabulary candidate unit has exactly one
 candidate with source_kind set to table and with the same page, section,
 ordinal, and context. Every other unit gives a reason and has no candidate. Keep
 repeated rows as separate units. Preserve the rows as the source states them;
 if a supplied reading appears uncertain, transcribe it and use low confidence.
+
+Never return a sample, a batch, a first chapter, a first page, or any other
+arbitrary limit on how many rows or cards you write: the supplied document
+defines the scope and nothing else does. Budget the answer for that exhaustive
+scope by keeping the text you author — meanings, usage notes, example sentences,
+pattern glosses — as concise as accuracy allows, while still populating every
+required field and copying every piece of verbatim source evidence these
+instructions ask for. Do not claim a pagination, context, or per-response limit,
+do not promise a continuation or a later part, and do not replace remaining
+required rows or cards with a count, a summary, or an explanation of what was
+left out. Finish the complete requested scope in this response.
 
 When the same expression and reading appear in more than one row, return one
 complete candidate for that identity carrying every sense, chapter, and
@@ -69,8 +82,13 @@ Give every example Hepburn romaji with word spaces. Spell particles as spoken:
 
 When the source supplies conjugated forms for a candidate, copy them into
 conjugations: every printed column label as its key and that row's supplied
-cell as its value, in the source's printed order. A source may print thirteen
-columns or any other number; keep every one of them. Do not substitute a
+cell as its value, in the source's printed order. Keep every printed form column
+the source supplies, whatever their number; there is no expected count. A printed
+dictionary-form, basic-form, or plain-form column is one of those columns: keep
+it under its printed label even when its cell simply repeats the candidate's
+expression or reading. A cell that looks redundant is still a physical column the
+source printed, so never silently drop a supplied form column for looking like
+one you already have. Do not substitute a
 familiar set of derived forms, drop a column whose label you do not recognise,
 reorder the columns, or fill a cell the source leaves blank — a blank cell
 stays an empty value under its label. Copy a clipped, misprinted, or otherwise
@@ -85,6 +103,15 @@ throughout, as in `group · leaf`. Take both halves from the source's own header
 text. Every physical column keeps its own key that way, in printed order, so
 two columns sharing a leaf label stay separate instead of collapsing into one
 and discarding a column the source printed.
+
+A grouped header can carry more than two semantic levels, and every printed level
+that helps identify the form belongs in the key. When a column is headed by a
+stated form description as well as a short form name — a printed long present
+affirmative heading above a printed masu-form label, for instance — the key
+carries both, not a lesson number and an abbreviation alone. Take every level
+from the source's own header text, join them the same way and in the same source
+order throughout, and leave out a level the printed header genuinely lacks rather
+than supplying a name for it. Every physical column still keeps its own key.
 
 When the source states which chapter, lesson, or unit teaches a candidate, copy
 those labels into source_chapters exactly as printed and in printed order. When
