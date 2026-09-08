@@ -577,6 +577,4970 @@
       "exports": {},
       "sources": []
     },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:(めがねを)かける:(めがねを)かける": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "ee74d77b08e610fd8190081d0e845b40d7a422ae1888559d0d6c6fc01ff667b5",
+          "file": "janki-eed2c344a29f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:(雨/雪)が降る:(あめ/ゆきが)ふる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "66aeffda85701541c24024eb4b74cc1038f417c9981910ca5e447be78a046759",
+          "file": "janki-db7366f06fb5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:あげる:あげる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "4e7c4a48cc594fd9ad26ebdbac3b4942244750b44507cdfddd81df85ca94a295",
+          "file": "janki-b87eaa5e5e5e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:ある:ある": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "7e1c19c1e285e740782d2254f0236808eb0974f1aa54d24f59cfd8754f38f598",
+          "file": "janki-e9bc438385ad.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:いる:いる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "dda24c508905e2eae44ed21d5d894ef30f05f4d76ae56bf37bca062e5c8cce2c",
+          "file": "janki-f6d74df6ee03.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:おごる:おごる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c43673f54ee0eda838c61d65680d5021f63c196efca070eb10cde191743902f7",
+          "file": "janki-86dca38e4f49.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:お皿を洗う:おさらをあらう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "a3ae05830833d62e21378e2ff933e4edb7669f3a37054bd15ddabcc79ef220f9",
+          "file": "janki-814d9f23b78a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:お腹が空く:おなかがすく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "8923416fc8f3d0658e90ee116ab46f364357cc741cd8425beeaddcd599919c61",
+          "file": "janki-873146538468.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:お金をおろす:おかねをおろす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "123343ac74257f135014b3e779e8b3c35083679c3fd4d8e9ce17fd465c1c7d71",
+          "file": "janki-b7463874e063.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:お風呂に入る:おふろにはいる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "2fce3372f80755c26fc22e765d4f86960e27d9513e46d2f95975dfde942a41ff",
+          "file": "janki-2516b3c59775.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:かかる:かかる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "7ddd23a3563770d7c92af7c9b7dd5f5400849bf0f8b04cb35de1db235710ee57",
+          "file": "janki-45e9bb03483e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:くれる:くれる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c52a090172a6d21ea0e3e96308e8810af133341e2e6c21fea4e25ce97159759e",
+          "file": "janki-e2440bb37ffa.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:ごろごろする:ごろごろする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "877bd5ed2f7f590e5a64ddb370d5085eeb1bb1d1e6a2bdda84eb8d7026a49ea2",
+          "file": "janki-1c0cf786219a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:する:する": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "66fd8753c3e4a87c7424d3b99c269eb376edfa06221126cd9683af29e3d7cf94",
+          "file": "janki-521bc14a1b30.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        },
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:たばこを吸う:たばこをすう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "f6078fe51db61b15e777c6990142b1ccd17cdbb5460c690b91877d2d51b08caf",
+          "file": "janki-28fabeb882c5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:つける:つける": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "b20270ff2a3979eebc78eed6ea0b5d28c8a5e3658a64a26824e5798e32ad6ed1",
+          "file": "janki-0b92b0db885f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:できる:できる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "3ac19957a57f58a6ac59d8e11b16cb8ee3c433d77bdc8f66bd20aadef80c8139",
+          "file": "janki-72de2e9d2086.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:なくす:なくす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "408ddc49830d4362c8ca037012c46d9da522a769855fb82aade7aac7770b41b6",
+          "file": "janki-9b69b0e766c3.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:なる:なる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "9755e48257eec19a539627dc18b364da45cf637cfd44c2db7890b8ec04e03322",
+          "file": "janki-76195383d7a6.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:まっすぐ行く:まっすぐいく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "4ace513a71e71e661a4f38863ac56f4885b6f0e3deaf880068962386a3491bcb",
+          "file": "janki-5fe4a90391a8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:もらう:もらう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "400199f4d525f3e3a2f75da547cad9394e711efd6e50419baa9e99689b871053",
+          "file": "janki-592067cf7743.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:やめる:やめる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "7537f00b72253cf1c2400f490bcb0528be3ac04b6edb7b381f05901e9cc10bdc",
+          "file": "janki-782b87404273.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:やる:やる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "afbab65ad45c68541c495c65ec6e6c0c5bbe4d3991fd4059df63f2fa7e6daaae",
+          "file": "janki-0f4c7ab12ff6.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:アイロンをかける:アイロンをかける": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "110f887acf5d023bf8de773fff28821c700017652d8282f1aa119c08b60e021c",
+          "file": "janki-e57db64cabbe.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        },
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:ゴミを出す:ゴミをだす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "d497604599ec9ce41bda9ab2f4f0b07865ea37a5caa177cba49ed0909b765a12",
+          "file": "janki-9451a4f43e15.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:サボる:サボる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "8bad3c2b1544bdc8ac661279ca2c96134adb52f688203b1460cd9106fa4ddbad",
+          "file": "janki-8cd4bd4691f1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:シャワーを浴びる:シャワーをあびる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "dd9c2295b2ce912e26eee8c772be1eb9038bdc3779d0e714ef054f22e0d3d0dd",
+          "file": "janki-b13de1e410c4.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:ダイエットする:ダイエットする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "470e3513ff9c0c5eadb242a7aac39a731f9ca4fb9ab1eb2d052a5ffa8c723636",
+          "file": "janki-3580b46be396.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:プロポーズする:プロポーズする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "b444f056fdae427324961e9c7d61fa04189fffd5c148f0d2fc5eb84949f3d53a",
+          "file": "janki-8373feac8714.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 73-77.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:下ろす:おろす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "da65b72b338a6034e8c284b6eac5ed2fd1ca5714267b4f3b90b851420501eb3d",
+          "file": "janki-b6f058f10a31.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 73-77.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:乗り遅れる:のりおくれる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "37442aa9d0b8f8b1db818d6201bd76f48a2ccbf1da3152fd5ee8c8af6a06432d",
+          "file": "janki-bf74341f5b59.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:乗る:のる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "b01952a25c7df037ae776d11ae1c10e716c76c56ce0777fd57ba468936fcbcb4",
+          "file": "janki-a40747802b6e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:予約する:よやくする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "62fd9fb77326c1309969f5de50cb9bfbf89583c4e4565097f519caaa7960dc76",
+          "file": "janki-1e6a7b713ab4.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:人気がある:にんきがある": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "8607d92fe7bb716a67dc15fb544fd6ee637c5c075721b756ba7babfcb35c3473",
+          "file": "janki-a8422d84ab20.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:付き合う:つきあう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "782ede8fe69ceac67e164c45a4ec47d267c464fd9c63a23d1944170481e995bf",
+          "file": "janki-9ca0fa17e369.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:休む:やすむ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "febba092b3920d135ad278cf58280b84b5a61ec1fb4475ef810a6451475f6383",
+          "file": "janki-8eef3e20c896.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:会う:あう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "7438b4b1152291dc84fee78b1c5614f7b5f84e316cc9b46e3e0cf576d90316bd",
+          "file": "janki-c5384f4d2407.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:似合う:にあう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "4e505b48268f6c1a81a063c4a2ea7b09188ae4ffb0028f597969519398df2cc1",
+          "file": "janki-aa7eb7f74549.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:住む:すむ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "811b2e2f7e65356500859c538d72313a1985c8e41a1f98934b907d9286725adb",
+          "file": "janki-f37a4231483e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:作る:つくる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "93d2506bf3865661b6c588f5cc19229803b17237cf1bd0fd93200e16964d184f",
+          "file": "janki-999e76de5abd.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:使う:つかう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "4c7f2860d521c5d68881ef64c79069e9c6be65a18245cd9a3e2cb3edfbbed67e",
+          "file": "janki-c7b7d743a456.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:保険に入る:ほけんにはいる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "0fa5c4a3d22c1eb7806607d530a1873a8290ab4a0d5a7c28350a8e09382a9952",
+          "file": "janki-3ff8568c7b0d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:借りる:かりる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "d9c460f97c0c4c21c91b2aca14a108116a6df711914013503406136ac06f97e5",
+          "file": "janki-3336460f88c0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:働く:はたらく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "4f09289ce0df940d5c42618ec38945b7ae0e74a5ec2ba842a570597fb1b871ce",
+          "file": "janki-e98a06192e96.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:入る:はいる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "062389b4f594111e72515fbdf020189433d821ef662731aa288e6cf1e1bcfab7",
+          "file": "janki-f617b9d632f3.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:入れる:いれる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ae413faa94ba7f80a35ced42dbb96be6cde440bb33c7c20345226f116ab3e9ed",
+          "file": "janki-92b911ff39a0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:出かける:でかける": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c49e2641855af2ee15668eefe159469b730c38250f58dcc2d0e39c7a1cc1c72e",
+          "file": "janki-83d8f0bb65e9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:出す:だす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "00b1265c460050457b37ba214400f2688ce3b5f605d58c19582a6ef08d8821cf",
+          "file": "janki-62e51a0aea35.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        },
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:出る:でる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "a834c429ab52c736279889e0ebafec3d24ead3881c0daacdd431b3e1f1f34ccb",
+          "file": "janki-e5765bdb502d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:分かる:わかる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "8825bc40a75d94a4a91963ba7ebbdce05fd32143dc6ddc6808722735ac3640d2",
+          "file": "janki-d1c1f257c6a1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:切る:きる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ae56cab2c7d066b4952ca9bea0ab7df593c0e62998ba174faa7d213960ec824d",
+          "file": "janki-04968ecd76f9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:別れる:わかれる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "98f87ab37f07ad81fcc16a7daae056882dbe8acb394d8684ff7adc2bae43f09d",
+          "file": "janki-6bf59953e43c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:勉強する:べんきょうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "0d90875c23e17feca239db564aebf2dac2a032d81edd759d28cba6cca8f84927",
+          "file": "janki-492c765bc3fd.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:卒業する:そつぎょうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "c2d01809b3e83eb11850a866fe8c23f88de714149031271c97c66f8064551a32",
+          "file": "janki-907d15178629.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:参加する:さんかする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "b649eb8f6323677c96a0f404e24278b960d9399220e0ef54f11c36b030d59053",
+          "file": "janki-6b427bc198ca.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:取る:とる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "88714652369ab5ccb669475cbd94d396c881f003db77f13e4a629c42db30d523",
+          "file": "janki-55994440d00d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:叩く:たたく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "077e297eb6941805476ff68bea64edf422e86e081818322b9255cf7185a9b7b7",
+          "file": "janki-54374612de2e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:右に曲がる:みぎにまがる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "77bd7cc1497711f09e84ba9458dea35fe3937d3b5616ba29474c1170e55a4d99",
+          "file": "janki-e412d862c9f5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:吹く:ふく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "413834bae5ba9f19f31b35e0e45f624fbd94dc96adae75966b9c1cc2c25c255f",
+          "file": "janki-e865358677c8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:咳が出る:せきがでる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "9c8330d89fb4fd4c52850d8fa49ed49fdfea08ae101cb341cc902ab87eaf4172",
+          "file": "janki-eacf753d0d90.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:喉が乾く:のどがかわく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "1387764483bdcd77946743daa16317f3926372e053c4d4c1e60016a1dc3856f3",
+          "file": "janki-75d263753972.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:喋る:しゃべる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "fbed433c1119d9c767c2a9f4132ae9f33147d2a12a1c2d2ac502c609fe15fec1",
+          "file": "janki-75fde13ddecb.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:喧嘩する:けんかする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "ad443434e8cfd0587b2ea3a07a433c5e6ba898ffe512743169a3800e77da0085",
+          "file": "janki-e1d97fbee0fc.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:嘘をつく:うそをつく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "6cc69de329e311307aace8d2cfbbc92eb1a28afa42c78f1dac10d8eb66103196",
+          "file": "janki-058095824e75.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:困る:こまる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "5ffa7197e5be6e7ea3c3df4332b31e72932f4aaa827f1dc356d1025244ff1782",
+          "file": "janki-bd966d57df08.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:売る:うる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "a30b79f0899b75cf6d4d42747d9742901464dd1bd3953f128bc8eb5a80f88d1d",
+          "file": "janki-3efd886d6966.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 73-77.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:太る:ふとる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "9e53074c76ba7ad2825ddba31857409754bb561d5d0853621ccbfc1b7f33e3e4",
+          "file": "janki-0409c2fa19bd.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:始まる:はじまる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "0f6b558f1dea18259396d89979d05a40f7d15a00e64a40b0a345523533a376bb",
+          "file": "janki-ab5120a4977f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:始める:はじめる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "f62138308d13ffb93f3bb21ccb2e33ed6a96f76fd61af7f478ef8d9a435f06fe",
+          "file": "janki-dd0d2654f9fe.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 73-78.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:寝る:ねる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "8aa6ddbaa66c2b493e3379f6c353471e89f77a9d90bcd13d77a087c82068d40e",
+          "file": "janki-04e90d3ec740.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:履く:はく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "9539180a5db3543ab80090a5ce23e512f395b5159549633ad8314d652aa96abc",
+          "file": "janki-b70af67bea84.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:左に曲がる:ひだりにまがる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "82c7cb05c6d62de786410fbd63ed2d236eee18b2d50731c1dd2fe3b690082afb",
+          "file": "janki-c500247dcd8b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:帰る:かえる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "339c8769bae79df5b15e321c16ad5d77f901566803886757468806fbef6c5b86",
+          "file": "janki-98a095b89af0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:座る:すわる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ddee4dd63a798836112e83b437ec5bcb358397fb1c8994062008eaf87ec644b0",
+          "file": "janki-60299574e98f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:弾く:ひく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "89b23a36af14454448051b151af4b8928958bef7cd3cd037d0b635d79850c1e9",
+          "file": "janki-f4f1c7e213b9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:待つ:まつ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "05c083a777ddd797257de03fde70ef56d49b9f273fa32be97c39a89519fb1986",
+          "file": "janki-b821804437b5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:心配する:しんぱいする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "54582568530d28aa812fd863fbc1edcf64a8319aaa304d93e8cf8253a0c8ff5e",
+          "file": "janki-19b3d3fcb64c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:忘れる:わすれる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ad1074f62b77d1b51eaefca79da588a1defbe845c93884ca7580c9d3d3b24912",
+          "file": "janki-103ff5094dc5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:思う:おもう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "74955828ab5324edb0b316777fe9df8b4401844155731b964b3017d885e25ee8",
+          "file": "janki-595d0b12557b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:急ぐ:いそぐ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "4081161bf5df697e488db634859142ff4864194feee902eb447c574beea31d8d",
+          "file": "janki-826c3178f7ad.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:感動する:かんどうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "20009292175ebd5f7f54fab7a0715c60075ee7c8e279bc63a449bb69c34facec",
+          "file": "janki-6719ee2ac240.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:手伝う:てつだう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "d6f278a9476ef0df8a52197c3690aa7b6f3501541f1e1e8136533581ecfbe410",
+          "file": "janki-f986078dff4f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:払う:はらう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "8af4febbb906e1d0a0ee368f0e8af17b1522f4a11faa7925af2c8aa20009663e",
+          "file": "janki-ea482ab62c0c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:持っていく:もっていく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "b8e87ad38c8288193d2a0a634219c3e49899763d5b5d72ce25b823411a995438",
+          "file": "janki-b3e645bd6aba.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 73-78.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:持ってくる:もってくる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "d9a4e09d60267a649004a04022fff819a136b625fa20ef996bc6c3eb72d0e4be",
+          "file": "janki-f80818bf7b25.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:持つ:もつ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "e0ede1bb98e34298392136d097aac734f471e1e9e1c20d0ef3294343970a1286",
+          "file": "janki-6bb4ee95156b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:捨てる:すてる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "b78b681eed333c1caedf4979f78bdeca562fc42b6c56d7cb3fa048018e3a28b7",
+          "file": "janki-9278b45d91e0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 73-78.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:掃除する:そうじする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "0ab1d58232012ae377ca09d1baede379d98a31472ef973f0808a03eae5b7866a",
+          "file": "janki-dda0e300853f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 73-78.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:掃除機をかける:そうじきをかける": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "864886d3a42416a120e0b733f98b68d461500edbb9a51b4b49db36b63784be30",
+          "file": "janki-52200918071f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:探す:さがす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "04dbcd551fbf7e85d1034003c2258ea29f88c034d73818ef80ff33e90183e431",
+          "file": "janki-bc27065d428e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:描く:かく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "f11f7f56bc4b36b01975ff9860bc56f46d7971c3c47b78c0bf482c0ea8410d3f",
+          "file": "janki-9172a84cb17b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 73-77.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:撮る:とる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "88714652369ab5ccb669475cbd94d396c881f003db77f13e4a629c42db30d523",
+          "file": "janki-b490e01b8a8c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:教える:おしえる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ebee9b12cc81b3b95b77625781e7c3b2bbe1a4959e695d1a9326292454a040ee",
+          "file": "janki-322973761859.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:散歩する:さんぽする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "891c79f4fc74b61c9c8a80e2f55e465273121a3d106f5fa7cfd901b24b06dbc0",
+          "file": "janki-9e1bf007f475.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:散歩に行く:さんぽにいく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "447b2e0aca99f48ea8d18446ecefe7526847282a28946295bde9202bcb4e33a1",
+          "file": "janki-05ce4cca697a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:料理する:りょうりする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "3feaf6e3087a916cd63639c78b5236a4939a48fa3636eb854b865e1a9adea749",
+          "file": "janki-3290343240ab.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:旅行する:りょこうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "986ce1796499f0ac49e6e275c9a4073ba3dcb9695c8ea610bcf773dc5d5ff608",
+          "file": "janki-dce979f84d88.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:書く:かく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "f11f7f56bc4b36b01975ff9860bc56f46d7971c3c47b78c0bf482c0ea8410d3f",
+          "file": "janki-f79dbc6d193a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:朝寝坊する:あさねぼうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "fe514c87b625c02616cc5962a36f9dedc5988886b95d0ad67e5f25b7768bbdc3",
+          "file": "janki-91b1b3f410e8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:来る:くる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "bb043c63281c18a4048dc2c5a809319e86f19f48dacb9629f5a660cd4f0e669d",
+          "file": "janki-b37bbd748c3c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:案内する:あんないする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "c9443b12f1b1a3abb4711e8dce6c758a0d668821c02e3483c9c888b2e56675d1",
+          "file": "janki-4bcd01be5245.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:歌う:うたう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "b19378cd35f3f6d2d08795e93ef2f216f2534ea370dceeb10a45310a69592531",
+          "file": "janki-0c9a1383efd5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:歩く:あるく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "5d344ca2e9e69315940c8df1f4e9383e75828d8dd8bddbc30d979dd323fd608f",
+          "file": "janki-57fbd24d696c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:歯を磨く:はをみがく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "371baf4d576a3c87803dd767bec24cf1aa059fa691fd25ae5cc301ac3b843a23",
+          "file": "janki-2ed64327587c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:気をつける:きをつける": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "a99058d1ffdf077f61d676c5d106b98bc032874aacd9c09cfcd6fe07ec3eec99",
+          "file": "janki-95c37bb85799.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:決める:きめる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "875f297d7146a9d5add791230cee551f73947ceb94f06e83f98939579d2792f3",
+          "file": "janki-1112425fdd0a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:泊まる:とまる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "cefe05e703e630984804ae881e2b1ed32b4bef96835f2ecead7f77f03a61a73b",
+          "file": "janki-de931dc8b887.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:泣く:なく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "cc6c3379c41c76909d34c7eb9247f30e2aeb105ca614abc2b58ca995c5926817",
+          "file": "janki-5c1d5fb06afa.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:注意する:ちゅういする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "0505417d551c5eecd37e527e4ed70d4beb1b984328db2f0a28f50059a48a2339",
+          "file": "janki-084fb22578c5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 73-77.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:泳ぐ:およぐ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "d8427e361dc378664f2aaa16c001a1d11351d6dd2e32601fcf6fd272fd83f62a",
+          "file": "janki-a2678f7d6e73.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:洗う:あらう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "271cbd72859b91de12374ec8863158a81319fdbfdf1e448fe5af0bb73c6b8a53",
+          "file": "janki-8ac6cf2eb57e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:洗濯する:せんたくする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "cfcc61e5d63a4d885b36acb728af42af70e4cddd7b93ecd2325ce0e23865786a",
+          "file": "janki-baba570fa319.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 73-78.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:消す:けす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "7f85c59983f8ca714bad0ece2a5d54f2c89c537442ddd905a1b513136ba0e035",
+          "file": "janki-004b01111eeb.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:渡る:わたる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ce62a3bcb04e61b5819fe5d073471fc2da9489bbf9896746c602fbcebe3386c0",
+          "file": "janki-17a00f33ec09.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:熱がある:ねつがある": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "9db535b88e416045a20c78215ed069f682acaa86f55eaec255bb846490715f04",
+          "file": "janki-df4e12697eaf.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:留学する:りゅうがくする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "d769a8297c8962108e59791ea8c578c190312a502eb2b0d2ca3f1279a5897ac1",
+          "file": "janki-6f5edc706798.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:疲れる:つかれる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "42322fb2c28fa165ee3b20ab51ee5fd5190b2b8e4db4ee04e514893e3ce4bc68",
+          "file": "janki-da2337c7e491.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:痩せる:やせる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "dbdd40a66ade366cc9cfd7929b93232fcf762bece332c863a0405777353cacf7",
+          "file": "janki-ec4ea7f46615.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:発表する:はっぴょうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "12c97dc89cdcdf34363ad6f9ec4b74386c5b1d10b4886baa6db71c0d3533ae39",
+          "file": "janki-7a64b5f8767b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:登る:のぼる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "4d96ead30ee643b8c50890679799b827925ba8ee1ffbcea35f6156ad937754c7",
+          "file": "janki-f7115ba0908b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:直す:なおす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "70367e0a8f6fa6e999942e099235a176235e45a45ef04cfdc0893d1f66b38527",
+          "file": "janki-7350b4762c13.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:相談する:そうだんする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "868af23112ba9d004bf1294aa917e88465901b25a7f340258e6acd0b9f2b8fe0",
+          "file": "janki-5f30d7943be2.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:着く:つく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "dc30ac826b1307141b1b04b0721ae72998e58dd3d78d06633d90f2d91e184a12",
+          "file": "janki-3ddc4a0e5c3c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:着る:きる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c17cd3071968538ffffbac5ca3d57c11e472e314a15c10e626a603bbc6679c8a",
+          "file": "janki-082cdbb24eda.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:着替える:きがえる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "8c256f60de83638be05b4a7fc6a3519817185a9ab4f251eccedd72d1933d22ec",
+          "file": "janki-75611f8f5827.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:知る:しる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "cf8a102d94d3677fb074aa97577727b502aeb559f7bf24850c32ed61441c3d2b",
+          "file": "janki-6f10f0088b56.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:磨く:みがく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ec6a9d00557863f5a1abb6299cceb53ce700b2bbfcb656053c9463ac5fd979f6",
+          "file": "janki-9fee9e185a49.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:立つ:たつ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "1033c5f06e77f24e409ea41630ed90dd267ec6a6062e2c7cc6b4d119361e9c37",
+          "file": "janki-c5df56a1fee3.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:笑う:わらう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "bd139bb80a5c925556c176361f33c960d0e577bb6b779abc5c19a5795da8045a",
+          "file": "janki-82b94592898e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:約束を守る:やくそくをまもる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "dae27f6db13927943bdf43c6ad2a2f6af80899381430b93c251996a02cb6707b",
+          "file": "janki-a4b9ba1e7acf.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:紹介する:しょうかいする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "c04fbf4a54b0eed01724724a718a7b5d1180da3b60682b433a4b3d5bfc61e036",
+          "file": "janki-bcabffa77db9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:終わる:おわる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "54631bc978caae53c50411bb652c8c05a929b76e5883fcd275b7f4077959669c",
+          "file": "janki-d730171c085a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:緊張する:きんちょうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "3917f738786e5fc2754c31b28866e96cd2096033caba2d60f7809cf03909b159",
+          "file": "janki-d638a7a911b5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:編む:あむ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "9d24467f0fb088f15f171ba51a0ce96b2ecc219aac89d9f4c35c9ce408301a64",
+          "file": "janki-a7105265a6d8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:練習する:れんしゅうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "ed8e2ceeb6ce4eb3118f0398a51012900e2810fb24ba61ea4a0c68d3549ceeff",
+          "file": "janki-b47c944a0976.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:習う:ならう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "dff5ac86dc7b2b4103c687cfffff73907828debf1bdbe21d9badbffb1120045a",
+          "file": "janki-feabbc27dabf.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:聞く:きく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "a9e07002d1d6da4729225cf7be1c672767e82989c2d04d409ffe0924895a050a",
+          "file": "janki-6c88b347a015.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        },
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:興味がある:きょうみがある": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "33f467f9df985c19aac78647852a468f57a9609a04e875a295515f9371b06cdf",
+          "file": "janki-bf1cbf7f0d76.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:落ち込む:おちこむ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "57fbd25ec6d84abdda6ddb9ee8658d886dc2602e95b710b1b468d660e8bf0d6d",
+          "file": "janki-a513c6b69738.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:薬を飲む:くすりをのむ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "74c4cb5e3c241c3f6059197f38be0b431553391d376117f36a67ec5d2cfdf8dc",
+          "file": "janki-26d680f5b9b1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:行く:いく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ee4485c3409175f73d940bd628c1f96ade068cdea972a5084bc7f3e504d3f364",
+          "file": "janki-7143d9c81ca1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:被る:かぶる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c53ab8b77c93c7e8369280c10785d6862e8b21f8696a0ac4db46dfbaf327f69c",
+          "file": "janki-5be9f80ecfec.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:要る:いる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "dda24c508905e2eae44ed21d5d894ef30f05f4d76ae56bf37bca062e5c8cce2c",
+          "file": "janki-6b6af6049475.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:見える:みえる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "86dddf1fd7738668e88918d339cf1771b301aac78a1b4278dbae9923b4effef2",
+          "file": "janki-b91f2fbda0c9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:見せる:みせる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "51f566abf59c5ede8c862acf09ce31ed9c728c4f0d1b8982666235dc1308044d",
+          "file": "janki-0d10c168037b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:見つかる:みつかる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c3a3988f670efb48db51721bbca9159387bf46a45b9b2af87de3f181c9b43af2",
+          "file": "janki-16fd23c29fdd.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:見る:みる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "b5a83cedcdd7fdcf249075a0386761d0d94c1d22519a06ef505c5739aff7839f",
+          "file": "janki-621e4f982523.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:覚える:おぼえる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "78ef8513136b4b97d99c868e9a822a5c15ea9ddef9c716526968d82c49d18168",
+          "file": "janki-f59fccb23069.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:観光する:かんこうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "ed00ecd1583e9b7adb1bd36cca3751fc8b827547b3255f7efeccd49598cde5f9",
+          "file": "janki-52a9b2098645.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:言う:いう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "d42ac5a22a2b5bd9be9293880cff76b115716207376e1c3a58f40646335c8ac5",
+          "file": "janki-79393cd10cfd.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:訳す:やくす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "328631eda8e76c292c50b813653adaa4fa3779d34331a86975e1215fc2854435",
+          "file": "janki-388cbebf32cf.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:話す:はなす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c420fd1ece2c6635835b5caddc8201bcef7b1ae9665d8e306ae53ac250597685",
+          "file": "janki-6746c0c97dea.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:誘う:さそう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "1e3bf94d395d540be75d9aecbc38e286732726ff713aa04ede15f0aee6ff86d1",
+          "file": "janki-e9cd7322e158.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:説明する:せつめいする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "ac153af2a455eba6b4749a9e189873b780d090764cdcf9d37ac5b6339c8e08fd",
+          "file": "janki-2dbc2e603c7f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:読む:よむ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "2bc755275fc130d78eb1094d0ea765af35781acd44cb4d779595a23230111e19",
+          "file": "janki-b4b51be33893.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:調べる:しらべる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "a6c706eee26cfd57b608c5da7d0a8beb61828061c7fab243979a996e6b53b4ec",
+          "file": "janki-ee6449dd3dd0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:諦める:あきらめる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "3f45a1bfc0512df951458b804d9423b9e991d4d7c76b08dade7481ff79619769",
+          "file": "janki-7e4bd16301de.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:買う:かう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "1f88d0e6d85c817c11e24575ced15a14e587d41501c5c165d2321c827bfefde4",
+          "file": "janki-482427734022.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:貸す:かす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "5105a3d915f5781d90734d59b60e89e744a37b251e1066e4f4df113af4be639d",
+          "file": "janki-eedd86de089e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        },
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:走る:はしる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "e879a0b23dffdad0e81e64ecded5475b99113a60b229c835fc4ddaffafd42eac",
+          "file": "janki-9e0d11e45dbe.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:起きる:おきる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "04d3283bcea8b0f20627f67520f6daf184e39dc41814f8f5b54ed2b8640086d0",
+          "file": "janki-c84cae3e53ac.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:起こす:おこす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "fe8d77c21128cb8a76b847893c20dbfc1fe4363fc39450a02a42ed9f7b2cefdc",
+          "file": "janki-6f4256fc2222.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:踊る:おどる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "b6ed830d122d2f9b53a975b4cb1dbc8bd613cb37482318091360d89fd14c6444",
+          "file": "janki-21942d871c47.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:迎えに来る:むかえにくる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "06f2e2dacf0993fbcda9bf2f6065131adc6300cdb01095de4885a0397544f0f2",
+          "file": "janki-5ecbced6341d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 37-37.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:迎えに行く:むかえにいく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "13db96c31e014bf2c97988be0fdd0e70b616d501a2c0d21eda4a8d975c8905ed",
+          "file": "janki-9b6401526f13.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:返す:かえす": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "4d67bdf03004b58c5520ac34abd2af55319f8c2789af6aa489bb9446f2393874",
+          "file": "janki-800983a23f21.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:送る:おくる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "61a43db40f8451b49d099e60932c82ac19e8143e522f803d09b387442f59962d",
+          "file": "janki-c81676761486.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:連れてくる:つれてくる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "9bf58fb2d01b4936fcd3e1f1b0f83ab0248a6ea30d9e3705999b5bf26c703260",
+          "file": "janki-978e981c7c28.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:連れて行く:つれていく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "d0aa18b70c34f5b06bf7b88cdc09702072911c262ef1413b4451d4094c4c8a2d",
+          "file": "janki-65b7c75a0cb6.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:遅くなる:おそくなる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "6513ca26ded92f94fc3c1a99ee0333603406e3515bb299c1c67605bf1ec51001",
+          "file": "janki-dcc106598701.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 61-72.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:遅刻する:ちこくする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "df490f6f078f36f002b8a3bad3cec6c6676b12403ea07ad71a779240885ce54d",
+          "file": "janki-f14ec4215186.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:遊ぶ:あそぶ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "ade4a0254b46d4cc3f4b7b3845eeb0bf914a0491edbd1a38f01815b3f759f18c",
+          "file": "janki-f7e3a70f4afd.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:運動する:うんどうする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "560885509cedb7ff42f97d488ce53b37b335c43f2cc9cb2b066cbb59d6f19a5c",
+          "file": "janki-2c46f79486e0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 13-24.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:運転する:うんてんする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "b5eed2819e458aa74e15d8fb2c9a065e60206faf0807e1615fe6ee3b567e7ba3",
+          "file": "janki-b05b70551063.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 73-78.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:道に迷う:みちにまよう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "23be0fb8d63995a5f2be8761c5ab1be298a63e966cc48330868367b9aa23bc98",
+          "file": "janki-364e55cebfe3.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:閉める:しめる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "61ed88afc4c6bdba6fa1bafb12949870175a6c6a608fe0f12c78973bb4e5ce1c",
+          "file": "janki-cc6fc29e9f63.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:開ける:あける": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "701572e42a922425916286595d72a601e630fe127cb95e6990ea95a32c143718",
+          "file": "janki-96b8ace70926.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:降りる:おりる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "3c45fbfc1968ee8ae8d7934b41be3625df460c482ebc671124e65f4c4ecaa814",
+          "file": "janki-ba03cc2aee86.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:集める:あつめる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "7878bf7c3a1c68b9307a3420a4cbf797112db5605134c3e67578fc7ff82068a3",
+          "file": "janki-452a68bf419d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 3 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:電話する:でんわする": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "f2c172f670332e371f461b71f974152a5d6590f226bd382ac4d5a69395d1177c",
+          "file": "janki-11593cea9097.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 1 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:頑張る:がんばる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "a24438a658ced8d48646e982a6e21fe228dc4cf55329f673482ddbda7d5628b5",
+          "file": "janki-956d03710fd8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 49-60.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:顔を洗う:かおをあらう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "32b76b03067a8eb88e140152aa45bbd137af017658437c1e1e8dc22e2fddfec3",
+          "file": "janki-a7774137b297.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:風邪をひく:かぜをひく": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "c9d6f059c04b415eea8c336d90c39c118cf400ad527585226a43a885d4d49cf2",
+          "file": "janki-4431eced4c87.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 37-48.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:食べる:たべる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "248aa87e9df31cf1f52f7b3afe526eeb3d68bb247dc481ae5d73c756cb561e8d",
+          "file": "janki-61aaa55142ed.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:飲む:のむ": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "63d8137a1024424d38681aef8c545145a8f098f6dfd581892d70f96aea74f34a",
+          "file": "janki-5320af749cd2.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:飼う:かう": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "at": "2026-09-08",
+          "content_fp": "0c918fb2fbf6102977357866af0cf4c7e0bcd4ea16b24e28cf8dec9a23221c0e",
+          "file": "janki-5c135975bfa1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": "2026-09-08"
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 25-36.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
+    "standalone:226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2:餌をやる:えさをやる": {
+      "added_at": "2026-09-08",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-09-08",
+          "content_fp": "604082cd0535fbd6a83206d78b8fa2914408c9fb5ea025adea25dc5f11f0b990",
+          "file": "janki-0e9245d9ed04.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
+      "enriched": [],
+      "exports": {
+        "brandon-japanese-201-verbs-29b00be5b4": {
+          "at": "2026-09-08",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "GENKI 201 Verbs - page 2 rows 01-12.png",
+          "seen_at": "2026-09-08",
+          "type": "extract"
+        }
+      ]
+    },
     "word:あそぶ:あそぶ": {
       "added_at": "2026-08-13",
       "audio": [

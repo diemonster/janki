@@ -1,4 +1,1282 @@
 {
   "version": 1,
-  "operations": {}
+  "operations": {
+    "02de826e-a9da-431f-bafb-555872b146c9": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI Verb List & Conjugations (201) - Google Sheets.pdf",
+      "source_sha256": "e4464539364e3941c8ca21791fa95bdcbd172f5d6f2b92ecebc53f53a5a511cb",
+      "request_fp": "57ecb528eacbae30793c0522d479377a831674fde49bb4a93f498ac5de7c1b53",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T19:32:38+00:00",
+      "updated_at": "2026-09-08T19:40:42+00:00",
+      "artifact": {
+        "relative_name": ".pending/02de826e-a9da-431f-bafb-555872b146c9.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148127896,
+          3710826,
+          1788896441378628733,
+          1788896441399559532
+        ],
+        "sha256": "2db39f6cf9bd2dcc94a89b185abf629b12792c635bc760e5f614c31ad556e787",
+        "terminal_marker": {
+          "name": ".02de826e-a9da-431f-bafb-555872b146c9.json.e95a9564115c0e7f.1000012-8d44098.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148127897,
+            687,
+            1788896441387967014,
+            1788896441388398970
+          ],
+          "sha256": "8400b0a6efe36e4581b756af6e267096a0a39c1297e8612573db5e6d98077b49"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/02de826e-a9da-431f-bafb-555872b146c9.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148105506,
+          0,
+          1788895958489782767,
+          1788895958493031236
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 2129477,
+        "committed_sha256": "2a4febaaf61ee898ac78eb5bff8256955843926e9f1b59970ee28270d4a640e5",
+        "frame_count": 6131,
+        "terminal_marker": {
+          "name": ".02de826e-a9da-431f-bafb-555872b146c9.frames.65ec843ec1c5a0a1.1000012-8d3e922.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148105507,
+            685,
+            1788895958491181587,
+            1788895958491487959
+          ],
+          "sha256": "19b5782d98e0fe44abbe2a26295c05dd454dbbff7a8d5b0e00a043c2a12e953e"
+        }
+      }
+    },
+    "1442b400-a235-47c4-a0b7-9b73dbbe4a64": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 2 rows 61-72.png",
+      "source_sha256": "24fbaa66010680a66fd4a1796cda74fdf51cbb75505a237ff61fa840413009f2",
+      "request_fp": "5dd14e298070dde71c2b654212afd3cc928ad1e565f868364d77ad09c4e19795",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:54:39+00:00",
+      "artifact": {
+        "relative_name": ".pending/1442b400-a235-47c4-a0b7-9b73dbbe4a64.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148853374,
+          2488576,
+          1788907881390580353,
+          1788907881404834748
+        ],
+        "sha256": "38d7f9601d13ec70890b0c2420347e36afd7c87031b48ce7b12a8cd76910c512",
+        "terminal_marker": {
+          "name": ".1442b400-a235-47c4-a0b7-9b73dbbe4a64.json.069bc0342ba3432c.1000012-8df527e.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148853375,
+            687,
+            1788907881397026699,
+            1788907881397283115
+          ],
+          "sha256": "400a1ebd83ba0793e750e7cab728578ebc80cdc7a6bae4a1695692480d944687"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/1442b400-a235-47c4-a0b7-9b73dbbe4a64.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148828165,
+          0,
+          1788907526092797684,
+          1788907526095989212
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1522485,
+        "committed_sha256": "68e8ddd687a07ad8d9102f97ac0b0d18bdd6a121b7889be777be5d73d541f533",
+        "frame_count": 4525,
+        "terminal_marker": {
+          "name": ".1442b400-a235-47c4-a0b7-9b73dbbe4a64.frames.3f33a6704738887b.1000012-8def005.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148828166,
+            685,
+            1788907526094308261,
+            1788907526094577260
+          ],
+          "sha256": "e12a18a99472a51c34f58e3ba17aae5832ef3773b98f3e26d26b0ea596c59f3a"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "60927e14-aa3f-4109-a724-692a3a9c6d5c": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 1 rows 25-36.png",
+      "source_sha256": "981008e7e9f0b0333b894b1f0d40775e05f21bc02d85b4c47f76d7e16c6fbecc",
+      "request_fp": "a248d1a14f1526621b905ddcff619895f808b48d370e653ee6702604737b24d5",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:34:02+00:00",
+      "artifact": {
+        "relative_name": ".pending/60927e14-aa3f-4109-a724-692a3a9c6d5c.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148751444,
+          2030800,
+          1788906355058690043,
+          1788906355072784396
+        ],
+        "sha256": "3edfc1de9bbeaed7b3e7a6818a0e32fd5b94a192b42c9b986e885d9de0c56916",
+        "terminal_marker": {
+          "name": ".60927e14-aa3f-4109-a724-692a3a9c6d5c.json.a1dba6630755248a.1000012-8ddc454.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148751445,
+            687,
+            1788906355064692349,
+            1788906355065120847
+          ],
+          "sha256": "10860d50a6f4b32ceaefcbccf4b1f6adcc37e07564d5ffe84e028295fef1aceb"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/60927e14-aa3f-4109-a724-692a3a9c6d5c.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148732429,
+          0,
+          1788906100190987666,
+          1788906100195602762
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1208232,
+        "committed_sha256": "7748ce17b3caa29d34d76aa63ea189484eef22fdec32da73a194c87948ae0c3c",
+        "frame_count": 3710,
+        "terminal_marker": {
+          "name": ".60927e14-aa3f-4109-a724-692a3a9c6d5c.frames.8c76060d8128df2b.1000012-8dd7a0d.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148732430,
+            685,
+            1788906100192373657,
+            1788906100192682072
+          ],
+          "sha256": "d42c841c7a564188020878dcfe1c7060d641ccbc454d0a4872f859593abbea0e"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "6290104a-4be5-4f78-ac68-fef69722faac": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 3 rows 37-37.png",
+      "source_sha256": "dc50ff9d601ec19e22bf0c37ba37524ecdcb5e73b734af46cff0a984b56d3f11",
+      "request_fp": "b59f9fd610f141f4d06c4c1acfbe0475eeeac1a854b7fb2fde5d7177cf9afbcd",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:58:25+00:00",
+      "artifact": {
+        "relative_name": ".pending/6290104a-4be5-4f78-ac68-fef69722faac.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148879639,
+          567712,
+          1788908305371446155,
+          1788908305375981337
+        ],
+        "sha256": "ca07e35afeb78224345f440003888fa4fc8a9230177b6da2745426dfd9789487",
+        "terminal_marker": {
+          "name": ".6290104a-4be5-4f78-ac68-fef69722faac.json.cc0b3bbf87cede03.1000012-8dfb917.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148879640,
+            686,
+            1788908305373299645,
+            1788908305373470894
+          ],
+          "sha256": "c12c6f4e1cf0da085051a88c97434355f3f9049cf26e2851581c14263789d1ae"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/6290104a-4be5-4f78-ac68-fef69722faac.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148877215,
+          0,
+          1788908224116374379,
+          1788908224119329778
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 208187,
+        "committed_sha256": "fbb3bb98d211760ad9507a61220934e8607b3a339e72c935ecd2d56cd289f147",
+        "frame_count": 519,
+        "terminal_marker": {
+          "name": ".6290104a-4be5-4f78-ac68-fef69722faac.frames.95e87fbb1f023733.1000012-8dfaf9f.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148877216,
+            685,
+            1788908224117707163,
+            1788908224117940536
+          ],
+          "sha256": "e6641cf437aa5c72bf9819ca60d9f77039fa0169551d76f8ed3efbee66538d43"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "8f40938c-b284-4568-8ed6-b5e2df9608dd": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 2 rows 37-48.png",
+      "source_sha256": "a8eebdf43f467483374887ac74ebd879512d492e5dfc1164353ab62d0b21a5e6",
+      "request_fp": "b3dd5190e5c1afe1e4b7b242e3402fc909eb3fae8af823877452dafa88516b5a",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:45:25+00:00",
+      "artifact": {
+        "relative_name": ".pending/8f40938c-b284-4568-8ed6-b5e2df9608dd.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148828130,
+          2381056,
+          1788907525258575786,
+          1788907525273804927
+        ],
+        "sha256": "d76336ab7e78763e4e8890b396a99916092d3f4571ed962c257e12518b112cac",
+        "terminal_marker": {
+          "name": ".8f40938c-b284-4568-8ed6-b5e2df9608dd.json.16485ee37f74ba0b.1000012-8deefe2.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148828131,
+            687,
+            1788907525265618713,
+            1788907525265930795
+          ],
+          "sha256": "e703147cf04381090058ea7cd34a09af7c732549931338b858fc2b3962d80893"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/8f40938c-b284-4568-8ed6-b5e2df9608dd.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148807399,
+          0,
+          1788907227249221449,
+          1788907227251978478
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1449376,
+        "committed_sha256": "6a54ffa27bd6555ac9d31371cdc137a92627336cc6fe6f237b944b22abc8fe19",
+        "frame_count": 4147,
+        "terminal_marker": {
+          "name": ".8f40938c-b284-4568-8ed6-b5e2df9608dd.frames.8c75c0349232b280.1000012-8de9ee7.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148807400,
+            685,
+            1788907227250380610,
+            1788907227250668442
+          ],
+          "sha256": "214cbb7e0a94cdbf7cdecdfb11539f895365d2a0788bd8f36ac48ed03efc5be9"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "90cb918f-a81c-45fa-8f38-c70629679f8f": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 1 rows 73-78.png",
+      "source_sha256": "8e9af7b662cb887b41efdbe50a376134b72506611bcf43c6967f57ad787c682f",
+      "request_fp": "53fa04c1bbf70ea730b4fe97f2744bd5558cd70762bfd361a3307dcd45ca797c",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:36:41+00:00",
+      "artifact": {
+        "relative_name": ".pending/90cb918f-a81c-45fa-8f38-c70629679f8f.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148778830,
+          1451720,
+          1788906830345638414,
+          1788906830355238330
+        ],
+        "sha256": "d115069622a9a93825bf0b946714bdcf0b2d359a796d5814f9a8ed1e8c7fd20e",
+        "terminal_marker": {
+          "name": ".90cb918f-a81c-45fa-8f38-c70629679f8f.json.dcb3758a526bc113.1000012-8de2f4e.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148778831,
+            687,
+            1788906830349472522,
+            1788906830349719229
+          ],
+          "sha256": "4ae5b013bcc9085b8148fec275ec6cea4b2ff0692b8ffdb9f57eefba22e94ab1"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/90cb918f-a81c-45fa-8f38-c70629679f8f.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148770607,
+          0,
+          1788906627023965193,
+          1788906627027156512
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 839082,
+        "committed_sha256": "4526259e2ffd31c9d5ff85599a05538f7b29bfe63effb682e8787e4b8da7db5d",
+        "frame_count": 2495,
+        "terminal_marker": {
+          "name": ".90cb918f-a81c-45fa-8f38-c70629679f8f.frames.6150e01c26699c86.1000012-8de0f2f.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148770608,
+            685,
+            1788906627025305103,
+            1788906627025611352
+          ],
+          "sha256": "bf74e025d32c229a966353a7cfd1208c9c8cb8182cd82a974913129b03da97ea"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "918ab836-3666-44b0-9bc8-0bf5b4aa425e": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 1 rows 13-24.png",
+      "source_sha256": "64878006e240d48d2fb2cf96dd6cbc9b99b50cc211799deb912582906481c1b2",
+      "request_fp": "2e4be5edd9d756d334959e67a122ba0064ee96156d9b86ad34000a94a1f419de",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:25:23+00:00",
+      "artifact": {
+        "relative_name": ".pending/918ab836-3666-44b0-9bc8-0bf5b4aa425e.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148743957,
+          2112372,
+          1788906322793934947,
+          1788906322806543474
+        ],
+        "sha256": "c7f23f5ce317307102d94660c26fb89f638c49632c8998ada78adb96589e5939",
+        "terminal_marker": {
+          "name": ".918ab836-3666-44b0-9bc8-0bf5b4aa425e.json.3223058d6d455720.1000012-8dda715.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148743958,
+            687,
+            1788906322799755463,
+            1788906322800006503
+          ],
+          "sha256": "c1c3eef18513e18f751640af98fcae1880ecf27f2a5a7c0acc4ddd8f9837456a"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/918ab836-3666-44b0-9bc8-0bf5b4aa425e.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148732436,
+          0,
+          1788906100248854559,
+          1788906100252710202
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1287140,
+        "committed_sha256": "4a8d37ec356c892555740931b44f6fe4b08ee981929aca2bda4853d0be507ffc",
+        "frame_count": 3762,
+        "terminal_marker": {
+          "name": ".918ab836-3666-44b0-9bc8-0bf5b4aa425e.frames.b8a63c0c22e006e9.1000012-8dd7a14.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148732437,
+            685,
+            1788906100250195176,
+            1788906100250448299
+          ],
+          "sha256": "9598e0ea464d896a9256ef3fb49a2c12d684a7c7465514f7bdab121ac0e792fd"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "924591c0-f1f2-4078-9f21-56438017438b": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 3 rows 01-12.png",
+      "source_sha256": "08e04e731c773a2fc76b92cc7546137c6ae8c9f8c0255dd8a2b6c7ec21ddf518",
+      "request_fp": "15ea0be77bf27743adca09ede492feb108e1d51f2db98a0c99ba76e6ad0888a0",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:56:33+00:00",
+      "artifact": {
+        "relative_name": ".pending/924591c0-f1f2-4078-9f21-56438017438b.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148871838,
+          2433124,
+          1788908193281536906,
+          1788908193295542058
+        ],
+        "sha256": "7c1216d211408ef90ad58d72d582b3211fa0c201e0924ea64a46fc353e45207d",
+        "terminal_marker": {
+          "name": ".924591c0-f1f2-4078-9f21-56438017438b.json.a184c6f71f1d3175.1000012-8df9a9e.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148871839,
+            687,
+            1788908193288121777,
+            1788908193288369858
+          ],
+          "sha256": "ee9055c625f1eddec2a23b22b0783a4b8fe6841d68d8ae188caffd3b49548dc7"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/924591c0-f1f2-4078-9f21-56438017438b.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148846030,
+          0,
+          1788907840936442502,
+          1788907840941097815
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1466017,
+        "committed_sha256": "15ca2fe83340273c6b9e6d2e87f00d4e302cef9a0c34c882a724cbb6e2c6be07",
+        "frame_count": 4131,
+        "terminal_marker": {
+          "name": ".924591c0-f1f2-4078-9f21-56438017438b.frames.08487f85b7b24c95.1000012-8df35ce.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148846031,
+            685,
+            1788907840937565622,
+            1788907840939384906
+          ],
+          "sha256": "5a596dae52bb43e0850b90abed63281a9c08960709ae13c32ee74aa7ba1f85a6"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "9bc9b362-f914-4744-bba2-0b0290a39ea0": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 1 rows 61-72.png",
+      "source_sha256": "503c3dc180b2bf79ca07051436d5077b2a9b13195c3fb47eb39652699ab1bb66",
+      "request_fp": "2e70c41599cce61cb6ecf91800c1fd93abfb10ce30d71b8b802344dd98a0672f",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:34:36+00:00",
+      "artifact": {
+        "relative_name": ".pending/9bc9b362-f914-4744-bba2-0b0290a39ea0.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148786302,
+          2271552,
+          1788906875977475881,
+          1788906875992413272
+        ],
+        "sha256": "02c4e628ced32665f9aa2ce1a535ede1023ab5bb4e65970c22ba231f84182d0d",
+        "terminal_marker": {
+          "name": ".9bc9b362-f914-4744-bba2-0b0290a39ea0.json.f21df227af314ca9.1000012-8de4c7e.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148786303,
+            687,
+            1788906875983614270,
+            1788906875984086518
+          ],
+          "sha256": "f6f65fe40651c4db70070ca589f7f3f1b1da601f7ac9c19676e72ba1e7c261a4"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/9bc9b362-f914-4744-bba2-0b0290a39ea0.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148765153,
+          0,
+          1788906600338998425,
+          1788906600341432789
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1379587,
+        "committed_sha256": "8c808160aae9f9f54ed6431f9bcf979e93cfd1c2d5fd70238f3f2ca08e0f64d8",
+        "frame_count": 3977,
+        "terminal_marker": {
+          "name": ".9bc9b362-f914-4744-bba2-0b0290a39ea0.frames.a6b2e0f0880c7dcc.1000012-8ddf9e1.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148765154,
+            685,
+            1788906600340064879,
+            1788906600340351002
+          ],
+          "sha256": "6d3d5c93d52e88b607732e346f86a1ab790db9a8688017f7eb9546cc70e31619"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "a0411625-bf1c-48b6-bd0b-3b057ae7eac7": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 2 rows 01-12.png",
+      "source_sha256": "f53351128557868c084c8e73ed21947136c03953d69a9b3d8d47a034988096fc",
+      "request_fp": "b163582cb110c3334c493dd856c02aea381e568563b7105b50e8fc135bf151b7",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:39:20+00:00",
+      "artifact": {
+        "relative_name": ".pending/a0411625-bf1c-48b6-bd0b-3b057ae7eac7.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148798611,
+          2479776,
+          1788907159966529337,
+          1788907159980540650
+        ],
+        "sha256": "cc1c6bea78f31ee05291ac7baf3fec82d86c0d7d739cf18fa4b84806ecdd373c",
+        "terminal_marker": {
+          "name": ".a0411625-bf1c-48b6-bd0b-3b057ae7eac7.json.7f0d31913424c8e2.1000012-8de7c93.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148798612,
+            687,
+            1788907159972744310,
+            1788907159973084350
+          ],
+          "sha256": "c5b89150c30b1ed0111063e6027602edd9e83a5cd7cf1260f4af9a28feccda3d"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/a0411625-bf1c-48b6-bd0b-3b057ae7eac7.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148778845,
+          0,
+          1788906830627738404,
+          1788906830630922931
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1501282,
+        "committed_sha256": "2ba92b6491fe1f0f89663d6d26ed95821fd9c4d3d175c44a51c302a6a0c38e95",
+        "frame_count": 4233,
+        "terminal_marker": {
+          "name": ".a0411625-bf1c-48b6-bd0b-3b057ae7eac7.frames.c5727a8762e6b458.1000012-8de2f5d.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148778846,
+            685,
+            1788906830629012023,
+            1788906830629455604
+          ],
+          "sha256": "c7297b5b9ade91f1b0bc8a891bea6dc7fba9607e5ad167b763f05fa240b24abf"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "b2a33b65-e616-4fed-8ce2-df184b81e1cf": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 3 rows 25-36.png",
+      "source_sha256": "559ff1940f4c39cbffd291108c67bca82bd279c517937dc234a504495a0a8ab9",
+      "request_fp": "8045df973c78ee93245866b5bc596d09e27926b62b5980a728bb9d4feca6c4a7",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T23:01:54+00:00",
+      "artifact": {
+        "relative_name": ".pending/b2a33b65-e616-4fed-8ce2-df184b81e1cf.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148890647,
+          2532784,
+          1788908514043372098,
+          1788908514057327600
+        ],
+        "sha256": "e464fd7bf95fcab89e43f88f8a0b39529d5783b5064e69999167adac445f4005",
+        "terminal_marker": {
+          "name": ".b2a33b65-e616-4fed-8ce2-df184b81e1cf.json.ea809d5cab3f6e39.1000012-8dfe417.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148890649,
+            687,
+            1788908514049397896,
+            1788908514049597561
+          ],
+          "sha256": "a0578e75474bd926f865f007a6c22c67cd4a25a69b3ffb1cd9afc03f780a601e"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/b2a33b65-e616-4fed-8ce2-df184b81e1cf.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148871940,
+          0,
+          1788908194584616775,
+          1788908194591711851
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1500892,
+        "committed_sha256": "b8c1736d8699ba98aa41a2936fcbb22184a01fba51dffbb87145a2d25d014577",
+        "frame_count": 4258,
+        "terminal_marker": {
+          "name": ".b2a33b65-e616-4fed-8ce2-df184b81e1cf.frames.cd8003b88c8172f8.1000012-8df9b04.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148871941,
+            685,
+            1788908194589902613,
+            1788908194590294902
+          ],
+          "sha256": "918f9b1ede3f24c19a0b28f604f1338f254bc14b65f7655b6f28e28aa88c466d"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "c4454b82-de44-4433-b396-20ba86c78596": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 2 rows 73-77.png",
+      "source_sha256": "3c001ac8bda2f5fdffe867efdf5b3fb47726cf67f4f504e94359ae2c475539d6",
+      "request_fp": "6e2e754420607417bf5634b28d17a28c7806f0b050f45fc8c1eaad7af2853375",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:50:40+00:00",
+      "artifact": {
+        "relative_name": ".pending/c4454b82-de44-4433-b396-20ba86c78596.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148845906,
+          1261372,
+          1788907840174235283,
+          1788907840182781412
+        ],
+        "sha256": "0cf669a8469cea2e9163628979d4698f8697621d152eccba81b4bd7fbd41bbfd",
+        "terminal_marker": {
+          "name": ".c4454b82-de44-4433-b396-20ba86c78596.json.e81e34809de09bb7.1000012-8df3552.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148845907,
+            687,
+            1788907840177801267,
+            1788907840178020683
+          ],
+          "sha256": "63ebd9419a0ad9e228f04472f496ad6bf36a3ef86b00a3e9af13421c8a31a4bf"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/c4454b82-de44-4433-b396-20ba86c78596.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148838055,
+          0,
+          1788907688454571064,
+          1788907688457504634
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 693585,
+        "committed_sha256": "8948d68185d63ee053caa08d5376ae09896ab5505887e9e646e54c8c7f541cc1",
+        "frame_count": 1970,
+        "terminal_marker": {
+          "name": ".c4454b82-de44-4433-b396-20ba86c78596.frames.63e328aa4bd32626.1000012-8df16a7.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148838056,
+            685,
+            1788907688455890225,
+            1788907688456210224
+          ],
+          "sha256": "2a5c5fb25856e92c3214110fea24c83074a87ae78eea1a24fbc9a041080b737c"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "cb2367ac-3c2f-4716-baf7-507268ba05af": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 3 rows 13-24.png",
+      "source_sha256": "69454037df46ba275e4810a4ddf4cd8a1cb58b6f41e8c5746215a4cffe142d96",
+      "request_fp": "781752c1eca790cd384614ec9024ef49ed9e39ddb6c4c43a0d0768dab7a6e3c6",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:57:03+00:00",
+      "artifact": {
+        "relative_name": ".pending/cb2367ac-3c2f-4716-baf7-507268ba05af.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148877176,
+          2462992,
+          1788908223217212428,
+          1788908223239872209
+        ],
+        "sha256": "dd9f363e9d1bd6588c1b193e5e00466e5dbb0b5d8c6189fd20584315c18a49cf",
+        "terminal_marker": {
+          "name": ".cb2367ac-3c2f-4716-baf7-507268ba05af.json.e4b059e882821217.1000012-8dfaf78.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148877177,
+            687,
+            1788908223226886995,
+            1788908223227121494
+          ],
+          "sha256": "5cb27323acc34348aa5a2c1284ef2cfe99d62e63d39a5cd070e9840e81d0dc4a"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/cb2367ac-3c2f-4716-baf7-507268ba05af.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148853408,
+          0,
+          1788907881689098228,
+          1788907881692031048
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1480280,
+        "committed_sha256": "84f634c4d156990256f2b0230df635bde5667706ba9eac7317062bfcd5f8e26a",
+        "frame_count": 4195,
+        "terminal_marker": {
+          "name": ".cb2367ac-3c2f-4716-baf7-507268ba05af.frames.40ba2d6422f8d571.1000012-8df52a0.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148853409,
+            685,
+            1788907881690301389,
+            1788907881690634887
+          ],
+          "sha256": "f3c58e93c3e6fc585def85ddd6efc82acf63bef916f9b90e1e7b515755696226"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "d4243500-2895-4d42-a9e2-b3225933204f": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 1 rows 49-60.png",
+      "source_sha256": "fabe9ff242289efa484a011f51ac6fdbb7f01ef328be1a2b47d60d9a2e5f6d45",
+      "request_fp": "f983cd7b6253a39ab5181a8b1b12c9c9d4663ab7d1884ea99014d197a243b0ca",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:30:26+00:00",
+      "artifact": {
+        "relative_name": ".pending/d4243500-2895-4d42-a9e2-b3225933204f.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148770577,
+          2249812,
+          1788906626313289785,
+          1788906626327754262
+        ],
+        "sha256": "2670706ac0edbf51f07f4a86139cf2abfbf2e01572b2e6a84781d2231fc144e0",
+        "terminal_marker": {
+          "name": ".d4243500-2895-4d42-a9e2-b3225933204f.json.f5d0a5cd1b1739c4.1000012-8de0f11.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148770578,
+            687,
+            1788906626319880131,
+            1788906626320122463
+          ],
+          "sha256": "3f01a11cab28d1f3fb054c999d8e3f04b1c5fa58c3722fb226a72575b3aa39b4"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/d4243500-2895-4d42-a9e2-b3225933204f.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148751460,
+          0,
+          1788906355399902601,
+          1788906355403077962
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1367599,
+        "committed_sha256": "5bdb28c52473467c777062a7ace30d6a27363b44a5834ee19d75b72d00113983",
+        "frame_count": 3954,
+        "terminal_marker": {
+          "name": ".d4243500-2895-4d42-a9e2-b3225933204f.frames.37aee79b68df081c.1000012-8ddc464.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148751461,
+            685,
+            1788906355401283012,
+            1788906355401558927
+          ],
+          "sha256": "c30e8fcfc2f1c5a55133283317ba241eef2c9e7763b6d5e1165947ac142cd360"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "d679e660-5cb0-465a-8515-746f821988e0": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 2 rows 25-36.png",
+      "source_sha256": "10a5f7b0898170e738492a9a7da41e21bea9c8b8683b4612e49e8d323c9a0f77",
+      "request_fp": "ca6c8f74faed2c8ead88d017b7c4f2c06034000632bf5fb6bc4e78a05014ccad",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:49:51+00:00",
+      "artifact": {
+        "relative_name": ".pending/d679e660-5cb0-465a-8515-746f821988e0.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148818968,
+          2309056,
+          1788907445248134699,
+          1788907445263029924
+        ],
+        "sha256": "a94ab24e6c657d8653c0e571a21d1fbe9b642cd107929030bbd56f53884b935a",
+        "terminal_marker": {
+          "name": ".d679e660-5cb0-465a-8515-746f821988e0.json.4d563bbe8c027b14.1000012-8decc18.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148818969,
+            687,
+            1788907445254578046,
+            1788907445254973169
+          ],
+          "sha256": "dd7c01200eb2e38fad77bd5fa81f369e5142091b8cc2446816e46a7a86b6e46a"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/d679e660-5cb0-465a-8515-746f821988e0.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148798644,
+          0,
+          1788907160815950248,
+          1788907160819671481
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1412334,
+        "committed_sha256": "d8dfbe2fdfc9259f857ceb08dbfe138504344464b70bb8054c5e5e9e503bd8a7",
+        "frame_count": 4269,
+        "terminal_marker": {
+          "name": ".d679e660-5cb0-465a-8515-746f821988e0.frames.8d759b398d0c2aee.1000012-8de7cb4.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148798645,
+            685,
+            1788907160817766906,
+            1788907160818051030
+          ],
+          "sha256": "a22d2734487a9a2b5c6a16589831423fec61fbe8abb3c1f0dd1e8f98565688f7"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "e797e6f8-2a08-4413-af91-414aef53e057": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 2 rows 13-24.png",
+      "source_sha256": "20e884fac5b8e6a3fac10c641c1dfb386c9959ab4d84f886d7e2edf993bb176e",
+      "request_fp": "c4df5b30234acb3185a6ff93983f01c8f616cd117af4386c08b9c52c79ca35b0",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:43:48+00:00",
+      "artifact": {
+        "relative_name": ".pending/e797e6f8-2a08-4413-af91-414aef53e057.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148807384,
+          2352028,
+          1788907226952034026,
+          1788907226966761627
+        ],
+        "sha256": "6a34b52c8730e83e807697d1dd54f41eed54e8b6aef54a0f1bf8ad755298831d",
+        "terminal_marker": {
+          "name": ".e797e6f8-2a08-4413-af91-414aef53e057.json.49ca867e861faa18.1000012-8de9ed8.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148807385,
+            687,
+            1788907226958391081,
+            1788907226958753829
+          ],
+          "sha256": "3e7d7f9d8faee6b4a5d34a29163887669cf8fd0d38463dd117eb662051440368"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/e797e6f8-2a08-4413-af91-414aef53e057.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148786335,
+          0,
+          1788906876757270314,
+          1788906876760763298
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1402282,
+        "committed_sha256": "80ecc61efdd12514c347d6b3aea8b97b3da53faf194b7fdaa6cc10103d445e42",
+        "frame_count": 4130,
+        "terminal_marker": {
+          "name": ".e797e6f8-2a08-4413-af91-414aef53e057.frames.af8058eec9d67437.1000012-8de4c9f.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148786336,
+            685,
+            1788906876758843057,
+            1788906876759177555
+          ],
+          "sha256": "ddd83b82e8190aa6a824d34d22f24a1b35452fd83c27aa47f85d593eadeb5e37"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "e8a29586-d230-474d-9f5b-ded29a700724": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "janki-201-verbs-pilot-page-1-rows-01-12.png",
+      "source_sha256": "3eb2146207f30a2f90e090a8a5d8809c0a5e1a6fcfcb99f4585ac64465204d2a",
+      "request_fp": "9ab6b9d0c99f44166efa8a1aa3bd1d42178f6e4b20a20201632975d64212feab",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T20:30:53+00:00",
+      "updated_at": "2026-09-08T20:34:23+00:00",
+      "artifact": {
+        "relative_name": ".pending/e8a29586-d230-474d-9f5b-ded29a700724.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148270314,
+          2127016,
+          1788899663092903321,
+          1788899663106022448
+        ],
+        "sha256": "a3f90c48560c8aa1e8858da826aec1a4e860a83a0ca75c09398ff0ef2f413820",
+        "terminal_marker": {
+          "name": ".e8a29586-d230-474d-9f5b-ded29a700724.json.b4a4a7ff85e15650.1000012-8d66cea.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148270315,
+            687,
+            1788899663098698655,
+            1788899663098982822
+          ],
+          "sha256": "10fb290ebd6240c1dcfb971f2598382b56f4b76c9aa9ec429be9013a81537ae0"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/e8a29586-d230-474d-9f5b-ded29a700724.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148260341,
+          0,
+          1788899453726940769,
+          1788899453729156644
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1280641,
+        "committed_sha256": "6f2c425fd10dc1b7e6b9c331142277993e0f061d45de7f71194c2ba7d7e552a8",
+        "frame_count": 3746,
+        "terminal_marker": {
+          "name": ".e8a29586-d230-474d-9f5b-ded29a700724.frames.d2990ccd8342da27.1000012-8d645f5.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148260342,
+            685,
+            1788899453727907644,
+            1788899453728082353
+          ],
+          "sha256": "2921633f1a658f4e787a2a49c5412ec84288e13e0c805c19b03257d9c611b39a"
+        }
+      }
+    },
+    "f3474cdc-c22f-4da9-a843-576135cd19c9": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 1 rows 37-48.png",
+      "source_sha256": "1c4eab5c2253a50b85a7937dc4dc304fa488c6108f01a8429a0dff36e4794b39",
+      "request_fp": "973aab7014339314024b35bde2ccdbd29302738f561bb781cb095a3c917aaec0",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:34:04+00:00",
+      "artifact": {
+        "relative_name": ".pending/f3474cdc-c22f-4da9-a843-576135cd19c9.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148765081,
+          2148784,
+          1788906600018635898,
+          1788906600031685590
+        ],
+        "sha256": "500bc45da1181ce1e9a560047e2987ba6d74e147fbfb3d3db781ac271177f2d2",
+        "terminal_marker": {
+          "name": ".f3474cdc-c22f-4da9-a843-576135cd19c9.json.e8ca38db46378b17.1000012-8ddf999.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148765082,
+            687,
+            1788906600024653913,
+            1788906600024901995
+          ],
+          "sha256": "b0d8526ce09587697b6e667c367687e28dfd2122a6182fc50d12b4343fff9467"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/f3474cdc-c22f-4da9-a843-576135cd19c9.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148744077,
+          0,
+          1788906323490223755,
+          1788906323492656578
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1270496,
+        "committed_sha256": "4da86a0c6b31c975ab2b2e0f5f30668f00c2be6cd0a5d381dc648512258f5751",
+        "frame_count": 3862,
+        "terminal_marker": {
+          "name": ".f3474cdc-c22f-4da9-a843-576135cd19c9.frames.49f7b3fef7606a8b.1000012-8dda78d.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148744078,
+            685,
+            1788906323491327042,
+            1788906323491564583
+          ],
+          "sha256": "502c72a6645b6f3c142e0c7dc06fcd4b8462053025ee638bbf2cbd00aab4ea30"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    },
+    "f43dc39c-1798-418c-b40d-d001f1e1edb8": {
+      "kind": "extract",
+      "state": "committed",
+      "source_file": "GENKI 201 Verbs - page 2 rows 49-60.png",
+      "source_sha256": "6b68fb16b355a34d5926bb3961a25b54e4e4ab9dd0020ca93f3499986aecbf4a",
+      "request_fp": "2d78d5718ad77e9bcdbf1d5ea63ead7d17b1b4e79fa8cf6259d891a9a80d7049",
+      "model": "claude-opus-5",
+      "authorized_at": "2026-09-08T22:21:39+00:00",
+      "updated_at": "2026-09-08T22:51:57+00:00",
+      "artifact": {
+        "relative_name": ".pending/f43dc39c-1798-418c-b40d-d001f1e1edb8.json",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "entry_state": [
+          16777234,
+          148838035,
+          2093176,
+          1788907688162748368,
+          1788907688173438237
+        ],
+        "sha256": "a6b0717ecf3da05af9231f82e165c783f4edc634eafadd31522cf4946913a6a4",
+        "terminal_marker": {
+          "name": ".f43dc39c-1798-418c-b40d-d001f1e1edb8.json.7405e5affc11d612.1000012-8df1693.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148838036,
+            687,
+            1788907688167473514,
+            1788907688167686096
+          ],
+          "sha256": "ce9ae0d079d6d8cdd3a0204984f6a18f5bcf42c07b7da93578fdd91d80d08a2a"
+        }
+      },
+      "response_spool": {
+        "relative_name": ".pending/f43dc39c-1798-418c-b40d-d001f1e1edb8.frames",
+        "directory_identity": [
+          16777234,
+          118842689
+        ],
+        "initial_state": [
+          16777234,
+          148818979,
+          0,
+          1788907445543154298,
+          1788907445546157493
+        ],
+        "initial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "committed_size": 1240620,
+        "committed_sha256": "7369e23d3d4b69e1e2155e05b60f59d1f8d7cd21c07a1e567a0a5533da1d865b",
+        "frame_count": 3791,
+        "terminal_marker": {
+          "name": ".f43dc39c-1798-418c-b40d-d001f1e1edb8.frames.bb072bbe925d2f9a.1000012-8decc23.janki-cas.validated",
+          "entry_state": [
+            16777234,
+            148818980,
+            685,
+            1788907445544442792,
+            1788907445544772374
+          ],
+          "sha256": "75973a594a9e0e7b67204200920cff85c8399085a54ffa1769ef44336bfa0539"
+        }
+      },
+      "batch_id": "dfee3123-743c-496c-b970-877aa64f47a9"
+    }
+  },
+  "batches": {
+    "dfee3123-743c-496c-b970-877aa64f47a9": {
+      "children": [
+        "918ab836-3666-44b0-9bc8-0bf5b4aa425e",
+        "60927e14-aa3f-4109-a724-692a3a9c6d5c",
+        "f3474cdc-c22f-4da9-a843-576135cd19c9",
+        "d4243500-2895-4d42-a9e2-b3225933204f",
+        "9bc9b362-f914-4744-bba2-0b0290a39ea0",
+        "90cb918f-a81c-45fa-8f38-c70629679f8f",
+        "a0411625-bf1c-48b6-bd0b-3b057ae7eac7",
+        "e797e6f8-2a08-4413-af91-414aef53e057",
+        "d679e660-5cb0-465a-8515-746f821988e0",
+        "8f40938c-b284-4568-8ed6-b5e2df9608dd",
+        "f43dc39c-1798-418c-b40d-d001f1e1edb8",
+        "1442b400-a235-47c4-a0b7-9b73dbbe4a64",
+        "c4454b82-de44-4433-b396-20ba86c78596",
+        "924591c0-f1f2-4078-9f21-56438017438b",
+        "cb2367ac-3c2f-4716-baf7-507268ba05af",
+        "b2a33b65-e616-4fed-8ce2-df184b81e1cf",
+        "6290104a-4be5-4f78-ac68-fef69722faac"
+      ],
+      "concurrency_limit": 2,
+      "manifest_sha256": "efff9cf87dcc22a9c3e5a4677a56cfb17cad32674802bd6793afe40e4642ca39"
+    }
+  }
 }

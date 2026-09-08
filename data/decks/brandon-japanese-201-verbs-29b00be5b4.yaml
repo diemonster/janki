@@ -1,0 +1,14 @@
+deck:
+  kind: vocabulary
+  name: Brandon Japanese::201 Verbs
+  deck_id: 1251316548
+  output: brandon-japanese-201-verbs-29b00be5b4.apkg
+  cards:
+    recognition: true
+    production: false
+    reading: false
+  source: ../normalized/vocabulary.json
+  intake_tag: janki:deck:brandon-japanese-201-verbs-29b00be5b4
+  include_tags:
+  - janki:deck:brandon-japanese-201-verbs-29b00be5b4
+  scope_id: 226ce25ca16c623c38629462f1bd3d8a630a955c7ee8c1360c0565f9cbadadc2
