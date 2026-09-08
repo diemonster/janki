@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import re
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -66,12 +67,14 @@ _EXTRACT_CONFIRM_ACTION = "janki.extraction.confirm"
 _SELECT_DECK_ACTION = "janki.deck.select"
 _PREPARE_OPERATION_ACTION = "janki.operation.prepare"
 _RESUME_KANJI_ACTION = "janki.kanji.resume"
+_EXTRACTION_BATCH_ACTION = "janki.extraction_batch.act"
 _ALL_LIBRARY_DECK_ID = "janki:all-library"
 SHOW_DECKS_MESSAGE = "Choose a deck to focus on"
 CAPABILITIES_MESSAGE = "Show me what I can do with my Japanese library"
 SOURCE_HELP_MESSAGE = "How do I add study material?"
 MANAGE_OPERATIONS_MESSAGE = "Manage model calls"
 RESUME_KANJI_MESSAGE = "Resume kanji cards"
+MANAGE_EXTRACTION_BATCHES_MESSAGE = "Manage extraction batches"
 _ASSISTANT_SCOPE = "janki-project"
 _ACTIVE_DECK_ID_KEY = "janki_active_deck_id"
 _ACTIVE_DECK_SCOPE_KEY = "janki_active_deck_scope"
@@ -168,6 +171,23 @@ _EXTRACTION_PROGRESS_LABELS = frozenset(
         "Saving proposals",
     }
 )
+_BATCH_PROGRESS = re.compile(r"^Source (\d+) of (\d+): ([a-z_]+)$")
+
+
+def _batch_progress_label(label: str) -> str:
+    """A batch narrates a numbered source and the state it reached.
+
+    Deliberately not one of the fixed single-source labels: with several calls
+    in flight, "Reading the source" cannot say which source, and a shared
+    allowlist would filter the only part that carries information.
+    """
+
+    normalized = label.strip()
+    if not _BATCH_PROGRESS.fullmatch(normalized):
+        raise ValueError("The extraction batch reported an unknown progress state.")
+    return normalized
+
+
 _T = TypeVar("_T")
 
 
@@ -458,6 +478,112 @@ class SourceExtractionExecution:
     message: str
 
 
+@dataclass(frozen=True, slots=True)
+class ExtractionBatchChildStatus:
+    """One numbered source in a batch and the durable state it reached."""
+
+    index: int
+    source_name: str
+    state: str
+    detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionBatchActionChoice:
+    """One local control the batch core says is worth offering right now.
+
+    ``child_indices`` is empty except for a retry, where it names the exact
+    sources the core found eligible. The widget offers nothing else, and the
+    core revalidates the selection before anything is sent.
+    """
+
+    action: str
+    label: str
+    child_indices: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionBatchChoice:
+    """One durable batch as the local desk shows it."""
+
+    batch_id: str
+    label: str
+    summary: str
+    concurrency_limit: int
+    children: tuple[ExtractionBatchChildStatus, ...]
+    actions: tuple[ExtractionBatchActionChoice, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionBatchResumption:
+    """Truthful durable aggregate after continuing a batch's recorded calls."""
+
+    message: str
+    state: str
+    complete: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionBatchPreviewOffer:
+    """One rendered look at what a batch has already saved.
+
+    ``preview_url`` is absent when this workbench has nowhere to serve the
+    bytes from; the message then says so rather than implying a review
+    happened. ``conflicts`` is the core's plain-text supplement — janki does
+    not decide which of two disagreeing sources is right.
+    """
+
+    message: str
+    preview_url: str | None = None
+    conflicts: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class _ExtractionBatchBinding:
+    """Which rendered batch controls this exact widget may act on.
+
+    An anti-replay guard, not authority: resume runs under calls the journal
+    already recorded, and a retry still has to win its own confirmation.
+    """
+
+    thread_id: str
+    widget_item_id: str
+    actions: frozenset[tuple[str, str, tuple[int, ...]]]
+
+
+def _validate_extraction_batch_choices(value: Any) -> tuple[ExtractionBatchChoice, ...]:
+    if not isinstance(value, tuple) or not all(
+        isinstance(choice, ExtractionBatchChoice) for choice in value
+    ):
+        raise TypeError("The batch desk must return exact batch choices.")
+    for choice in value:
+        if not choice.batch_id or not choice.label:
+            raise ValueError("Every batch choice needs a durable id and a plain label.")
+        if any(
+            option.action not in {"preview", "resume", "retry"}
+            for option in choice.actions
+        ):
+            raise ValueError("A batch choice offered an action janki does not have.")
+        if any(
+            bool(option.child_indices) != (option.action == "retry")
+            for option in choice.actions
+        ):
+            raise ValueError("Only a retry names exact sources.")
+    return value
+
+
+def _validate_batch_resumption(value: Any) -> ExtractionBatchResumption:
+    if not isinstance(value, ExtractionBatchResumption):
+        raise TypeError("A batch resume must return its durable aggregate state.")
+    return value
+
+
+def _validate_batch_preview_offer(value: Any) -> ExtractionBatchPreviewOffer:
+    if not isinstance(value, ExtractionBatchPreviewOffer):
+        raise TypeError("A batch preview must return one exact rendered offer.")
+    return value
+
+
 class RevisionRefusal(RuntimeError):
     """A safe refusal that may be shown to the owner without a server error."""
 
@@ -494,6 +620,36 @@ class RevisionCallbacks(Protocol):
         progress: Callable[[str], None],
     ) -> KanjiFinishResumption | Awaitable[KanjiFinishResumption]:
         """Continue or re-offer one durable receipt under its recorded authority."""
+
+    def list_extraction_batch_choices(
+        self,
+    ) -> tuple[ExtractionBatchChoice, ...] | Awaitable[tuple[ExtractionBatchChoice, ...]]:
+        """Read the durable extraction batches and the controls each one allows."""
+
+    def resume_extraction_batch(
+        self,
+        *,
+        batch_id: str,
+        progress: Callable[[str], None],
+    ) -> ExtractionBatchResumption | Awaitable[ExtractionBatchResumption]:
+        """Continue one batch under the model calls it already authorized."""
+
+    def prepare_extraction_batch_retry(
+        self,
+        *,
+        batch_id: str,
+        child_indices: tuple[int, ...],
+        deck_scope: str,
+    ) -> ChatReply | Awaitable[ChatReply]:
+        """Plan a fresh retry of exactly these sources, locally and unsent."""
+
+    def render_extraction_batch_preview(
+        self,
+        *,
+        batch_id: str,
+        deck_scope: str,
+    ) -> ExtractionBatchPreviewOffer | Awaitable[ExtractionBatchPreviewOffer]:
+        """Render one combined look at what this batch has already saved."""
 
     def chat(
         self,
@@ -1943,6 +2099,7 @@ def create_assistant_core(
             self._selectors: dict[str, _SelectorBinding] = {}
             self._operation_selectors: dict[str, _OperationSelectorBinding] = {}
             self._kanji_resumes: dict[str, _KanjiResumeBinding] = {}
+            self._batch_selectors: dict[str, _ExtractionBatchBinding] = {}
             self._plans: dict[str, _PlanBinding] = {}
             self._finishes: dict[str, _FinishBinding] = {}
             self._extractions: dict[str, _ExtractionBinding] = {}
@@ -2038,6 +2195,7 @@ def create_assistant_core(
                 self._selectors,
                 self._operation_selectors,
                 self._kanji_resumes,
+                self._batch_selectors,
                 self._plans,
                 self._finishes,
             ):
@@ -2481,6 +2639,129 @@ def create_assistant_core(
                 }
             )
 
+        def _extraction_batch_widget(
+            self,
+            batch_choices: tuple[ExtractionBatchChoice, ...],
+            *,
+            capability: str,
+        ) -> Any:
+            rows: list[dict[str, Any]] = []
+            for choice in batch_choices:
+                rows.append(
+                    {
+                        "type": "ListViewItem",
+                        "gap": 2,
+                        "children": [
+                            {
+                                "type": "Box",
+                                "direction": "col",
+                                "gap": 1,
+                                "children": [
+                                    {
+                                        "type": "Title",
+                                        "value": choice.label,
+                                        "size": "sm",
+                                    },
+                                    {
+                                        "type": "Text",
+                                        "value": (
+                                            f"{choice.summary}, "
+                                            f"{choice.concurrency_limit} at a time"
+                                        ),
+                                        "size": "sm",
+                                        "color": "secondary",
+                                    },
+                                    *[
+                                        {
+                                            "type": "Text",
+                                            "value": (
+                                                f"{child.index}. {child.source_name}"
+                                                f" — {child.state}"
+                                                + (f": {child.detail}" if child.detail else "")
+                                            ),
+                                            "size": "sm",
+                                            "color": "secondary",
+                                        }
+                                        for child in choice.children
+                                    ],
+                                ],
+                            }
+                        ],
+                    }
+                )
+                for option in choice.actions:
+                    rows.append(
+                        {
+                            "type": "ListViewItem",
+                            "gap": 2,
+                            "children": [
+                                {
+                                    "type": "Text",
+                                    "value": option.label,
+                                    "width": "100%",
+                                    "color": "primary",
+                                }
+                            ],
+                            "onClickAction": {
+                                "type": _EXTRACTION_BATCH_ACTION,
+                                "payload": {
+                                    "capability": capability,
+                                    "batch_id": choice.batch_id,
+                                    "action": option.action,
+                                    "child_indices": list(option.child_indices),
+                                },
+                                "handler": "server",
+                                "loadingBehavior": "container",
+                                "streaming": True,
+                            },
+                        }
+                    )
+            return DynamicWidgetRoot.model_validate(
+                {
+                    "type": "ListView",
+                    "limit": "auto",
+                    "status": {"text": "Extraction batches", "icon": "book-open"},
+                    "children": rows,
+                }
+            )
+
+        def _extraction_batch_selector_event(
+            self,
+            thread: Any,
+            request_context: AssistantRequestContext,
+            batch_choices: tuple[ExtractionBatchChoice, ...],
+        ) -> Any:
+            capability = secrets.token_urlsafe(32)
+            item_id = store.generate_item_id("message", thread, request_context)
+            self._batch_selectors[capability] = _ExtractionBatchBinding(
+                thread_id=thread.id,
+                widget_item_id=item_id,
+                actions=frozenset(
+                    (choice.batch_id, option.action, tuple(option.child_indices))
+                    for choice in batch_choices
+                    for option in choice.actions
+                ),
+            )
+            return ThreadItemDoneEvent(
+                item=WidgetItem(
+                    id=item_id,
+                    thread_id=thread.id,
+                    created_at=datetime.now(),
+                    widget=self._extraction_batch_widget(
+                        batch_choices,
+                        capability=capability,
+                    ),
+                    copy_text=None,
+                )
+            )
+
+        async def _list_extraction_batch_choices(
+            self,
+        ) -> tuple[ExtractionBatchChoice, ...]:
+            return _validate_extraction_batch_choices(
+                await _call_callback(callbacks.list_extraction_batch_choices)
+            )
+
         def _kanji_finish_selector_event(
             self,
             thread: Any,
@@ -2918,6 +3199,40 @@ def create_assistant_core(
                 )
                 return
 
+            if message == MANAGE_EXTRACTION_BATCHES_MESSAGE:
+                # Ahead of the busy guard on purpose: the whole point of this
+                # desk is to say what a running batch is doing, which is when
+                # the thread is least likely to be free.
+                try:
+                    batch_choices = await self._list_extraction_batch_choices()
+                except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Extraction batch status unavailable",
+                        message=str(error),
+                    )
+                    return
+                if not batch_choices:
+                    yield self._message_event(
+                        thread,
+                        "No extraction batch has been started in this project.",
+                    )
+                    return
+                yield self._message_event(
+                    thread,
+                    (
+                        "Here is every extraction batch and what each source did. "
+                        "Janki reads this locally, so checking, previewing, "
+                        "continuing or retrying makes no model call of its own."
+                    ),
+                )
+                yield self._extraction_batch_selector_event(
+                    thread,
+                    request_context,
+                    batch_choices,
+                )
+                return
+
             local_help = self._local_help(message)
             if local_help is not None:
                 yield self._message_event(thread, local_help)
@@ -3209,6 +3524,238 @@ def create_assistant_core(
         ) -> Any:
             if request_context.deck_scope != _ASSISTANT_SCOPE:
                 yield ErrorEvent(message="That assistant action was refused.", allow_retry=False)
+                return
+            if action.type == _EXTRACTION_BATCH_ACTION:
+                payload = action.payload
+                capability = (
+                    payload.get("capability") if isinstance(payload, dict) else None
+                )
+                batch_id = payload.get("batch_id") if isinstance(payload, dict) else None
+                batch_action = payload.get("action") if isinstance(payload, dict) else None
+                raw_indices = (
+                    payload.get("child_indices") if isinstance(payload, dict) else None
+                )
+                child_indices = (
+                    tuple(raw_indices)
+                    if isinstance(raw_indices, list)
+                    and all(
+                        isinstance(index, int) and not isinstance(index, bool)
+                        for index in raw_indices
+                    )
+                    else None
+                )
+                binding = (
+                    self._batch_selectors.get(capability)
+                    if isinstance(capability, str)
+                    else None
+                )
+                if (
+                    not isinstance(payload, dict)
+                    or set(payload)
+                    != {"capability", "batch_id", "action", "child_indices"}
+                    or not isinstance(batch_id, str)
+                    or batch_action not in {"preview", "resume", "retry"}
+                    or child_indices is None
+                    or binding is None
+                    or binding.thread_id != thread.id
+                    or sender is None
+                    or sender.id != binding.widget_item_id
+                    or (batch_id, batch_action, child_indices) not in binding.actions
+                ):
+                    if isinstance(capability, str):
+                        self._batch_selectors.pop(capability, None)
+                    yield ErrorEvent(
+                        message=(
+                            "This extraction batch control is missing, stale, "
+                            "already used, tampered with, or belongs elsewhere."
+                        ),
+                        allow_retry=False,
+                    )
+                    return
+                try:
+                    current_selection = self._selection(thread)
+                except RevisionRefusal:
+                    current_selection = None
+                deck_scope = (
+                    current_selection.choice.scope
+                    if current_selection is not None
+                    else ""
+                )
+                if batch_action == "preview":
+                    # Read-only, so it survives a busy thread and stays usable
+                    # more than once. It reserves nothing and reviews nothing.
+                    try:
+                        offer = _validate_batch_preview_offer(
+                            await _call_callback(
+                                callbacks.render_extraction_batch_preview,
+                                batch_id=batch_id,
+                                deck_scope=deck_scope,
+                            )
+                        )
+                    except (
+                        JankiError,
+                        RevisionRefusal,
+                        OSError,
+                        TypeError,
+                        ValueError,
+                    ) as error:
+                        yield NoticeEvent(
+                            level="danger",
+                            title="Combined cards unavailable",
+                            message=str(error),
+                        )
+                        return
+                    told = [offer.message]
+                    if offer.preview_url is not None:
+                        told.append(f"Open the combined cards: {offer.preview_url}")
+                    if offer.conflicts:
+                        told.append(
+                            "The sources disagree about these, which janki does not "
+                            "settle for you:"
+                        )
+                        told += [f"- {conflict}" for conflict in offer.conflicts]
+                    yield self._message_event(thread, "\n\n".join(told))
+                    return
+                if thread.id in self._busy_threads:
+                    yield ErrorEvent(
+                        message="Wait for this thread's current operation to finish.",
+                        allow_retry=False,
+                    )
+                    return
+                self._batch_selectors.pop(capability, None)
+                if batch_action == "retry":
+                    try:
+                        reply = _validate_chat_reply(
+                            await _call_callback(
+                                callbacks.prepare_extraction_batch_retry,
+                                batch_id=batch_id,
+                                child_indices=child_indices,
+                                deck_scope=deck_scope,
+                            )
+                        )
+                    except (
+                        JankiError,
+                        RevisionRefusal,
+                        OSError,
+                        TypeError,
+                        ValueError,
+                    ) as error:
+                        yield NoticeEvent(
+                            level="danger",
+                            title="Batch retry unavailable",
+                            message=str(error),
+                        )
+                        return
+                    plan = reply.action
+                    instruction = reply.action_instruction
+                    if plan is None or instruction is None:
+                        yield ErrorEvent(
+                            message=(
+                                "The local batch retry planner returned no exact action."
+                            ),
+                            allow_retry=False,
+                        )
+                        return
+                    # A selected retry is planned locally and still has to win
+                    # its own confirmation: clicking the row above bought
+                    # nothing, and this widget is where the spending is agreed.
+                    yield self._message_event(thread, reply.text)
+                    confirm_capability = secrets.token_urlsafe(32)
+                    item_id = store.generate_item_id("message", thread, request_context)
+                    self._plans[confirm_capability] = _PlanBinding(
+                        confirmation=RevisionConfirmation(
+                            capability=confirm_capability,
+                            deck_scope=deck_scope,
+                            instruction=instruction,
+                            expected_fingerprint=plan.request_fingerprint,
+                            target=plan.target,
+                        ),
+                        thread_id=thread.id,
+                        widget_item_id=item_id,
+                        deck_id=(
+                            current_selection.choice.deck_id
+                            if current_selection is not None
+                            else None
+                        ),
+                        selection_epoch=(
+                            current_selection.epoch
+                            if current_selection is not None
+                            else 0
+                        ),
+                        progress_label=plan.progress_label,
+                    )
+                    yield ThreadItemDoneEvent(
+                        item=WidgetItem(
+                            id=item_id,
+                            thread_id=thread.id,
+                            created_at=datetime.now(),
+                            widget=self._plan_widget(
+                                plan,
+                                instruction=instruction,
+                                capability=confirm_capability,
+                            ),
+                            copy_text=None,
+                        )
+                    )
+                    return
+
+                progress_queue: asyncio.Queue[str] = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def report_batch_progress(label: str) -> None:
+                    loop.call_soon_threadsafe(
+                        progress_queue.put_nowait, _batch_progress_label(label)
+                    )
+
+                async def execute_batch_resume() -> ExtractionBatchResumption:
+                    result = _validate_batch_resumption(
+                        await _call_callback(
+                            callbacks.resume_extraction_batch,
+                            batch_id=batch_id,
+                            progress=report_batch_progress,
+                        )
+                    )
+                    await self._remember_assistant_result(thread.id, result.message)
+                    return result
+
+                execution_task = asyncio.create_task(execute_batch_resume())
+                release_busy = self._track_durable_task(thread.id, execution_task)
+                try:
+                    try:
+                        while not execution_task.done():
+                            try:
+                                label = await asyncio.wait_for(
+                                    progress_queue.get(), timeout=0.1
+                                )
+                            except TimeoutError:
+                                continue
+                            yield ProgressUpdateEvent(text=label, icon="write")
+                        while not progress_queue.empty():
+                            yield ProgressUpdateEvent(
+                                text=progress_queue.get_nowait(),
+                                icon="write",
+                            )
+                        resumed = await asyncio.shield(execution_task)
+                    except RevisionRefusal as error:
+                        yield NoticeEvent(
+                            level="danger",
+                            title="Batch could not be continued",
+                            message=str(error),
+                        )
+                        return
+                    yield self._message_event(thread, resumed.message)
+                    if not resumed.complete:
+                        yield NoticeEvent(
+                            level="warning",
+                            title="Extraction batch still unfinished",
+                            message=(
+                                f"This batch is in state {resumed.state}. Everything "
+                                "it has already saved is kept; open the batch desk "
+                                "again to see which sources are left."
+                            ),
+                        )
+                finally:
+                    release_busy()
                 return
             if action.type == _RESUME_KANJI_ACTION:
                 payload = action.payload
@@ -3841,7 +4388,11 @@ def create_assistant_core(
 
             def report_progress(label: str) -> None:
                 normalized = label.strip()
-                if normalized not in _PROGRESS_LABELS:
+                # A batch narrates a numbered source instead of one of the
+                # fixed labels; anything matching neither is still refused.
+                if normalized not in _PROGRESS_LABELS and not _BATCH_PROGRESS.fullmatch(
+                    normalized
+                ):
                     raise ValueError("The revision service reported an unknown progress state.")
                 loop.call_soon_threadsafe(progress_queue.put_nowait, normalized)
 

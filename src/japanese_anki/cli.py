@@ -14,6 +14,7 @@ from typing import Any
 
 from japanese_anki import (
     claude_client,
+    cli_extract_batches,
     codex_client,
     enrich,
     extract,
@@ -1904,23 +1905,29 @@ def command_extract(args: argparse.Namespace) -> int:
     first (M3.2), so a candidate can always be checked against the page it came
     from.
 
-    Files are processed one at a time and written as they succeed. A later file
-    failing therefore leaves the earlier ones' staging files in place — which is
-    the useful direction: the work already paid for is kept, and the error names
-    what is left to do.
+    One source is one call, written as it succeeds. Several sources are one
+    batch instead: a single confirmation over the whole list, then up to
+    ``--concurrency`` calls at a time. Either way a failure leaves the sources
+    that already succeeded staged — which is the useful direction: the work
+    already paid for is kept, and the error names what is left to do.
     """
     config = _load_config(args)
+    prepared = prepare_inputs(
+        [path for path in args.files],
+        config.scan_inbox,
+        inbox_root=durable_inbox_root(config),
+    )
+    if len(prepared) > 1:
+        # Preserved first, then handed over as durable origin paths. The batch
+        # core owns its own prompt and style-guide reads, so nothing below is
+        # loaded for this route.
+        return cli_extract_batches.run_batch_extraction(config, args, prepared)
     style_guide = claude_client.read_style_guide(config.root)
     # Read once for the run, like the style guide: every input in a batch is
     # extracted under the same instructions, and re-reading per file would let
     # a mid-run edit split one command across two prompts.
     system = prompts.load(config.root, extract.prompt_name(args.mode))
     model = args.model or config.extract_model
-    prepared = prepare_inputs(
-        [path for path in args.files],
-        config.scan_inbox,
-        inbox_root=durable_inbox_root(config),
-    )
 
     # Everything knowable without paying — targets, fingerprints, the request
     # identity, and every refusal a provider is not needed for. The split is
@@ -3992,6 +3999,16 @@ def command_preview(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_extract_batch(args: argparse.Namespace) -> int:
+    """Check, continue, retry, or preview one multi-source extraction.
+
+    Its own command rather than a mode of ``extract``, so that ``resume`` can
+    never be read as the name of a file to send.
+    """
+
+    return cli_extract_batches.run_batch_command(_load_config(args), args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="janki",
@@ -4222,6 +4239,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the configured extract model for this run.",
     )
     extract_parser.add_argument(
+        "--concurrency",
+        type=cli_extract_batches.concurrency,
+        default=cli_extract_batches.CONCURRENCY_DEFAULT,
+        metavar="N",
+        help=(
+            "How many sources to read at once when more than one is given "
+            f"(1 to {cli_extract_batches.CONCURRENCY_CAP}; default "
+            f"{cli_extract_batches.CONCURRENCY_DEFAULT}). A single source is "
+            "always one call."
+        ),
+    )
+    extract_parser.add_argument(
         "--force",
         action="store_true",
         help=(
@@ -4238,6 +4267,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Without it, an unattended run refuses rather than sending."
         ),
     )
+
+    cli_extract_batches.add_batch_parser(subparsers, _path, command_extract_batch)
     extract_parser.set_defaults(handler=command_extract)
 
     audio_parser = subparsers.add_parser(

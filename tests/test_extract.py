@@ -1113,7 +1113,11 @@ def test_extract_writes_one_staging_file_per_input(
         cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()), ok(candidate()))
     )
 
-    code = cli.main(["--root", str(root), "extract", "--yes", str(one), str(two)])
+    # One run per source: several sources in one command are one batch with
+    # its own lifecycle, and what this guards is the staging file each
+    # source gets on the single-source path.
+    assert cli.main(["--root", str(root), "extract", "--yes", str(one)]) == 0
+    code = cli.main(["--root", str(root), "extract", "--yes", str(two)])
 
     assert code == 0
     assert (root / "staging" / "lesson.pdf.yaml").is_file()
@@ -1121,7 +1125,8 @@ def test_extract_writes_one_staging_file_per_input(
     _, first_meta = read_staging(root / "staging" / "lesson.pdf.yaml")
     _, second_meta = read_staging(root / "staging" / "lesson2.pdf.yaml")
     assert first_meta["review_run_id"] != second_meta["review_run_id"]
-    assert "Wrote 2 staging file(s)" in capsys.readouterr().out
+    # Once per run, and each run reports only the file it wrote.
+    assert capsys.readouterr().out.count("Wrote 1 staging file(s)") == 2
 
 
 def test_one_source_call_writes_cards_and_patterns_with_the_same_provenance(
@@ -1788,7 +1793,8 @@ def test_a_later_failure_keeps_the_earlier_files(
         FakeCall(ok(candidate()), CallResult(None, "max_tokens", None)),
     )
 
-    code = cli.main(["--root", str(root), "extract", "--yes", str(one), str(two)])
+    assert cli.main(["--root", str(root), "extract", "--yes", str(one)]) == 0
+    code = cli.main(["--root", str(root), "extract", "--yes", str(two)])
 
     assert code == 1
     assert (root / "staging" / "lesson.pdf.yaml").is_file()
@@ -1842,7 +1848,8 @@ def test_a_scan_and_a_photo_of_the_same_page_keep_separate_files(
         cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()), ok(candidate()))
     )
 
-    assert cli.main(["--root", str(root), "extract", "--yes", str(scan), str(photo)]) == 0
+    assert cli.main(["--root", str(root), "extract", "--yes", str(scan)]) == 0
+    assert cli.main(["--root", str(root), "extract", "--yes", str(photo)]) == 0
 
     assert (root / "staging" / "worksheet.pdf.yaml").is_file()
     assert (root / "staging" / "worksheet.png.yaml").is_file()

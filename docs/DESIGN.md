@@ -25,7 +25,11 @@ giving each kanji's *contextual* reading in that sentence, romaji, usage, and
 register. There are three external card-writing paths. `extract` reads a preserved
 source once and returns candidates, coverage facts, complete card proposals,
 and the grammar patterns that source teaches in the same answer; its auto,
-table, and prose modes remain three complete source templates. `enrich --ai`
+table, and prose modes remain three complete source templates. A large job may
+be requested as one confirmed finite batch of smaller independent `extract`
+calls over explicit source parts, run with bounded parallelism; each child is
+still one source read with its own journal entry, capture and staging.
+`enrich --ai`
 reads a bare record once and returns glosses, examples, and usage together.
 `revise` reads only explicitly selected existing cards or deck content plus the
 owner's requested change and returns a fingerprinted staging proposal; it never
@@ -39,8 +43,10 @@ workflow. `claude-code` consumes the locally logged-in Claude Pro or Max
 subscription allowance, guarded as first-party Pro/Max; `anthropic-api` uses
 Anthropic API billing and has to be written down, because a missing CLI, a
 logged-out login or any failure is a refusal rather than a fallback. Each
-source call is separately, exactly consented to on the transport it names, and
-extraction's existing staging and journal flow is unchanged by the choice.
+source call is exactly consented to on the transport it names — on its own, or
+as one exactly enumerated child of a confirmed batch, where the child keeps its
+own source, request, provider and billing identity — and extraction's existing
+staging and journal flow is unchanged by the choice.
 
 A subscription reply is captured inside its own operation artifact as a
 versioned wrapper holding the original request manifest and channels beside
@@ -214,6 +220,18 @@ content and grants no approval. `janki preview` provides the same interaction
 as a standalone file. `docs/CARD_DESIGN.md` records the interaction demonstrated
 by the Week 2 kanji preview.
 
+An extraction batch reviews its children together the same way: the exact
+proposed normalized records are overlaid into that one temporary collection and
+rendered with the real templates and CSS. Combining them is a reading
+convenience only. Without a chosen destination, a temporary vocabulary deck
+shows the proposals using the configured card directions; that preview makes
+no permanent deck or assignment. It fabricates no multi-source staging document, marks no
+Japanese reviewed, accepts no coverage, promotes no canonical content, and
+settles no duplicate meaning automatically; each source keeps its own promotion
+and coverage rules. Where two sources propose the same identity differently,
+the review discloses the conflict rather than hiding it behind first-wins
+merging.
+
 ## Mechanisms the pipeline rests on
 
 Not stages, but load-bearing: the word database
@@ -289,8 +307,9 @@ adopted or retired. Thus a crash before the journal write leaves WAL
 proof, and one after it leaves receipt proof. With neither proof, a lexical
 operation-id filename is never freshly adopted, even when its bytes match.
 
-**One journaled call at a time.** The journal refuses to authorize a new one
-while any entry is live or holds money nobody has accounted for — every state
+**One journaled call at a time, or one confirmed batch.** The journal refuses
+to authorize a new one while any entry is live or holds money nobody has
+accounted for — every state
 except the terminal ones, plus `outcome_unknown`. `authorized` counts, because
 writing the authority and marking it dispatched are two writes and excluding
 it leaves a window where two runs both pass. This is enforced under the
@@ -313,6 +332,54 @@ names retire or their old namespace is proven no longer bound. That durable
 forget decision means the call's money is accounted for and no longer blocks a
 new authorization, while a cleanup-only entry remains listed with its exact
 ordinary `--forget` retry.
+
+**The exception is one confirmed extraction batch.** The owner may confirm one
+exact finite batch of explicit immutable source parts — prepared source files
+in the first increment, since discovering and cropping arbitrary PDF rows is
+separate work — and janki runs them as smaller independent calls with bounded
+parallelism. No batch logic reads Japanese or corrects a child's answer. One
+locked atomic journal write reserves every child operation id at once, each
+with its own exact source hash, request fingerprint and model, the fixed batch
+membership, and the stored concurrency limit — two by default, four at most.
+Ordinary unrelated authorization still refuses while any existing operation is
+live or unaccounted for.
+
+Batches reuse the states above. Each child consumes `authorized → dispatching`
+exactly once under that same journal lock, which checks its exact batch
+membership, fingerprint and concurrency, and the normal advance method cannot
+bypass a batch claim. The streaming spool is prepared while the child is still
+`authorized`, before the claim; each reply is captured before decoding and
+stages independently through the ordinary extraction lifecycle. An in-flight or
+`outcome_unknown` child occupies a slot; a complete captured reply does not,
+and stays recoverable on its own. An unknown call is never sent again
+automatically or presumed dead, while a reserved unsent child may resume under
+its original exact authority after fresh binding checks. A failed child
+discards nothing a successful sibling produced, and an authentication refusal
+stops queued dispatch rather than falling back to the API.
+
+Retrying part of a batch needs one fresh owner confirmation binding the new
+exact requests and any discard decision for the failed operations it clears. A
+successful child cannot be retried; an in-flight call needs the owner's end
+decision first. An `outcome_unknown` call is already ended: its retry
+confirmation acknowledges the uncertain prior cost and explicitly discards its
+bound evidence. Fresh operation ids are mandatory, and an unchanged
+exact request fingerprint is valid for a freshly authorized retry. The
+cleanup-then-reserve sequence is resumable from durable recovery state rather
+than one atomic transaction, and evidence is never erased silently.
+After exact confirmation, a separate `<batch_id>.execution.json` receipt binds
+the complete manifest hash, fresh child identities and exact discard decisions.
+Resume may finish that confirmed execution after fresh binding checks. A request
+manifest alone grants no spending or discard authority; every child still needs
+the journal's atomic reservation and one-use dispatch claim.
+
+The batch's committed manifest and execution receipt live under
+`data/extraction_batches/` by default, derived beside the configured operations file, not in the
+`data/.pending` recovery buffer. It binds each child's expectations and
+operation id, its parts' source ancestry and labels, the concurrency limit and
+every retry's provenance, and flattens nothing: each page or slice keeps its own
+staging document with its own request, coverage, candidate-accounting and
+pattern metadata; a reference to the full parent source is documentary, never a
+substitute for the sliced input actually sent.
 
 ## Surfaces
 
@@ -391,7 +458,12 @@ turn, a destructive action, staging model-authored Japanese the owner has not
 seen, or a canonical repository transition. The batch names every target,
 every fresh input fingerprint, provider/model/billing identity and exact
 request identity knowable before dispatch, explicit replacement or owner-only
-decision, recovery consequence, and all writes or removals. When the result
+decision, recovery consequence, and all writes or removals. One confirmation
+may authorize several paid child calls when the batch enumerates them exactly:
+each child keeps its own source, request fingerprint, provider/model and
+billing identity in that enumeration, and the confirmation buys precisely
+those. It never becomes one paid parent call, and the children's answers never
+merge into one synthetic provenance. When the result
 already exists, the batch also binds its exact output fingerprint and
 provenance. A paid call's not-yet-created output is never pretended to exist:
 its capture records output provenance after dispatch, and a later
@@ -433,6 +505,14 @@ batch names the exact stored source, disclosure and extraction request; one
 owner-confirmation click dispatches and stages it, with no additional consent
 page or phase-by-phase confirmation. OpenAI Realtime audio remains API-backed
 and neither Claude transport setting nor a model intent can reroute it.
+
+Extraction batches run through one batch service that the Assistant and the CLI
+both call. The Assistant is the primary surface for them: it renders the exact
+batch confirmation, per-child progress and status, safe resume, selected retry,
+and the combined review of the actual proposed cards as HTML. While a live
+batch blocks ordinary paid Assistant chat, those read-only status and review
+controls stay available — the owner can watch a batch and read what it already
+produced without spending anything.
 
 Code review and Japanese-content approval are separate gates. A machinery
 review neither judges nor approves Japanese, and content approval neither

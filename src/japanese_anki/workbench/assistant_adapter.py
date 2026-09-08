@@ -49,6 +49,7 @@ from japanese_anki.application import (
     character_notes,
     describe_extraction,
     dispatch_extraction,
+    extraction_batch,
     kanji_finish,
     revision,
     revision_apply,
@@ -61,6 +62,7 @@ from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.exporters.pattern_cards import read_drill_deck_content
 from japanese_anki.io import load_records, merge_records, read_bytes_bound
 from japanese_anki.models import ExampleSentence, VocabularyRecord
+from japanese_anki.workbench import assistant_batch_surface
 from japanese_anki.workbench.assistant import (
     AssistantDeckChoice,
     ChatReply,
@@ -411,6 +413,12 @@ class RevisionAssistantAdapter:
         default_factory=dict,
         init=False,
         repr=False,
+    )
+    # One rendered batch plan, held whole. The core's fingerprint covers the
+    # ids it already minted, so the plan that was shown is the plan that is
+    # dispatched — never a fresh one compared against an old fingerprint.
+    _batch_plans: dict[str, Any] = field(
+        default_factory=dict, init=False, repr=False
     )
     _extraction_expectations: dict[str, ExtractionDispatchExpectation] = field(
         default_factory=dict,
@@ -1749,6 +1757,56 @@ class RevisionAssistantAdapter:
                     effects=extraction.effects,
                     disclosures=extraction.disclosures,
                     confirm_label=extraction.confirm_label,
+                    progress_label="Preparing pages",
+                ),
+                action_instruction=intent.instruction,
+            )
+        if intent.kind == "extract_batch":
+            options = dict(intent.options)
+            concurrency = options.pop("concurrency_limit", None)
+            if (
+                len(intent.resource_ids) < 2
+                or len(set(intent.resource_ids)) != len(intent.resource_ids)
+                or intent.record_ids
+                or options
+                or not isinstance(concurrency, int | None)
+                or isinstance(concurrency, bool)
+                or (concurrency is not None and not 1 <= concurrency <= 4)
+            ):
+                raise RevisionRefusal(
+                    "A batch extraction needs two or more different preserved "
+                    "source resources, no card targets, and no choice other than "
+                    "how many to read at once, which is 1 to 4."
+                )
+            try:
+                broker = assistant_context.AssistantContextBroker(config)
+                sources = [
+                    broker.source_path(resource_id)
+                    for resource_id in intent.resource_ids
+                ]
+                batch = self.prepare_source_extraction_batch(
+                    source_paths=sources,
+                    deck_scope=deck_scope,
+                    concurrency_limit=2 if concurrency is None else concurrency,
+                )
+            except (JankiError, OSError, TypeError, ValueError) as exc:
+                raise RevisionRefusal(str(exc)) from exc
+            prepared = _PreparedAgentAction(
+                kind=intent.kind,
+                focus_scope=deck_scope,
+                instruction=intent.instruction,
+                target=batch.target,
+                plan=batch,
+            )
+            self._remember_agent_plan(batch.fingerprint, prepared)
+            return ChatReply(
+                text=result.answer,
+                action=AssistantRevisionPlan(
+                    request_fingerprint=batch.fingerprint,
+                    target=batch.target,
+                    effects=batch.effects,
+                    disclosures=batch.disclosures,
+                    confirm_label=batch.confirm_label,
                     progress_label="Preparing pages",
                 ),
                 action_instruction=intent.instruction,
@@ -4300,6 +4358,197 @@ class RevisionAssistantAdapter:
             ) from exc
         return target.path, scope_id, deck_sha256, target.choice.label
 
+    def prepare_source_extraction_batch(
+        self,
+        *,
+        source_paths: Sequence[Path],
+        deck_scope: str = "",
+        concurrency_limit: int = 2,
+    ) -> assistant_batch_surface.PreparedExtractionBatch:
+        """Plan one batch over these preserved sources and hold the exact plan.
+
+        The same deck focus that scopes a single extraction scopes this one:
+        it decides which words janki already counts as had, not where the
+        proposals land.
+        """
+
+        destination = self._extraction_destination(deck_scope) if deck_scope else None
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            prepared = assistant_batch_surface.plan_batch(
+                fresh_config,
+                source_paths,
+                scope_id="" if destination is None else destination[1],
+                destination_deck=None if destination is None else destination[0],
+                concurrency_limit=concurrency_limit,
+            )
+        except JankiError as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        with self._plan_lock:
+            while len(self._batch_plans) >= 64:
+                self._batch_plans.pop(next(iter(self._batch_plans)))
+            self._batch_plans[prepared.fingerprint] = prepared
+        return prepared
+
+    def list_extraction_batch_choices(self) -> tuple[Any, ...]:
+        """Read-only durable batch state for the local desk. Nothing is sent."""
+
+        return assistant_batch_surface.list_batch_choices(
+            ProjectConfig.load(self.config.root)
+        )
+
+    def resume_extraction_batch(
+        self,
+        *,
+        batch_id: str,
+        progress: Any,
+    ) -> Any:
+        """Continue one batch under the calls its own receipt already records.
+
+        A missing or changed manifest, a moved source, an edited prompt or a
+        drifted deck are all refusals the core states in its own words. They
+        arrive here as ordinary errors, and the owner needs the sentence, not a
+        stream that failed for no stated reason — so they are translated the
+        same way every other local recovery here translates them.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            total = len(
+                extraction_batch.extraction_batch_status(
+                    fresh_config, batch_id
+                ).children
+            )
+            outcome = extraction_batch.resume_extraction_batch(
+                fresh_config,
+                batch_id,
+                progress=lambda event: progress(
+                    assistant_batch_surface.progress_label(event, total)
+                ),
+            )
+            unfinished = outcome.pending_count + outcome.unknown_count
+            return assistant_batch_surface.ExtractionBatchResumption(
+                message=assistant_batch_surface.batch_summary(outcome),
+                state="complete" if not unfinished else "unfinished",
+                complete=not unfinished,
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+
+    def prepare_extraction_batch_retry(
+        self,
+        *,
+        batch_id: str,
+        child_indices: tuple[int, ...],
+        deck_scope: str,
+    ) -> ChatReply:
+        """Plan a retry of exactly these sources; the owner still has to agree."""
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            batch = assistant_batch_surface.plan_batch_retry(
+                fresh_config,
+                batch_id,
+                child_indices,
+            )
+        except JankiError as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        listed = ", ".join(str(index) for index in child_indices)
+        instruction = f"Send sources {listed} of this batch again."
+        with self._plan_lock:
+            self._batch_plans[batch.fingerprint] = batch
+        self._remember_agent_plan(
+            batch.fingerprint,
+            _PreparedAgentAction(
+                kind="extract_batch",
+                focus_scope=deck_scope,
+                instruction=instruction,
+                target=batch.target,
+                plan=batch,
+            ),
+        )
+        return ChatReply(
+            text=(
+                f"Here is exactly what sending sources {listed} again would do. "
+                "Nothing has been sent or retired yet."
+            ),
+            action=AssistantRevisionPlan(
+                request_fingerprint=batch.fingerprint,
+                target=batch.target,
+                effects=batch.effects,
+                disclosures=batch.disclosures,
+                confirm_label=batch.confirm_label,
+                progress_label="Preparing pages",
+            ),
+            action_instruction=instruction,
+        )
+
+    def _batch_review_offer(self, batch_id: str, deck_scope: str) -> str:
+        """Put the cards this batch proposed in front of the owner to look at.
+
+        A presentation, not a decision: nothing here accepts Japanese, promotes
+        a proposal, or writes anything. The calls that succeeded stay succeeded
+        even when the drawing fails, so a render problem never reads as a
+        failed extraction and never suggests sending anything again.
+        """
+
+        try:
+            offer = self.render_extraction_batch_preview(
+                batch_id=batch_id,
+                deck_scope=deck_scope,
+            )
+        except (
+            AssistantPreviewError,
+            JankiError,
+            OSError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            return (
+                "The proposals are saved. Janki could not draw them just now "
+                f"({exc}); the preview can be tried again from Manage "
+                "extraction batches."
+            )
+        if offer.preview_url is None:
+            told = [
+                "The proposals are saved, but this workbench cannot serve a "
+                "card preview."
+            ]
+        else:
+            told = [
+                f"[Look at the proposed cards]({offer.preview_url}) — drawn as "
+                "Anki draws them. Looking accepts nothing and adds nothing to a "
+                "deck."
+            ]
+        if offer.conflicts:
+            # Counted, not pasted. The core's conflict lines carry each
+            # proposal's full provenance, which belongs beside the cards in the
+            # batch desk rather than in the middle of a chat reply.
+            count = len(offer.conflicts)
+            appears = "word appears" if count == 1 else "words appear"
+            told.append(
+                f"{count} {appears} in more than one source. The preview draws "
+                "the first source's proposal for each; Manage extraction "
+                "batches lists what the sources differ on. Janki settles none "
+                "of it."
+            )
+        return "\n\n".join(told)
+
+    def render_extraction_batch_preview(
+        self,
+        *,
+        batch_id: str,
+        deck_scope: str,
+    ) -> Any:
+        """One combined rendered look at what this batch already saved."""
+
+        return assistant_batch_surface.preview_offer(
+            ProjectConfig.load(self.config.root),
+            batch_id,
+            preview_store=self._preview_store,
+            focus_scope=deck_scope,
+        )
+
     def prepare_source_extraction(
         self,
         *,
@@ -5010,6 +5259,54 @@ class RevisionAssistantAdapter:
                 )
             return RevisionExecution(
                 message=self._kanji_finish_message(fresh_config, plan, result),
+                finish=None,
+                complete=True,
+            )
+        if expected.kind == "extract_batch":
+            batch = expected.plan
+            with self._plan_lock:
+                held = (
+                    self._batch_plans.pop(batch.fingerprint, None)
+                    if isinstance(batch, assistant_batch_surface.PreparedExtractionBatch)
+                    else None
+                )
+            if (
+                held is None
+                or held is not batch
+                or confirmation.expected_fingerprint != batch.fingerprint
+                # Recomputed from the manifest the core still holds: a member,
+                # concurrency or discard edit since rendering changes this.
+                or held.plan.fingerprint != batch.fingerprint
+            ):
+                raise RevisionRefusal(
+                    "This batch action no longer matches the rendered plan. "
+                    "Nothing was sent."
+                )
+            try:
+                fresh_config = ProjectConfig.load(self.config.root)
+                outcome = extraction_batch.dispatch_extraction_batch(
+                    fresh_config,
+                    held.plan,
+                    # Several calls are in flight, so "reading the source"
+                    # cannot say which. Every event names its numbered child.
+                    progress=lambda event: progress(
+                        assistant_batch_surface.progress_label(
+                            event, len(held.plan.children)
+                        )
+                    ),
+                )
+            except (JankiError, OSError, TypeError, ValueError) as exc:
+                raise RevisionRefusal(str(exc)) from exc
+            told = [assistant_batch_surface.batch_summary(outcome)]
+            if outcome.committed_count:
+                told.append(
+                    self._batch_review_offer(
+                        held.plan.batch_id,
+                        confirmation.deck_scope,
+                    )
+                )
+            return RevisionExecution(
+                message="\n\n".join(told),
                 finish=None,
                 complete=True,
             )

@@ -202,6 +202,15 @@ def assistant_agent_schema() -> Any:
             le=20,
             description="Maximum search_cards results; null uses Janki's default.",
         )
+        concurrency_limit: int | None = Field(
+            default=None,
+            ge=1,
+            le=4,
+            description=(
+                "How many sources extract_batch reads at once; null uses 2. "
+                "Never set for any other action."
+            ),
+        )
 
     class AssistantActionIntent(BaseModel):
         model_config = ConfigDict(extra="forbid")
@@ -220,6 +229,7 @@ def assistant_agent_schema() -> Any:
             "generate_audio",
             "build_deck",
             "extract_source",
+            "extract_batch",
             "delete_content",
             "manage_operation",
             "inspect_resources",

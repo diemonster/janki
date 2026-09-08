@@ -66,6 +66,7 @@ from japanese_anki.io import (
 )
 
 __all__ = [
+    "BATCH_OCCUPIED_STATES",
     "BLOCKS_SPENDING",
     "IN_FLIGHT",
     "PENDING_DIR",
@@ -74,6 +75,8 @@ __all__ = [
     "TERMINAL_STATES",
     "ArtifactReceipt",
     "Operation",
+    "OperationAuthorization",
+    "OperationBatch",
     "OperationError",
     "OperationJournal",
     "ReplyObservation",
@@ -183,6 +186,42 @@ PENDING_DIR = ".pending"
 #: from a process killed between the two writes — is paid by `end`, which
 #: retires it as `canceled_before_send` because nothing was sent.
 BLOCKS_SPENDING: frozenset[str] = LIVE_STATES | frozenset({"outcome_unknown"})
+
+#: States in which one batch child still occupies a live dispatch slot.
+#:
+#: `outcome_unknown` is in the set and never leaves it. Nothing redispatches an
+#: unknown outcome, so the slot it holds is spent, not recoverable — releasing
+#: it would let a batch quietly run more calls than the person authorized while
+#: the one nobody could account for is still unaccounted for. `result_captured`
+#: is deliberately *out*: the exact reply is on disk, which is a call that
+#: finished, and holding its slot would stall a batch on work already done.
+BATCH_OCCUPIED_STATES: frozenset[str] = frozenset(
+    {"dispatching", "running", "outcome_unknown"}
+)
+
+#: The only kinds a batch may reserve. A batch buys bounded parallelism for one
+#: finite set of pages of one source document; every other paid call in janki is
+#: a single decision and keeps the ordinary one-at-a-time rule.
+_BATCH_KINDS: frozenset[str] = frozenset({"extract"})
+
+
+def _is_sha256_digest(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _valid_batch_identifier(batch_id: Any) -> bool:
+    """Whether a batch id is a usable stable key rather than a shape hazard."""
+    return (
+        isinstance(batch_id, str)
+        and bool(batch_id)
+        and batch_id.strip() == batch_id
+        and "\x00" not in batch_id
+        and all(character.isprintable() for character in batch_id)
+    )
 
 
 def advance_refusal(
@@ -1728,6 +1767,173 @@ def _now() -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationAuthorization:
+    """One exact paid call a batch is asking to be allowed to make.
+
+    The same six facts an ordinary `authorize` records, carried as a value so a
+    whole childset can be validated before a single byte of authority is
+    written. It is not itself authority: only a journalled row is that.
+    """
+
+    operation_id: str
+    kind: str
+    source_file: str
+    source_sha256: str
+    request_fp: str
+    model: str
+
+
+@dataclass(frozen=True, slots=True)
+class OperationBatch:
+    """The one finite childset a batch reserved, and how many may run at once.
+
+    Durable and immutable. The membership outlives the rows: an ordinary
+    `forget` removes a settled child's entry, and the id it used stays spent
+    here so a replayed request can never ride on a decision already consumed.
+    """
+
+    batch_id: str
+    child_operation_ids: tuple[str, ...]
+    concurrency_limit: int
+    manifest_sha256: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "children": list(self.child_operation_ids),
+            "concurrency_limit": self.concurrency_limit,
+            "manifest_sha256": self.manifest_sha256,
+        }
+
+    @classmethod
+    def from_dict(cls, batch_id: str, raw: Mapping[str, Any]) -> OperationBatch:
+        refusal = f"Operation batch {batch_id!r} is not a valid batch record"
+        if not _valid_batch_identifier(batch_id):
+            raise OperationError(refusal)
+        if not isinstance(raw, Mapping) or set(raw) != {
+            "children",
+            "concurrency_limit",
+            "manifest_sha256",
+        }:
+            raise OperationError(refusal)
+        children = raw["children"]
+        limit = raw["concurrency_limit"]
+        if (
+            not isinstance(children, list)
+            or not children
+            or any(
+                not isinstance(child, str)
+                or not _valid_pending_operation_id(child)
+                for child in children
+            )
+            or len(set(children)) != len(children)
+            or not isinstance(limit, int)
+            or isinstance(limit, bool)
+            or limit < 1
+            or not _is_sha256_digest(raw["manifest_sha256"])
+        ):
+            raise OperationError(refusal)
+        return cls(
+            batch_id=batch_id,
+            child_operation_ids=tuple(children),
+            concurrency_limit=limit,
+            manifest_sha256=raw["manifest_sha256"],
+        )
+
+
+def _validated_batch_children(
+    batch_id: str,
+    children: Iterable[OperationAuthorization],
+) -> tuple[OperationAuthorization, ...]:
+    """Materialize one finite childset and prove every request is exact.
+
+    Everything here is structural and happens before the journal lock, so a
+    childset janki cannot authorize in full never reaches the point of writing
+    part of it.
+    """
+    authorizations = tuple(children)
+    if not authorizations:
+        raise OperationError(
+            f"Operation batch {batch_id!r} must reserve at least one child "
+            "operation"
+        )
+    for child in authorizations:
+        if not isinstance(child, OperationAuthorization):
+            raise OperationError(
+                f"Operation batch {batch_id!r} needs exact extraction "
+                f"authorizations, got {type(child).__name__}"
+            )
+        if (
+            not _valid_pending_operation_id(child.operation_id)
+            or child.kind not in _BATCH_KINDS
+            or not isinstance(child.source_file, str)
+            or not child.source_file
+            or not _is_sha256_digest(child.source_sha256)
+            or not _is_sha256_digest(child.request_fp)
+            or not isinstance(child.model, str)
+            or not child.model
+        ):
+            raise OperationError(
+                f"Operation batch {batch_id!r} child {child.operation_id!r} is "
+                "not an exact extraction authorization"
+            )
+    return authorizations
+
+
+def _blocked_refusal(first: Operation) -> str:
+    """What a person is told when an unsettled call stops the next one."""
+    return (
+        f"Operation {first.operation_id!r} for {first.source_file} "
+        f"is {first.state!r} and janki will not start another paid "
+        "call until it is settled. 'janki operations' shows it "
+        "and the action that settles it."
+    )
+
+
+def _validate_batch_membership(
+    path: Path,
+    operations: Mapping[str, Operation],
+    batches: Mapping[str, OperationBatch],
+) -> None:
+    """Prove every row and every batch agree about who belongs to what.
+
+    Membership is the thing a claim counts slots against, so an entry that
+    silently points at a missing or different batch — or a member row that
+    quietly dropped its batch id — would be a way to dispatch outside the
+    limit. A member with no row at all is ordinary: that is what `forget`
+    leaves behind, and it is never recreated.
+    """
+    owner_of: dict[str, str] = {}
+    for batch_id in sorted(batches):
+        for child in batches[batch_id].child_operation_ids:
+            owner = owner_of.setdefault(child, batch_id)
+            if owner != batch_id:
+                raise OperationError(
+                    f"{path} has operation {child!r} in two operation batches "
+                    f"{owner!r} and {batch_id!r}"
+                )
+    for operation_id in sorted(operations):
+        held = operations[operation_id]
+        owner = owner_of.get(operation_id)
+        if not held.batch_id:
+            if owner is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds no batch id but is a "
+                    f"member of operation batch {owner!r}"
+                )
+            continue
+        if held.batch_id not in batches:
+            raise OperationError(
+                f"Operation {operation_id!r} names missing operation batch "
+                f"{held.batch_id!r}"
+            )
+        if owner != held.batch_id:
+            raise OperationError(
+                f"Operation {operation_id!r} is not a member of operation "
+                f"batch {held.batch_id!r}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class Operation:
     """One paid call, and what is known about it."""
 
@@ -1748,6 +1954,8 @@ class Operation:
     detail: str = ""
     #: Durable exact deletion authority while ``forget`` retires recovery data.
     cleanup: _CleanupIntent | None = None
+    #: The batch that reserved this authority, for a batch child; "" otherwise.
+    batch_id: str = ""
 
     @property
     def money_may_have_been_spent(self) -> bool:
@@ -1796,6 +2004,10 @@ class Operation:
             value["detail"] = self.detail
         if self.cleanup is not None:
             value["cleanup"] = self.cleanup.to_dict()
+        # Only a batch child carries one, so an ordinary journal keeps exactly
+        # the wire shape every released janki has written.
+        if self.batch_id:
+            value["batch_id"] = self.batch_id
         return value
 
     @classmethod
@@ -1844,6 +2056,13 @@ class Operation:
             response_spool = ResponseSpoolReceipt.from_dict(
                 operation_id, response_spool_raw
             )
+        batch_id = ""
+        if "batch_id" in raw:
+            batch_id = raw["batch_id"]
+            if not _valid_batch_identifier(batch_id):
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid batch id"
+                )
         receipt_states = {"result_captured", "committed"}
         if (state in receipt_states) != (artifact is not None):
             requirement = (
@@ -1868,6 +2087,7 @@ class Operation:
             response_spool=response_spool,
             detail=str(raw.get("detail", "")),
             cleanup=cleanup,
+            batch_id=batch_id,
         )
 
 
@@ -1884,6 +2104,9 @@ class OperationJournal:
 
     path: Path
     operations: dict[str, Operation] = field(default_factory=dict)
+    #: Durable membership for every batch this journal has ever reserved. Empty
+    #: for an ordinary journal, and read-only to everything but `authorize_batch`.
+    batches: dict[str, OperationBatch] = field(default_factory=dict)
     _wire_revision: str | None = field(default=None, repr=False)
     _expected_absent: bool = field(default=True, repr=False)
 
@@ -1912,23 +2135,39 @@ class OperationJournal:
             entries = {}
         if not isinstance(entries, Mapping):
             raise OperationError(f"{path} operations must be an object")
+        reserved = raw.get("batches")
+        if reserved is None:
+            reserved = {}
+        if not isinstance(reserved, Mapping):
+            raise OperationError(f"{path} batches must be an object")
+        operations = {
+            str(key): Operation.from_dict(path, str(key), value)
+            for key, value in entries.items()
+        }
+        batches = {
+            str(key): OperationBatch.from_dict(str(key), value)
+            for key, value in reserved.items()
+        }
+        _validate_batch_membership(path, operations, batches)
         return cls(
             path=path,
-            operations={
-                str(key): Operation.from_dict(path, str(key), value)
-                for key, value in entries.items()
-            },
+            operations=operations,
+            batches=batches,
             _wire_revision=hashlib.sha256(wire).hexdigest(),
             _expected_absent=False,
         )
 
     def _write(self) -> None:
-        payload = {
+        payload: dict[str, Any] = {
             "version": 1,
             "operations": {
                 key: self.operations[key].to_dict() for key in sorted(self.operations)
             },
         }
+        if self.batches:
+            payload["batches"] = {
+                key: self.batches[key].to_dict() for key in sorted(self.batches)
+            }
         rendered = json.dumps(
             payload, ensure_ascii=False, indent=2, sort_keys=False
         ) + "\n"
@@ -1966,21 +2205,10 @@ class OperationJournal:
         """
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
-            if operation_id in current.operations:
-                held = current.operations[operation_id]
-                raise OperationError(
-                    f"Operation {operation_id!r} is already authorized and is "
-                    f"{held.state!r}; authority is one-use."
-                )
+            current._refuse_reused_identity(operation_id)
             blocking = current.blocking()
             if blocking:
-                first = blocking[0]
-                raise OperationError(
-                    f"Operation {first.operation_id!r} for {first.source_file} "
-                    f"is {first.state!r} and janki will not start another paid "
-                    "call until it is settled. 'janki operations' shows it "
-                    "and the action that settles it."
-                )
+                raise OperationError(_blocked_refusal(blocking[0]))
             now = _now()
             operation = Operation(
                 operation_id=operation_id,
@@ -1997,7 +2225,219 @@ class OperationJournal:
             current.path = self.path
             current._write()
             self.operations = current.operations
+            self.batches = current.batches
             return operation
+
+    def _batch_retaining(self, operation_id: str) -> str | None:
+        """The batch that still holds this operation id, if any holds it.
+
+        Membership is immutable, so this answers "has this identity already
+        been spent?" long after `forget` removed the row that used it.
+        """
+        for batch_id in sorted(self.batches):
+            if operation_id in self.batches[batch_id].child_operation_ids:
+                return batch_id
+        return None
+
+    def _refuse_reused_identity(self, operation_id: str) -> None:
+        """Refuse one operation id that any authority has already consumed."""
+        held = self.operations.get(operation_id)
+        if held is not None:
+            raise OperationError(
+                f"Operation {operation_id!r} is already authorized and is "
+                f"{held.state!r}; authority is one-use."
+            )
+        retained = self._batch_retaining(operation_id)
+        if retained is not None:
+            raise OperationError(
+                f"Operation {operation_id!r} is retained by operation batch "
+                f"{retained!r}; authority is one-use."
+            )
+
+    def authorize_batch(
+        self,
+        batch_id: str,
+        children: Iterable[OperationAuthorization],
+        *,
+        concurrency_limit: int,
+        manifest_sha256: str,
+    ) -> OperationBatch:
+        """Reserve one finite extraction childset in a single atomic write.
+
+        The one exception to "one authority, one call at a time", and it is an
+        exception only about *when* the authorities are written. Every child is
+        still a one-use authority that has to be consumed by its own
+        :meth:`claim_batch_dispatch`; the batch merely says a person agreed to
+        this exact finite set of extraction requests, at this concurrency, over
+        this exact manifest.
+
+        Reserving them together is what makes bounded parallelism safe to
+        account for: the whole childset and its limit reach disk before any
+        request leaves, so a crash can never leave a batch whose real size
+        nobody can reconstruct. It is all or nothing — a childset that cannot
+        be authorized in full writes nothing at all.
+        """
+        if not _valid_batch_identifier(batch_id):
+            raise OperationError(
+                f"Operation batch {batch_id!r} needs a valid batch identifier"
+            )
+        if (
+            not isinstance(concurrency_limit, int)
+            or isinstance(concurrency_limit, bool)
+            or concurrency_limit < 1
+        ):
+            raise OperationError(
+                f"Operation batch {batch_id!r} needs a positive integer "
+                "concurrency limit"
+            )
+        if not _is_sha256_digest(manifest_sha256):
+            raise OperationError(
+                f"Operation batch {batch_id!r} needs an exact manifest digest"
+            )
+        authorizations = _validated_batch_children(batch_id, children)
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            if batch_id in current.batches:
+                raise OperationError(
+                    f"Operation batch {batch_id!r} already exists; batch "
+                    "authority is one-use."
+                )
+            blocking = current.blocking()
+            if blocking:
+                raise OperationError(_blocked_refusal(blocking[0]))
+            named: set[str] = set()
+            requested: set[str] = set()
+            for child in authorizations:
+                if child.operation_id in named:
+                    raise OperationError(
+                        f"Operation batch {batch_id!r} names operation "
+                        f"{child.operation_id!r} twice"
+                    )
+                # Two children carrying one exact request are the same paid
+                # call twice. Across *settled* batches that is a legitimate
+                # retry; inside one reservation nothing has settled yet.
+                if child.request_fp in requested:
+                    raise OperationError(
+                        f"Operation batch {batch_id!r} reserves one exact "
+                        f"request twice: {child.request_fp!r}"
+                    )
+                named.add(child.operation_id)
+                requested.add(child.request_fp)
+                current._refuse_reused_identity(child.operation_id)
+            batch = OperationBatch.from_dict(
+                batch_id,
+                OperationBatch(
+                    batch_id=batch_id,
+                    child_operation_ids=tuple(
+                        child.operation_id for child in authorizations
+                    ),
+                    concurrency_limit=concurrency_limit,
+                    manifest_sha256=manifest_sha256,
+                ).to_dict(),
+            )
+            now = _now()
+            for child in authorizations:
+                current.operations[child.operation_id] = Operation(
+                    operation_id=child.operation_id,
+                    kind=child.kind,
+                    state="authorized",
+                    source_file=child.source_file,
+                    source_sha256=child.source_sha256,
+                    request_fp=child.request_fp,
+                    model=child.model,
+                    authorized_at=now,
+                    updated_at=now,
+                    batch_id=batch_id,
+                )
+            current.batches[batch_id] = batch
+            current.path = self.path
+            current._write()
+            self.operations = current.operations
+            self.batches = current.batches
+            return batch
+
+    def claim_batch_dispatch(
+        self,
+        operation_id: str,
+        *,
+        batch_id: str,
+        request_fp: str,
+        manifest_sha256: str,
+    ) -> Operation:
+        """Consume one child's authority, if the batch still has a free slot.
+
+        This is the only door from `authorized` to `dispatching` for a batch
+        child, which is what makes the stored limit a rule rather than advice:
+        the count is taken from the journal's own member rows under the same
+        lock that writes the transition, so two callers racing at one instant
+        cannot both find the last slot free.
+
+        A slot is occupied by every member that is dispatching, running, or
+        resting in an unknown outcome. The unknown one never gives its slot
+        back — nothing here redispatches it, and pretending the call ended
+        would be inventing what somebody's money bought.
+        """
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            batch = current.batches.get(batch_id)
+            if batch is None:
+                raise OperationError(
+                    f"No operation batch {batch_id!r} to claim a dispatch slot"
+                )
+            held = current.operations.get(operation_id)
+            if held is None:
+                raise OperationError(
+                    f"No operation {operation_id!r} to claim a dispatch slot"
+                )
+            if (
+                operation_id not in batch.child_operation_ids
+                or held.batch_id != batch_id
+            ):
+                raise OperationError(
+                    f"Operation {operation_id!r} is not a member of operation "
+                    f"batch {batch_id!r}"
+                )
+            if batch.manifest_sha256 != manifest_sha256:
+                raise OperationError(
+                    f"Operation batch {batch_id!r} was authorized for a "
+                    "different exact manifest"
+                )
+            if held.request_fp != request_fp:
+                raise OperationError(
+                    f"Operation {operation_id!r} was authorized for a "
+                    "different exact request"
+                )
+            if held.cleanup is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} is being forgotten; rerun "
+                    f"'janki operations --forget {operation_id}' to finish cleanup"
+                )
+            if held.state != "authorized":
+                raise OperationError(
+                    f"Operation {operation_id!r} is {held.state!r} and cannot "
+                    "claim a dispatch slot; batch authority is one-use"
+                )
+            occupied = sum(
+                1
+                for member in batch.child_operation_ids
+                if (row := current.operations.get(member)) is not None
+                and row.cleanup is None
+                and row.state in BATCH_OCCUPIED_STATES
+            )
+            if occupied >= batch.concurrency_limit:
+                raise OperationError(
+                    f"Operation batch {batch_id!r} is at its concurrency limit "
+                    f"of {batch.concurrency_limit}; another child must settle "
+                    f"before {operation_id!r} may dispatch"
+                )
+            claimed = self._move_under_lock(
+                current,
+                operation_id,
+                "dispatching",
+                batched_claim=True,
+            )
+            self.batches = current.batches
+            return claimed
 
     def advance(
         self,
@@ -2114,6 +2554,7 @@ class OperationJournal:
                 artifact=held.artifact,
                 response_spool=receipt,
                 detail=held.detail,
+                batch_id=held.batch_id,
             )
             current.operations[operation_id] = prepared
             current.path = self.path
@@ -2150,6 +2591,7 @@ class OperationJournal:
             artifact=held.artifact,
             response_spool=receipt,
             detail=held.detail,
+            batch_id=held.batch_id,
         )
         current.operations[held.operation_id] = updated
         current.path = self.path
@@ -2301,6 +2743,7 @@ class OperationJournal:
         *,
         artifact: ArtifactReceipt | None = None,
         detail: str = "",
+        batched_claim: bool = False,
     ) -> Operation:
         """The move itself, for a caller already holding this journal's lock.
 
@@ -2319,6 +2762,7 @@ class OperationJournal:
             operation_id,
             state,
             artifact=artifact,
+            batched_claim=batched_claim,
         )
         moved = Operation(
             operation_id=held.operation_id,
@@ -2333,6 +2777,7 @@ class OperationJournal:
             artifact=artifact if artifact is not None else held.artifact,
             response_spool=held.response_spool,
             detail=detail or held.detail,
+            batch_id=held.batch_id,
         )
         current.operations[operation_id] = moved
         current.path = self.path
@@ -2347,6 +2792,7 @@ class OperationJournal:
         state: str,
         *,
         artifact: ArtifactReceipt | None = None,
+        batched_claim: bool = False,
     ) -> Operation:
         """Validate one transition against the locked journal snapshot."""
         held = current.operations.get(operation_id)
@@ -2356,6 +2802,20 @@ class OperationJournal:
             raise OperationError(
                 f"Operation {operation_id!r} is being forgotten; rerun "
                 f"'janki operations --forget {operation_id}' to finish cleanup"
+            )
+        # A batch child leaves `authorized` through its claim or not at all.
+        # Every other mover — `advance`, `end`, capture, commit — passes here,
+        # so closing the door once closes it for all of them rather than
+        # trusting each caller to remember the limit exists.
+        if (
+            not batched_claim
+            and held.batch_id
+            and held.state == "authorized"
+            and state == "dispatching"
+        ):
+            raise OperationError(
+                f"Operation {operation_id!r} belongs to operation batch "
+                f"{held.batch_id!r} and must dispatch through its batch claim"
             )
         refusal = advance_refusal(
             operation_id,
@@ -2889,6 +3349,7 @@ class OperationJournal:
                         response_spool=held.response_spool,
                         detail=held.detail,
                         cleanup=cleanup[operation_id],
+                        batch_id=held.batch_id,
                     )
                 current.path = self.path
                 current._write()

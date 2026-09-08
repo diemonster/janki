@@ -90,6 +90,7 @@ __all__ = [
     "ExtractionPlan",
     "ExtractionRevision",
     "ExtractionTarget",
+    "RevalidatedExtraction",
     "authorize_dispatch",
     "busy_refusal",
     "capture_hook",
@@ -104,8 +105,11 @@ __all__ = [
     "extraction_provider_plan",
     "prepare_extraction_transport",
     "recover_extraction",
+    "require_current_destination",
     "recover_extraction_from_capture",
+    "revalidate_extraction_request",
     "run_extraction_call",
+    "run_extraction_lifecycle",
     "extraction_replacement_revision",
     "plan_corpus_extraction",
     "plan_extraction",
@@ -1751,7 +1755,7 @@ def destination_deck_facts(deck_path: Path) -> tuple[str, str]:
     return selection.scope_id, hashlib.sha256(wire).hexdigest()
 
 
-def _require_current_destination(expected: ExtractionDispatchExpectation) -> None:
+def require_current_destination(expected: ExtractionDispatchExpectation) -> None:
     """Refuse a paid call whose rendered destination deck has moved.
 
     Before authorization and before any provider call, because this is a
@@ -1814,27 +1818,38 @@ def _report_extraction_progress(
         return
 
 
-def dispatch_extraction(
+@dataclass(frozen=True, slots=True)
+class RevalidatedExtraction:
+    """One freshly re-planned call, proved to be the one an owner confirmed.
+
+    Every field is read again from disk at click time: nothing an expectation
+    carried is dispatched.  Holding the four values together is what lets a
+    single call and one child of a batch share the same revalidation instead
+    of keeping two definitions of "the request has not moved".
+    """
+
+    plan: ExtractionPlan
+    target: ExtractionTarget
+    #: Explicit owner confirmation, which is the only force authority there is.
+    force: bool
+    #: The exact review that confirmation allows this answer to destroy.
+    expected_revision: ExtractionRevision | None
+
+
+def revalidate_extraction_request(
     config: ProjectConfig,
     expected: ExtractionDispatchExpectation,
     *,
-    client: Any | None = None,
-    progress: Callable[[str], None] | None = None,
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
-    provider_spawn: Any = subprocess.Popen,
-) -> ExtractionOutcome:
-    """Re-plan and run one exact owner-confirmed corpus extraction.
+) -> RevalidatedExtraction:
+    """Read everything again and refuse any difference, before any authority.
 
-    This is the shared paid boundary used by every surface.  The expectation
-    is what the owner saw; none of its planned objects is dispatched.  The
-    source, prompts, collection and replacement state are read again, the
-    exact request identity is compared, and only then may the journal's locked
-    authorization gate let a provider call begin.
-
-    The progress callback receives state names only.  Providers do not report
-    percentages, so this service never invents one.
+    Pure with respect to the journal and the provider: it plans, compares and
+    raises.  A batch calls it for *every* child before it reserves anything,
+    which is what makes "one page moved, so nothing was sent" a property of
+    the batch rather than of whichever child happened to be checked first.
     """
     if expected.replacement_revision is not None and not expected.replacement_confirmed:
         raise ExtractionDispatchError(
@@ -1935,35 +1950,36 @@ def dispatch_extraction(
         )
         raise ExtractionDispatchError(cause, phase="binding")
 
-    _require_current_destination(expected)
+    require_current_destination(expected)
 
-    # One selected transport, proved before the journal can record authority.
-    # A local failure here — no CLI, a logged-out login, a missing key — is a
-    # refusal on the transport that was chosen; it is never a reason to reach
-    # the other one.
-    try:
-        transport = prepare_extraction_transport(
-            plan,
-            target,
-            client=client,
-            env=provider_env,
-            runner=provider_runner,
-            which=provider_which,
-        )
-    except JankiError as exc:
-        raise ExtractionDispatchError(exc, phase="preparation") from exc
+    return RevalidatedExtraction(
+        plan=plan,
+        target=target,
+        force=force,
+        expected_revision=rendered_revision,
+    )
 
-    try:
-        journal = operations.OperationJournal.load(config.operations_file)
-        # `busy_refusal` is a render-time display.  The real one-call gate is
-        # OperationJournal.authorize inside authorize_dispatch, under its own
-        # file lock, so two stale pages cannot both spend.
-        operation_id = authorize_dispatch(
-            journal, target, model=plan.model, stream=transport.prepared is not None
-        )
-    except JankiError as exc:
-        raise ExtractionDispatchError(exc, phase="authorization") from exc
 
+def run_extraction_lifecycle(
+    config: ProjectConfig,
+    journal: operations.OperationJournal,
+    revalidated: RevalidatedExtraction,
+    *,
+    operation_id: str,
+    transport: ExtractionTransport,
+    progress: Callable[[str], None] | None = None,
+    provider_spawn: Any = subprocess.Popen,
+) -> ExtractionOutcome:
+    """Make one already-authorized call and turn its answer into staging.
+
+    The half after the authority, and the only one there is.  A single
+    dispatch and one child of a batch differ in how they came by
+    ``operation_id`` — an exclusive authorization or a reserved batch claim —
+    and in nothing else, so the capture, the failure classification and the
+    completion happen here once rather than in each caller.
+    """
+    plan = revalidated.plan
+    target = revalidated.target
     _report_extraction_progress(progress, "Preparing pages")
     _report_extraction_progress(progress, "Reading the source")
     captured = capture_hook(
@@ -2026,8 +2042,8 @@ def dispatch_extraction(
             known=plan.known,
             mode=plan.mode,
             model=plan.model,
-            force=force,
-            expected_revision=rendered_revision,
+            force=revalidated.force,
+            expected_revision=revalidated.expected_revision,
         )
     except JankiError as exc:
         raise ExtractionDispatchError(
@@ -2035,3 +2051,74 @@ def dispatch_extraction(
             phase="completion",
             operation_id=operation_id,
         ) from exc
+
+
+def dispatch_extraction(
+    config: ProjectConfig,
+    expected: ExtractionDispatchExpectation,
+    *,
+    client: Any | None = None,
+    progress: Callable[[str], None] | None = None,
+    provider_env: Mapping[str, str] | None = None,
+    provider_runner: Callable[..., Any] = subprocess.run,
+    provider_which: Callable[..., str | None] = shutil.which,
+    provider_spawn: Any = subprocess.Popen,
+) -> ExtractionOutcome:
+    """Re-plan and run one exact owner-confirmed corpus extraction.
+
+    This is the shared paid boundary used by every surface.  The expectation
+    is what the owner saw; none of its planned objects is dispatched.  The
+    source, prompts, collection and replacement state are read again, the
+    exact request identity is compared, and only then may the journal's locked
+    authorization gate let a provider call begin.
+
+    The progress callback receives state names only.  Providers do not report
+    percentages, so this service never invents one.
+    """
+    revalidated = revalidate_extraction_request(
+        config,
+        expected,
+        provider_env=provider_env,
+        provider_runner=provider_runner,
+        provider_which=provider_which,
+    )
+
+    # One selected transport, proved before the journal can record authority.
+    # A local failure here — no CLI, a logged-out login, a missing key — is a
+    # refusal on the transport that was chosen; it is never a reason to reach
+    # the other one.
+    try:
+        transport = prepare_extraction_transport(
+            revalidated.plan,
+            revalidated.target,
+            client=client,
+            env=provider_env,
+            runner=provider_runner,
+            which=provider_which,
+        )
+    except JankiError as exc:
+        raise ExtractionDispatchError(exc, phase="preparation") from exc
+
+    try:
+        journal = operations.OperationJournal.load(config.operations_file)
+        # `busy_refusal` is a render-time display.  The real one-call gate is
+        # OperationJournal.authorize inside authorize_dispatch, under its own
+        # file lock, so two stale pages cannot both spend.
+        operation_id = authorize_dispatch(
+            journal,
+            revalidated.target,
+            model=revalidated.plan.model,
+            stream=transport.prepared is not None,
+        )
+    except JankiError as exc:
+        raise ExtractionDispatchError(exc, phase="authorization") from exc
+
+    return run_extraction_lifecycle(
+        config,
+        journal,
+        revalidated,
+        operation_id=operation_id,
+        transport=transport,
+        progress=progress,
+        provider_spawn=provider_spawn,
+    )

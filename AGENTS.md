@@ -188,6 +188,22 @@ below is what is left, and it is the loop every other project already uses.*
   capability bound to the exact plan the conversation rendered. The assistant
   may never infer that confirmation from an earlier broad request, confirm its
   own proposal, or reuse or widen the capability.
+- **One exact confirmed extraction batch is the exception to one paid call at a
+  time.** It is a consent and scheduling shape, not a new pass: a single
+  confirmation that enumerates the batch exactly authorizes its child calls,
+  and each child keeps its own source, request fingerprint, provider/model and
+  billing identity. It never becomes one paid parent call, and the children's
+  answers never merge into one synthetic provenance. Unrelated authorization
+  still refuses while any operation is live or unaccounted for.
+- Retrying part of a batch is a **fresh** owner decision: one new confirmation
+  binds the new exact requests together with the forget/discard decision for
+  each failed operation it clears, and fresh operation ids are mandatory. A
+  successful child is never retried, and an in-flight child needs the owner's
+  `operations --end` decision first. An `outcome_unknown` child is already
+  ended; its new retry confirmation must acknowledge the uncertain prior cost
+  and explicitly discard its exact retained evidence. No unknown call is ever
+  sent again automatically. An agent may not make one of these decisions
+  or read it out of the owner's original batch confirmation.
 - **Staging coverage acceptance is the exception, decided 2026-08-16.** It was
   on the list above until the owner measured what it cost: since M8.4 deleted
   oracles every extraction *carrying a table* lands `unmeasured` — a prose-only
@@ -275,6 +291,23 @@ below is what is left, and it is the loop every other project already uses.*
    its operation-journal entry; never delete or edit it by hand. ChatKit
    threads are convenience views of these repository records, not their
    replacement, and this store never grants revision or content authority.
+1d. `data/extraction_batches/` (derived beside the configured operations file):
+   durable manifests and confirmed-execution receipts for extraction batches — **committed**
+   repository state, not a `data/.pending` recovery buffer. A manifest binds
+   each child's expectations and reserved operation id, the source ancestry and
+   labels its parts came from, the batch's concurrency limit, and the
+   provenance of every retry. It never flattens the children: each page or
+   slice keeps its own staging document with its own request, coverage,
+   candidate-accounting and pattern metadata, and a reference to the full
+   parent source is documentary — never a substitute for the sliced input whose
+   bytes were actually sent. A reserved child that was never sent may resume
+   under its original authority after fresh binding checks. Recovering an
+   already-captured reply makes no new call and keeps its existing operation;
+   sending a replacement request needs fresh confirmation and a fresh operation
+   id. An exact confirmed-execution receipt may finish interrupted cleanup and
+   reservation after fresh binding checks; a request manifest alone grants no
+   authority. Never hand-edit either file, and never delete one while its
+   execution or any child operation is unfinished.
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a

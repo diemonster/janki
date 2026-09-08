@@ -26,6 +26,7 @@ from typing import Any
 from japanese_anki.localhttp import MAX_BODY_BYTES, LocalOnlyHandler, LocalOnlyServer, bind_loopback
 from japanese_anki.workbench.assistant import (
     CAPABILITIES_MESSAGE,
+    MANAGE_EXTRACTION_BATCHES_MESSAGE,
     MANAGE_OPERATIONS_MESSAGE,
     RESUME_KANJI_MESSAGE,
     SHOW_DECKS_MESSAGE,
@@ -599,6 +600,11 @@ def _application_javascript(server: AssistantHTTPServer) -> str:
         {{
           label: "Resume kanji cards",
           prompt: {json.dumps(RESUME_KANJI_MESSAGE)},
+          icon: "book-open",
+        }},
+        {{
+          label: "Manage extraction batches",
+          prompt: {json.dumps(MANAGE_EXTRACTION_BATCHES_MESSAGE)},
           icon: "book-open",
         }},
       ]"""
