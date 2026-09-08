@@ -297,6 +297,10 @@ def _assignment_value(plan: assignment.DeckAssignmentPlan) -> dict[str, object]:
     prospective_wire = _canonical_json(plan.prospective_record.to_dict())
     return {
         "record_id": plan.record_id,
+        # What the selected row becomes. Equal to ``record_id`` for a shared
+        # destination; a standalone deck's independent copy carries its own
+        # identity, and the owner sees both before confirming anything.
+        "target_record_id": plan.assigned_record.id,
         "expression": plan.assigned_record.expression,
         "reading": plan.assigned_record.reading,
         "existing_owner": plan.existing_owner,
@@ -469,11 +473,22 @@ def _prepare(
         updated[index] = plan.assigned_record
 
     assignment_values = [_assignment_value(plan) for plan in plans]
+    try:
+        destination_bytes = read_bytes_bound(destination)
+    except (JankiError, OSError) as exc:
+        raise AssistantAssignmentError(
+            f"Could not read the destination deck definition: {exc}"
+        ) from exc
     service_value = {
         "staging_sha256": hashlib.sha256(snapshot).hexdigest(),
         "destination_file": _relative(
             config, destination, label="destination deck"
         ),
+        # The deck file's exact bytes, because its scope decides what identity
+        # every assigned row becomes. A scope edited between the plan and the
+        # confirmation must invalidate the plan, not silently re-target it.
+        "destination_sha256": hashlib.sha256(destination_bytes).hexdigest(),
+        "destination_scope_id": plans[0].destination.scope_id,
         "assignments": assignment_values,
     }
     service_wire = _canonical_json(service_value)
@@ -498,10 +513,16 @@ def _prepare(
             "name": destination_name,
             "stem": plans[0].destination.stem,
             "intake_tag": plans[0].destination.intake_tag,
+            # Empty for an ordinary shared deck. A nonempty scope is what makes
+            # every assigned row below an independent copy rather than the same
+            # card gaining a tag, so the confirmation says so plainly.
+            "scope_id": service_value["destination_scope_id"],
             "configured_file": service_value["destination_file"],
+            "deck_sha256": service_value["destination_sha256"],
         },
         "selection": {
             "record_ids": list(selected),
+            "target_record_ids": [plan.assigned_record.id for plan in plans],
             "assignments": assignment_values,
         },
         "writes": {
@@ -600,5 +621,10 @@ def execute_assignment(
         ) from exc
     return AssistantAssignmentExecution(
         plan=fresh,
-        assigned_record_ids=fresh.selected_record_ids,
+        # What is now in the staging file. For a standalone destination these
+        # are the copies' new identities, so the review, promotion and preview
+        # that follow focus the rows this assignment actually wrote.
+        assigned_record_ids=tuple(
+            plan.assigned_record.id for plan in fresh.service_plans
+        ),
     )

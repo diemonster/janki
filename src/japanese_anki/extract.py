@@ -33,7 +33,11 @@ from typing import Any
 from japanese_anki import ai_schema as shared_ai_schema
 from japanese_anki import claude_client, patterns, prompts, repairs
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import stable_record_id
+from japanese_anki.identifiers import (
+    record_scope_id,
+    stable_record_id,
+    validate_scope_id,
+)
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import (
     SourceReference,
@@ -1190,15 +1194,35 @@ def _describe(candidate: Any) -> list[str]:
     return parts or ["nothing but an empty row"]
 
 
-def known_ids(records: Iterable[VocabularyRecord]) -> set[str]:
+def known_ids(
+    records: Iterable[VocabularyRecord], *, scope_id: str = ""
+) -> set[str]:
     """Every id a candidate could match, by identity as well as stored id.
 
     Both, because a hand-written record may carry an id that no longer matches
     what its expression and reading would mint today, and a candidate matching
     either one is a word janki already has.
+
+    ``scope_id`` names *which* collection is being asked. The default is the
+    shared one, and it deliberately does not see deck-scoped copies: a
+    standalone deck holding 話す does not make 話す a word the shared collection
+    already has. A caller extracting for one standalone deck passes that deck's
+    scope and gets that scope's records instead.
+
+    The reconstructed key stays an ordinary ``word:`` identity in both cases.
+    Extraction has not chosen a destination when it mints candidate ids, so
+    ordinary keys are what a candidate is actually compared against; scoping the
+    reconstruction would compare a scoped key with a candidate that can never
+    carry one, and every word would look new.
     """
+    if scope_id:
+        # Refused here rather than silently answering "nothing is known": a
+        # scope nothing can match would mark every word in the source as new.
+        validate_scope_id(scope_id)
     ids: set[str] = set()
     for record in records:
+        if record_scope_id(record.id) != scope_id:
+            continue
         ids.add(record.id)
         ids.add(stable_record_id(record.expression, record.reading))
     return ids

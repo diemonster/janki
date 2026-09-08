@@ -37,7 +37,7 @@ from typing import Any
 from japanese_anki import enrich, extract, jpdb
 from japanese_anki import pitch as pitch_module
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import contains_kanji, stable_record_id
+from japanese_anki.identifiers import contains_kanji, record_scope_id, stable_record_id
 from japanese_anki.io import MergeOutcome, merge_records
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
@@ -246,7 +246,11 @@ def _candidate_accounting_retry_targets(
         resolved = _accept_examples(_resolved(record))
         stable = replace(
             resolved,
-            id=stable_record_id(resolved.expression, resolved.reading),
+            id=stable_record_id(
+                resolved.expression,
+                resolved.reading,
+                scope_id=record_scope_id(resolved.id),
+            ),
         )
         variants = {resolved.id: resolved.to_dict(), stable.id: stable.to_dict()}
         matches = [
@@ -509,10 +513,18 @@ def remint(
     because the id is uncorrectable by design, and M4.2's staging route then
     sends such a record back through promote. So an id the collection already
     holds is left exactly as it is.
+
+    A row that carries a deck scope re-mints *inside* that scope. The scope is
+    which collection the row belongs to, not a spelling of it, so re-deriving
+    the identity from the expression and reading alone would quietly move a
+    standalone copy onto the shared word it was copied from — the one record
+    this row exists to be independent of.
     """
     if record.id in already_stored:
         return record
-    minted = stable_record_id(record.expression, record.reading)
+    minted = stable_record_id(
+        record.expression, record.reading, scope_id=record_scope_id(record.id)
+    )
     return record if record.id == minted else replace(record, id=minted)
 
 
@@ -625,7 +637,12 @@ def check_readings(
         if (
             remint_blocked
             and record.id not in already_stored
-            and record.id != stable_record_id(resolved.expression, resolved.reading)
+            and record.id
+            != stable_record_id(
+                resolved.expression,
+                resolved.reading,
+                scope_id=record_scope_id(record.id),
+            )
         ):
             result.held.append(_hold(record, HOLD_UNVERIFIABLE_ID))
             result.keep.append(True)

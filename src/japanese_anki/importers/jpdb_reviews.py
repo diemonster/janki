@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import stable_record_id
+from japanese_anki.identifiers import record_scope_id, stable_record_id
 from japanese_anki.models import VocabularyRecord
 
 __all__ = [
@@ -189,10 +189,17 @@ def _index(records: Iterable[VocabularyRecord]) -> tuple[dict[str, str], dict[st
     should not have, and ``janki status --duplicates`` is the command that says
     so — silently tagging both here would spread the problem rather than
     surface it.
+
+    A deck-scoped copy is not indexed at all. This export is the history of the
+    words in jpdb's own collection, and first-match-wins would otherwise let a
+    standalone copy that happens to sort first take the review count belonging
+    to the shared word — leaving the word this export is about unmatched.
     """
     by_vid: dict[str, str] = {}
     by_identity: dict[str, str] = {}
     for record in records:
+        if record_scope_id(record.id):
+            continue
         vid = str(record.source.raw_fields.get("vid", "")).strip()
         if vid:
             by_vid.setdefault(vid, record.id)

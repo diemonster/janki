@@ -4601,22 +4601,19 @@ def test_create_deck_explicit_options_render_the_exact_local_plan_card(
     assert reply.action.target == "data/decks/weekly-review.yaml"
     assert reply.action.confirm_label == "Create this exact deck"
     assert reply.action.progress_label == "Preparing deck"
+    # What the learner reads: the deck, its directions, and what sharing means.
+    # The deck id, intake tag, package path, deck-set digest and YAML hash stay
+    # in the plan this confirmation is bound to.
     assert reply.action.effects == (
-        "Create the configured study deck 'Weekly Review'",
+        "Create the study deck 'Weekly Review'",
         "Enable card directions: recognition, reading",
-        "Assign Anki deck id 1702000001 and intake tag deck:weekly-review",
-        "Reserve its future package path at dist/weekly-review.apkg",
-        f"Bind the current configured-deck set: SHA-256 {'8' * 64}",
-        (
-            f"Write this exact UTF-8 YAML (SHA-256 {'7' * 64}):\n"
-            "deck:\n"
-            "  name: Weekly Review\n"
-            "  cards:\n"
-            "    recognition: true\n"
-            "    production: false\n"
-            "    reading: true\n"
-        ),
+        "Shared: it reuses your existing cards and their review progress",
     )
+    written = "\n".join((*reply.action.effects, *reply.action.disclosures))
+    assert "1702000001" not in written
+    assert "deck:weekly-review" not in written
+    assert "7" * 64 not in written
+    assert "8" * 64 not in written
     assert reply.action.disclosures == (
         "This local action makes no model or audio-provider call.",
         "The new deck definition is written once; existing decks and cards are unchanged.",
@@ -4667,27 +4664,28 @@ def test_create_deck_refuses_missing_extra_or_duplicate_directions(
 
 
 @pytest.mark.parametrize(
-    ("owner_message", "message"),
+    "owner_message",
     [
-        (
-            "Create a deck with recognition and reading cards.",
-            "deck name must appear verbatim",
-        ),
-        (
-            "Create a deck named Weekly Review with recognition cards.",
-            "explicitly name every requested card direction",
-        ),
+        "Create a deck with recognition and reading cards.",
+        "yes, use that setup",
     ],
-    ids=("model-invented-name", "model-invented-direction"),
+    ids=("name-not-repeated", "conversational-yes"),
 )
-def test_create_deck_refuses_owner_only_values_invented_by_the_model_before_planning(
+def test_create_deck_plans_the_typed_setup_without_repeating_it_in_the_message(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     owner_message: str,
-    message: str,
 ) -> None:
+    """The owner settles the setup in conversation; the plan is what they confirm.
+
+    Requiring the name and every direction to appear again in the message that
+    accepts them made the owner restate a decision they had already made, and
+    the visible plan-bound confirmation below is what actually authorizes the
+    write.
+    """
     config = _config(tmp_path)
     adapter = _adapter(config)
+    creation_plan = _FakeDeckCreationPlan()
     intent = _agent_intent(
         kind="create_deck",
         resource_ids=(),
@@ -4697,23 +4695,34 @@ def test_create_deck_refuses_owner_only_values_invented_by_the_model_before_plan
             "card_directions": ["recognition", "reading"],
         },
     )
+    planned: list[Any] = []
+
+    def plan_creation(_fresh: ProjectConfig, request: Any) -> Any:
+        planned.append(request)
+        return creation_plan
+
     monkeypatch.setattr(
         assistant_adapter.assistant_deck_creation,
         "plan_deck_creation",
-        lambda *_args, **_kwargs: pytest.fail(
-            "model-invented owner values must refuse before deck planning"
-        ),
+        plan_creation,
     )
 
-    with pytest.raises(RevisionRefusal, match=message):
-        adapter._prepare_agent_intent(
-            config,
-            result=_agent_result(intents=(intent,)),
-            deck_scope="",
-            owner_message=owner_message,
-        )
+    reply = adapter._prepare_agent_intent(
+        config,
+        result=_agent_result(intents=(intent,)),
+        deck_scope="",
+        owner_message=owner_message,
+    )
 
-    assert adapter._agent_plans == {}
+    assert [request.name for request in planned] == ["Weekly Review"]
+    assert planned[0].recognition is True
+    assert planned[0].reading is True
+    assert reply.action is not None
+    assert reply.action.request_fingerprint == "6" * 64
+    assert reply.action.target == "data/decks/weekly-review.yaml"
+    assert reply.action.confirm_label == "Create this exact deck"
+    assert adapter._agent_plans["6" * 64].plan is creation_plan
+    assert not list(tmp_path.rglob("data/decks/*.yaml"))
 
 
 def test_one_create_deck_confirmation_delegates_the_exact_plan_once(
@@ -4865,8 +4874,16 @@ def test_extract_source_intent_routes_one_opaque_source_to_the_existing_plan(
         _FakeSourceBroker,
     )
 
-    def prepare(_self: Any, *, source_path: Path) -> SourceExtractionPlan:
+    forwarded_scopes: list[str] = []
+
+    def prepare(
+        _self: Any,
+        *,
+        source_path: Path,
+        deck_scope: str = "",
+    ) -> SourceExtractionPlan:
         prepared_paths.append(source_path)
+        forwarded_scopes.append(deck_scope)
         return extraction
 
     monkeypatch.setattr(
@@ -4882,6 +4899,8 @@ def test_extract_source_intent_routes_one_opaque_source_to_the_existing_plan(
     )
 
     assert prepared_paths == [_FakeSourceBroker.source]
+    # An unfocused thread forwards no destination, so this stays the shared call.
+    assert forwarded_scopes == [""]
     assert reply.action is not None
     assert reply.action.request_fingerprint == "5" * 64
     assert reply.action.target == "data/staging/lesson.pdf.yaml"
@@ -5287,6 +5306,7 @@ def test_adapter_prepares_then_dispatches_one_exact_saved_source_only_after_clic
     )
     consent = SimpleNamespace(
         sendable=True,
+        scope_id="",
         target=target,
         refusal="",
         busy="",
@@ -5395,6 +5415,7 @@ def test_adapter_replacement_button_is_the_only_event_that_grants_force(
     )
     consent = SimpleNamespace(
         sendable=True,
+        scope_id="",
         target=SimpleNamespace(
             source_sha256="a" * 64,
             staging_path=config.staging_dir / "lesson.yaml",

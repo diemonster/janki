@@ -35,6 +35,7 @@ def _request(
     production: bool = False,
     reading: bool = True,
     instruction: str = "Create this thematic study deck.",
+    deck_scope: str = "shared",
 ) -> assistant_deck_creation.AssistantDeckCreationRequest:
     return assistant_deck_creation.AssistantDeckCreationRequest(
         name=name,
@@ -42,6 +43,7 @@ def _request(
         production=production,
         reading=reading,
         instruction=instruction,
+        deck_scope=deck_scope,
     )
 
 
@@ -92,6 +94,8 @@ def test_plan_is_side_effect_free_and_exposes_exact_browser_safe_definition(
         "future_package": f"dist/{plan.service_plan.stem}.apkg",
         "deck_id": plan.service_plan.deck_id,
         "intake_tag": plan.service_plan.intake_tag,
+        "deck_scope": "shared",
+        "scope_id": "",
         "cards": {
             "recognition": False,
             "production": True,
@@ -131,6 +135,132 @@ def test_plan_is_side_effect_free_and_exposes_exact_browser_safe_definition(
     assert str(config.root.resolve()) not in plan.projection_wire
 
 
+def test_standalone_choice_binds_its_scope_in_the_plan_and_projection(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    request = _request(deck_scope="standalone")
+    before = _snapshot_files(tmp_path)
+
+    plan = assistant_deck_creation.plan_deck_creation(config, request)
+
+    assert _snapshot_files(tmp_path) == before
+    assert plan.request.deck_scope == "standalone"
+    assert plan.service_plan.standalone is True
+    scope_id = plan.service_plan.scope_id
+    assert len(scope_id) == 64
+    target = plan.projection["target"]
+    assert target["deck_scope"] == "standalone"
+    assert target["scope_id"] == scope_id
+    assert yaml.safe_load(plan.projection["definition"]["yaml"])["deck"][
+        "scope_id"
+    ] == scope_id
+    assert str(config.root.resolve()) not in plan.projection_wire
+
+    shared = assistant_deck_creation.plan_deck_creation(config, _request())
+
+    assert shared.service_plan.standalone is False
+    assert shared.projection["target"]["scope_id"] == ""
+    assert shared.fingerprint != plan.fingerprint
+
+
+def test_deck_scope_is_a_closed_choice_and_omitting_it_stays_shared(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+
+    class WithoutScope:
+        name = "Lesson 15"
+        recognition = True
+        production = False
+        reading = False
+        instruction = "Create it."
+
+    plan = assistant_deck_creation.plan_deck_creation(
+        config, WithoutScope()  # type: ignore[arg-type]
+    )
+
+    assert plan.request.deck_scope == "shared"
+    assert plan.service_plan.standalone is False
+
+    for value in ("Standalone", "", "independent", True, None, 1):
+        with pytest.raises(
+            assistant_deck_creation.AssistantDeckCreationError,
+            match="'shared' or 'standalone'",
+        ):
+            assistant_deck_creation.plan_deck_creation(
+                config, LooseRequest(deck_scope=value)  # type: ignore[arg-type]
+            )
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["request_scope", "service_flag", "service_scope", "yaml"],
+)
+def test_execute_refuses_a_forged_scope_flag_or_definition_before_writing(
+    tmp_path: Path,
+    tamper: str,
+) -> None:
+    config = _project(tmp_path)
+    plan = assistant_deck_creation.plan_deck_creation(config, _request())
+    service = plan.service_plan
+    if tamper == "request_scope":
+        forged = replace(plan, request=replace(plan.request, deck_scope="standalone"))
+    elif tamper == "service_flag":
+        forged = replace(plan, service_plan=replace(service, standalone=True))
+    elif tamper == "service_scope":
+        forged = replace(plan, service_plan=replace(service, scope_id="a" * 64))
+    else:
+        forged = replace(
+            plan,
+            service_plan=replace(
+                service,
+                yaml_bytes=service.yaml_bytes + b"  scope_id: " + b"a" * 64 + b"\n",
+            ),
+        )
+    before = _snapshot_files(tmp_path)
+
+    with pytest.raises(
+        assistant_deck_creation.AssistantDeckCreationError,
+        match="changed after it was displayed",
+    ):
+        assistant_deck_creation.execute_deck_creation(config, forged)
+
+    assert _snapshot_files(tmp_path) == before
+
+
+def test_a_refreshed_scope_collision_refuses_the_standalone_execution(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    plan = assistant_deck_creation.plan_deck_creation(
+        config, _request(deck_scope="standalone")
+    )
+    # A surviving canonical record leaves the configured deck set untouched, so
+    # only a repeated scope choice can stale this plan.
+    config.normalized_file.write_text(
+        json.dumps(
+            [
+                {
+                    "id": f"standalone:{plan.service_plan.scope_id}:one:one",
+                    "expression": "one",
+                    "reading": "one",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    before = _snapshot_files(tmp_path)
+
+    with pytest.raises(
+        assistant_deck_creation.AssistantDeckCreationError,
+        match="changed after it was displayed",
+    ):
+        assistant_deck_creation.execute_deck_creation(config, plan)
+
+    assert _snapshot_files(tmp_path) == before
+
+
 @dataclass
 class LooseRequest:
     name: object = "Lesson 15"
@@ -138,6 +268,7 @@ class LooseRequest:
     production: object = False
     reading: object = False
     instruction: object = "Create it."
+    deck_scope: object = "shared"
 
 
 def test_request_requires_exact_name_instruction_and_every_explicit_direction(

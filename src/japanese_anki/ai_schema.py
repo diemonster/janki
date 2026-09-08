@@ -76,6 +76,14 @@ def assistant_agent_schema() -> Any:
                 "add_kanji_notes; never infer an omitted direction."
             ),
         )
+        deck_scope: Literal["shared", "standalone"] | None = Field(
+            default=None,
+            description=(
+                "create_deck only: 'standalone' when the owner asked for their "
+                "own independent copies of the words, 'shared' when they asked "
+                "to reuse the existing cards; null when they have not chosen."
+            ),
+        )
         study_type: Literal["vocabulary", "kanji"] | None = Field(
             default=None,
             description=(

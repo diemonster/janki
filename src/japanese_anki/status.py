@@ -49,7 +49,11 @@ from japanese_anki.exporters.anki import (
     deck_kind,
     resolve_deck_records,
 )
-from japanese_anki.identifiers import normalize_identity_part
+from japanese_anki.identifiers import (
+    IdentityError,
+    normalize_identity_part,
+    record_scope_id,
+)
 from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.ledger import (
     Ledger,
@@ -1280,6 +1284,39 @@ def _jpdb_vid(record: VocabularyRecord) -> str:
 
 
 def find_duplicates(records: Iterable[VocabularyRecord]) -> list[DuplicateGroup]:
+    """Every duplicate class, one record scope at a time.
+
+    The universe this reads unions the collection with every deck's records, so
+    a standalone deck's copies arrive beside the shared words they were copied
+    from. Those pairs are the intended shape of a standalone deck — same
+    spelling, same reading, sometimes the same jpdb vid — and reporting them
+    would print a remedy ("pick a survivor and delete the other") that is wrong
+    for every one of them, burying the real duplicates in noise.
+
+    So the whole report runs per scope, using exactly the same three tests
+    below. Two copies of one word inside one standalone deck are still a
+    duplicate, and the shared collection's report is unchanged.
+    """
+    partitions: dict[str, list[VocabularyRecord]] = {}
+    for record in records:
+        try:
+            scope = record_scope_id(record.id)
+        except IdentityError:
+            # A malformed reserved id belongs to no scope janki can name. It
+            # cannot be grouped with anything, so it gets a partition of its
+            # own rather than taking the whole report down.
+            scope = f"\x1f{record.id}"
+        partitions.setdefault(scope, []).append(record)
+    return [
+        group
+        for scope in sorted(partitions)
+        for group in _duplicates_in_one_scope(partitions[scope])
+    ]
+
+
+def _duplicates_in_one_scope(
+    records: Iterable[VocabularyRecord],
+) -> list[DuplicateGroup]:
     """Every duplicate class, not just the obvious one.
 
     (a) The same expression under two ids — a word that arrived twice with

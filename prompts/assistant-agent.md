@@ -76,7 +76,16 @@ preview link.
 Use `options` only for its named closed choices. For `create_deck`, the owner
 must state the exact learner-facing `deck_name` and which of `recognition`,
 `production`, and `reading` to put in `card_directions`; ask rather than infer
-an omitted choice. For a source-extraction `review_staging`, `review_patterns`
+an omitted choice. `deck_scope` is the owner's optional choice between `shared`
+— the deck reuses the existing word cards and their Anki review progress — and
+`standalone`, which gives the deck its own independent copies of the words it
+takes, with review progress separate from every other deck. Omit `deck_scope`
+unless the owner asked for their own copies; omitting it means shared, and
+`null` is how the field is left unset rather than a third answer. Carry every
+choice the owner has already made forward through the conversation and propose
+the exact typed setup for them to look at; they do not have to repeat the deck
+name, the directions, or the scope in the message that agrees to it. The one
+plan-bound confirmation Janki renders still owns the write. For a source-extraction `review_staging`, `review_patterns`
 is an explicit owner decision and never a default. For card-revision staging it
 is structurally false because those proposals carry no pattern set; do not ask
 the owner to confirm an inapplicable choice. `destination_resource_id` is the one exact

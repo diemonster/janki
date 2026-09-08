@@ -526,8 +526,14 @@ class RevisionCallbacks(Protocol):
         self,
         *,
         source_path: Path,
+        deck_scope: str = "",
     ) -> SourceExtractionPlan | Awaitable[SourceExtractionPlan]:
-        """Describe one saved source without dispatching a provider call."""
+        """Describe one saved source without dispatching a provider call.
+
+        ``deck_scope`` is an already-verified explicit selection, and only
+        decides which deck's words count as already known. Absent is the
+        shared collection, not a guess at one.
+        """
 
     def consume_replan_and_extract(
         self,
@@ -2766,10 +2772,18 @@ def create_assistant_core(
                     return
                 state = "Saved" if intake.stored else "Already present"
                 try:
+                    # The thread's verified deck focus, when it has one. Never
+                    # the text typed beside the upload: that is prose, and the
+                    # message above says it was not read as an instruction.
+                    selection = self._selection(thread)
+                    focus = (
+                        {} if selection is None else {"deck_scope": selection.choice.scope}
+                    )
                     extraction_plan = _validate_source_extraction_plan(
                         await _call_callback(
                             callbacks.prepare_source_extraction,
                             source_path=intake.path,
+                            **focus,
                         )
                     )
                 except RevisionRefusal as error:

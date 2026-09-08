@@ -31,7 +31,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import normalize_identity_part, stable_record_id
+from japanese_anki.identifiers import (
+    normalize_identity_part,
+    record_scope_id,
+    stable_record_id,
+)
 from japanese_anki.models import VocabularyRecord
 
 __all__ = [
@@ -208,16 +212,22 @@ def plan_reidentification(
             "word a distinct card."
         )
     record = staged[index]
+    # Minted in whatever collection this row already belongs to. Correcting a
+    # standalone copy's reading is still a correction to that copy; it must not
+    # hand the row back to the shared collection under a new identity.
+    new_id = stable_record_id(
+        new_expression, new_reading, scope_id=record_scope_id(record.id)
+    )
     return Reidentification(
         index=index,
         old_id=record.id,
-        new_id=stable_record_id(new_expression, new_reading),
+        new_id=new_id,
         old_expression=record.expression,
         old_reading=record.reading,
         new_expression=new_expression,
         new_reading=new_reading,
         neighbours=_neighbours(
-            stable_record_id(new_expression, new_reading),
+            new_id,
             new_expression,
             new_reading,
             index=index,

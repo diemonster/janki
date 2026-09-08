@@ -1132,3 +1132,36 @@ def test_a_deck_cannot_gain_path_traversal_after_its_opaque_id_was_issued(
 
     with pytest.raises(AssistantContextError, match="escapes the project"):
         broker.snapshot(resource_id)
+
+
+def test_a_standalone_decks_saved_scope_is_disclosed_and_secrets_stay_hidden(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    scoped = config.deck_dir / "lesson.yaml"
+    scoped.write_text(
+        scoped.read_text(encoding="utf-8") + f"  scope_id: {'a' * 64}\n",
+        encoding="utf-8",
+    )
+    broker = AssistantContextBroker(config)
+
+    disclosure = broker.snapshot(
+        _entry(_decoded(broker.catalog()), "deck", "Lesson One")["resource_id"]  # type: ignore[arg-type]
+    )
+    value = _decoded(disclosure)
+
+    assert value["data"]["configuration"]["scope_id"] == "a" * 64
+    assert RAW_SECRET not in disclosure.wire
+    assert "ignored_api_key" not in disclosure.wire
+
+    # A deck that saved no scope is shared, and the snapshot says nothing at all
+    # about one rather than inventing a default to report.
+    (tmp_path / "shared").mkdir()
+    plain = AssistantContextBroker(_project(tmp_path / "shared"))
+    plain_value = _decoded(
+        plain.snapshot(
+            _entry(_decoded(plain.catalog()), "deck", "Lesson One")["resource_id"]  # type: ignore[arg-type]
+        )
+    )
+
+    assert "scope_id" not in plain_value["data"]["configuration"]

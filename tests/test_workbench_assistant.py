@@ -291,7 +291,12 @@ class _FakeRevisions:
             card_count=16,
         )
 
-    def prepare_source_extraction(self, *, source_path: Path) -> SourceExtractionPlan:
+    def prepare_source_extraction(
+        self,
+        *,
+        source_path: Path,
+        deck_scope: str = "",
+    ) -> SourceExtractionPlan:
         self.extraction_prepared.append(source_path)
         return SourceExtractionPlan(
             preparation_id="prepared-extraction-1",

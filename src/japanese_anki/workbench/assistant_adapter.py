@@ -54,6 +54,7 @@ from japanese_anki.application import (
     revision_apply,
     revision_finish,
 )
+from japanese_anki.application.extraction import destination_deck_facts
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
@@ -1533,7 +1534,7 @@ class RevisionAssistantAdapter:
             )
         if intent.kind == "create_deck":
             options = dict(intent.options)
-            if set(options) != {"deck_name", "card_directions"}:
+            if set(options) - {"deck_scope"} != {"deck_name", "card_directions"}:
                 raise RevisionRefusal(
                     "Deck creation needs exactly one deck name and explicit card "
                     "directions."
@@ -1558,12 +1559,17 @@ class RevisionAssistantAdapter:
                 raise RevisionRefusal(
                     "Choose at least one of recognition, production, or reading."
                 )
-            self._require_owner_literal(owner_message, deck_name, label="deck name")
-            normalized_owner_message = (owner_message or "").casefold()
-            if any(direction not in normalized_owner_message for direction in selected):
+            # Closed values, settled in conversation. The owner may have named
+            # this deck, its directions and its scope an exchange ago; making
+            # them retype all three into the message that accepts the setup is a
+            # second confirmation of a decision they already made. The visible
+            # plan-bound confirmation below is what authorizes the write.
+            requested_scope = options.get("deck_scope", "shared")
+            if requested_scope is None:
+                requested_scope = "shared"
+            if requested_scope not in ("shared", "standalone"):
                 raise RevisionRefusal(
-                    "The owner must explicitly name every requested card direction in "
-                    "the current message."
+                    "A new deck is 'shared' or 'standalone'."
                 )
             request = assistant_deck_creation.AssistantDeckCreationRequest(
                 name=deck_name,
@@ -1571,6 +1577,7 @@ class RevisionAssistantAdapter:
                 production="production" in selected,
                 reading="reading" in selected,
                 instruction=intent.instruction,
+                deck_scope=requested_scope,
             )
             try:
                 plan = assistant_deck_creation.plan_deck_creation(config, request)
@@ -1605,6 +1612,21 @@ class RevisionAssistantAdapter:
                 )
             ) or not isinstance(deck_id, int):
                 raise RevisionRefusal("The deck-creation plan is incomplete.")
+            # The learner reads the deck, its directions and what its scope means
+            # for their review history. The deck id, intake tag, package path,
+            # deck-set digest and YAML hash validated above stay in the plan this
+            # confirmation is bound to, where provenance belongs.
+            if requested_scope == "standalone":
+                scope_id = target.get("scope_id")
+                if not isinstance(scope_id, str) or not scope_id:
+                    raise RevisionRefusal("The deck-creation plan is incomplete.")
+                scope_effect = (
+                    "Standalone: independent copies and separate review progress"
+                )
+            else:
+                scope_effect = (
+                    "Shared: it reuses your existing cards and their review progress"
+                )
             prepared = _PreparedAgentAction(
                 kind=intent.kind,
                 focus_scope=deck_scope,
@@ -1619,12 +1641,9 @@ class RevisionAssistantAdapter:
                     request_fingerprint=plan.fingerprint,
                     target=configured_file,
                     effects=(
-                        f"Create the configured study deck {deck_name!r}",
+                        f"Create the study deck {deck_name!r}",
                         "Enable card directions: " + ", ".join(directions),
-                        f"Assign Anki deck id {deck_id} and intake tag {intake_tag}",
-                        f"Reserve its future package path at {package}",
-                        f"Bind the current configured-deck set: SHA-256 {deck_set_sha}",
-                        f"Write this exact UTF-8 YAML (SHA-256 {definition_sha}):\n{yaml_text}",
+                        scope_effect,
                     ),
                     disclosures=(
                         "This local action makes no model or audio-provider call.",
@@ -1687,7 +1706,13 @@ class RevisionAssistantAdapter:
                 source_path = assistant_context.AssistantContextBroker(
                     config
                 ).source_path(intent.resource_ids[0])
-                extraction = self.prepare_source_extraction(source_path=source_path)
+                # The thread's own focus, which janki resolved before the model
+                # answered. The intent carries no destination of its own — the
+                # refusal above rejects any option it tried to add.
+                extraction = self.prepare_source_extraction(
+                    source_path=source_path,
+                    deck_scope=deck_scope,
+                )
             except (JankiError, OSError, TypeError, ValueError) as exc:
                 raise RevisionRefusal(str(exc)) from exc
             prepared = _PreparedAgentAction(
@@ -4238,14 +4263,76 @@ class RevisionAssistantAdapter:
         )
         return plan, rendered
 
-    def prepare_source_extraction(self, *, source_path: Path) -> SourceExtractionPlan:
-        """Describe one saved source and retain only its scalar dispatch binding."""
+    def _extraction_destination(self, deck_scope: str) -> tuple[Path, str, str, str]:
+        """Resolve one already-selected deck into an extraction destination.
 
+        ``deck_scope`` is the thread's explicit focus or a typed intent's
+        focus, never prose: this re-resolves it through the startup allowlist
+        and then reads the deck file's own declared scope. What comes back is
+        the deck path, that scope, the exact bytes behind it, and the label the
+        owner will read.
+        """
+
+        target = self._chat_target_for_scope(deck_scope)
+        try:
+            scope_id, deck_sha256 = destination_deck_facts(target.path)
+        except (JankiError, OSError) as exc:
+            raise RevisionRefusal(
+                f"That deck cannot be this extraction's destination: {exc}"
+            ) from exc
+        return target.path, scope_id, deck_sha256, target.choice.label
+
+    def prepare_source_extraction(
+        self,
+        *,
+        source_path: Path,
+        deck_scope: str = "",
+    ) -> SourceExtractionPlan:
+        """Describe one saved source and retain only its scalar dispatch binding.
+
+        A selected deck changes one thing here: which words janki already
+        counts as had. A standalone deck keeps its own copies, so its known
+        list is its own, and an owner who has one selected must be told that
+        before agreeing. No selection is not an inferred one — it is the shared
+        collection, which is what this has always described.
+        """
+
+        destination: tuple[Path, str, str, str] | None = None
+        if deck_scope:
+            destination = self._extraction_destination(deck_scope)
         try:
             fresh_config = ProjectConfig.load(self.config.root)
-            consent = describe_extraction(fresh_config, source_path, mode=None)
+            # Only a resolved destination changes the question being asked. An
+            # unfocused thread keeps the exact shared call, argument for
+            # argument.
+            consent = (
+                describe_extraction(
+                    fresh_config,
+                    source_path,
+                    mode=None,
+                    scope_id=destination[1],
+                )
+                if destination is not None
+                else describe_extraction(fresh_config, source_path, mode=None)
+            )
         except JankiError as exc:
             raise RevisionRefusal(str(exc)) from exc
+        if destination is not None:
+            # Read the deck again after describing. One preparation must
+            # describe one deck: a scope or byte edit in that window would
+            # otherwise be bound as though it had been rendered.
+            deck_path, scope_id, deck_sha256, _label = destination
+            try:
+                current_scope, current_sha256 = destination_deck_facts(deck_path)
+            except (JankiError, OSError) as exc:
+                raise RevisionRefusal(
+                    f"That deck cannot be this extraction's destination: {exc}"
+                ) from exc
+            if current_scope != scope_id or current_sha256 != deck_sha256:
+                raise RevisionRefusal(
+                    "The selected deck changed while this extraction was being "
+                    "described. Ask again; nothing was sent."
+                )
         if not consent.sendable or consent.target is None:
             reason = consent.refusal or consent.busy or "This source cannot be extracted."
             raise RevisionRefusal(reason)
@@ -4265,6 +4352,12 @@ class RevisionAssistantAdapter:
             staging_path=target.staging_path,
             patterns_path=target.patterns_path,
             operations_path=fresh_config.operations_file,
+            scope_id=consent.scope_id,
+            # A local consent binding, revalidated before the paid call. It
+            # says which deck decided the known-word list, not where these
+            # proposals will land: assignment is a separate owner decision.
+            destination_deck=None if destination is None else destination[0],
+            destination_deck_sha256="" if destination is None else destination[2],
         )
         preparation_id = secrets.token_urlsafe(32)
         with self._plan_lock:
@@ -4285,6 +4378,28 @@ class RevisionAssistantAdapter:
             f"Use {mode_display} and write proposals to {target_display}",
             "Propose vocabulary cards and grammar for owner review",
         ]
+        if destination is None:
+            effects.append(
+                "Treat the shared collection as the already-known word list; no "
+                "destination deck is selected"
+            )
+        else:
+            deck_path, scope_id, _deck_sha256, deck_label = destination
+            try:
+                deck_display = (
+                    deck_path.resolve()
+                    .relative_to(fresh_config.root.resolve())
+                    .as_posix()
+                )
+            except ValueError:
+                deck_display = str(deck_path)
+            pool = (
+                f"standalone scope {scope_id}" if scope_id else "the shared collection"
+            )
+            effects.append(
+                "Skip only the words already in that deck: "
+                f"{deck_label} ({deck_display}, {pool})"
+            )
         if consent.sends_known_words:
             effects.append("Also send the existing expression list so prose extraction can skip it")
         replaces = consent.replaces is not None
@@ -4308,6 +4423,17 @@ class RevisionAssistantAdapter:
             (
                 "Extraction creates unapproved staging proposals. It does not approve, "
                 "assign, voice, build, or install a deck."
+            ),
+            *(
+                ()
+                if destination is None
+                else (
+                    (
+                        "Naming that deck only chooses which words count as already "
+                        "known. Extraction does not assign these proposals to it, and "
+                        "this confirmation grants no assignment authority."
+                    ),
+                )
             ),
         )
         confirm_label = (

@@ -118,10 +118,77 @@ def is_kana(value: str) -> bool:
     )
 
 
-def stable_record_id(expression: str, reading: str = "") -> str:
+#: The namespace a deck-scoped copy of a word lives in. Reserved: an ordinary
+#: word is ``word:…`` and a character is ``kanji:…``, so a reader can tell the
+#: three apart without asking what any of them means.
+STANDALONE_NAMESPACE = "standalone"
+
+#: What a deck's ``scope_id`` may be. Lowercase hexadecimal, any length: the
+#: deck creator picks the digest size, and this is the artifact-structure rule
+#: that keeps a scope safely inside an identity — no colon to split on, no case
+#: that a filesystem or a YAML round-trip could fold.
+_SCOPE_PATTERN = re.compile(r"[0-9a-f]+")
+
+
+def validate_scope_id(scope_id: str) -> str:
+    """Return ``scope_id`` unchanged, or refuse it.
+
+    Not normalized like the Japanese halves of an identity are: NFKC would fold
+    ａｂ１２ into ab12 and mint one scope from two different deck files, which is
+    the collision this refuses instead.
+    """
+    if not _SCOPE_PATTERN.fullmatch(scope_id):
+        raise IdentityError(
+            f"A deck scope is nonempty lowercase hexadecimal; {scope_id!r} is not."
+        )
+    return scope_id
+
+
+def stable_record_id(expression: str, reading: str = "", *, scope_id: str = "") -> str:
+    """The durable identity of one word, optionally inside one deck's scope.
+
+    An empty ``scope_id`` mints exactly what janki has always minted, so no
+    existing record's id — and therefore no existing note's GUID — moves.
+
+    A nonempty one mints the same normalized expression and reading under the
+    reserved standalone namespace instead. That is what makes a standalone
+    deck's card an *independent copy*: the shared word keeps its id, its GUID,
+    its Anki history and its audio filename, and the copy gets its own.
+    """
     expression_part = normalize_identity_part(expression)
     reading_part = normalize_identity_part(reading)
-    return f"word:{expression_part}:{reading_part}"
+    if not scope_id:
+        return f"word:{expression_part}:{reading_part}"
+    scope = validate_scope_id(scope_id)
+    return f"{STANDALONE_NAMESPACE}:{scope}:{expression_part}:{reading_part}"
+
+
+def record_scope_id(record_id: str) -> str:
+    """The deck scope an id belongs to, or ``""`` for the shared collection.
+
+    Structure only. Everything after the scope is opaque: this never asks what
+    the expression is, whether the reading matches it, or whether either is
+    Japanese at all. Ordinary ``word:``/``kanji:`` ids, synthetic drill owners
+    and hand-written ids are all shared, because none of them claims the
+    reserved namespace.
+
+    A string that *does* claim it without carrying a valid scope is refused
+    rather than quietly read as shared: it would otherwise be filed with the
+    collection every scope exists to stay out of.
+    """
+    prefix = f"{STANDALONE_NAMESPACE}:"
+    if not record_id.startswith(prefix):
+        return ""
+    scope, separator, _suffix = record_id[len(prefix) :].partition(":")
+    if not separator:
+        raise IdentityError(
+            f"A standalone record id is {prefix}<scope>:<word key>; {record_id!r} "
+            "has no word key."
+        )
+    try:
+        return validate_scope_id(scope)
+    except IdentityError as exc:
+        raise IdentityError(f"{record_id!r} carries an invalid deck scope: {exc}") from exc
 
 
 def character_record_id(character: str) -> str:

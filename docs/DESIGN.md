@@ -157,6 +157,15 @@ convention the deck files keep, checked by a test over the real decks rather
 than enforced by the builder, which filters each deck without looking at the
 others.
 
+A vocabulary deck is **shared** by default. An explicit **standalone** deck
+holds its own scoped records — `standalone:<scope>:<expression>:<reading>` — in
+that same canonical store, so its cards and their Anki review progress are
+independent of the shared ones. The scope is derived once at creation and saved
+in the deck definition; renaming the deck does not rederive it, and no reviewed
+shared identity is ever migrated into a scope. A copy is a distinct record, so
+one record still belongs to one word deck. The owner chooses shared or
+standalone in the Assistant's single, exact deck-creation confirmation.
+
 **Kanji is a distinct content type.** An explicit character target produces one
 character note with identity `kanji:<character>` and GUID
 `genanki.guid_for(record.id)`, independent of its readings. The curated

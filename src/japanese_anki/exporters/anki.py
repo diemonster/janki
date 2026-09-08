@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - exercised by the bootstrap environment
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
+from japanese_anki.identifiers import IdentityError, record_scope_id, validate_scope_id
 from japanese_anki.io import (
     YAML_LOADER,
     DataError,
@@ -572,6 +573,10 @@ class DeckSelection:
     #: this deck. ``None`` leaves synthetic and exact-list decks buildable but
     #: deliberately unavailable as workbench destinations.
     intake_tag: str | None = None
+    #: The deck's own record scope, or ``""`` for the shared collection. A
+    #: standalone deck holds independent copies under this scope, and no other
+    #: deck — however broad its tag filters — may claim one of them.
+    scope_id: str = ""
 
     @property
     def takes_everything(self) -> bool:
@@ -581,6 +586,7 @@ class DeckSelection:
             or self.exclude_ids
             or self.include_tags
             or self.exclude_tags
+            or self.scope_id
         )
 
     def includes(self, record: VocabularyRecord) -> bool:
@@ -594,6 +600,32 @@ class DeckSelection:
         someone deciding where a new lesson's words should go, and the four
         filters fail for four different and fixable reasons.
         """
+        # Scope first, and before every ordinary selector, because a scope is
+        # not a filter over one collection — it says which collection the card
+        # belongs to at all. A pre-existing deck that takes everything tagged
+        # `verbs` must not start claiming a standalone deck's copies simply
+        # because the copy inherited that tag.
+        try:
+            scope = record_scope_id(record.id)
+        except IdentityError as exc:
+            # One malformed identity refuses everywhere rather than taking down
+            # every deck's ownership answer: promotion then reports it as
+            # unowned, which names the record instead of the whole census.
+            return f"this card's standalone identity is malformed: {exc}"
+        if scope != self.scope_id:
+            if self.scope_id:
+                return (
+                    f"this deck holds its own standalone copies (scope {self.scope_id}), "
+                    + (
+                        f"and this card belongs to scope {scope}"
+                        if scope
+                        else "and this card belongs to the shared collection"
+                    )
+                )
+            return (
+                "this deck holds shared collection cards, and this card is a "
+                f"standalone copy in scope {scope}"
+            )
         tags = set(record.tags)
         if self.include_ids and record.id not in self.include_ids:
             return "this deck lists the exact cards it holds, and this is not one"
@@ -641,12 +673,29 @@ def deck_selection(deck_config: dict[str, Any], deck_path: Path) -> DeckSelectio
                 f"{deck_path}"
             )
 
+    raw_scope = deck_config.get("scope_id", "")
+    if raw_scope is None:
+        raw_scope = ""
+    if not isinstance(raw_scope, str):
+        raise DataError(
+            f"deck.scope_id must be a hexadecimal string, got {raw_scope!r}: {deck_path}"
+        )
+    # An absent or empty value is an ordinary shared deck, so every deck file
+    # written before standalone decks existed keeps reading exactly as it did.
+    scope_id = raw_scope.strip()
+    if scope_id:
+        try:
+            validate_scope_id(scope_id)
+        except IdentityError as exc:
+            raise DataError(f"deck.scope_id is invalid: {exc}: {deck_path}") from exc
+
     return DeckSelection(
         include_ids=include_ids,
         exclude_ids=exclude_ids,
         include_tags=include_tags,
         exclude_tags=exclude_tags,
         intake_tag=intake_tag,
+        scope_id=scope_id,
     )
 
 

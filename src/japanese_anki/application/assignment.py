@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import stat
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Container, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
@@ -31,10 +31,17 @@ from japanese_anki.exporters.anki import (
     project_deck_records,
     resolve_deck_records,
 )
+from japanese_anki.identifiers import record_scope_id, stable_record_id
 from japanese_anki.io import load_records, merge_records
 from japanese_anki.models import VocabularyRecord
 
+#: Where a standalone copy records the row it was made from. One structural
+#: key, written beside the importer's verbatim source fields, so the copy can
+#: always name its origin without anything having to guess at it later.
+STANDALONE_COPY_FROM_KEY = "standalone_copy_from"
+
 __all__ = [
+    "STANDALONE_COPY_FROM_KEY",
     "AssignableWordDeck",
     "AssignmentError",
     "DeckAssignmentAttempt",
@@ -67,6 +74,10 @@ class AssignableWordDeck:
     name: str
     intake_tag: str
     selection: DeckSelection
+    #: The deck's record scope, or ``""`` for a shared destination. Read off
+    #: the deck file's own selector so an assignment and a build can never
+    #: disagree about which collection a destination holds.
+    scope_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +179,47 @@ class _PreparedAssignment:
     existing_owner: str | None
     tag_diff: DeckTagDiff
     assigned_record: VocabularyRecord
+
+
+def _destination_record(
+    current: VocabularyRecord,
+    destination: AssignableWordDeck,
+    canonical_ids: Container[str],
+) -> VocabularyRecord:
+    """The record this destination would own, before its ownership tags.
+
+    A shared destination owns the selected row itself — the identity it already
+    carries, whatever that is. Sending a standalone copy to a shared deck does
+    not quietly strip its scope back off; the deck's own selector refuses it,
+    which is the honest answer and the same one a build gives.
+
+    A standalone destination owns an independent *copy*: the same expression
+    and reading minted under the deck's scope, with provenance back to the row
+    it came from. The shared original is not read, re-tagged or re-identified
+    here — this returns a new value, and the original keeps its id, its GUID,
+    its review history and its audio.
+
+    A row already in the destination's scope is returned unchanged. A stored
+    identity is never re-minted, so assigning the same row twice is the same
+    assignment rather than a second card.
+    """
+    scope = destination.scope_id
+    if not scope or record_scope_id(current.id) == scope:
+        return current
+    minted = stable_record_id(current.expression, current.reading, scope_id=scope)
+    raw_fields = dict(current.source.raw_fields)
+    raw_fields[STANDALONE_COPY_FROM_KEY] = current.id
+    copy = replace(
+        current, id=minted, source=replace(current.source, raw_fields=raw_fields)
+    )
+    if minted not in canonical_ids:
+        # `already_known` is extraction's note that the *shared* collection has
+        # this word. It says nothing about a scope that has never held it, and
+        # left in place it would describe this brand-new card as one janki
+        # already has. Where the scope does already hold it, the mark is true
+        # and is left exactly as the paid answer wrote it.
+        copy = staging.annotate(copy, already_known=None)
+    return copy
 
 
 def staged_sibling_proposals(
@@ -301,6 +353,7 @@ def _assignable_from_rules(
                 name=rule.name,
                 intake_tag=rule.selection.intake_tag,
                 selection=rule.selection,
+                scope_id=rule.selection.scope_id,
             )
         )
     return tuple(found)
@@ -591,7 +644,7 @@ def _plan_prepared_group(
             plan = _finish_assignment_plan(
                 rules,
                 item,
-                by_id[item.current.id],
+                by_id[item.assigned_record.id],
                 membership_ids,
             )
         except JankiError as exc:
@@ -661,14 +714,47 @@ def plan_deck_assignments(
     canonical_matches: dict[str, list[VocabularyRecord]] = {}
     for record in canonical:
         canonical_matches.setdefault(record.id, []).append(record)
-    existing_indices = [
-        index
-        for index, record in enumerate(records)
-        if len(canonical_matches.get(record.id, ())) == 1
+
+    # What each destination would actually own, resolved before anything asks
+    # the collection about it: for a standalone deck that is a copy under its
+    # scope, and the ownership question is about *that* identity, not about the
+    # shared word it was copied from.
+    targets: list[list[VocabularyRecord | None]] = []
+    target_refusals: list[list[str | None]] = []
+    for current, siblings in zip(records, sibling_rows, strict=True):
+        shared_problem: str | None = None
+        if any(proposal.id != current.id for proposal in siblings):
+            shared_problem = (
+                "Sibling proposals shown for a deck assignment must have the same "
+                "stable id as the current staged card."
+            )
+        target_row: list[VocabularyRecord | None] = []
+        refusal_row: list[str | None] = []
+        for destination in destinations:
+            if shared_problem is not None:
+                target_row.append(None)
+                refusal_row.append(shared_problem)
+                continue
+            try:
+                target_row.append(
+                    _destination_record(current, destination, canonical_matches)
+                )
+                refusal_row.append(None)
+            except JankiError as exc:
+                target_row.append(None)
+                refusal_row.append(str(exc))
+        targets.append(target_row)
+        target_refusals.append(refusal_row)
+
+    existing_targets = [
+        target
+        for target_row in targets
+        for target in target_row
+        if target is not None and len(canonical_matches.get(target.id, ())) == 1
     ]
     current_membership_ids: dict[Path, frozenset[str]] = {}
     current_membership_issue: str | None = None
-    if existing_indices:
+    if existing_targets:
         try:
             current_membership_ids = _membership_ids(config, rules, canonical)
         except JankiError as exc:
@@ -686,58 +772,61 @@ def plan_deck_assignments(
     for index, (current, siblings) in enumerate(
         zip(records, sibling_rows, strict=True)
     ):
-        problem: str | None = None
-        existing_owner: _WordDeckRule | None = None
-        if any(proposal.id != current.id for proposal in siblings):
-            problem = (
-                "Sibling proposals shown for a deck assignment must have the same "
-                "stable id as the current staged card."
-            )
-        matching = canonical_matches.get(current.id, [])
-        if problem is None and len(matching) > 1:
-            problem = (
-                f"The canonical collection has more than one {current.id}; resolve "
-                "that duplicate before assignment."
-            )
-        if problem is None and matching:
-            if current_membership_issue is not None:
-                problem = current_membership_issue
-            else:
-                current_memberships = _memberships_from_ids(
-                    rules,
-                    matching[0],
-                    current_membership_ids,
-                )
-                owner_stems = {
-                    item.stem for item in current_memberships if item.takes
-                }
-                owners = [rule for rule in rules if rule.stem in owner_stems]
-                if len(owners) > 1:
-                    names = ", ".join(owner.name for owner in owners)
-                    problem = (
-                        f"{current.id} already belongs to more than one word deck "
-                        f"({names}); resolve its existing membership before assignment."
-                    )
-                elif owners:
-                    existing_owner = owners[0]
-
         for destination_index, destination in enumerate(destinations):
-            refusal = problem
+            refusal = target_refusals[index][destination_index]
+            target = targets[index][destination_index]
+            existing_owner: _WordDeckRule | None = None
+            matching = (
+                canonical_matches.get(target.id, []) if target is not None else []
+            )
+            if refusal is None and len(matching) > 1:
+                refusal = (
+                    f"The canonical collection has more than one {target.id}; resolve "
+                    "that duplicate before assignment."
+                )
+            if refusal is None and matching:
+                if current_membership_issue is not None:
+                    refusal = current_membership_issue
+                else:
+                    current_memberships = _memberships_from_ids(
+                        rules,
+                        matching[0],
+                        current_membership_ids,
+                    )
+                    owner_stems = {
+                        item.stem for item in current_memberships if item.takes
+                    }
+                    owners = [rule for rule in rules if rule.stem in owner_stems]
+                    if len(owners) > 1:
+                        names = ", ".join(owner.name for owner in owners)
+                        refusal = (
+                            f"{target.id} already belongs to more than one word deck "
+                            f"({names}); resolve its existing membership before assignment."
+                        )
+                    elif owners:
+                        existing_owner = owners[0]
             if (
                 refusal is None
                 and existing_owner is not None
                 and existing_owner.stem != destination.stem
             ):
                 refusal = (
-                    f"{current.id} already belongs to {existing_owner.name} "
+                    f"{target.id} already belongs to {existing_owner.name} "
                     f"({existing_owner.stem}); moving it to {destination.name} "
                     "requires an explicit reassignment review."
                 )
-            if refusal is not None:
+            if refusal is not None or target is None:
                 rows[index][destination_index] = DeckAssignmentAttempt(
                     destination=destination,
                     plan=None,
-                    refusal=refusal,
+                    # An upstream error's exact text, even when it is empty:
+                    # substituting a friendlier sentence for a blank one is how
+                    # a refusal stops saying what actually happened.
+                    refusal=(
+                        refusal
+                        if refusal is not None
+                        else "Deck assignment was refused."
+                    ),
                 )
                 continue
             diff = _tag_diff(
@@ -755,17 +844,20 @@ def plan_deck_assignments(
                         existing_owner.stem if existing_owner is not None else None
                     ),
                     tag_diff=diff,
-                    assigned_record=replace(current, tags=list(diff.after)),
+                    assigned_record=replace(target, tags=list(diff.after)),
                 )
             )
 
     for destination_index, prepared in enumerate(prepared_by_destination):
         if not prepared:
             continue
-        ids = [item.current.id for item in prepared]
+        # Keyed on what each row would *become*: two staged rows that mint one
+        # scoped copy must not share a projection, for the same reason two rows
+        # sharing a stable id must not.
+        ids = [item.assigned_record.id for item in prepared]
         counts = Counter(ids)
-        unique = [item for item in prepared if counts[item.current.id] == 1]
-        repeated = [item for item in prepared if counts[item.current.id] > 1]
+        unique = [item for item in prepared if counts[item.assigned_record.id] == 1]
+        repeated = [item for item in prepared if counts[item.assigned_record.id] > 1]
         groups = ([unique] if unique else []) + [[item] for item in repeated]
         for group in groups:
             attempts = _plan_prepared_group(config, rules, canonical, group)

@@ -53,8 +53,11 @@ from japanese_anki.application.journey import (
 from japanese_anki.config import ProjectConfig
 from japanese_anki.credential_safety import redact_environment_credentials
 from japanese_anki.errors import JankiError
+from japanese_anki.exporters.anki import deck_selection
+from japanese_anki.identifiers import record_scope_id
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import (
+    _parse_structured_text,
     exclusive_path_lock,
     load_records,
     prepare_bound_directory,
@@ -163,6 +166,19 @@ class ExtractionDispatchExpectation:
     staging_path: Path
     patterns_path: Path
     operations_path: Path
+    #: The record namespace this request's known-word suppression was computed
+    #: for: one deck's scope, or ``""`` for the shared collection.
+    scope_id: str = ""
+    #: The deck whose scope that is, when a surface let an owner choose one.
+    #: A local consent binding rather than a destination this run writes to:
+    #: extraction stages proposals, and assigning them to a deck is a separate
+    #: decision. Optional, because a service caller may extract for a scope
+    #: without a deck file in hand.
+    destination_deck: Path | None = None
+    #: That deck file's exact bytes when the batch was rendered. Bound
+    #: separately from the request fingerprint because a re-scoped or edited
+    #: destination can leave the prompt — and so the fingerprint — identical.
+    destination_deck_sha256: str = ""
 
     def __post_init__(self) -> None:
         # These paths are authority and destination bindings, not display
@@ -174,6 +190,12 @@ class ExtractionDispatchExpectation:
                 self,
                 field_name,
                 Path(os.path.realpath(getattr(self, field_name))),
+            )
+        if self.destination_deck is not None:
+            object.__setattr__(
+                self,
+                "destination_deck",
+                Path(os.path.realpath(self.destination_deck)),
             )
 
 
@@ -302,6 +324,9 @@ class ExtractionPlan:
     #: identity is what the journal records and a retry compares.
     skip_list: tuple[str, ...]
     known: frozenset[str]
+    #: The record namespace both of those were computed in: one deck's scope,
+    #: or ``""`` for the shared collection.
+    scope_id: str = ""
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -351,21 +376,39 @@ def plan_extraction(
     style_guide: str,
     system: str,
     force: bool = False,
+    scope_id: str = "",
 ) -> ExtractionPlan:
     """Resolve everything a run can know before it spends anything.
 
     Every refusal that does not need a provider happens here, which is the
     point: a batch that would write two inputs to one staging file is refused
     now rather than after paying for both.
+
+    ``scope_id`` names the collection this extraction is *for*. The default is
+    the shared one, which is what every existing caller means. A standalone
+    deck holds its own copies of words under its own scope, so "janki already
+    has this" is a different question per destination, and both halves of the
+    answer — the ids a candidate can match and the expressions prose mode is
+    told to skip — are filtered to that one namespace. A shared run therefore
+    stops suppressing words only a standalone deck has, and a scoped run stops
+    suppressing the shared words it exists to copy.
     """
     existing: list[VocabularyRecord] = (
         load_records(config.normalized_file)
         if config.normalized_file.exists()
         else []
     )
-    known = frozenset(extract.known_ids(existing))
+    known = frozenset(extract.known_ids(existing, scope_id=scope_id))
     skip_list = (
-        tuple(sorted({record.expression for record in existing}))
+        tuple(
+            sorted(
+                {
+                    record.expression
+                    for record in existing
+                    if record_scope_id(record.id) == scope_id
+                }
+            )
+        )
         if mode == "prose"
         else ()
     )
@@ -409,6 +452,7 @@ def plan_extraction(
         system=system,
         skip_list=skip_list,
         known=known,
+        scope_id=scope_id,
     )
 
 
@@ -419,6 +463,7 @@ def plan_corpus_extraction(
     mode: str | None,
     model: str,
     force: bool = False,
+    scope_id: str = "",
 ) -> ExtractionPlan:
     """Freshly plan one source that must already be in the durable corpus.
 
@@ -437,6 +482,7 @@ def plan_corpus_extraction(
         style_guide=claude_client.read_style_guide(config.root),
         system=prompts.load(config.root, extract.prompt_name(mode)),
         force=force,
+        scope_id=scope_id,
     )
 
 
@@ -618,6 +664,12 @@ class ExtractionConsent:
     #: `refusal`: this source is fine, the moment is not, and a page that
     #: merged them would tell somebody their lesson was the problem.
     busy: str = ""
+    #: The collection this consent's known-word suppression was computed for:
+    #: one deck's scope, or ``""`` for the shared one. Rendered, because "which
+    #: words will janki treat as already had" is part of what is being agreed
+    #: to — and it survives a refusal, so a page can still say which
+    #: destination it was asking about.
+    scope_id: str = ""
 
     @property
     def sendable(self) -> bool:
@@ -630,6 +682,7 @@ def describe_extraction(
     *,
     mode: str | None = None,
     model: str | None = None,
+    scope_id: str = "",
 ) -> ExtractionConsent:
     """What sending one corpus source to a model would mean, before agreeing.
 
@@ -657,6 +710,7 @@ def describe_extraction(
             # the replacement is what supplies `force` to the dispatch; this
             # value never sends anything.
             force=True,
+            scope_id=scope_id,
         )
         replaces = plan.targets[0].replaces if plan.targets else None
         state, cards, grammar = "", 0, ""
@@ -713,13 +767,18 @@ def describe_extraction(
             )
     except JankiError as exc:
         return ExtractionConsent(
-            name=source.name, model=chosen, mode=mode, refusal=str(exc)
+            name=source.name,
+            model=chosen,
+            mode=mode,
+            refusal=str(exc),
+            scope_id=scope_id,
         )
 
     return ExtractionConsent(
         name=source.name,
         model=chosen,
         mode=mode,
+        scope_id=plan.scope_id,
         target=plan.targets[0] if plan.targets else None,
         replaces=replaces,
         replaces_state=state,
@@ -1178,6 +1237,97 @@ def complete_extraction(
     )
 
 
+#: The deck kinds that can hold proposed vocabulary cards. A conjugation or
+#: kanji deck is a real selected deck and the wrong destination for this
+#: answer, so naming it is a refusal rather than a silent shared run.
+VOCABULARY_DECK_KINDS = ("", "vocabulary")
+
+
+def destination_deck_facts(deck_path: Path) -> tuple[str, str]:
+    """One selected deck's record scope and the hash of its exact bytes.
+
+    Structural only, and deliberately through the same readers the builder
+    uses: the deck file's declared kind, its ``scope_id`` as
+    :func:`deck_selection` parses it, and the bytes themselves. Nothing here
+    looks at a card, and no second definition of what a scope is.
+    """
+    # One read, then parsed and hashed from that one snapshot. Two reads would
+    # let an edit land between them and answer with one file's scope and the
+    # other file's hash — the exact pair this consent binding exists to compare.
+    try:
+        wire = read_bytes_bound(deck_path)
+    except FileNotFoundError as exc:
+        raise staging.StagingError(f"Deck file not found: {deck_path}") from exc
+    except OSError as exc:
+        raise staging.StagingError(
+            f"Could not read {deck_path}: {exc.strerror or exc}"
+        ) from exc
+    try:
+        text = wire.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise staging.StagingError(f"Could not read {deck_path}: {exc}") from exc
+    raw = _parse_structured_text(deck_path, text)
+    if not isinstance(raw, dict):
+        raise staging.StagingError(f"Deck file must contain a mapping: {deck_path}")
+    deck_config = raw.get("deck") or {}
+    if not isinstance(deck_config, dict):
+        raise staging.StagingError(f"The deck section must be a mapping: {deck_path}")
+    kind = str(deck_config.get("kind") or "").strip().lower()
+    if kind not in VOCABULARY_DECK_KINDS:
+        raise staging.StagingError(
+            f"A {kind} deck cannot hold proposed vocabulary cards, so it cannot "
+            f"be an extraction destination: {deck_path}"
+        )
+    selection = deck_selection(deck_config, deck_path)
+    return selection.scope_id, hashlib.sha256(wire).hexdigest()
+
+
+def _require_current_destination(expected: ExtractionDispatchExpectation) -> None:
+    """Refuse a paid call whose rendered destination deck has moved.
+
+    Before authorization and before any provider call, because this is a
+    consent binding rather than a display: the owner agreed to extract *for
+    one named deck*, and its scope is what decided which words janki treated
+    as already had.
+
+    The scope is compared before the bytes on purpose. Every scope edit is
+    also a byte edit, so a hash-only check would refuse correctly and explain
+    it wrongly — "the deck changed" for a file that changed collections. It
+    would also leave the scope binding untested and free to disappear.
+    """
+    if expected.destination_deck is None:
+        if expected.destination_deck_sha256:
+            raise ExtractionDispatchError(
+                staging.StagingError(
+                    "This extraction binds destination deck bytes without naming "
+                    "the deck they belong to."
+                ),
+                phase="binding",
+            )
+        return
+    try:
+        scope, deck_sha256 = destination_deck_facts(expected.destination_deck)
+    except (JankiError, OSError) as exc:
+        raise ExtractionDispatchError(
+            staging.StagingError(f"The destination deck could not be read: {exc}"),
+            phase="binding",
+        ) from exc
+    if scope != expected.scope_id:
+        raise ExtractionDispatchError(
+            staging.StagingError(
+                "The destination deck scope changed after this page was rendered."
+            ),
+            phase="binding",
+        )
+    if deck_sha256 != expected.destination_deck_sha256:
+        raise ExtractionDispatchError(
+            staging.StagingError(
+                "The destination deck changed after this page was rendered."
+            ),
+            phase="binding",
+        )
+
+
 def _report_extraction_progress(
     progress: Callable[[str], None] | None,
     label: str,
@@ -1239,6 +1389,7 @@ def dispatch_extraction(
             mode=expected.mode,
             model=expected.model,
             force=force,
+            scope_id=expected.scope_id,
         )
     except JankiError as exc:
         raise ExtractionDispatchError(exc, phase="binding") from exc
@@ -1302,6 +1453,8 @@ def dispatch_extraction(
             "The grammar review changed after this page was rendered."
         )
         raise ExtractionDispatchError(cause, phase="binding")
+
+    _require_current_destination(expected)
 
     if client is None:
         try:

@@ -267,6 +267,9 @@ _TEACHING_CONFIGURATION = (
     "include_tags",
     "exclude_tags",
     "intake_tag",
+    #: A standalone deck's saved scope, so a snapshot can say which setup the
+    #: owner chose. Opaque, and no more revealing than the intake tag beside it.
+    "scope_id",
     "form_note",
     "document",
 )

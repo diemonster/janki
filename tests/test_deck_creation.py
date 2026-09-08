@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -41,6 +43,7 @@ def _existing_deck(
     exclude_ids: list[str] | None = None,
     output: str | None = None,
     deck_id: int = 1_500_000_001,
+    scope_id: str | None = None,
 ) -> Path:
     config.deck_dir.mkdir(parents=True, exist_ok=True)
     section: dict[str, object] = {
@@ -48,6 +51,8 @@ def _existing_deck(
         "deck_id": deck_id,
         "source": "../vocabulary.json",
     }
+    if scope_id is not None:
+        section["scope_id"] = scope_id
     if include_tags is not None:
         section["include_tags"] = include_tags
     if include_ids is not None:
@@ -105,6 +110,176 @@ def test_plan_previews_exact_canonical_deck_and_create_is_explicit(
     assert records == []
     assert selection.intake_tag == plan.intake_tag
     assert (plan.path.parent / deck_config["source"]).resolve() == config.normalized_file
+
+
+#: The exact domain prefix a standalone vocabulary scope is derived under. Written
+#: out here rather than imported so a changed derivation fails this test instead of
+#: quietly moving every future scope with it.
+SCOPE_DOMAIN = "janki:deck-scope:v1"
+
+
+def _expected_scope(stem: str, counter: int) -> str:
+    return hashlib.sha256(f"{SCOPE_DOMAIN}:{stem}:{counter}".encode("ascii")).hexdigest()
+
+
+def _canonical_records(config: ProjectConfig, ids: list[str]) -> None:
+    config.normalized_file.parent.mkdir(parents=True, exist_ok=True)
+    config.normalized_file.write_text(
+        json.dumps(
+            [
+                {"id": record_id, "expression": "one", "reading": "one"}
+                for record_id in ids
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_standalone_plan_derives_one_scope_and_still_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+
+    plan = plan_study_deck(config, name="Genki 1", standalone=True)
+
+    assert plan.standalone is True
+    assert re.fullmatch(r"[0-9a-f]{64}", plan.scope_id)
+    assert plan.scope_id == _expected_scope(plan.stem, 0)
+    assert not config.deck_dir.exists()
+    assert yaml.safe_load(plan.yaml_bytes) == {
+        "deck": {
+            "kind": "vocabulary",
+            "name": "Genki 1",
+            "deck_id": plan.deck_id,
+            "output": f"{plan.stem}.apkg",
+            "cards": {
+                "recognition": True,
+                "production": False,
+                "reading": False,
+            },
+            "source": "../vocabulary.json",
+            "intake_tag": plan.intake_tag,
+            "include_tags": [plan.intake_tag],
+            "scope_id": plan.scope_id,
+        }
+    }
+    assert plan == plan_study_deck(config, name="Genki 1", standalone=True)
+
+    created = create_study_deck(config, plan)
+
+    assert yaml.safe_load(created.yaml_bytes)["deck"]["scope_id"] == plan.scope_id
+    assert plan.path.read_bytes() == plan.yaml_bytes
+
+
+def test_shared_creation_keeps_its_definition_and_carries_no_scope(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+
+    plan = plan_study_deck(config, name="Genki 1")
+
+    assert plan.standalone is False
+    assert plan.scope_id == ""
+    assert "scope_id" not in yaml.safe_load(plan.yaml_bytes)["deck"]
+    assert plan == plan_study_deck(config, name="Genki 1", standalone=False)
+
+
+@pytest.mark.parametrize("value", [1, 0, "true", None], ids=("one", "zero", "text", "none"))
+def test_standalone_must_be_an_explicit_boolean(tmp_path: Path, value: object) -> None:
+    config = _project(tmp_path)
+
+    with pytest.raises(StudyDeckCreationError, match="true or false"):
+        plan_study_deck(config, name="Genki 1", standalone=value)  # type: ignore[arg-type]
+
+
+def test_only_a_vocabulary_deck_can_hold_standalone_copies(tmp_path: Path) -> None:
+    config = _project(tmp_path)
+
+    with pytest.raises(StudyDeckCreationError, match="[Oo]nly a vocabulary deck"):
+        plan_study_deck(
+            config,
+            name="Week 2 Characters",
+            kind="kanji",
+            include_ids=["kanji:理"],
+            standalone=True,
+        )
+
+
+def test_scope_skips_ids_held_by_a_renamed_deck_or_a_surviving_record(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    stem = plan_study_deck(config, name="Genki 1", standalone=True).stem
+    # A deck whose display name and file stem have nothing to do with the scope
+    # it holds: this is what a rename leaves behind, and its Anki history is
+    # still keyed on that scope.
+    _existing_deck(
+        config,
+        "some-other-stem",
+        intake_tag="janki:deck:some-other-stem",
+        include_tags=["janki:deck:some-other-stem"],
+        scope_id=_expected_scope(stem, 0),
+    )
+    # A canonical record that outlived the deck file it was created for.
+    _canonical_records(config, [f"standalone:{_expected_scope(stem, 1)}:one:one"])
+
+    plan = plan_study_deck(config, name="Genki 1", standalone=True)
+
+    assert plan.scope_id == _expected_scope(stem, 2)
+
+
+def test_a_fresh_scope_collision_stales_the_plan_before_any_write(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    plan = plan_study_deck(config, name="Genki 1", standalone=True)
+    # Surviving canonical records do not move the deck-set fingerprint, so only a
+    # repeated scope choice can catch this one.
+    _canonical_records(config, [f"standalone:{plan.scope_id}:one:one"])
+
+    with pytest.raises(StudyDeckCreationError, match="preview the study deck again"):
+        create_study_deck(config, plan)
+
+    assert not plan.path.exists()
+
+
+def test_creating_a_standalone_deck_changes_no_canonical_identity(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    _canonical_records(config, ["word:one:one"])
+    before = config.normalized_file.read_bytes()
+
+    plan = plan_study_deck(config, name="Genki 1", standalone=True)
+    create_study_deck(config, plan)
+
+    assert config.normalized_file.read_bytes() == before
+
+    document = yaml.safe_load(plan.path.read_text(encoding="utf-8"))
+    document["deck"]["name"] = "Genki 1 Renamed"
+    plan.path.write_text(
+        yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+    renamed = yaml.safe_load(plan.path.read_text(encoding="utf-8"))["deck"]
+
+    assert renamed["scope_id"] == plan.scope_id
+    assert config.normalized_file.read_bytes() == before
+
+
+def test_the_cross_selection_probe_carries_the_scope_it_probes_for(
+    tmp_path: Path,
+) -> None:
+    config = _project(tmp_path)
+    plan = plan_study_deck(config, name="Genki 1", standalone=True)
+
+    standalone_probe = deck_creation._cross_selection_probe(
+        (), plan.intake_tag, plan.scope_id
+    )
+    shared_probe = deck_creation._cross_selection_probe((), plan.intake_tag, "")
+
+    assert standalone_probe.tags == (plan.intake_tag,)
+    assert standalone_probe.id.startswith(f"standalone:{plan.scope_id}:")
+    assert shared_probe.id == "word:assignment:assignment"
 
 
 def test_inputs_are_strict_and_name_derivation_is_stable(tmp_path: Path) -> None:

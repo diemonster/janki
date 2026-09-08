@@ -34,6 +34,7 @@ from japanese_anki.exporters.anki import (
     deck_selection,
     resolve_deck_records,
 )
+from japanese_anki.identifiers import record_scope_id, stable_record_id
 from japanese_anki.io import (
     DataError,
     atomic_write_bytes_bound,
@@ -79,6 +80,12 @@ class StudyDeckCreationPlan:
     #: The exact character identities a kanji deck ships, in the order written.
     include_ids: tuple[str, ...] = ()
     model_id: int | None = None
+    #: Whether this vocabulary deck holds its own copies of the words it takes
+    #: rather than sharing the canonical ones with every other deck.
+    standalone: bool = False
+    #: The immutable scope a standalone deck's copies are identified under,
+    #: chosen once here and never rederived from the display name again.
+    scope_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,11 +185,13 @@ def _existing_deck_state(
     frozenset[int],
     tuple[_ExistingWordDeck, ...],
     tuple[_ExistingDeckOutput, ...],
+    frozenset[str],
 ]:
     intake_tags: set[str] = set()
     deck_ids: set[int] = set()
     word_decks: list[_ExistingWordDeck] = []
     outputs: list[_ExistingDeckOutput] = []
+    scope_ids: set[str] = set()
     for path in paths:
         try:
             raw = load_structured(path)
@@ -191,6 +200,13 @@ def _existing_deck_state(
                 raise StudyDeckCreationError(
                     f"The deck section must be a mapping: {path}"
                 )
+
+            # Every persisted scope is held, whatever else the file says about
+            # itself. A renamed deck still owns the Anki history its scope keys,
+            # so this collects the value rather than re-deriving or judging it.
+            held_scope = section.get("scope_id")
+            if isinstance(held_scope, str) and held_scope.strip():
+                scope_ids.add(held_scope.strip())
 
             raw_deck_id = section.get("deck_id", config.default_deck_id)
             if isinstance(raw_deck_id, bool) or not isinstance(raw_deck_id, int):
@@ -228,6 +244,7 @@ def _existing_deck_state(
         frozenset(deck_ids),
         tuple(word_decks),
         tuple(outputs),
+        frozenset(scope_ids),
     )
 
 
@@ -237,17 +254,89 @@ def _path_key(path: Path) -> str:
 
 
 def _cross_selection_probe(
-    word_decks: tuple[_ExistingWordDeck, ...], intake_tag: str
+    word_decks: tuple[_ExistingWordDeck, ...], intake_tag: str, scope_id: str = ""
 ) -> _IntakeProbe:
     reserved_ids = {
         record_id
         for deck in word_decks
         for record_id in deck.selection.include_ids | deck.selection.exclude_ids
     }
-    record_id = "word:assignment:assignment"
+    # The probe has to carry the scope it probes for: a shared selector must not
+    # be able to claim a standalone card, and a standalone one must not answer
+    # for the shared collection. The suffix varies the reading part, so a
+    # reserved literal is stepped over without leaving the scope being tested.
+    record_id = stable_record_id("assignment", "assignment", scope_id=scope_id)
     while record_id in reserved_ids:
         record_id += "-probe"
     return _IntakeProbe(id=record_id, tags=(intake_tag,))
+
+
+#: The domain a standalone vocabulary scope is derived under. Explicit, so a
+#: scope can never collide with an unrelated digest this project derives from
+#: the same stem — the Anki deck id below is derived from that stem too.
+SCOPE_DOMAIN = "janki:deck-scope:v1"
+
+
+@dataclass(frozen=True, slots=True)
+class _ScopeHolders:
+    """Every scope a new standalone deck may not adopt."""
+
+    deck_scopes: frozenset[str]
+    record_ids: tuple[str, ...]
+
+    def holds(self, scope_id: str) -> bool:
+        if scope_id in self.deck_scopes:
+            return True
+        # The core helper is the only thing that reads a scope out of an id.
+        return any(
+            record_scope_id(record_id) == scope_id for record_id in self.record_ids
+        )
+
+
+def _canonical_record_ids(config: ProjectConfig) -> tuple[str, ...]:
+    """The identities the canonical word collection currently holds.
+
+    An absent file is an empty library, which is what creating the first deck in
+    a fresh project looks like. Entries this cannot read are skipped rather than
+    reported: the collection has its own validation, and a creator that refused
+    on an unrelated record would make one broken row block every new deck.
+    """
+    path = config.normalized_file
+    if not path.exists():
+        return ()
+    try:
+        raw: Any = load_structured(path)
+    except (DataError, JankiError, OSError) as exc:
+        raise StudyDeckCreationError(
+            f"Could not read the canonical word collection {path}: {exc}"
+        ) from exc
+    if isinstance(raw, dict):
+        raw = raw.get("records", ())
+    if not isinstance(raw, list):
+        return ()
+    return tuple(
+        entry["id"]
+        for entry in raw
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+    )
+
+
+def _scope_id(stem: str, holders: _ScopeHolders) -> str:
+    """A full SHA-256 scope for this deck, skipping every one already held.
+
+    Derived like :func:`_deck_id` — the stable stem plus a deterministic counter
+    — so the same creation in the same repository plans the same scope twice,
+    and the counter steps past a scope some surviving deck or record still owns.
+    Deleting a deck and recreating it under its old name therefore cannot adopt
+    the review history the old scope still keys.
+    """
+    for counter in range(10_000):
+        candidate = hashlib.sha256(
+            f"{SCOPE_DOMAIN}:{stem}:{counter}".encode("ascii")
+        ).hexdigest()
+        if not holders.holds(candidate):
+            return candidate
+    raise StudyDeckCreationError("Could not choose a unique standalone deck scope.")
 
 
 def _deck_id(stem: str, existing: frozenset[int]) -> int:
@@ -304,6 +393,7 @@ def _render_deck(
     directions: dict[str, bool],
     source: str,
     include_ids: tuple[str, ...],
+    scope_id: str = "",
 ) -> bytes:
     """The exact bytes of a new deck file, for the kind that was asked for.
 
@@ -327,6 +417,10 @@ def _render_deck(
     else:
         section["intake_tag"] = intake_tag
         section["include_tags"] = [intake_tag]
+        # Only a standalone deck writes a scope, and it writes it once. A shared
+        # deck's definition is byte for byte what it has always been.
+        if scope_id:
+            section["scope_id"] = scope_id
     return yaml.safe_dump(
         {"deck": section}, allow_unicode=True, sort_keys=False
     ).encode("utf-8")
@@ -341,7 +435,16 @@ def _plan_under_lock(
     reading: bool,
     kind: str,
     include_ids: tuple[str, ...],
+    standalone: bool = False,
 ) -> StudyDeckCreationPlan:
+    # Structural, and here rather than only at the entrypoint, so the locked
+    # re-plan cannot be handed a scope decision the first plan never made.
+    if not isinstance(standalone, bool):
+        raise StudyDeckCreationError("Standalone must be true or false.")
+    if standalone and kind != "vocabulary":
+        raise StudyDeckCreationError(
+            "Only a vocabulary deck can hold standalone copies."
+        )
     display_name, stem = _name_parts(name)
     directions = _directions(recognition, production, reading)
     paths = _deck_paths(config)
@@ -353,8 +456,22 @@ def _plan_under_lock(
             f"A deck already uses the stable file stem {stem!r}: {colliding_paths[0]}"
         )
 
-    intake_tags, deck_ids, word_decks, outputs = _existing_deck_state(config, paths)
+    intake_tags, deck_ids, word_decks, outputs, deck_scopes = _existing_deck_state(
+        config, paths
+    )
     intake_tag = f"janki:deck:{stem}"
+    scope_id = ""
+    if standalone:
+        # Chosen here, under the deck-directory lock this function already holds,
+        # and chosen again on the locked re-plan — so a scope claimed between the
+        # preview and the create stales the plan instead of being adopted twice.
+        scope_id = _scope_id(
+            stem,
+            _ScopeHolders(
+                deck_scopes=deck_scopes,
+                record_ids=_canonical_record_ids(config),
+            ),
+        )
     if kind == "vocabulary":
         if intake_tag in intake_tags:
             raise StudyDeckCreationError(
@@ -364,7 +481,7 @@ def _plan_under_lock(
         # contract: if an existing selector also takes a record carrying the
         # new assignment tag, the creator would mint a destination that cannot
         # own its cards uniquely. No Japanese content is inspected.
-        probe = _cross_selection_probe(word_decks, intake_tag)
+        probe = _cross_selection_probe(word_decks, intake_tag, scope_id)
         if claimers := [
             deck.path for deck in word_decks if deck.selection.includes(probe)
         ]:
@@ -399,6 +516,7 @@ def _plan_under_lock(
         directions=directions,
         source=_source_reference(target.parent, canonical),
         include_ids=include_ids,
+        scope_id=scope_id,
     )
     return StudyDeckCreationPlan(
         name=display_name,
@@ -417,6 +535,8 @@ def _plan_under_lock(
         kind=kind,
         include_ids=include_ids,
         model_id=model_id,
+        standalone=standalone,
+        scope_id=scope_id,
     )
 
 
@@ -429,6 +549,7 @@ def plan_study_deck(
     reading: bool = False,
     kind: str = "vocabulary",
     include_ids: Sequence[str] = (),
+    standalone: bool = False,
 ) -> StudyDeckCreationPlan:
     """Return the exact path and YAML for a new study deck, without writing.
 
@@ -436,7 +557,14 @@ def plan_study_deck(
     the intake tag this derives for it; a ``kanji`` deck names the exact
     character identities it ships and reads the curated character store
     instead of the word collection.
+
+    ``standalone`` gives a vocabulary deck its own copies of the words it takes,
+    under an immutable scope chosen here once. It reads the same canonical
+    collection and declares the same unique intake tag as a shared deck; there
+    is no second vocabulary file, and no existing record or identity moves.
     """
+    if not isinstance(standalone, bool):
+        raise StudyDeckCreationError("Standalone must be true or false.")
     if kind not in ("vocabulary", "kanji"):
         raise StudyDeckCreationError(
             f"A study deck is 'vocabulary' or 'kanji', not {kind!r}."
@@ -465,6 +593,7 @@ def plan_study_deck(
             reading=reading,
             kind=kind,
             include_ids=exact_ids,
+            standalone=standalone,
         )
 
 
@@ -492,6 +621,7 @@ def create_study_deck(
             reading=plan.reading,
             kind=plan.kind,
             include_ids=plan.include_ids,
+            standalone=plan.standalone,
         )
         if fresh != plan:
             raise StudyDeckCreationError(

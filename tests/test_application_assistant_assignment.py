@@ -156,10 +156,16 @@ def test_plan_is_read_only_and_binds_exact_tag_diff_ownership_and_snapshots(
         "name": "Lesson deck",
         "stem": "lesson",
         "intake_tag": "lesson-intake",
+        # A shared deck: no record scope, so every assignment below is the same
+        # card gaining a tag rather than an independent copy.
+        "scope_id": "",
         "configured_file": "decks/lesson.yaml",
+        "deck_sha256": hashlib.sha256(deck_path.read_bytes()).hexdigest(),
     }
+    assert plan.projection["selection"]["target_record_ids"] == [records[0].id]
     [change] = plan.projection["selection"]["assignments"]
     assert change["record_id"] == records[0].id
+    assert change["target_record_id"] == records[0].id
     assert change["expression"] == "食べる"
     assert change["reading"] == "たべる"
     assert change["tags"] == {

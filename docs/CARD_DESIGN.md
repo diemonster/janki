@@ -46,6 +46,11 @@ templates and CSS so the review shows the layout, furigana, reading evidence
 and available media in their study context. Represent the enabled directions,
 preserving mobile and dark-mode styling.
 
+A vocabulary deck may enable recognition only, which gives one card per word —
+useful for verb study, where the conjugations a source supplies are presented
+together on that one card in the source's own labels and order. With more than
+one direction enabled a note still produces several cards.
+
 Janki Assistant remains the primary workflow. Its **Preview these cards** link
 opens a snapshot alongside the kanji wizard's confirmation and the existing
 staged-card and revision review actions. Proposed cards need their destination
@@ -77,8 +82,21 @@ The record ID normally has this form:
 word:<expression>:<reading>
 ```
 
+A **standalone** vocabulary deck's records carry a scope instead:
+
+```text
+standalone:<scope>:<expression>:<reading>
+```
+
 The builder uses the ID to derive the Anki note GUID. Do not edit IDs after a
 record has entered your real deck unless you intentionally want a new note.
+
+Standalone records live in the same canonical word store as shared ones — there
+is no second collection. A scoped record is simply a distinct record, so each
+record still has exactly one owning deck, and a shared card's reviewed identity
+is never rewritten or migrated into a scope. The scope is chosen once when the
+deck is created and saved in the deck definition, so renaming the deck later
+leaves both the scope and the review history it keys untouched.
 
 Deck IDs and model IDs also need to remain stable. Vocabulary model IDs derive
 from the configured base model ID plus a bit mask representing enabled card

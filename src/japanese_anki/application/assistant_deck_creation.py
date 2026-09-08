@@ -47,6 +47,9 @@ class AssistantDeckCreationRequestLike(Protocol):
     production: bool
     reading: bool
     instruction: str
+    #: ``"shared"`` or ``"standalone"``. Optional on the protocol because an
+    #: older request-like value that predates the choice means the default.
+    deck_scope: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +61,9 @@ class AssistantDeckCreationRequest:
     production: bool
     reading: bool
     instruction: str
+    #: Whether the new deck reuses the canonical word cards or holds its own
+    #: standalone copies with their own Anki review progress.
+    deck_scope: str = "shared"
 
     def __post_init__(self) -> None:
         _validate_request_values(
@@ -66,7 +72,13 @@ class AssistantDeckCreationRequest:
             production=self.production,
             reading=self.reading,
             instruction=self.instruction,
+            deck_scope=self.deck_scope,
         )
+
+    @property
+    def standalone(self) -> bool:
+        """Whether this request asks the creator for standalone copies."""
+        return self.deck_scope == "standalone"
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +159,7 @@ def _validate_request_values(
     production: object,
     reading: object,
     instruction: object,
+    deck_scope: object,
 ) -> None:
     if not isinstance(name, str) or not name.strip():
         raise AssistantDeckCreationError(
@@ -175,6 +188,10 @@ def _validate_request_values(
         raise AssistantDeckCreationError(
             "Assistant deck creation needs the owner's nonblank instruction."
         )
+    if deck_scope not in ("shared", "standalone") or not isinstance(deck_scope, str):
+        raise AssistantDeckCreationError(
+            f"An Assistant deck is 'shared' or 'standalone', not {deck_scope!r}."
+        )
 
 
 def _request(value: AssistantDeckCreationRequestLike) -> AssistantDeckCreationRequest:
@@ -184,6 +201,9 @@ def _request(value: AssistantDeckCreationRequestLike) -> AssistantDeckCreationRe
         "production": getattr(value, "production", _MISSING),
         "reading": getattr(value, "reading", _MISSING),
         "instruction": getattr(value, "instruction", _MISSING),
+        # A request-like value that predates the choice means the default; a
+        # present-but-wrong one still refuses below.
+        "deck_scope": getattr(value, "deck_scope", "shared"),
     }
     _validate_request_values(**fields)
     name = fields["name"]
@@ -191,17 +211,20 @@ def _request(value: AssistantDeckCreationRequestLike) -> AssistantDeckCreationRe
     production = fields["production"]
     reading = fields["reading"]
     instruction = fields["instruction"]
+    deck_scope = fields["deck_scope"]
     assert isinstance(name, str)
     assert isinstance(recognition, bool)
     assert isinstance(production, bool)
     assert isinstance(reading, bool)
     assert isinstance(instruction, str)
+    assert isinstance(deck_scope, str)
     return AssistantDeckCreationRequest(
         name=name,
         recognition=recognition,
         production=production,
         reading=reading,
         instruction=instruction,
+        deck_scope=deck_scope,
     )
 
 
@@ -240,6 +263,8 @@ def _projection(
             ),
             "deck_id": service.deck_id,
             "intake_tag": service.intake_tag,
+            "deck_scope": request.deck_scope,
+            "scope_id": service.scope_id,
             "cards": {
                 "recognition": service.recognition,
                 "production": service.production,
@@ -281,6 +306,7 @@ def plan_deck_creation(
             recognition=exact.recognition,
             production=exact.production,
             reading=exact.reading,
+            standalone=exact.standalone,
         )
         projection = _projection(config, exact, service)
     except AssistantDeckCreationError:
