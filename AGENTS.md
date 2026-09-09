@@ -308,6 +308,17 @@ below is what is left, and it is the loop every other project already uses.*
    reservation after fresh binding checks; a request manifest alone grants no
    authority. Never hand-edit either file, and never delete one while its
    execution or any child operation is unfinished.
+1e. `data/source_parts/` (derived beside the configured operations file the
+   same way): committed, immutable publication receipts binding the parent
+   source, the complete render recipe including renderer and encoder versions,
+   and every planned part's exact name and expected hash. They are
+   job-independent and may be reused by any later job or CLI run. An
+   interrupted publication resumes against this expectation. Never edit one,
+   and never delete one — publishing every part it names does not retire it —
+   while any unfinished batch, finish authority or current job still
+   references it. The published parts are ordinary immutable intake under
+   `data/inbox/`: a derivative never overwrites a namesake, and the canonical
+   parent source is never edited.
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a

@@ -334,10 +334,15 @@ new authorization, while a cleanup-only entry remains listed with its exact
 ordinary `--forget` retry.
 
 **The exception is one confirmed extraction batch.** The owner may confirm one
-exact finite batch of explicit immutable source parts — prepared source files
-in the first increment, since discovering and cropping arbitrary PDF rows is
-separate work — and janki runs them as smaller independent calls with bounded
-parallelism. No batch logic reads Japanese or corrects a child's answer. One
+exact finite batch of explicit immutable source parts. A part is a preserved
+source file: a whole document, or a derivative janki rendered from one page or
+from explicitly reviewed regions of one page under a recorded recipe binding
+the parent, the geometry, the renderer and encoder versions, and each part's
+exact bytes. Janki renders pixels; it never decides that a rectangle is a
+table, a row, or a word. The original is never edited, and a derivative is a
+new deliberate intake that never overwrites a namesake. Janki runs them as
+smaller independent calls with bounded parallelism. No batch logic reads
+Japanese or corrects a child's answer. One
 locked atomic journal write reserves every child operation id at once, each
 with its own exact source hash, request fingerprint and model, the fixed batch
 membership, and the stored concurrency limit — two by default, four at most.
@@ -505,6 +510,16 @@ batch names the exact stored source, disclosure and extraction request; one
 owner-confirmation click dispatches and stages it, with no additional consent
 page or phase-by-phase confirmation. OpenAI Realtime audio remains API-backed
 and neither Claude transport setting nor a model intent can reroute it.
+
+Preparing source parts is ordinary local work: an explicit preparation request
+and the owner's own page or region choice authorize it. It adds no approval
+gate, discloses nothing to a provider, and spends nothing. Region geometry
+comes only from the owner's editor or an owner-supplied recipe file; a model
+may ask for the editor and may not author or alter a coordinate. A preparation
+receipt belongs to the parts, not to one job, and any later job or CLI run may
+reuse it by its exact recipe id and receipt hash. Parts are published as
+immutable derivatives before any batch is planned, so the one exact paid batch
+confirmation names children whose bytes already exist.
 
 Extraction batches run through one batch service that the Assistant and the CLI
 both call. The Assistant is the primary surface for them: it renders the exact
