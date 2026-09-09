@@ -28,9 +28,11 @@ from japanese_anki import operations
 from japanese_anki.io import DataError
 from japanese_anki.operations import (
     LIVE_STATES,
+    STATES,
     TERMINAL_STATES,
     ArtifactReceipt,
     Operation,
+    OperationBatch,
     OperationError,
     OperationJournal,
     advance_refusal,
@@ -527,10 +529,59 @@ def test_receipt_and_cleanup_shapes_cannot_be_swapped(tmp_path: Path) -> None:
         )
 
 
-def test_committed_repository_operation_journal_loads() -> None:
-    loaded = OperationJournal.load(ROOT / "data" / "operations.json")
+def test_the_committed_repository_journal_round_trips_every_entry_it_holds() -> None:
+    """The committed journal loads, validates, and survives its own reader.
 
-    assert loaded.operations == {}
+    This used to assert the file was empty. That was true when it was written
+    and stopped being true the first time a paid call was committed, and an
+    empty journal is exactly the state where a load/validate test proves
+    nothing: every entry it could get wrong is absent. So it asserts the
+    property instead, over whatever valid state is persisted — including none.
+
+    The expectation is read from the file independently of the journal reader,
+    so this compares the reader's answer to the bytes rather than to itself. A
+    dropped entry fails on the id set; an altered, dropped or reordered field
+    fails on the wire comparison; a receipt or membership the reader cannot
+    reproduce fails on the parse round trip. The journal is the only durable
+    record that money was spent, and a reader that quietly loses part of one
+    loses the evidence a person needs to settle it.
+
+    Nothing here asserts *which* operations are present or what state they are
+    in: that is repository content, and pinning it is what the empty
+    assertion was really doing.
+    """
+    path = ROOT / "data" / "operations.json"
+    wire = json.loads(path.read_text(encoding="utf-8"))
+    persisted_operations = wire.get("operations") or {}
+    persisted_batches = wire.get("batches") or {}
+
+    loaded = OperationJournal.load(path)
+
+    assert set(loaded.operations) == set(persisted_operations)
+    for operation_id, entry in persisted_operations.items():
+        held = loaded.operations[operation_id]
+        assert held.operation_id == operation_id
+        assert held.state in STATES
+        # Every field, in the wire shape, against the bytes on disk.
+        assert held.to_dict() == entry, operation_id
+        assert Operation.from_dict(path, operation_id, held.to_dict()) == held
+
+    assert set(loaded.batches) == set(persisted_batches)
+    for batch_id, entry in persisted_batches.items():
+        held_batch = loaded.batches[batch_id]
+        assert held_batch.batch_id == batch_id
+        assert held_batch.to_dict() == entry, batch_id
+        assert OperationBatch.from_dict(batch_id, held_batch.to_dict()) == held_batch
+        # `load` has already refused a member row whose batch id is missing or
+        # names a different batch, so this loop restates that guarantee over
+        # the loaded rows rather than catching something the loader let by —
+        # a reader that lost the link fails above, on `load`. A forgotten
+        # child leaves no row at all, which is ordinary and is why this is not
+        # an equality.
+        for child in held_batch.child_operation_ids:
+            child_row = loaded.operations.get(child)
+            if child_row is not None:
+                assert child_row.batch_id == batch_id, child
 
 
 def test_an_existing_journal_write_is_bound_to_the_bytes_it_loaded(

@@ -9,6 +9,17 @@ hand-checked forms, and the module has to match them.
 Three coverage tests at the bottom (``test_every_godan_ending_...`` and
 friends) fail when a table or exception list grows an entry no case above
 pins, so a new hand-written exception cannot land unproven.
+
+``tests/fixtures/conjugation_golden.json`` is the same discipline in a file:
+an answer key nobody derived from this module, pinning both the forms and the
+order the exporter renders them in. It replaced two tests that read the
+shipped records and compared them to what ``conjugate`` produces. Those never
+tested this module. A record's ``conjugations`` map is whatever its source
+printed and its reviewer accepted — the 201-verbs deck carries the source's
+own column headings — so demanding the derivation's key set or its exact
+output from authored Japanese was janki's code grading a person's card. What
+the stored records really owe this project is *structural*: the map they hold
+survives being loaded, which is the one live contract kept below.
 """
 
 from __future__ import annotations
@@ -26,9 +37,11 @@ from japanese_anki.conjugation import (
     polite_stem,
 )
 from japanese_anki.jpdb import GODAN, ICHIDAN, KURU, SURU
+from japanese_anki.models import VocabularyRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CURATED_RECORDS = PROJECT_ROOT / "data" / "normalized" / "vocabulary.json"
+ANSWER_KEY = Path(__file__).resolve().parent / "fixtures" / "conjugation_golden.json"
 
 
 def table(*forms: str) -> dict[str, str]:
@@ -37,46 +50,178 @@ def table(*forms: str) -> dict[str, str]:
 
 
 # --------------------------------------------------------------------------
-# The key set
+# The key set, and the checked-in answer key
 # --------------------------------------------------------------------------
 
 
-def test_the_key_set_and_its_order_are_what_the_stored_records_already_carry() -> None:
-    # The exporter labels each row from the dict's own keys in iteration order,
-    # so a generated table has to key and order itself like a hand-typed one or
-    # the cards change shape. This is that contract, read off the shipped data.
+def _answer_key() -> dict:
+    return json.loads(ANSWER_KEY.read_text(encoding="utf-8"))
+
+
+def _answer_key_entries() -> list:
+    return [
+        pytest.param(entry, id=f"{entry['expression']}:{entry['verb_group']}")
+        for entry in _answer_key()["entries"]
+    ]
+
+
+@pytest.mark.parametrize("entry", _answer_key_entries())
+def test_the_answer_key_is_reproduced_form_for_form(entry: dict) -> None:
+    # Every form and every key name is written out in the fixture, hand-checked
+    # and never generated from this module: an answer key derived from the
+    # writer proves only that the writer agrees with itself.
     #
-    # An *ordered subset*, not equality: this module omits a form a verb does
-    # not have rather than inventing one — ある has no standard potential or
-    # passive, because ありえる is a separate lexeme — so demanding all seven
-    # keys asserted the opposite of what the module documents. It passed only
-    # while the file happened to hold three regular verbs, and failed the first
-    # time real vocabulary arrived.
-    records = json.loads(CURATED_RECORDS.read_text(encoding="utf-8"))
-    stored = [tuple(record["conjugations"]) for record in records if record.get("conjugations")]
-    assert stored, "the stored records are the fixture for this test; they cannot be empty"
-    assert any(keys == CONJUGATION_FORMS for keys in stored), "at least one full table"
-    for keys in stored:
+    # Both assertions, because a dict compares equal regardless of order and
+    # the exporter labels each row from the iteration order it gets.
+    #
+    # Mutant: the う row of `_GODAN_ENDINGS` takes あ instead of わ, so 買う's
+    # negative becomes 買あない — the one cell a "shift the vowel"
+    # implementation gets wrong, on the commonest ending in the language.
+    produced = conjugate(entry["expression"], entry["reading"], entry["verb_group"])
+
+    assert list(produced) == entry["keys"], entry["why"]
+    assert produced == entry["forms"], entry["why"]
+
+
+def test_the_answer_key_pins_the_rendered_key_set_and_its_order() -> None:
+    # The names and their order, spelled out in the fixture rather than read
+    # back off the module. A table that keys or orders itself differently
+    # changes the shape of every card that renders one.
+    #
+    # An *ordered subset* per entry, not equality: the module omits a form a
+    # verb does not have rather than inventing one — ある has no standard
+    # potential or passive, because ありえる is a separate lexeme — so
+    # demanding all seven keys would assert the opposite of what it documents.
+    # 知る keeps its passive and drops only its potential, so at least one
+    # entry's hole is in the middle and the order is pinned rather than a
+    # prefix length.
+    #
+    # Mutant: `CONJUGATION_FORMS` is reordered (`past` before `negative`). The
+    # module's own `table()` helper positions its arguments by that same tuple,
+    # so the cases above move with it; this is what does not.
+    key = _answer_key()
+
+    assert key["forms_order"] == list(CONJUGATION_FORMS)
+    assert key["adjective_forms_order"] == list(ADJECTIVE_FORMS)
+
+    entries = key["entries"]
+    assert entries, "the answer key cannot be empty"
+    for entry in entries:
+        keys = entry["keys"]
         assert set(keys) <= set(CONJUGATION_FORMS), f"unknown form in {keys}"
-        order = [form for form in CONJUGATION_FORMS if form in set(keys)]
-        assert list(keys) == order, f"{keys} is not in the canonical order"
+        assert keys == [form for form in CONJUGATION_FORMS if form in set(keys)], keys
+        assert list(entry["forms"]) == keys, entry["expression"]
+
+    assert any(entry["keys"] == list(CONJUGATION_FORMS) for entry in entries), (
+        "at least one complete table"
+    )
+    assert any(
+        entry["keys"] != list(CONJUGATION_FORMS)[: len(entry["keys"])]
+        for entry in entries
+    ), "at least one table whose missing form is not the last one"
+    assert {entry["verb_group"] for entry in entries} >= {
+        GODAN,
+        ICHIDAN,
+        SURU,
+        KURU,
+        "i-adjective",
+    }
 
 
-def test_the_curated_records_are_reproduced_form_for_form() -> None:
-    # The three hand-written verbs in data/normalized/vocabulary.json were typed
-    # by a human before this module existed. Regenerating them is the strongest
-    # golden test available: it is an answer key nobody wrote for the code.
+def test_a_conjugations_map_is_loaded_and_saved_in_the_order_it_was_written() -> None:
+    # The order contract's witness, written here rather than borrowed from the
+    # shipped records. The map below is synthetic and its keys are opaque
+    # labels this module does not know — no Japanese is read and no authored
+    # table is graded — and they are deliberately out of `sorted()` order, so
+    # the assertion that can see a reordering is guaranteed to have something
+    # to see. The live test below cannot promise that: valid canonical data is
+    # free to change, and a corpus whose maps happen to sort would leave an
+    # order assertion that proves nothing while still passing.
+    #
+    # The exporter renders the map key by key, so a loader that reorders one
+    # silently relabels rows on cards that already have review history.
+    #
+    # Mutant: `VocabularyRecord.from_dict` builds `conjugations` from
+    # `sorted(...)`, which no assertion over a *set* of keys can see.
+    written = {
+        "volitional": "row-one",
+        "affirmative": "row-two",
+        "attributive": "row-three",
+    }
+    assert list(written) != sorted(written), "the witness must be out of sorted order"
+
+    loaded = VocabularyRecord.from_dict(
+        {
+            "id": "word:alpha:alpha",
+            "expression": "alpha",
+            "reading": "alpha",
+            "conjugations": written,
+        }
+    )
+
+    assert loaded.conjugations == {
+        "volitional": "row-one",
+        "affirmative": "row-two",
+        "attributive": "row-three",
+    }
+    assert list(loaded.conjugations) == ["volitional", "affirmative", "attributive"]
+
+    payload = loaded.to_dict()
+
+    assert payload["conjugations"] == {
+        "volitional": "row-one",
+        "affirmative": "row-two",
+        "attributive": "row-three",
+    }
+    assert list(payload["conjugations"]) == [
+        "volitional",
+        "affirmative",
+        "attributive",
+    ]
+
+    reloaded = VocabularyRecord.from_dict(payload)
+
+    assert reloaded.conjugations == {
+        "volitional": "row-one",
+        "affirmative": "row-two",
+        "attributive": "row-three",
+    }
+    assert list(reloaded.conjugations) == ["volitional", "affirmative", "attributive"]
+
+
+def test_every_stored_conjugations_map_survives_being_loaded_unchanged() -> None:
+    # The one live contract left over the shipped records, and it is about
+    # janki's own machinery rather than anyone's Japanese: whatever a reviewer
+    # accepted into `conjugations` is what a loaded record holds, in the order
+    # it was written, and it still holds it after a serialize/parse round trip.
+    #
+    # This deliberately does *not* re-derive the stored forms: the maps here
+    # are what each source printed and a reviewer accepted — several carry the
+    # source's own column headings rather than this module's form names — and
+    # comparing them to `conjugate` would be code grading authored Japanese.
+    #
+    # The named mutant for the order contract belongs to the synthetic witness
+    # above, not here: this test asks nothing of the shape of authored content
+    # beyond it existing, so the collection stays free to change without
+    # deciding whether a serializer guard is live.
     records = json.loads(CURATED_RECORDS.read_text(encoding="utf-8"))
+    assert records, "the stored records are this test's fixture; they cannot be empty"
+
     checked = 0
     for record in records:
-        if not record.get("conjugations") or not record.get("verb_group"):
-            continue
-        assert (
-            conjugate(record["expression"], record["reading"], record["verb_group"])
-            == record["conjugations"]
-        ), record["expression"]
-        checked += 1
-    assert checked >= 3
+        stored = record.get("conjugations") or {}
+        loaded = VocabularyRecord.from_dict(record)
+
+        assert loaded.conjugations == stored, record.get("id")
+        assert list(loaded.conjugations) == list(stored), record.get("id")
+
+        reloaded = VocabularyRecord.from_dict(loaded.to_dict())
+        assert reloaded.conjugations == stored, record.get("id")
+        assert list(reloaded.conjugations) == list(stored), record.get("id")
+        if stored:
+            checked += 1
+
+    assert checked, "no stored record carries a conjugations map to check"
 
 
 def test_an_adjective_has_the_first_five_forms_and_no_potential_or_passive() -> None:

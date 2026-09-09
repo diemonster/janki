@@ -1,9 +1,30 @@
 # Assistant study jobs — implementation plan
 
-**Status: proposed / not implemented.** Written 2026-09-09 against `main` at
-`55682fb`. No production code, prompt, test or data file changes with this
-document; the owner authorized this planning and review loop only. Approving
-the plan is not approval to implement it, and it is not consent to disclose
+**Status: implementation owner-authorized.** Written 2026-09-09 against `main`
+at `55682fb`. The original planning document changed no production code,
+prompts, tests or data. The owner has now authorized implementing the plan;
+that authorization covers code, tests and documents only.
+
+**Where the work stands.** **S0 (§10) is complete.** It is implemented as tests
+and one new fixture only — `tests/test_anki_builder_contract.py`,
+`tests/test_conjugation.py`, `tests/test_operations.py`,
+`tests/fixtures/conjugation_golden.json` — with no production code change; its
+replacement tests are proven against their named mutants, it has passed an
+independent code review, and its `make gates` run on the integrated primary
+checkout reported 5285 passed, Ruff clean and the sample deck build successful
+in 422.91s (`/tmp/janki-study-s0-v2-main-gates.log`).
+**S1, S2 and S3 are under implementation** in separate worktrees (§10.3,
+wave 1); none of the three is integrated. **S4–S7 remain pending and
+unimplemented.**
+
+`78da954` already landed one narrow repair next to S1's area, and it is not S1.
+It classifies the exact deck document it was handed before collecting
+vocabulary **audio census** owners, so a `kind: kanji` character store is
+skipped by that exact-revision guard (`exporters/anki.py`) instead of being
+resolved as a word list; it changes no status behaviour and adds no capability
+registry. S1's `application/deck_capabilities.py` does not exist yet.
+
+Authorizing implementation is not consent to disclose
 private source or card bytes to a paid model. Paid work is bought exactly as
 DESIGN already buys it: one confirmation may enumerate one exact finite batch
 and buys precisely the calls it enumerates — never one confirmation per child,

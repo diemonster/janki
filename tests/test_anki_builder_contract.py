@@ -9,6 +9,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import pytest
 
 from japanese_anki import status
+from japanese_anki.application import deck_creation
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters import anki, pattern_cards
@@ -153,59 +154,100 @@ def test_builder_uses_the_public_direction_and_output_resolvers(
     assert output_calls == [(deck_path.resolve(), direction_calls[0][0], config)]
 
 
-def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
-    config = ProjectConfig.load(PROJECT_ROOT)
-    paths = [
+def _discover_word_decks(config: ProjectConfig) -> list[Path]:
+    """Every shipped deck file a *word* can land in, discovered rather than listed.
+
+    `status.deck_files` plus `anki.deck_kind` is the same pair `janki status`
+    and the builder use, so this cannot disagree with them about which files
+    are word decks. That matters more than it sounds: the literal filename set
+    this replaced had to be hand-edited whenever a deck was added, and what it
+    asserted was the *names*. A deck that stopped being a word deck was
+    indistinguishable from a deck that was legitimately renamed — both arrived
+    as one line to update — so the gate was maintained rather than enforced.
+
+    The properties asserted below are what the set was standing in for, and
+    each of them survives a deck being added or renamed while still failing
+    when a word deck silently leaves the collection: `verbs.yaml` gaining
+    `kind: pattern` drops its records out of the coverage union. (A *typo* in
+    `kind:` needs no test here — `deck_kind` refuses an unknown one.)
+    """
+    return [
         path
         for path in status.deck_files(config)
         if anki.deck_kind(path) in {"", "vocabulary"}
     ]
-    # Named, not counted. `>= 2` is satisfied by a subset, so a deck that
-    # stopped being a word deck would leave this gate silently while the
-    # assertion still passed. Not a *typo* in `kind:` — `deck_kind` already
-    # refuses an unknown one — but the valid-but-wrong cases it cannot catch:
-    # `verbs.yaml` gaining `kind: pattern`, or a deck blanking its kind. Both
-    # measured. The deleted `deck-membership-partition` case pinned the exact
-    # list; this is that half, kept, and the cost is one line to update when a
-    # deck is legitimately added.
-    assert {path.relative_to(config.root).as_posix() for path in paths} == {
-        "data/decks/104-week-1-2.yaml",
-        "data/decks/104-week-8.yaml",
-        "data/decks/104-week-11.yaml",
-        "data/decks/201-week-2.yaml",
-        "data/decks/brandon-japanese-genki-ii-lesson-13-vocabulary-4689c50439.yaml",
-        "data/decks/kanji-practice-112-123.yaml",
-        "data/decks/medical-conditions-vocab.yaml",
-        "data/decks/m7-camera-vertical-dialogue.yaml",
-        "data/decks/m7-mixed-tsumori.yaml",
-        "data/decks/m7-native-teform-table.yaml",
-        "data/decks/verbs.yaml",
-        "data/decks/yotsuba.yaml",
-    }, [path.as_posix() for path in paths]
+
+
+@pytest.fixture(scope="module")
+def real_config() -> ProjectConfig:
+    return ProjectConfig.load(PROJECT_ROOT)
+
+
+@pytest.fixture(scope="module")
+def word_deck_memberships(real_config: ProjectConfig) -> dict[str, set[str]]:
+    """What each discovered word deck would actually ship, resolved once."""
     memberships: dict[str, set[str]] = {}
-    for path in paths:
-        name = path.relative_to(config.root).as_posix()
-        _, records = anki.resolve_deck_records(path)
+    for path in _discover_word_decks(real_config):
+        _deck_config, records = anki.resolve_deck_records(path)
+        name = path.relative_to(real_config.root).as_posix()
         memberships[name] = {record.id for record in records}
-        assert memberships[name], name
+    return memberships
 
-    for left, right in combinations(memberships, 2):
-        assert memberships[left].isdisjoint(memberships[right]), f"{left} <> {right}"
 
-    # And every record is in one. Disjointness alone was satisfied by decks
-    # that between them cover nothing, and the collection was a partition only
-    # because `verbs.yaml` was a catch-all: every record minus eight
-    # exclusions, so anything untagged fell into it. That made "Starter Verbs"
-    # the destination for the next noun imported without a source tag, which
-    # is why it now selects by tag instead — and why the property it was
-    # accidentally providing has to be asserted rather than arranged.
+def test_every_shipped_word_deck_selects_at_least_one_record(
+    word_deck_memberships: dict[str, set[str]],
+) -> None:
+    # Mutant: `DeckSelection.refusal` reads an empty tag set for every record
+    # (`tags = set(record.tags)` becomes `tags: set[str] = set()`), so a deck
+    # that selects by tag matches nothing, resolves to no records and writes an
+    # empty package over its own output on exit 0.
+    #
+    # That mutant empties a tag-selecting deck structurally — it holds however
+    # the shipped decks are tagged and whatever ids they list — which is what
+    # this property is for. Inverting the include-tag test instead does not
+    # empty a deck in general: `refusal` answers *why a deck declines a
+    # record*, so dropping its `not` makes a deck take everything that lacks
+    # its tag, and whether that empties anything depends on the collection.
+    assert word_deck_memberships, "no word deck was discovered at all"
+    empty = sorted(name for name, ids in word_deck_memberships.items() if not ids)
+    assert not empty, empty
+
+
+def test_no_two_word_decks_claim_the_same_stable_id(
+    word_deck_memberships: dict[str, set[str]],
+) -> None:
+    # One record belongs to one word deck (DESIGN, "Compile"). The builder
+    # filters each deck without looking at the others, so this convention is
+    # only ever true because the deck files keep it — which is why it is
+    # checked here over the real decks.
+    #
+    # Mutant: `DeckSelection.refusal` stops honouring `exclude_ids`, so two
+    # decks whose tag filters overlap both claim the record one of them
+    # explicitly gives up.
+    for left, right in combinations(word_deck_memberships, 2):
+        shared = word_deck_memberships[left] & word_deck_memberships[right]
+        assert not shared, f"{left} <> {right}: {sorted(shared)}"
+
+
+def test_every_canonical_record_reaches_a_word_deck(
+    real_config: ProjectConfig, word_deck_memberships: dict[str, set[str]]
+) -> None:
+    # Disjointness alone was satisfied by decks that between them cover
+    # nothing, and the collection was a partition only because `verbs.yaml`
+    # was a catch-all: every record minus eight exclusions, so anything
+    # untagged fell into it. That made "Starter Verbs" the destination for the
+    # next noun imported without a source tag, which is why it now selects by
+    # tag instead — and why the property it was accidentally providing has to
+    # be asserted rather than arranged.
     #
     # A record in no deck is not an error janki can see: it builds, it
     # promotes, it gets audio, and it never reaches Anki.
-    from japanese_anki.io import load_records
-
-    everything = {record.id for record in load_records(config.normalized_file)}
-    covered = set().union(*memberships.values())
+    #
+    # Mutant: `anki.deck_kind` answers something other than `""` for a deck
+    # file that omits `kind:`, so every ordinary word deck drops out of
+    # discovery and the records they ship are covered by nothing.
+    everything = {record.id for record in load_records(real_config.normalized_file)}
+    covered: set[str] = set().union(*word_deck_memberships.values())
     assert not (everything - covered), sorted(everything - covered)
 
 
@@ -251,38 +293,76 @@ def test_genki_lesson_13_potential_drill_has_its_exact_study_scope() -> None:
     assert pattern_cards.deck_problems(deck_path, {}, config) == []
 
 
-def _real_word_selections(config: ProjectConfig) -> dict[str, anki.DeckSelection]:
-    selections: dict[str, anki.DeckSelection] = {}
-    for path in status.deck_files(config):
-        if anki.deck_kind(path) not in {"", "vocabulary"}:
-            continue
+def _real_word_selections(
+    config: ProjectConfig,
+) -> tuple[deck_creation._ExistingWordDeck, ...]:
+    """The real word decks as deck creation itself reads them.
+
+    Deck creation's own value type, so the probe helper below can be the
+    production one rather than a copy of it.
+    """
+    decks: list[deck_creation._ExistingWordDeck] = []
+    for path in _discover_word_decks(config):
         deck_config, _records = anki.resolve_deck_records(path)
-        name = path.relative_to(config.root).as_posix()
-        selections[name] = anki.deck_selection(deck_config, path)
-    return selections
+        decks.append(
+            deck_creation._ExistingWordDeck(
+                path=path, selection=anki.deck_selection(deck_config, path)
+            )
+        )
+    return tuple(decks)
 
 
-def test_real_word_decks_define_unique_intake_tags() -> None:
-    selections = _real_word_selections(ProjectConfig.load(PROJECT_ROOT))
+def _deck_name(config: ProjectConfig, path: Path) -> str:
+    return path.relative_to(config.root).as_posix()
+
+
+def test_real_word_decks_define_unique_intake_tags(
+    real_config: ProjectConfig,
+) -> None:
     assignments = {
-        name: selection.intake_tag for name, selection in selections.items()
+        _deck_name(real_config, deck.path): deck.selection.intake_tag
+        for deck in _real_word_selections(real_config)
     }
 
+    assert assignments, "no word deck was discovered at all"
     assert all(tag is not None for tag in assignments.values()), assignments
     assert len(set(assignments.values())) == len(assignments), assignments
 
 
-def test_each_real_intake_tag_selects_only_its_owner() -> None:
-    selections = _real_word_selections(ProjectConfig.load(PROJECT_ROOT))
+def test_each_real_intake_tag_selects_only_its_owner(
+    real_config: ProjectConfig,
+) -> None:
+    # One probe per deck, minted in that deck's own scope through the helper
+    # deck creation uses when it refuses a new tag that would also select an
+    # existing deck. The fixed `word:assignment:assignment` this replaced was
+    # scope-blind, so a standalone deck refused its *own* probe — a shared
+    # identity does not belong to a scoped collection at all — and the
+    # exclusivity it was supposed to prove became "nobody claims it".
+    #
+    # Reusing `_cross_selection_probe` rather than restating the convention is
+    # the point: a probe that drifts from the one creation uses would assert
+    # exclusivity against an identity no assignment ever mints.
+    #
+    # Mutant: `_cross_selection_probe` stops passing `scope_id` to
+    # `stable_record_id`, so the standalone deck's probe is a shared identity
+    # its own scope refuses and no deck claims the tag.
+    word_decks = _real_word_selections(real_config)
+    assert word_decks, "no word deck was discovered at all"
 
-    for owner, owner_selection in selections.items():
-        tag = owner_selection.intake_tag
-        assert tag is not None, owner
-        probe = SimpleNamespace(id="word:assignment:assignment", tags=[tag])
+    for owner in word_decks:
+        tag = owner.selection.intake_tag
+        assert tag is not None, owner.path
+        probe = deck_creation._cross_selection_probe(
+            word_decks, tag, owner.selection.scope_id
+        )
         claimers = {
-            name for name, selection in selections.items() if selection.includes(probe)
+            _deck_name(real_config, deck.path)
+            for deck in word_decks
+            if deck.selection.includes(probe)
         }
-        assert claimers == {owner}, f"{tag!r} is selected by {sorted(claimers)}"
+        assert claimers == {_deck_name(real_config, owner.path)}, (
+            f"{tag!r} is selected by {sorted(claimers)}"
+        )
 
 
 def test_deck_files_discovers_nested_yaml(tmp_path: Path) -> None:
