@@ -1,6 +1,6 @@
 # Assistant study jobs — plan review record
 
-**Status: adversarial plan review complete — no material findings remain.** This records an adversarial review of the
+**Status: adversarial plan and scheduling review complete — no material findings remain.** This records an adversarial review of the
 [implementation plan](ASSISTANT_STUDY_JOBS_PLAN.md) and its
 [detailed contracts](ASSISTANT_STUDY_JOBS_CONTRACTS.md), not approval of
 implemented behavior or Japanese study content. Implementation has not started.
@@ -173,6 +173,59 @@ contradiction. All accepted findings are resolved; none was waived.
 This is a clean implementation-plan review, not proof that the future
 implementation is correct. The milestones still require failing tests, mutation
 proof and `make gates`; production implementation has not started.
+
+## Parallel-scheduling addendum — 2026-09-09
+
+The owner's follow-up asks which implementation work can run in parallel.
+§10.3 adds a development schedule, file ownership, interface handoffs and
+integration checks. The milestone scopes and detailed contracts are unchanged.
+The original six-round verdict above remains tied to its recorded hashes.
+
+A separate subscription-backed planning pass inspected shared files and
+dependencies while the schedule was drafted. The schedule uses the strongest
+independent wave, S1/S2/S3 after S0, keeps each of S4 and S5 in one
+implementation lane, and splits S6's writer preparation into three development
+packages with one integrated finish.
+Additional checks against `Makefile`, `assistant_agent.recover_agent` and
+extraction revalidation established the need for per-lane environments and an
+activation window that preserves affected unfinished operations under their
+original revision. This adds no runtime authority or automatic cleanup.
+
+### Scheduling review 1 — one finding
+
+| Document | SHA-256 |
+|---|---|
+| `ASSISTANT_STUDY_JOBS_PLAN.md` | `1111a734adefb52b31d54862db5630954d2705f423f21ade6c4efcaa965d71c3` |
+| `ASSISTANT_STUDY_JOBS_CONTRACTS.md` | `cdf9713540a441a964d6042b19138457d332861ba289767f7d773eada07d1b21` |
+
+The independent reviewer returned **FINDINGS 1**: the S6-E handoff said facts
+were prepared before the review projection, reversing §7.9's dependency on the
+post-promotion projection. The correction names that projection as the input
+and places fact preparation before word enrichment. The review passed the
+remaining scheduling checks: milestone joins, shared-file ownership, complete
+lock rollout, test-only fakes, runtime ordering, authority and both surfaces.
+
+### Scheduling review 2 — clean
+
+| Document | SHA-256 |
+|---|---|
+| `ASSISTANT_STUDY_JOBS_PLAN.md` | `d717294399c26af20bc76bb6283c09b1dd164063449bc12a4e9e89a483664d1d` |
+| `ASSISTANT_STUDY_JOBS_CONTRACTS.md` | `cdf9713540a441a964d6042b19138457d332861ba289767f7d773eada07d1b21` |
+
+The fresh independent reviewer returned **VERDICT: CLEAN**. It confirmed the
+corrected reference ordering, the fixture-to-real integration obligation, the
+Makefile's preference for a checkout-local environment, and the prompt/schema
+activation hazards and recovery boundaries. The review used an immutable
+packet containing the scheduling text, the exact delta, the prior finding,
+DESIGN and relevant contract/code excerpts. The integration lead computed and
+rechecked the packet's hashes locally; the reviewer did not recompute them.
+Both scheduling reviews used the same guarded subscription launcher and pinned
+review model/effort as the original rounds. No finding was waived.
+
+Local documentation links and `git diff --check` pass. The detailed-contracts
+file is byte-identical to the round-6 version. No implementation, test,
+dependency or data changes were made, so the baseline gate result below is
+unchanged; the scheduling addendum did not rerun that suite.
 
 ## Repository validation
 

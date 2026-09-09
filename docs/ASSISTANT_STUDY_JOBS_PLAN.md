@@ -143,6 +143,9 @@ notetype, no new paid writing path. Verb study is an existing-or-new
 
 Each milestone lands its deletions **in the same change** — pre-release rule: no
 shims, no deprecation — and any DESIGN amendment it needs lands first.
+The dependency column names **integration prerequisites**, not a requirement
+to develop every milestone serially. §10.3 schedules the independent work and
+the joins required before dependent behavior can land.
 
 | # | milestone | depends | files | acceptance and deletions |
 |---|---|---|---|---|
@@ -242,6 +245,115 @@ dispatches nothing).
 `make gates` is expected to reach the sample build only after S0. Until then the
 five baseline failures above are the only known ones, and no other failure is
 treated as known.
+
+### 10.3 Parallel implementation schedule
+
+Use up to **three implementation lanes and one integration lead**. The lead
+owns shared interfaces, orders merges and checks the combined result; it is a
+role, not another approval gate. When fewer workers are available, run the same
+packages sequentially without changing their contracts. This schedule changes
+neither the scope of S0–S7 nor the contracts in sections 2–9.
+
+```mermaid
+flowchart LR
+    S0["S0: baseline tests"] --> S1["S1: media capabilities"]
+    S0 --> S2["S2: capture recovery"]
+    S0 --> S3["S3: source preparation"]
+    S1 --> J1["Join: S1-S3 integrated"]
+    S2 --> J1
+    S3 --> J1
+    J1 --> S4["S4: study job and actions"]
+    S4 --> S5["S5: layout and curation"]
+    S5 --> P["S6: review and promotion writers"]
+    S5 --> E["S6: reference and enrichment writers"]
+    S5 --> B["S6: package preparation and recovery"]
+    P --> J2["Join: S6 finish and both surfaces"]
+    E --> J2
+    B --> J2
+    J2 --> S7["S7: complete offline journey"]
+```
+
+| Wave | Work that can run together | Required join |
+|---|---|---|
+| 0 | S0 fixture corrections. Other workers may map contracts and prepare synthetic test scenarios. | S0's replacement tests catch their named mutants and `make gates` passes before feature integration. |
+| 1 | **S1, S2 and S3 in separate worktrees**, each with its own service tests. S2 remains operation-scoped; S3 remains job-independent. | Integrate S1, then S2, then S3; this preserves §9.3's recovery-before-source-preparation shipping order. The order is a merge policy, not a development dependency. S3's A/B amendments precede its behavior. All three must be integrated before S4. |
+| 2 | S4's job store and action integration have one owner. Another worker can prepare S7's synthetic inputs, expected scenario outcomes and fake-provider fixtures while S4 is built. | Freeze the implemented job CAS writers, resource/action schema and optional batch `job_id` wire at the integrated S4 commit before S5 edits their callers. Early acceptance work is preparation; S7 does not pass or ship here. |
+| 3 | Keep S5's production changes with one owner: layout transport, serialization, staging curation and the promotion barrier share too many files for useful independent implementation. An independent worker can author the §10.2 regression cases against agreed contracts. | C/D amendments precede behavior. Land the curation guard at every existing promotion entry together, with the curation writer; never enable a partially guarded path. Prove layout dispatch/resume/retry, card rendering and existing revision-finish interleaving before S6. |
+| 4 | After S5 and a recorded interface handoff, split S6 into the three writer packages below. The integration lead handles their common seams. | Integrate all writer packages before connecting the complete `study_finish` coordinator and its Assistant/CLI controls. F precedes the affected behavior. No new finish action is exposed until every phase has its real writer and recovery proof. |
+| 5 | S7's Assistant and CLI scenario tests can execute independently against the same integrated revision, using separate temporary repositories. | The complete journey, failure/restart cases and `make gates` must pass on the integrated checkout. A passing package test cannot stand in for this join. |
+
+**S6 writer packages.** These are development packages inside S6, not new
+independently shipped milestones. Before branching, the integration lead pins
+the base commit, exact helper signatures, prepared-payload shapes and synthetic
+input/output examples from §7.5–§7.11. Any necessary shared `io.py` change has
+one owner and an agreed patch order. The handoff is ordinary engineering
+coordination; it does not ask the owner to approve interfaces.
+
+| Package | Owned implementation and tests | Inputs supplied by the other packages at integration |
+|---|---|---|
+| S6-P: review and promotion | `staging.py`, `workbench/review.py`, `application/coverage.py`, `application/assistant_staging_review.py`, `application/assistant_promotion.py`, `application/promotion.py`; coalesced review/coverage payloads, aggregate pattern snapshot, canonical fold, per-state archive/ledger recovery and executor-entry projection refusal. | Consumes S5's barrier and serializers; supplies the exact post-promotion records/revision to enrichment. This package owns the review/promotion projection chain as a whole. |
+| S6-E: reference facts and enrichment | `enrich.py`, `application/enrichment.py`, `application/character_notes.py`, `kanji.py`, `jpdb_kanji.py`; frozen fact book, prepared reference stores, dictionary projection and apply/recover. | Tests use explicit synthetic canonical snapshots while S6-P develops. References are prepared over S6-P's post-promotion projection and before the word-enrichment projection, then applied before vocabulary enrichment, as §7 specifies. Supplies exact after-records and reference hashes for audio/package planning. |
+| S6-B: package preparation and recovery | `application/deck_package.py`; reference-hash projection, realization comparison, durable package evidence, publication and recovery tests. | Tests use contract-shaped post-audio records, reference hashes and audio-completion proofs. Integration must use the actual finish/audio writer proofs, including free VOICEVOX completion; fixture proofs grant no production authority. |
+
+The integration lead owns `application/study_finish.py` and the combined
+surface work in S6. In particular, it constructs the preview from real prepared
+facts, wires owner review/coverage/disposition choices, composes the three
+packages, proves audio completion, and connects package download/resume. It may
+prepare tests while packages run; it does not land a coordinator that calls
+placeholder writers. If a shared signature or wire shape changes, stop its
+dependent callers, update the handoff and rebase them before continuing. Fakes
+stay in tests; no production stubs, alternate writers or compatibility paths
+are introduced to make an early merge possible.
+
+**Shared-file ownership.** Each concurrent wave has one editor for a shared
+file. In wave 1 the lead composes S2/S3's `cli.py` registrations; S2 owns
+`cli_extract_batches.py` and S3 owns the source-editor broker/schema changes.
+S1 owns `deck_package.py` until its merge; S6-B starts from that integrated
+version. Across later waves the lead sequences edits to `io.py`, `cli.py`,
+`ai_schema.py`, `application/assistant_context.py`,
+`workbench/assistant_adapter.py`, `workbench/assistant.py` and
+`workbench/assistant_packages.py`. The table's service owners retain their
+writer modules. DESIGN, lifecycle and prompt-index changes are integrated by
+the lead before the behavior they describe. Workers hand off patches for these
+shared files instead of independently replacing the same registrations or
+helper. A cross-file lock-order change is one coordinated change, even when
+its callers live in different packages.
+
+**Working and verification rules.** Give each lane its own branch and
+worktree rooted at the agreed base, with its own local `.venv` (already
+preferred by `Makefile`). S3 installs its renderer dependencies there; it must
+not change the shared fallback venv beneath another running suite. Keep runtime stores and generated test
+artifacts isolated in temporary repositories; tests do not write the owner's
+collection, journal, media or source files. Launch all development, planning
+and review models through that checkout's `scripts/claude-subscription.py`
+under the pinned repository model/effort rules; a login refusal stops the
+launch, with no API fallback. Use checkout-root test commands and `make gates`
+so a shared editable venv cannot silently test the primary worktree. Each lane
+supplies its behavioral tests and mutation evidence; the lead reviews conflicts
+against the contracts and runs `make gates` on every integrated milestone and
+the final join. Do not mutate that checkout while its tests or review run.
+
+**Activation in the owner's working checkout.** Before integrating prompt or
+Assistant-schema changes there, the lead checks the operation status without
+changing it. A changed extraction prompt can stale reserved-unsent children;
+Assistant recovery rebuilds its schema from the running code, so widening it
+can strand a captured turn. Complete or recover affected work under its
+original revision and existing authority before activating the changed code.
+If an end, retry or discard needs a new owner decision, leave that activation
+pending and preserve the evidence; isolated implementation and tests may
+continue. Do not auto-forget operations to clear the merge. This is an
+integration practice over existing tools, not a new runtime approval gate.
+The extraction response schema and its version remain frozen throughout this
+plan, as §4.3 requires; ordinary request prompts and Assistant action schemas
+are the deliberately changing contracts.
+
+**Runtime ordering stays fixed.** Parallel development does not parallelize the
+canonical promotion fold, the reference/enrichment writes, or the finish phase
+chain (`reviewed → promoted → enriched → audio_complete → packaged → preview
+→ complete`). Paid dispatch retains only the bounded concurrency already
+enumerated in an exact confirmed batch. Existing authority persists on resume;
+an unknown paid outcome is never automatically sent again. These rules are
+unchanged by the number of implementation workers.
 
 ---
 
