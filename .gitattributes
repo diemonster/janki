@@ -1,2 +1,12 @@
 data/media/audio/**/*.wav filter=lfs diff=lfs merge=lfs -text
 data/media/audio/.pending/*.stage filter=lfs diff=lfs merge=lfs -text
+
+# A PDF is bytes even when most of it is readable ASCII. `tests/fixtures/`
+# holds hand-written ones whose xref entries are exactly 20 bytes each, ending
+# in a trailing space the format requires: eol conversion or whitespace
+# fixing would move every offset in the table and the file would stop parsing.
+# Not LFS — these are small and belong in the tree beside the tests that read
+# them. `binary` is git's `-diff -merge -text` macro: `-text` is that
+# protection, and the cost of the other half is that git reports a changed
+# fixture as "Binary files … differ" rather than diffing it.
+tests/fixtures/*.pdf binary

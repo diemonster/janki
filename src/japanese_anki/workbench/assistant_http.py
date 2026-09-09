@@ -49,6 +49,10 @@ from japanese_anki.workbench.assistant_previews import (
     AssistantPreviewError,
     LocalAssistantPreviewStore,
 )
+from japanese_anki.workbench.source_part_editor import (
+    LocalSourcePartEditorStore,
+    SourcePartEditorError,
+)
 
 __all__ = [
     "AssistantHTTPServer",
@@ -161,9 +165,11 @@ class AssistantHTTPServer(LocalOnlyServer):
     upload_path_prefix: str | None
     download_path_prefix: str
     preview_path_prefix: str
+    editor_path_prefix: str
     attachment_store: LocalAssistantAttachmentStore | None
     package_store: LocalAssistantPackageStore | None
     preview_store: LocalAssistantPreviewStore | None
+    source_part_editor_store: LocalSourcePartEditorStore | None
     deck_choices: tuple[AssistantDeckChoice, ...]
 
 
@@ -235,6 +241,10 @@ class _AssistantHandler(LocalOnlyHandler):
             self._send_package(self.path.removeprefix(self.server.download_path_prefix))
         elif self.path.startswith(self.server.preview_path_prefix):
             self._send_preview(self.path.removeprefix(self.server.preview_path_prefix))
+        elif self.path.startswith(self.server.editor_path_prefix):
+            self._send_source_part_editor(
+                self.path.removeprefix(self.server.editor_path_prefix)
+            )
         else:
             self._error(404, "This assistant route does not exist.")
 
@@ -264,6 +274,75 @@ class _AssistantHandler(LocalOnlyHandler):
         self.wfile.write(snapshot.html)
         self.close_connection = True
 
+    def _send_source_part_editor(self, token: str) -> None:
+        """Serve one open region editor under its own exact policy.
+
+        A read, exactly as a card preview is: the contact sheet was rendered
+        before the link existed and is served back unchanged. Nothing here
+        publishes a part.
+        """
+
+        store = self.server.source_part_editor_store
+        if store is None or not token or not _TOKEN.fullmatch(token):
+            self._error(404, "This assistant route does not exist.")
+            return
+        try:
+            document = store.read(token)
+        except SourcePartEditorError as error:
+            self._error(409, str(error))
+            return
+        self._start_response(
+            200,
+            content_type="text/html; charset=utf-8",
+            content_length=len(document.html),
+            content_security_policy=document.content_security_policy,
+        )
+        self.wfile.write(document.html)
+        self.close_connection = True
+
+    def _source_part_editor_action(self, token: str) -> None:
+        """One owner control from an open editor: render a plan, or publish it.
+
+        Preparing source parts is ordinary local work — an explicit request and
+        the owner's own page or region choice authorize it — so this route
+        consumes no capability and asks for no second confirmation. It also
+        grants nothing else: the editor's session decides which source may be
+        named, and publication still binds the exact plan fingerprint the owner
+        reviewed.
+        """
+
+        store = self.server.source_part_editor_store
+        if store is None or not token or not _TOKEN.fullmatch(token):
+            self._error(404, "This assistant route does not exist.")
+            return
+        body = self._read_json_body()
+        if body is None:
+            return
+        try:
+            parsed = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._error(400, "The source-part request was not valid JSON.")
+            return
+        try:
+            payload = store.act(token, parsed)
+        except SourcePartEditorError as error:
+            self._send_json(409, {"ok": False, "error": str(error)})
+            return
+        except Exception as error:  # noqa: BLE001 - one owner-facing refusal
+            self._send_json(409, {"ok": False, "error": str(error)})
+            return
+        self._send_json(200, payload)
+
+    def _send_json(self, status: int, payload: dict[str, Any]) -> None:
+        encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self._start_response(
+            status,
+            content_type="application/json; charset=utf-8",
+            content_length=len(encoded),
+        )
+        self.wfile.write(encoded)
+        self.close_connection = True
+
     def _send_package(self, token: str) -> None:
         """Serve only the exact package a complete finish receipt still proves."""
 
@@ -286,12 +365,19 @@ class _AssistantHandler(LocalOnlyHandler):
         self.close_connection = True
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if self.path != self.server.api_path:
+        if self.path != self.server.api_path and not self.path.startswith(
+            self.server.editor_path_prefix
+        ):
             self._error(404, "This assistant route does not exist.")
             return
         request_origin = self._exact_origin()
         if not self._request_is_local() or request_origin is None:
             self._error(403, "The request host or origin was refused.")
+            return
+        if self.path != self.server.api_path:
+            self._source_part_editor_action(
+                self.path.removeprefix(self.server.editor_path_prefix)
+            )
             return
         body = self._read_json_body()
         if body is None:
@@ -789,6 +875,7 @@ def create_assistant_sidecar(
         upload_path_prefix = f"{root}attachments/" if inbox_root is not None else None
         download_path_prefix = f"{root}packages/"
         preview_path_prefix = f"{root}previews/"
+        editor_path_prefix = f"{root}source-parts/"
         if upload_path_prefix is not None:
             attachment_store = LocalAssistantAttachmentStore(
                 inbox_root=inbox_root,
@@ -819,6 +906,18 @@ def create_assistant_sidecar(
             )
             if not isinstance(preview_store, LocalAssistantPreviewStore):
                 raise TypeError("bind_preview_links must return a preview store.")
+        # Region editors are held by the same adapter, for the same reason, and
+        # carry its owner-only plan and publish routes.
+        editor_binder = getattr(callbacks, "bind_source_part_editors", None)
+        source_part_editor_store: LocalSourcePartEditorStore | None = None
+        if callable(editor_binder):
+            source_part_editor_store = editor_binder(
+                f"http://{server.expected_host}{editor_path_prefix}"
+            )
+            if not isinstance(source_part_editor_store, LocalSourcePartEditorStore):
+                raise TypeError(
+                    "bind_source_part_editors must return a source-part editor store."
+                )
         core = create_assistant_core(
             callbacks,
             deck_choices=deck_choices,
@@ -834,9 +933,11 @@ def create_assistant_sidecar(
         server.upload_path_prefix = upload_path_prefix
         server.download_path_prefix = download_path_prefix
         server.preview_path_prefix = preview_path_prefix
+        server.editor_path_prefix = editor_path_prefix
         server.attachment_store = attachment_store
         server.package_store = package_store
         server.preview_store = preview_store
+        server.source_part_editor_store = source_part_editor_store
         server.deck_choices = tuple(deck_choices)
         return AssistantSidecar(server=server, bridge=bridge)
     except Exception:

@@ -54,6 +54,7 @@ from japanese_anki.application import (
     revision,
     revision_apply,
     revision_finish,
+    source_parts,
 )
 from japanese_anki.application.extraction import destination_deck_facts
 from japanese_anki.config import ProjectConfig
@@ -95,11 +96,20 @@ from japanese_anki.workbench.assistant_previews import (
     AssistantPreviewOffer,
     LocalAssistantPreviewStore,
 )
+from japanese_anki.workbench.source_part_editor import (
+    LocalSourcePartEditorStore,
+    SourcePartEditorError,
+    SourcePartEditorOffer,
+)
 
 __all__ = [
     "RevisionAssistantAdapter",
     "discover_revision_adapter",
 ]
+
+#: Rendered source-part plans held for the editor's publish control. Each one
+#: carries its parts' exact PNG bytes, so the number is small on purpose.
+_MAX_REMEMBERED_SOURCE_PART_PLANS = 4
 
 _RICH_DRILL_ONLY = "Deck changes currently support rich conjugation practice decks only."
 _DRILL_EXAMPLES_REQUIRED = (
@@ -435,6 +445,19 @@ class RevisionAssistantAdapter:
         init=False,
         repr=False,
     )
+    _source_part_editors: LocalSourcePartEditorStore | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
+    # One rendered source-part plan, held whole and keyed by the fingerprint
+    # the owner saw, for the same reason `_batch_plans` is: publishing binds
+    # the plan that was shown rather than a fresh one compared against an old
+    # fingerprint. It carries the exact rendered bytes, which is why it is
+    # bounded.
+    _source_part_plans: dict[str, source_parts.SourcePartsPlan] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _finish_plans: dict[
         str,
         revision_finish.RevisionFinishPlan
@@ -483,6 +506,145 @@ class RevisionAssistantAdapter:
         store = LocalAssistantPreviewStore(preview_prefix=preview_prefix)
         self._preview_store = store
         return store
+
+    def bind_source_part_editors(
+        self,
+        editor_prefix: str,
+    ) -> LocalSourcePartEditorStore:
+        """Build the store the isolated origin serves region editors from.
+
+        The store carries this adapter's own owner routes rather than anything
+        the model can reach: no model-emittable field carries a recipe, a
+        coordinate or a plan fingerprint, so plan and publish are owner
+        controls inside the editor and nothing else.
+        """
+
+        store = LocalSourcePartEditorStore(
+            editor_prefix=editor_prefix,
+            plan_recipe=self._plan_source_parts_for_owner,
+            publish_plan=self._publish_source_parts_for_owner,
+        )
+        self._source_part_editors = store
+        return store
+
+    def open_source_part_editor(self, source_name: str) -> SourcePartEditorOffer:
+        """Render one source's real pages and open the owner's region editor.
+
+        A read. It publishes nothing, mints no receipt, prepares no part
+        speculatively and reaches no provider — the owner has not chosen
+        anything yet.
+        """
+
+        store = self._source_part_editors
+        if store is None:
+            raise RevisionRefusal(
+                "This workbench is not serving source-part editors, so there is "
+                "no editor to open. `janki source-parts choose` and `janki "
+                "source-parts prepare --recipe FILE` prepare the same parts "
+                "from the terminal."
+            )
+        fresh_config = ProjectConfig.load(self.config.root)
+        unavailable = source_parts.sources_unavailable()
+        if unavailable is not None:
+            raise RevisionRefusal(unavailable)
+        try:
+            sheet = source_parts.render_contact_sheet(fresh_config, source_name)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        try:
+            return store.open(sheet, recipe_id=source_parts.new_recipe_id())
+        except SourcePartEditorError as exc:
+            raise RevisionRefusal(str(exc)) from exc
+
+    def _plan_source_parts_for_owner(
+        self,
+        source_name: str,
+        recipe_bytes: bytes,
+    ) -> dict[str, Any]:
+        """The editor's own Render control: exact bytes, exact hashes, no writes."""
+
+        fresh_config = ProjectConfig.load(self.config.root)
+        recipe, token = source_parts.recipe_from_bytes(recipe_bytes)
+        plan = source_parts.plan_source_parts(
+            fresh_config, source_name, recipe, recipe_token=token
+        )
+        with self._plan_lock:
+            while len(self._source_part_plans) >= _MAX_REMEMBERED_SOURCE_PART_PLANS:
+                self._source_part_plans.pop(next(iter(self._source_part_plans)))
+            self._source_part_plans[plan.plan_fingerprint] = plan
+        return {
+            "ok": True,
+            "recipe_id": plan.recipe_id,
+            "plan_fingerprint": plan.plan_fingerprint,
+            "parent_name": plan.parent_name,
+            "parent_sha256": plan.parent_sha256,
+            "renderer": plan.renderer,
+            "renderer_version": plan.renderer_version,
+            "encoder": plan.encoder,
+            "encoder_version": plan.encoder_version,
+            "render_dpi": plan.render_dpi,
+            "parts": [
+                {
+                    "ordinal": part.ordinal,
+                    "target_name": part.target_name,
+                    "sha256": part.sha256,
+                    "byte_length": part.byte_length,
+                    "page_index": part.page_index,
+                    "page_rotate": part.page_rotate,
+                    "regions": [list(region) for region in part.regions],
+                    "thumbnail_png_base64": part.thumbnail_png_base64,
+                }
+                for part in plan.parts
+            ],
+        }
+
+    def _publish_source_parts_for_owner(
+        self,
+        source_name: str,
+        plan_fingerprint: str,
+    ) -> dict[str, Any]:
+        """The editor's own Publish control, bound to the reviewed plan.
+
+        The owner's click is the authority for a local write: DESIGN puts
+        source preparation in ordinary local work, so there is no second
+        dialog and no capability. What it may not do is publish anything but
+        the exact plan that was rendered and shown.
+        """
+
+        with self._plan_lock:
+            plan = self._source_part_plans.get(plan_fingerprint)
+        if plan is None:
+            raise SourcePartEditorError(
+                "That plan is not the one this workbench rendered. Render the "
+                "parts again and publish what you reviewed."
+            )
+        if plan.parent_name != source_name:
+            raise SourcePartEditorError(
+                "That plan was rendered for a different source; nothing was "
+                "published."
+            )
+        fresh_config = ProjectConfig.load(self.config.root)
+        receipt = source_parts.execute_source_parts(
+            fresh_config, plan, publish_token=plan_fingerprint
+        )
+        published = [path.name for path in receipt.published]
+        reused = [path.name for path in receipt.reused]
+        summary = f"Published {len(published)} part(s) into your corpus"
+        if reused:
+            summary += f" and reused {len(reused)} already there"
+        return {
+            "ok": True,
+            "message": (
+                f"{summary}. The receipt at "
+                f"{self._display_path(fresh_config, receipt.path)} binds every "
+                "name and hash; the original source is unchanged. Nothing was "
+                "sent to a model."
+            ),
+            "recipe_id": receipt.plan.recipe_id,
+            "receipt_sha256": receipt.receipt_sha256,
+            "published": published,
+            "reused": reused,
+        }
 
     def _render_preview(
         self,
@@ -1721,6 +1883,32 @@ class RevisionAssistantAdapter:
                     preview_url=None if preview is None else preview.url,
                 ),
                 action_instruction=intent.instruction,
+            )
+        if intent.kind == "open_source_part_editor":
+            if len(intent.resource_ids) != 1 or intent.record_ids or intent.options:
+                raise RevisionRefusal(
+                    "Opening the source-part editor needs exactly one preserved "
+                    "source resource, no card targets and no options. The owner "
+                    "chooses every page and region inside it."
+                )
+            try:
+                source_path = assistant_context.AssistantContextBroker(
+                    config
+                ).source_path(intent.resource_ids[0])
+                offer = self.open_source_part_editor(source_path.name)
+            except (JankiError, OSError, TypeError, ValueError) as exc:
+                raise RevisionRefusal(str(exc)) from exc
+            return ChatReply(
+                text=(
+                    f"{result.answer}\n\n### Choose the parts of {offer.source_name}\n\n"
+                    f"[Open the region editor]({offer.url}) — {offer.page_count} "
+                    "page(s) rendered for review.\n\n"
+                    "You choose every page and region; Janki renders exactly "
+                    "those pixels and never decides that a rectangle is a table, "
+                    "a row or a word. Opening this editor changed nothing, made "
+                    "no model call and cost nothing, and publishing parts from "
+                    "it is ordinary local intake."
+                )
             )
         if intent.kind == "extract_source":
             if len(intent.resource_ids) != 1 or intent.record_ids or intent.options:

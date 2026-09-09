@@ -15,6 +15,7 @@ from typing import Any
 from japanese_anki import (
     claude_client,
     cli_extract_batches,
+    cli_source_parts,
     codex_client,
     enrich,
     extract,
@@ -4009,6 +4010,16 @@ def command_extract_batch(args: argparse.Namespace) -> int:
     return cli_extract_batches.run_batch_command(_load_config(args), args)
 
 
+def command_source_parts(args: argparse.Namespace) -> int:
+    """Render the pages or regions the owner chose into new immutable sources.
+
+    Its own command rather than a mode of ``extract``: preparing a part reads
+    a preserved source and writes new ones, and it never sends anything.
+    """
+
+    return cli_source_parts.run_source_parts_command(_load_config(args), args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="janki",
@@ -4269,6 +4280,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     cli_extract_batches.add_batch_parser(subparsers, _path, command_extract_batch)
+    cli_source_parts.add_source_parts_parser(subparsers, _path, command_source_parts)
     extract_parser.set_defaults(handler=command_extract)
 
     audio_parser = subparsers.add_parser(

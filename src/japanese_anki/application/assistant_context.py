@@ -24,7 +24,7 @@ from pathlib import Path, PurePath
 from typing import Any, Literal
 
 from japanese_anki import kanji, ledger, operations, patterns, staging, status
-from japanese_anki.application import promotion, revision_apply
+from japanese_anki.application import promotion, revision_apply, source_parts
 from japanese_anki.application.detail import source_detail
 from japanese_anki.application.journey import (
     SourceJourney,
@@ -65,6 +65,7 @@ ResourceKind = Literal[
     "deck",
     "card",
     "source",
+    "source_part",
     "status",
     "operations",
     "patterns",
@@ -398,6 +399,14 @@ class AssistantContextBroker:
                     if resource.kind == "deck"
                     else {}
                 ),
+                # A publication receipt that cannot be read stays listed and
+                # says so, rather than vanishing from the catalog: the parts it
+                # names may well be in the corpus.
+                **(
+                    {"available": resource.available}
+                    if resource.kind == "source_part"
+                    else {}
+                ),
                 **({"proposal_kind": resource.subtype} if resource.kind == "proposal" else {}),
             }
             for resource in sorted(
@@ -427,6 +436,8 @@ class AssistantContextBroker:
                 data, count = self._card_snapshot(resource)
             elif resource.kind == "source":
                 data, count = self._source_snapshot(resource)
+            elif resource.kind == "source_part":
+                data, count = self._source_part_snapshot(resource)
             elif resource.kind == "status":
                 data, count = self._status_snapshot()
             elif resource.kind == "operations":
@@ -709,6 +720,32 @@ class AssistantContextBroker:
         for name in names:
             self._register("source", _safe_name(name), name)
 
+        for recipe_id in source_parts.list_source_part_receipts(self.config):
+            title = f"Source parts {recipe_id[:8]}"
+            available = False
+            try:
+                # Titled from the receipt, never from the corpus. A broker is
+                # built for every ordinary turn and receipts are immutable and
+                # never retired, so verifying publication here would cost each
+                # turn a read and a hash of every prepared part in the project.
+                # `_source_part_snapshot` measures that state for the one
+                # receipt the owner actually selected, which is the only place
+                # it is disclosed.
+                record = source_parts.load_source_part_receipt(
+                    self.config, recipe_id, verify_published=False
+                )
+                count = len(record.parts)
+                title = (
+                    f"{_safe_name(record.parent_name)} parts "
+                    f"({count} part{'' if count == 1 else 's'})"
+                )
+                available = True
+            except (JankiError, OSError, UnicodeError, ValueError):
+                # A malformed receipt refuses when it is selected; it does not
+                # make its siblings or the catalog disappear.
+                pass
+            self._register("source_part", title, recipe_id, available=available)
+
         for resource in self._discover_proposals():
             self._register(
                 "proposal",
@@ -990,6 +1027,21 @@ class AssistantContextBroker:
                     ]
                     count += len(detail.pattern_set.patterns)
         return value, count
+
+    def _source_part_snapshot(self, resource: _Resource) -> tuple[dict[str, Any], int]:
+        """One publication receipt: ids, hashes, versions, states and counts.
+
+        Never a rendered pixel and never a contact-sheet cell. What a part
+        *is* — which page of which parent, at which DPI, under which renderer
+        and encoder, hashing to what, published or not — is exactly what a plan
+        needs, and the bytes themselves are the owner's private source.
+        """
+
+        self._guard_regular_file(
+            source_parts.receipt_path(self.config, resource.key), "source part receipt"
+        )
+        record = source_parts.load_source_part_receipt(self.config, resource.key)
+        return {"source_parts": record.to_dict()}, max(1, len(record.parts))
 
     def _status_snapshot(self) -> tuple[dict[str, Any], int]:
         universe = self._current_universe()

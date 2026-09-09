@@ -53,6 +53,7 @@ __all__ = [
     "inside",
     "prepare_corpus_input",
     "prepare_inputs",
+    "publish_derived_part",
 ]
 
 
@@ -301,6 +302,80 @@ def receive_upload(raw_name: str, data: bytes, *, inbox_root: Path) -> Intake:
             )
         atomic_write_bytes(target, data)
         return Intake(path=target, stored=True)
+
+
+def publish_derived_part(
+    parts: Sequence[tuple[str, bytes]],
+    *,
+    scan_inbox: Path,
+    inbox_root: Path,
+) -> tuple[Intake, ...]:
+    """Put one recipe's rendered parts in the corpus under their exact names.
+
+    Deliberately not :func:`_copy_into_inbox`. That one starts from a path and,
+    for bytes from outside the durable root, takes the content-stamped rename
+    branch — which would store a part under a name its publication receipt
+    never bound, and a receipt that does not name the file it published is not
+    a receipt. Here the name is the whole point: it was planned, reviewed and
+    written down before this call.
+
+    One recipe, one transaction. The durable root's lock is taken once, *every*
+    planned name is checked against it, and only then is anything written: half
+    a recipe published under a namesake refusal is not what the owner reviewed.
+    Same name and the same bytes is a reuse — that is how an interrupted
+    publication resumes — and same name with different bytes refuses the whole
+    recipe. Nothing is renamed and nothing in the inbox is overwritten.
+    """
+
+    scan_inbox = Path(scan_inbox)
+    durable_root = Path(inbox_root)
+    planned = [(str(name), bytes(data)) for name, data in parts]
+    if not planned:
+        raise InputError("A publication needs at least one part.")
+    for name, data in planned:
+        if safe_upload_name(name) != name:
+            raise InputError(f"{name!r} is not a usable part filename.")
+        _classify(Path(name))  # refuses an unsupported suffix, naming what is read
+        if not data:
+            raise InputError(f"{name} rendered no bytes; nothing was published.")
+    names = [name.casefold() for name, _data in planned]
+    if len(set(names)) != len(names):
+        raise InputError(
+            "Two parts of this recipe would be published under one name; "
+            "nothing was published."
+        )
+
+    scan_inbox.mkdir(parents=True, exist_ok=True)
+    durable_root.mkdir(parents=True, exist_ok=True)
+    with exclusive_path_lock(durable_root):
+        reuse: dict[str, Path] = {}
+        for name, data in planned:
+            matches, conflicts = _durable_namesakes(name, durable_root, data)
+            if conflicts:
+                listed = ", ".join(str(path) for path in conflicts)
+                raise InputError(
+                    f"A different source called {name} is already in your corpus "
+                    f"({listed}). Nothing from this recipe was published: prepare "
+                    "it again under a new recipe id, or move that file aside."
+                )
+            target = scan_inbox / name
+            if matches:
+                reuse[name] = target if target in matches else matches[0]
+            elif _occupied(target):
+                raise InputError(
+                    f"{target} already exists and is not a readable source file. "
+                    "Move it aside before publishing these parts."
+                )
+        results: list[Intake] = []
+        for name, data in planned:
+            existing = reuse.get(name)
+            if existing is not None:
+                results.append(Intake(path=existing, stored=False))
+                continue
+            target = scan_inbox / name
+            atomic_write_bytes(target, data)
+            results.append(Intake(path=target, stored=True))
+    return tuple(results)
 
 
 def _copy_into_inbox(

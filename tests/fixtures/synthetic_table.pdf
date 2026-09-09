@@ -1,0 +1,72 @@
+%PDF-1.4
+% synthetic_table.pdf - a synthetic janki test fixture.
+% Page 1 (/Rotate 0): a ruled two-column table with a header band.
+% Page 2 (/Rotate 90): one filled square in the PDF-space bottom-left
+% corner, so a rotated render can be checked where it actually lands.
+% Hand-written and uncompressed on purpose: no generator, no binary blob.
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 0 /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 687 >>
+stream
+0.85 0.85 0.85 rg
+56 700 500 60 re f
+0 0 0 RG
+2 w
+56 700 500 60 re S
+BT /F1 18 Tf 72 722 Td (SYNTHETIC TABLE HEADER) Tj ET
+56 660 m 556 660 l S
+56 620 m 556 620 l S
+56 580 m 556 580 l S
+56 540 m 556 540 l S
+56 500 m 556 500 l S
+56 460 m 56 660 l S
+306 460 m 306 660 l S
+556 460 m 556 660 l S
+BT /F1 14 Tf 72 634 Td (LEFT CELL 1) Tj ET
+BT /F1 14 Tf 322 634 Td (RIGHT CELL 1) Tj ET
+BT /F1 14 Tf 72 594 Td (LEFT CELL 2) Tj ET
+BT /F1 14 Tf 322 594 Td (RIGHT CELL 2) Tj ET
+BT /F1 14 Tf 72 554 Td (LEFT CELL 3) Tj ET
+BT /F1 14 Tf 322 554 Td (RIGHT CELL 3) Tj ET
+BT /F1 14 Tf 72 514 Td (LEFT CELL 4) Tj ET
+BT /F1 14 Tf 322 514 Td (RIGHT CELL 4) Tj ET
+BT /F1 12 Tf 72 120 Td (FOOTER MARK) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 90 /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 73 >>
+stream
+0 0 0 rg
+36 36 120 120 re f
+BT /F1 16 Tf 200 700 Td (ROTATED PAGE) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000346 00000 n 
+0000000395 00000 n 
+0000000458 00000 n 
+0000000594 00000 n 
+0000001331 00000 n 
+0000001468 00000 n 
+0000001590 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /ID [<4a616e6b6953796e746865746963303031> <4a616e6b6953796e746865746963303031>] >>
+startxref
+1660
+%%EOF

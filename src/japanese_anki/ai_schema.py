@@ -230,6 +230,7 @@ def assistant_agent_schema() -> Any:
             "build_deck",
             "extract_source",
             "extract_batch",
+            "open_source_part_editor",
             "delete_content",
             "manage_operation",
             "inspect_resources",

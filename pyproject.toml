@@ -33,7 +33,15 @@ dependencies = [
 # messages.create(output_config={"format": ...}), and a floor nobody checked
 # would fail at the first AI call rather than at install time.
 ai = [
-  "anthropic>=0.121",
+  # Pinned, not floored. `claude_client._http_errors()` catches `httpx.HTTPError`
+  # because that is the transport the supported SDK raises through, and
+  # `tests/test_claude_client.py::test_a_midstream_http_error_cannot_echo_the_
+  # environment_key` proves the redaction boundary against exactly that
+  # exception. The 1.x SDK line moved to `httpx2`, so a floor resolves an SDK
+  # whose mid-stream transport errors this boundary would no longer recognise —
+  # and a stray `httpx` installed beside it hides the gap rather than closing
+  # it. Moving the SDK is its own change, with its own transport tests.
+  "anthropic==0.121.0",
   # Imported directly by both structured-output clients to validate a response
   # against the schema, so it is declared rather than leaned on transitively.
   "pydantic>=2",
@@ -52,6 +60,21 @@ ai = [
 # `preview_unavailable()` reports the absence instead of importing it.
 preview = [
   "anki>=25.2",
+]
+# Rendering an owner-chosen page or region into a new immutable source part
+# needs a PDF rasterizer and a PNG encoder, and there is no reason for `janki
+# build` or `janki import-shirabe` to carry either: `application/source_parts.py`
+# imports both only inside its spawned worker, and `sources_unavailable()`
+# reports their absence the way `preview_unavailable()` does.
+#
+# Pinned to the versions this checkout actually renders with, because the pair
+# *is* the pixels: pypdfium2 ships ctypes bindings plus a bundled PDFium binary,
+# and every publication receipt records both identities. Pillow owns PNG
+# composition and encoding — a hand-written zlib/struct encoder is code this
+# project would own forever.
+sources = [
+  "pypdfium2>=5.13,<6",
+  "Pillow>=12.3,<13",
 ]
 assistant = [
   "openai-chatkit>=1.6.5,<2",
@@ -78,6 +101,11 @@ dev = [
   "playwright>=1.55,<2",
   "japanese-anki[ai]",
   "japanese-anki[assistant]",
+  # The renderer, for the same reason `[ai]` is here: the source-part render
+  # and publication tests must run rather than skip. `scripts/bootstrap.sh`
+  # installs `.[dev]`, and a skip would report green for the code the
+  # milestone exists to add.
+  "japanese-anki[sources]",
   # Anki itself, so `tests/test_rendered_cards.py` can ask *Anki* what the
   # templates draw instead of reading their HTML off disk. The ordinary build
   # and import path still never imports it — `collection.py` reads a collection

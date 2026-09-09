@@ -21,6 +21,7 @@ from japanese_anki.inputs import (
     PreparedInput,
     prepare_corpus_input,
     prepare_inputs,
+    publish_derived_part,
     receive_upload,
 )
 
@@ -903,3 +904,101 @@ def test_a_cleanup_that_also_fails_still_reports_a_janki_error(
     # The survivor is named, since nothing prunes the inbox.
     assert "partial file may remain" in message
     assert str(inbox / "lesson.pdf") in message
+
+
+# --- publishing rendered source parts -----------------------------------------
+#
+# One recipe, one transaction, and the planned name is the whole point: a part
+# stored under a content-stamped name would be a part its publication receipt
+# never bound.
+
+
+def test_publishing_parts_writes_the_exact_planned_names(tmp_path: Path) -> None:
+    """The names the receipt bound are the names that land.
+
+    Mutant: route publication through ``_copy_into_inbox``, whose external-bytes
+    branch renames to ``<stem>-<fingerprint><suffix>``.
+    """
+
+    root = tmp_path / "inbox"
+    scans = root / "scans"
+    results = publish_derived_part(
+        [("lesson--p001-rabcdef12-01.png", PNG), ("lesson--p001-rabcdef12-02.png", PNG + b"!")],
+        scan_inbox=scans,
+        inbox_root=root,
+    )
+
+    assert [intake.path.name for intake in results] == [
+        "lesson--p001-rabcdef12-01.png",
+        "lesson--p001-rabcdef12-02.png",
+    ]
+    assert all(intake.stored for intake in results)
+    assert sorted(path.name for path in scans.iterdir()) == [
+        "lesson--p001-rabcdef12-01.png",
+        "lesson--p001-rabcdef12-02.png",
+    ]
+    assert (scans / "lesson--p001-rabcdef12-01.png").read_bytes() == PNG
+
+
+def test_publishing_reuses_an_identical_part_anywhere_in_the_durable_root(
+    tmp_path: Path,
+) -> None:
+    """Identical bytes under that name are the same part, published already."""
+
+    root = tmp_path / "inbox"
+    elsewhere = root / "shirabe"
+    elsewhere.mkdir(parents=True)
+    (elsewhere / "part-01.png").write_bytes(PNG)
+
+    [intake] = publish_derived_part(
+        [("part-01.png", PNG)], scan_inbox=root / "scans", inbox_root=root
+    )
+
+    assert intake.path == elsewhere / "part-01.png"
+    assert intake.stored is False
+    assert not (root / "scans" / "part-01.png").exists()
+
+
+def test_a_namesake_with_different_bytes_publishes_no_part_at_all(
+    tmp_path: Path,
+) -> None:
+    """Every planned name is checked before any of them is written.
+
+    Mutant: check and write one name at a time.
+    """
+
+    root = tmp_path / "inbox"
+    scans = root / "scans"
+    scans.mkdir(parents=True)
+    (root / "part-02.png").write_bytes(b"\x89PNG\r\n\x1a\n a different part")
+
+    with pytest.raises(InputError) as error:
+        publish_derived_part(
+            [("part-01.png", PNG), ("part-02.png", PNG + b"!")],
+            scan_inbox=scans,
+            inbox_root=root,
+        )
+
+    assert "part-02.png" in str(error.value)
+    assert list(scans.iterdir()) == []
+    assert (root / "part-02.png").read_bytes().endswith(b"a different part")
+
+
+def test_publishing_refuses_an_unreadable_name_or_suffix(tmp_path: Path) -> None:
+    """A part filename is a basename janki can read back as a corpus source."""
+
+    root = tmp_path / "inbox"
+    for name in ("../escape.png", "part.txt", "", "."):
+        with pytest.raises(InputError):
+            publish_derived_part(
+                [(name, PNG)], scan_inbox=root / "scans", inbox_root=root
+            )
+    with pytest.raises(InputError):
+        publish_derived_part(
+            [("part-01.png", PNG), ("PART-01.PNG", PNG)],
+            scan_inbox=root / "scans",
+            inbox_root=root,
+        )
+    with pytest.raises(InputError):
+        publish_derived_part([], scan_inbox=root / "scans", inbox_root=root)
+    assert not (root / "scans").exists() or list((root / "scans").iterdir()) == []
