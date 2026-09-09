@@ -319,6 +319,15 @@ below is what is left, and it is the loop every other project already uses.*
    references it. The published parts are ordinary immutable intake under
    `data/inbox/`: a derivative never overwrites a namesake, and the canonical
    parent source is never edited.
+1f. `data/study_jobs/` (derived beside the configured operations file the same
+   way): committed owner choices for one study job, its immutable layout
+   revisions, and an append-only log of curation and action intents, outcomes
+   and supersedes edges, plus references to receipts other stores own. Choice
+   edits are compare-and-swap; an appended intent and a bound layout revision
+   are immutable, and an ordinary choice edit may not replace either. A job
+   record grants no spending, discard or approval authority and holds no
+   independent progress state. Never hand-edit it, and never delete one while
+   any action it reserved is unfinished.
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a

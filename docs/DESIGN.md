@@ -436,6 +436,23 @@ action intents. They are untrusted data until janki validates them and invokes
 the same application planner the CLI and ordinary workbench use. Unknown or
 unsupported intents refuse; the model never improvises a parallel writer.
 
+A model may emit only closed typed intents. They may read, prepare a plan,
+open a local owner editor or prepare a choice that executes nothing, or
+dispatch and resume work the owner has already authorized exactly — a resume
+after fresh binding checks, a reserved unsent child under its original
+authority, or one unambiguously valid captured answer reaching the staging
+destination its own paid call was confirmed for. A model may not mint or
+select an owner decision, author source geometry, choose a column layout,
+execute curation, choose among competing captured proposals, widen scope into
+new protected work, or grant authority to write canonical content or saved
+facts. The new study-finish actions execute those writes only under their
+exact finish authority; existing deck-creation and other protected application
+actions retain their existing exact authorities. An owner control binds the exact
+resource, snapshot and choice it was rendered from and invokes the application
+service directly; a reversible local save asks for no second confirmation and
+is never consent for a paid or canonical effect. A model-proposed staged write
+still consumes the same one-use capability the browser and the CLI demand.
+
 Sending an ordinary Janki message is the owner's one action authorizing one
 journaled Assistant turn over that message and its exact bounded context. The
 routine page need not repeat provider, model, or context-provenance prose; the
