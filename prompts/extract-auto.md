@@ -211,3 +211,9 @@ of the same generalizable rule must also appear exactly once. Do not add a lexic
 pairing, mere use, contrast without a stated general rule, or a marked-wrong
 example without a source-stated valid rule to satisfy this check. Completing the
 candidate cards is not a reason to omit or postpone a required pattern.
+
+Return the answer by calling the structured-output tool exactly once. The tool
+argument is the answer object this schema describes, and nothing else: every
+REQUIRED field present on every object it contains, no property the schema does
+not define, no wrapper object around it such as {"input": ...}, and no JSON
+string or other encoding of it in place of the object itself.

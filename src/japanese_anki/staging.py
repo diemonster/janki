@@ -178,6 +178,14 @@ AI_ENRICHMENT_REVIEW_KEY = "ai_enrichment_review"
 CARD_REVISION_KEY = "card_revision"
 CARD_REVISION_REVIEW_KEY = "card_revision_review"
 
+#: Which envelope inside an already-paid-for captured reply this extraction was
+#: read out of, and who chose it. Written only when an answer reached staging
+#: through capture recovery rather than through its own dispatch: an ordinary
+#: extraction has exactly one place its answer came from and says nothing here.
+#: A content hash alone is not a location, so the block keeps every location in
+#: the selected group beside the one that was selected.
+CAPTURE_RECOVERY_KEY = "capture_recovery"
+
 META_KEYS: tuple[str, ...] = (
     "source_file",
     "extracted_at",
@@ -195,6 +203,7 @@ META_KEYS: tuple[str, ...] = (
     CARD_REVISION_REVIEW_KEY,
     "field_replacements",
     CANDIDATE_ACCOUNTING_KEY,
+    CAPTURE_RECOVERY_KEY,
     PROMOTION_BATCHES_KEY,
 )
 

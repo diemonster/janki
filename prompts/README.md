@@ -53,6 +53,17 @@ work, and reading `extract-table.md` should not require mentally deleting the
 prose paragraphs. The cost is that shared closing paragraph, duplicated three
 times. That is the intended trade — a reader of one file needs no other file.
 
+The last of those duplicated closing paragraphs asks for the answer as the bare
+schema object through the structured-output tool: every required field present,
+no property the schema does not define, no wrapper object and no JSON string
+standing in for the object. It is byte-identical in all three files and has no
+Python counterpart — no branch selects a variant of it. It is there because the
+alternative is a decoder that repairs answers: a reply whose tool argument
+arrived wrapped or stringified is still a reply somebody paid for, and
+`janki extract-batch recover` reads exactly those shapes out of a capture and
+refuses everything else. Expanding this paragraph is the first remedy; widening
+that reader is not one.
+
 **No placeholders.** If a prompt needs a record's data, Python puts it in the
 user turn. A `{{expression}}` here would make the file something you have to
 run to understand.

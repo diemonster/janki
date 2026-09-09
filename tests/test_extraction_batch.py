@@ -1439,3 +1439,159 @@ def test_every_worker_limit_inside_the_cap_is_accepted(
     plan = _plan(config, sources, _runner(), concurrency_limit=limit)
 
     assert plan.concurrency_limit == limit
+
+
+# --- finding the child one operation id belongs to -------------------------------
+#
+# Recovery keyed by an operation id has to find the expectations that operation
+# was bound to, and those live only in a manifest. What these pin is that the
+# lookup is by exact reserved id: never the newest manifest, never a guess, and
+# never a silent skip past a manifest that could not be read.
+
+
+def test_a_reserved_operation_id_finds_its_own_batch_and_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact id, out of several batches, with no ordering involved.
+
+    Mutant: return the first child of the newest manifest.
+    """
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    runner = _runner()
+    first = _plan(config, [_source(config, "one.pdf", b"one")], runner)
+    _dispatch(config, first, runner)
+    second_sources = [
+        _source(config, "two.pdf", b"two"),
+        _source(config, "three.pdf", b"three"),
+    ]
+    second = _plan(config, second_sources, runner)
+    _dispatch(config, second, runner)
+
+    wanted = second.children[1]
+    found_plan, found_child = extraction_batch.find_capture_child(
+        config, wanted.operation_id
+    )
+
+    assert found_plan.batch_id == second.batch_id
+    assert found_child == wanted
+    assert found_child.source.name == "three.pdf"
+
+
+def test_an_operation_no_batch_reserved_refuses_rather_than_guessing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-batch or unknown id has no expectations here, and says so.
+
+    Mutant: fall back to the only manifest present when nothing matches.
+    """
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    runner = _runner()
+    plan = _plan(config, [_source(config, "one.pdf", b"one")], runner)
+    _dispatch(config, plan, runner)
+
+    with pytest.raises(JankiError) as caught:
+        extraction_batch.find_capture_child(config, "not-a-reserved-operation")
+
+    assert "reserved operation" in str(caught.value)
+
+
+def test_two_manifests_naming_one_operation_refuse_instead_of_choosing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One id, two claims: janki writes nothing rather than pick a winner.
+
+    Mutant: return the first match instead of refusing an ambiguous one.
+    """
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    runner = _runner()
+    plan = _plan(config, [_source(config, "one.pdf", b"one")], runner)
+    _dispatch(config, plan, runner)
+
+    directory = config.operations_file.parent / "extraction_batches"
+    original = json.loads((directory / f"{plan.batch_id}.json").read_text("utf-8"))
+    duplicate_id = "11111111-2222-4333-8444-555555555555"
+    original["batch_id"] = duplicate_id
+    (directory / f"{duplicate_id}.json").write_text(
+        json.dumps(original), encoding="utf-8"
+    )
+
+    with pytest.raises(JankiError) as caught:
+        extraction_batch.find_capture_child(
+            config, plan.children[0].operation_id
+        )
+
+    message = str(caught.value)
+    assert "more than one batch manifest" in message
+    assert plan.batch_id in message and duplicate_id in message
+
+
+def test_an_unreadable_manifest_is_named_rather_than_silently_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manifest that cannot be read may be the one that holds the answer.
+
+    Mutant: swallow an unreadable manifest and report "no batch has it".
+    """
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    runner = _runner()
+    plan = _plan(config, [_source(config, "one.pdf", b"one")], runner)
+    _dispatch(config, plan, runner)
+
+    directory = config.operations_file.parent / "extraction_batches"
+    broken = "99999999-8888-4777-8666-555555555555"
+    (directory / f"{broken}.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(JankiError) as caught:
+        extraction_batch.find_capture_child(config, "0" * 36)
+
+    assert broken in str(caught.value)
+
+
+def test_ordinary_recovery_writes_no_capture_recovery_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The staging serializer's new seam is off unless a caller supplies it.
+
+    A child recovered the ordinary way has exactly one place its answer came
+    from, so it says nothing about envelopes: the ``capture_recovery`` key
+    exists to record a *choice*, and there was none here.
+
+    Mutant: default ``complete_extraction``'s ``capture_recovery`` to ``{}``
+    so an ordinary recovery writes an empty block.
+    """
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    sources = [_source(config, "one.pdf", b"one")]
+    runner = _runner()
+    plan = _plan(config, sources, runner, concurrency_limit=1)
+
+    real_write = extraction.write_staging_under_lock
+    calls = {"count": 0}
+
+    def refuse_first(path: Path, *args: Any, **kwargs: Any) -> Any:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise staging.StagingError("the disk went away")
+        return real_write(path, *args, **kwargs)
+
+    monkeypatch.setattr(extraction, "write_staging_under_lock", refuse_first)
+    first_pass = _dispatch(config, plan, runner)
+    monkeypatch.setattr(extraction, "write_staging_under_lock", real_write)
+    assert first_pass.children[0].state == "result_captured"
+
+    resumed = resume_extraction_batch(
+        config,
+        plan.batch_id,
+        provider_env={},
+        provider_runner=runner,
+        provider_which=_which,
+        provider_spawn=runner.spawn,
+    )
+
+    assert resumed.children[0].state == "committed"
+    _records, meta = staging.read_staging(plan.children[0].staging_path)
+    assert "capture_recovery" not in meta

@@ -71,6 +71,7 @@ from japanese_anki.io import (
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.staging import (
     CANDIDATE_ACCOUNTING_KEY,
+    CAPTURE_RECOVERY_KEY,
     new_review_run_id,
     write_staging_under_lock,
 )
@@ -1497,6 +1498,7 @@ def complete_extraction(
     model: str,
     force: bool = False,
     expected_revision: ExtractionRevision | None = None,
+    capture_recovery: Mapping[str, Any] | None = None,
 ) -> ExtractionOutcome:
     """Turn one paid answer into a staging file, and close its journal entry.
 
@@ -1513,6 +1515,12 @@ def complete_extraction(
     fresh unreviewed answer lands first and the reviewer sees it — neither can
     silently erase the other, nor an unrelated source added while the model
     was still answering.
+
+    ``capture_recovery`` is the one caller-supplied metadata seam. It exists so
+    that an answer salvaged out of a captured reply records *which* envelope in
+    that reply it was read from, written by the sole staging writer rather than
+    patched in beside it. Omitted — which is every ordinary dispatch and the
+    ordinary batch recovery — the staging bytes are exactly what they were.
     """
     # Identity before anything else, because everything after it records this
     # answer against this entry. A caller running two extractions at once and
@@ -1615,6 +1623,12 @@ def complete_extraction(
     if held:
         meta["review_notes"] = extract.unusable_note(held)
     meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
+    if capture_recovery is not None:
+        # Round-tripped through JSON so the staging serializer receives plain
+        # types, exactly as the accounting block above already is.
+        meta[CAPTURE_RECOVERY_KEY] = json.loads(
+            json.dumps(dict(capture_recovery), ensure_ascii=False)
+        )
     kept_reviewed_patterns = False
     if expected_revision is None:
         # Staging's path lock is outside the journal lock, matching the

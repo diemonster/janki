@@ -91,19 +91,25 @@ __all__ = [
     "MAX_CONCURRENCY",
     "RETIRED",
     "UNRESERVED",
+    "CapturedChildBinding",
     "ExtractionBatchChild",
     "ExtractionBatchChildOutcome",
     "ExtractionBatchOutcome",
     "ExtractionBatchPlan",
     "ExtractionBatchPreview",
     "ExtractionBatchProgress",
+    "ProposalProjection",
     "SourcePartLineage",
     "batch_manifest_path",
+    "bind_captured_child",
+    "complete_captured_child",
     "dispatch_extraction_batch",
     "extraction_batch_status",
+    "find_capture_child",
     "list_extraction_batches",
     "plan_extraction_batch",
     "plan_extraction_batch_retry",
+    "project_proposals",
     "render_extraction_batch_preview",
     "resume_extraction_batch",
 ]
@@ -1231,11 +1237,34 @@ def _outcome(
     )
 
 
-def _recover_child(
+@dataclass(frozen=True, slots=True)
+class CapturedChildBinding:
+    """One captured child's reply, revalidated against everything it writes to.
+
+    The value :func:`bind_captured_child` produces and both recovery readers
+    consume. Holding it is not authority to write: it is the proof that the
+    source, the outputs, the destination deck and the review this answer may
+    replace are all still the ones its paid call was bound to.
+    """
+
+    child: ExtractionBatchChild
+    journal: operations.OperationJournal
+    #: The captured artifact exactly as the journal returned it.
+    payload: bytes
+    #: The request as it was planned, read back from beside those bytes.
+    provenance: Mapping[str, Any]
+    target: ExtractionTarget
+    expected_revision: ExtractionRevision | None
+    mode: str | None
+    model: str
+    known: frozenset[str]
+
+
+def bind_captured_child(
     config: ProjectConfig,
     child: ExtractionBatchChild,
-) -> ExtractionOutcome:
-    """Finish a child from the reply it already paid for, entirely offline.
+) -> CapturedChildBinding:
+    """Revalidate everything one captured child's write depends on, offline.
 
     No provider, no login, and no prompt file is read. The captured artifact
     carries both halves — the request as planned and the reply as received —
@@ -1249,6 +1278,10 @@ def _recover_child(
     the owner chose, and the review this answer is allowed to replace. Those
     are facts about the file system, not about a request, and none of them
     needs a provider to establish.
+
+    Factored out so the salvage reader in
+    :mod:`japanese_anki.application.capture_recovery` runs these exact checks
+    rather than a second, weaker set of its own.
     """
     expectation = child.expectation
     journal = operations.OperationJournal.load(config.operations_file)
@@ -1343,33 +1376,68 @@ def _recover_child(
 
     saved_mode = provenance.get("mode")
     mode = None if saved_mode in (None, "auto") else str(saved_mode)
-    result = recover_extraction_from_capture(
-        payload, source_name=target.name, mode=mode
-    )
     existing = (
         load_records(config.normalized_file)
         if config.normalized_file.exists()
         else []
     )
+    return CapturedChildBinding(
+        child=child,
+        journal=journal,
+        payload=payload,
+        provenance=provenance,
+        target=target,
+        expected_revision=rendered_revision,
+        mode=mode,
+        model=str(provenance.get("model") or expectation.model),
+        known=frozenset(extract.known_ids(existing, scope_id=expectation.scope_id)),
+    )
+
+
+def complete_captured_child(
+    config: ProjectConfig,
+    binding: CapturedChildBinding,
+    result: extract.ExtractionResult,
+    *,
+    capture_recovery: Mapping[str, Any] | None = None,
+) -> ExtractionOutcome:
+    """Write one revalidated captured answer through the ordinary completion.
+
+    The sole staging writer, reached with the sole extra metadata seam. A
+    salvaged answer differs from an ordinary recovered one in exactly one way —
+    it says which envelope inside the capture it was read from — and that
+    difference is a `meta` block rather than a second writing path.
+    """
     try:
         return complete_extraction(
             config,
-            journal,
-            target,
+            binding.journal,
+            binding.target,
             result,
-            operation_id=child.operation_id,
-            known=frozenset(
-                extract.known_ids(existing, scope_id=expectation.scope_id)
-            ),
-            mode=mode,
-            model=str(provenance.get("model") or expectation.model),
-            force=expectation.replacement_confirmed,
-            expected_revision=rendered_revision,
+            operation_id=binding.child.operation_id,
+            known=binding.known,
+            mode=binding.mode,
+            model=binding.model,
+            force=binding.child.expectation.replacement_confirmed,
+            expected_revision=binding.expected_revision,
+            capture_recovery=capture_recovery,
         )
     except JankiError as exc:
         raise ExtractionDispatchError(
-            exc, phase="completion", operation_id=child.operation_id
+            exc, phase="completion", operation_id=binding.child.operation_id
         ) from exc
+
+
+def _recover_child(
+    config: ProjectConfig,
+    child: ExtractionBatchChild,
+) -> ExtractionOutcome:
+    """Finish a child from the reply it already paid for, entirely offline."""
+    binding = bind_captured_child(config, child)
+    result = recover_extraction_from_capture(
+        binding.payload, source_name=binding.target.name, mode=binding.mode
+    )
+    return complete_captured_child(config, binding, result)
 
 
 def _is_before_send_refusal(exc: ExtractionDispatchError) -> bool:
@@ -1867,6 +1935,58 @@ def list_extraction_batches(
     return tuple(outcome for _stamp, _id, outcome in sorted(found, key=lambda row: row[:2]))
 
 
+def find_capture_child(
+    config: ProjectConfig, operation_id: str
+) -> tuple[ExtractionBatchPlan, ExtractionBatchChild]:
+    """The batch and child that reserved this exact operation id. Reads only.
+
+    Recovery keyed by an operation id has to find the expectations that
+    operation was bound to, and those live only in a manifest. Every manifest
+    is read through the same private loader the rest of this module uses, so
+    the journal — not the file — still says what each reservation covers.
+
+    The match is on the exact reserved id. Nothing is ordered by modification
+    time and nothing resolves a tie: zero matches and more than one are both
+    refusals, because an answer somebody paid for must not be written against
+    a batch that was merely the newest guess.
+    """
+    directory = config.operations_file.parent / BATCH_DIR_NAME
+    matches: list[tuple[ExtractionBatchPlan, ExtractionBatchChild]] = []
+    unreadable: list[str] = []
+    if directory.is_dir():
+        for path in sorted(directory.glob("*.json")):
+            if not _valid_batch_id(path.stem):
+                continue
+            try:
+                plan = _load_batch_plan(config, path.stem)
+            except (JankiError, OSError) as exc:
+                # Named rather than skipped: an unreadable manifest may be the
+                # very one that reserved this id, and silence would report that
+                # as "no batch has it".
+                unreadable.append(f"{path.name}: {exc}")
+                continue
+            matches.extend(
+                (plan, child)
+                for child in plan.children
+                if child.operation_id == operation_id
+            )
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        detail = ""
+        if unreadable:
+            detail = " Unreadable manifests: " + "; ".join(unreadable)
+        raise operations.OperationError(
+            f"No extraction batch under {directory} reserved operation "
+            f"{operation_id!r}.{detail}"
+        )
+    named = ", ".join(sorted(plan.batch_id for plan, _child in matches))
+    raise operations.OperationError(
+        f"Operation {operation_id!r} is named by more than one batch manifest "
+        f"({named}); janki will not choose between them."
+    )
+
+
 def _records_text(records: Sequence[VocabularyRecord]) -> str:
     """Serialize a prospective collection exactly as the canonical store holds it."""
     return (
@@ -1971,7 +2091,7 @@ def _conflict_sentences(group: Sequence[_Proposal]) -> str:
 
 
 def _scratch_deck_overlay(
-    config: ProjectConfig, batch_id: str, record_ids: Sequence[str]
+    config: ProjectConfig, slug: str, title: str, record_ids: Sequence[str]
 ) -> tuple[Path, card_preview.ProposedText]:
     """A proposal-only deck that exists for the length of one render.
 
@@ -1981,12 +2101,10 @@ def _scratch_deck_overlay(
     by id, reads the canonical collection like every word deck, and takes the
     project's own card defaults rather than inventing directions.
     """
-    deck_path = Path(
-        os.path.abspath(config.deck_dir / f"batch-{batch_id}.preview.yaml")
-    )
+    deck_path = Path(os.path.abspath(config.deck_dir / f"{slug}.preview.yaml"))
     definition = {
         "deck": {
-            "name": f"Batch {batch_id[:8]} proposals",
+            "name": title,
             "source": os.path.relpath(
                 Path(os.path.realpath(config.normalized_file)),
                 Path(os.path.realpath(config.deck_dir)),
@@ -2032,6 +2150,88 @@ def _assigned_for_destination(
             )
         assigned.append(attempt.plan.assigned_record)
     return assigned
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalProjection:
+    """The exact in-memory files one render of proposed cards draws from.
+
+    Nothing here is written: every element is a
+    :class:`card_preview.ProposedText` the renderer mirrors into its own
+    temporary tree. Shared so a batch's saved proposals and a captured reply's
+    competing proposals are drawn by the same projection rather than by two
+    that could disagree about what a proposal looks like.
+    """
+
+    deck_path: Path
+    overlay: tuple[card_preview.ProposedText, ...]
+    new_record_ids: tuple[str, ...]
+    scope_record_ids: tuple[str, ...]
+
+
+def project_proposals(
+    config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    *,
+    deck_path: Path | None,
+    scratch_slug: str,
+    scratch_title: str,
+) -> ProposalProjection:
+    """Project proposed records over the canonical collection, for display only.
+
+    The proposal replaces what the collection holds for that identity, so its
+    new meanings, examples and notes are what a reviewer sees; every other
+    canonical record is carried through exactly as it is.
+
+    With a destination deck the identities and ownership tags come from the
+    assignment service, because a standalone deck holds its own scoped copies
+    and those rules are its own. With none, a scratch deck exists for the
+    length of the render and assigns nothing.
+    """
+    overlay: list[card_preview.ProposedText] = []
+    if deck_path is None:
+        rendered = list(records)
+        target_deck, scratch = _scratch_deck_overlay(
+            config, scratch_slug, scratch_title, [record.id for record in rendered]
+        )
+        overlay.append(scratch)
+    else:
+        target_deck = Path(os.path.realpath(deck_path))
+        rendered = _assigned_for_destination(config, target_deck, list(records))
+
+    existing = (
+        load_records(config.normalized_file)
+        if config.normalized_file.exists()
+        else []
+    )
+    known = {record.id for record in existing}
+    projected = {record.id: record for record in existing}
+    for record in rendered:
+        projected[record.id] = record
+    new_record_ids = tuple(
+        record.id for record in rendered if record.id not in known
+    )
+    canonical = Path(os.path.realpath(config.normalized_file))
+    overlay.insert(
+        0,
+        card_preview.ProposedText(
+            path=canonical, text=_records_text(list(projected.values()))
+        ),
+    )
+    if deck_path is not None:
+        # A real deck that names its cards by id would draw none of these.
+        # The scratch deck already selects exactly the proposals.
+        deck_overlay = _deck_include_overlay(
+            target_deck, [record.id for record in rendered]
+        )
+        if deck_overlay is not None:
+            overlay.append(deck_overlay)
+    return ProposalProjection(
+        deck_path=target_deck,
+        overlay=tuple(overlay),
+        new_record_ids=new_record_ids,
+        scope_record_ids=tuple(record.id for record in rendered),
+    )
 
 
 def _require_own_staging(
@@ -2142,48 +2342,13 @@ def render_extraction_batch_preview(
         if len(group) > 1
     )
 
-    target_deck = deck_path if deck_path is not None else plan.destination_deck
-    overlay: list[card_preview.ProposedText] = []
-    if target_deck is None:
-        rendered = list(representatives)
-        target_deck, scratch = _scratch_deck_overlay(
-            config, batch_id, [record.id for record in rendered]
-        )
-        overlay.append(scratch)
-    else:
-        target_deck = Path(os.path.realpath(target_deck))
-        rendered = _assigned_for_destination(config, target_deck, representatives)
-
-    existing = (
-        load_records(config.normalized_file)
-        if config.normalized_file.exists()
-        else []
+    projection = project_proposals(
+        config,
+        representatives,
+        deck_path=deck_path if deck_path is not None else plan.destination_deck,
+        scratch_slug=f"batch-{batch_id}",
+        scratch_title=f"Batch {batch_id[:8]} proposals",
     )
-    known = {record.id for record in existing}
-    # The proposal replaces what the collection holds for that identity, so
-    # its new meanings, examples and notes are what a reviewer sees. Every
-    # other canonical record is carried through exactly as it is.
-    projected = {record.id: record for record in existing}
-    for record in rendered:
-        projected[record.id] = record
-    new_record_ids = tuple(
-        record.id for record in rendered if record.id not in known
-    )
-    canonical = Path(os.path.realpath(config.normalized_file))
-    overlay.insert(
-        0,
-        card_preview.ProposedText(
-            path=canonical, text=_records_text(list(projected.values()))
-        ),
-    )
-    if deck_path is not None or plan.destination_deck is not None:
-        # A real deck that names its cards by id would draw none of these.
-        # The scratch deck already selects exactly the proposals.
-        deck_overlay = _deck_include_overlay(
-            target_deck, [record.id for record in rendered]
-        )
-        if deck_overlay is not None:
-            overlay.append(deck_overlay)
 
     subtitle = "Proposed — nothing is promoted yet"
     if conflicts:
@@ -2196,10 +2361,10 @@ def render_extraction_batch_preview(
         )
     preview = card_preview.render_card_preview(
         config,
-        target_deck,
-        proposed=tuple(overlay),
-        new_record_ids=new_record_ids,
-        scope_record_ids=tuple(record.id for record in rendered),
+        projection.deck_path,
+        proposed=projection.overlay,
+        new_record_ids=projection.new_record_ids,
+        scope_record_ids=projection.scope_record_ids,
         subtitle=subtitle,
     )
     return ExtractionBatchPreview(

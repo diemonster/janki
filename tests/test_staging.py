@@ -255,6 +255,49 @@ def test_candidate_accounting_is_recognized_staging_metadata(
     assert meta["candidate_accounting"] == accounting
 
 
+def test_capture_recovery_is_recognized_staging_metadata_and_survives_the_archive(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Which envelope in a captured reply an answer came out of, kept for good.
+
+    It is a *writer's* key, so it belongs in ``META_KEYS`` rather than arriving
+    with a warning; and the archive is the only copy left once a fully promoted
+    review file is deleted, so it has to reach ``data/staging/done/`` unchanged.
+
+    Mutant: remove ``capture_recovery`` from ``META_KEYS``.
+    """
+    from japanese_anki.promote import archive_meta
+
+    path = tmp_path / "recovered.yaml"
+    block = {
+        "capture_sha256": "a" * 64,
+        "proposal_sha256": "b" * 64,
+        "envelope_shape": "tool_use_input_wrapped",
+        "frame_index": 7,
+        "block_index": 0,
+        "tool_use_id": "toolu_01",
+        "json_pointer": "/message/content/0/input/input",
+        "locations": [
+            {
+                "frame_index": 7,
+                "block_index": 0,
+                "tool_use_id": "toolu_01",
+                "json_pointer": "/message/content/0/input/input",
+                "envelope_shape": "tool_use_input_wrapped",
+            }
+        ],
+        "selected_by": "repository-owner",
+        "selected_at": "2026-09-09",
+    }
+
+    write_staging(path, [_record()], {"capture_recovery": block})
+
+    assert capsys.readouterr().err == ""
+    _, meta = read_staging(path)
+    assert meta["capture_recovery"] == block
+    assert archive_meta(meta, 1)["capture_recovery"] == block
+
+
 def test_a_generated_review_run_id_is_recognized_and_round_trips(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

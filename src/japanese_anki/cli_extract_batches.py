@@ -45,8 +45,18 @@ def _core() -> Any:
     return importlib.import_module("japanese_anki.application.extraction_batch")
 
 
-def _ask(assume_yes: bool) -> bool:
-    """The one owner question. ``--yes`` is consent given in advance, in words."""
+def _recovery() -> Any:
+    return importlib.import_module("japanese_anki.application.capture_recovery")
+
+
+def _ask(assume_yes: bool, question: str = "Send them? [y/N] ") -> bool:
+    """The one owner question. ``--yes`` is consent given in advance, in words.
+
+    ``question`` is only the wording. What ``--yes`` answers is always a
+    question the command already decided to ask; it never supplies a choice
+    between two things, which is why the ambiguous-capture refusal below
+    happens before this is reached.
+    """
 
     if assume_yes:
         return True
@@ -58,7 +68,7 @@ def _ask(assume_yes: bool) -> bool:
         )
         return False
     try:
-        answer = input("Send them? [y/N] ")
+        answer = input(question)
     except (EOFError, KeyboardInterrupt):
         print()
         return False
@@ -267,11 +277,103 @@ def _command_preview(config: Any, args: argparse.Namespace) -> int:
     return 0
 
 
+def _describe_location(location: Any) -> str:
+    return (
+        f"    at {location.json_pointer} — frame {location.frame_index}, "
+        f"block {location.block_index}, tool use "
+        f"{location.tool_use_id or '(none)'}, shape {location.envelope_shape}"
+    )
+
+
+def _print_capture(plan: Any) -> None:
+    """Pointers, hashes and verdicts. Never a candidate or a source byte."""
+
+    print(f"Operation {plan.operation_id} — {plan.operation_state}")
+    print(f"  request fingerprint {plan.request_fingerprint}")
+    print(f"  captured reply {plan.capture_sha256}")
+    print(f"  response contract {plan.response_schema_fingerprint}")
+    print(f"  source {plan.source_sha256}")
+    print(f"  staging {plan.staging_path}")
+    print(f"  patterns {plan.patterns_path}")
+    if plan.destination_deck_sha256:
+        print(f"  destination deck {plan.destination_deck_sha256}")
+    for group in plan.groups:
+        print(f"  proposal {group.proposal_sha256}: {group.schema_verdict}")
+        for location in group.locations:
+            print(_describe_location(location))
+    if not plan.groups:
+        print("  This reply carries no proposal janki knows how to read.")
+
+
+def _command_inspect_capture(config: Any, args: argparse.Namespace) -> int:
+    plan = _recovery().inspect_capture_proposals(config, args.operation)
+    _print_capture(plan)
+    print(
+        f"  {plan.valid_group_count} readable proposal(s). Reading this "
+        "changed nothing and cost nothing."
+    )
+    return 0 if plan.valid_group_count else 1
+
+
+def _command_recover(config: Any, args: argparse.Namespace) -> int:
+    if args.at and not args.proposal:
+        print(
+            "--at names a location inside one proposal, so it needs "
+            "--proposal SHA256 as well.",
+            file=sys.stderr,
+        )
+        return 1
+    core = _recovery()
+    plan = core.inspect_capture_proposals(config, args.operation)
+    _print_capture(plan)
+    selection = None
+    if args.proposal:
+        # Built from the capture itself, so a typed hash can never name a
+        # location this reply does not hold. An omitted ``--at`` is *no
+        # pointer*, not the empty one: the service branches on ``None``, and
+        # every pointer a capture holds is non-empty.
+        selection = plan.select(args.proposal, json_pointer=args.at or None)
+        print(f"Staging proposal {selection.proposal_sha256}")
+        print(f"  from {selection.json_pointer}")
+    print(
+        f"This writes {plan.staging_path} from a reply that was already paid "
+        "for. Nothing is sent, no new model call is made, and this operation "
+        "keeps its own identity."
+    )
+    if not _ask(args.yes, "Recover it? [y/N] "):
+        print("Nothing was written. The captured reply is untouched.")
+        return 1
+    outcome = core.stage_capture_proposal(config, args.operation, selection)
+    print(
+        f"Wrote {outcome.records} proposal(s) to {outcome.target} "
+        f"(coverage {outcome.coverage_status})."
+    )
+    if outcome.kept_reviewed_patterns:
+        print("  The existing reviewed pattern set was kept.")
+    return 0
+
+
+def _command_render_proposals(config: Any, args: argparse.Namespace) -> int:
+    written = _recovery().render_capture_proposals(
+        config, args.operation, args.output
+    )
+    print(f"Wrote {written}.")
+    print(
+        "Each readable proposal is drawn as the cards it would really make, "
+        "with the exact parsed argument beside it. It stages nothing, "
+        "promotes nothing and approves nothing."
+    )
+    return 0
+
+
 _COMMANDS = {
     "status": _command_status,
     "resume": _command_resume,
     "retry": _command_retry,
     "preview": _command_preview,
+    "inspect-capture": _command_inspect_capture,
+    "recover": _command_recover,
+    "render-proposals": _command_render_proposals,
 }
 
 
@@ -342,4 +444,61 @@ def add_batch_parser(subparsers: Any, path: Any, handler: Any) -> None:
         required=True,
         metavar="FILE",
         help="Where to write the rendered HTML.",
+    )
+
+    inspect = commands.add_parser(
+        "inspect-capture",
+        help="Say what a captured reply holds, without disclosing any of it.",
+    )
+    inspect.add_argument(
+        "--operation",
+        required=True,
+        metavar="ID",
+        help="The model call whose captured reply to read.",
+    )
+
+    recover = commands.add_parser(
+        "recover",
+        help="Stage an answer out of a reply that was captured but not read.",
+    )
+    recover.add_argument("--operation", required=True, metavar="ID")
+    recover.add_argument(
+        "--proposal",
+        default="",
+        metavar="SHA256",
+        help=(
+            "Which proposal in that reply is the answer, as `inspect-capture` "
+            "prints it. Required when the reply holds more than one: choosing "
+            "between paid proposals is a person's decision."
+        ),
+    )
+    recover.add_argument(
+        "--at",
+        default="",
+        metavar="POINTER",
+        help=(
+            "The exact location of that proposal, when one reply holds the "
+            "same answer in more than one place."
+        ),
+    )
+    recover.add_argument(
+        "--yes",
+        action="store_true",
+        help=(
+            "Answer the recovery question in advance. It cannot supply a "
+            "--proposal, so an ambiguous reply still refuses."
+        ),
+    )
+
+    render = commands.add_parser(
+        "render-proposals",
+        help="Draw each proposal in a captured reply as the cards it would make.",
+    )
+    render.add_argument("--operation", required=True, metavar="ID")
+    render.add_argument(
+        "--output",
+        type=path,
+        required=True,
+        metavar="FILE",
+        help="Where to write the index page; the card pages land beside it.",
     )
