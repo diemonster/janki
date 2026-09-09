@@ -1,6 +1,6 @@
 # Assistant study jobs — plan review record
 
-**Status: adversarial plan and scheduling review complete — no material findings remain.** This records an adversarial review of the
+**Status: plan, scheduling and sentence-audio review complete — no material findings remain.** This records an adversarial review of the
 [implementation plan](ASSISTANT_STUDY_JOBS_PLAN.md) and its
 [detailed contracts](ASSISTANT_STUDY_JOBS_CONTRACTS.md), not approval of
 implemented behavior or Japanese study content. Implementation has not started.
@@ -226,6 +226,71 @@ Local documentation links and `git diff --check` pass. The detailed-contracts
 file is byte-identical to the round-6 version. No implementation, test,
 dependency or data changes were made, so the baseline gate result below is
 unchanged; the scheduling addendum did not rerun that suite.
+
+## Sentence-audio addendum — 2026-09-09
+
+The owner asks that study jobs generate sentence audio and link it through the
+delivered deck. The proposal now includes sentence audio by default, keeps
+opt-out in owner-controlled job choices, and verifies an independent census of
+expected example slots through canonical references, current media, exported
+sound fields, APKG bytes and the final interactive preview. Stored examples
+beyond the existing two export slots remain explicitly disclosed and voiced;
+the proposal adds no note fields. The same finish confirmation binds exact
+provider/model, billing and requests; default inclusion authorizes no paid call.
+
+A bounded planning pass identified the previous opt-in CLI, the proposed
+model-controlled audio field and the vacuous selected-clip completeness check.
+The update fixes all three. A suggested written reason for audio opt-out was
+not adopted: the direct owner control records this ordinary preference without
+another reason or approval gate.
+
+### Sentence review 1 — three findings
+
+| Document | SHA-256 |
+|---|---|
+| `ASSISTANT_STUDY_JOBS_PLAN.md` | `24d1ff8c7fbefd481fda4d87928e60967429bc9b4339ca3d1ac3b95939ad1227` |
+| `ASSISTANT_STUDY_JOBS_CONTRACTS.md` | `d83799626b28296323095b5b78cb374e3f1c4aebaa592e177c699c2ff034698c` |
+
+The independent review returned **FINDINGS 3**: specify the refusal for
+identical displayed sentences with divergent spoken input; name the S6
+preview files, owner and edit order; and define the job-wide audio choice's
+CAS binding and persistence through staging/rendering changes. All were
+accepted and corrected, along with an unrelated indentation nit.
+
+### Sentence review 2 — one remaining correction
+
+| Document | SHA-256 |
+|---|---|
+| `ASSISTANT_STUDY_JOBS_PLAN.md` | `7554e35a2bd78e438e8b15cd9496ee7a94c0c159ab9abcc8cbe3455693a3d44a` |
+| `ASSISTANT_STUDY_JOBS_CONTRACTS.md` | `5737293460e7de4f954684b46574b353df0e4487c9032a249d20033529b87a38` |
+
+The fresh review closed the file-ownership and CAS findings and requested an
+exact citation for the existing collision refusal. Local inspection confirmed
+`audio_cmd.prepare_example_audio_profiles` performs it during planning; its
+diagnostic names the record and duplicate sentence, not example positions.
+The contract now cites that service and its planning caller and describes the
+existing diagnostic accurately. No new diagnostic or production edit is needed.
+
+### Sentence review 3 — clean
+
+| Document | SHA-256 |
+|---|---|
+| `ASSISTANT_STUDY_JOBS_PLAN.md` | `7554e35a2bd78e438e8b15cd9496ee7a94c0c159ab9abcc8cbe3455693a3d44a` |
+| `ASSISTANT_STUDY_JOBS_CONTRACTS.md` | `df05d54e3dd8973ac33431a848d937cd4d566a853ad72ce59209009f5e807ce5` |
+
+The final independent review returned **VERDICT: CLEAN**, confirming the
+per-record refusal, its actual diagnostic and the invocation before dispatch.
+All three reviews used immutable packets with the affected text, exact hashes,
+DESIGN and relevant code/contract excerpts, through the same guarded
+subscription launcher and pinned review model/effort. The integration lead
+computed and rechecked the hashes locally. No material finding was waived.
+The earlier clean verdicts remain bound to their own versions above; this
+addendum is not a claim that any proposed feature is implemented.
+
+Local documentation links and `git diff --check` pass. This addendum changes
+only the plan, contracts and review record; it makes no production-code,
+test, dependency or canonical-data change. The existing baseline gate result
+below is unchanged and was not rerun for these documentation edits.
 
 ## Repository validation
 

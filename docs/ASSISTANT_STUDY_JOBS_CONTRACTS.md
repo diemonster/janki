@@ -1288,6 +1288,40 @@ reading is guessed, and nothing audits the language.
 
 ### 7.10 `audio_complete`
 
+**Sentence audio is included by default, independently of word audio.** Resolve
+the effective `include_example_audio` from the job's saved audio choice,
+defaulting to `true` when none exists. Only an explicit owner control or CLI
+choice can save an opt-out; an omitted model option cannot become `false`.
+The default is a proposal, not spending authority. The one finish confirmation
+discloses the exact provider/model, API billing when applicable, and separate
+word and sentence counts: expected example slots, unique clip requests, current,
+recoverable and provider-required. It binds that effective choice and the exact
+requests; no extra per-phase confirmation is introduced. Reuse current clips,
+recover exact captured/WAL work without another charge, and generate only the
+remaining authorized requests. No silent switch to a different provider or to
+a word-only result is permitted.
+
+Derive the expected sentence slots **independently of the audio plan's clip
+list**, from every nonblank example's `japanese` field in the final accepted
+post-enrichment records. Bind each slot to its record, example position and
+exact displayed/spoken input. The existing identity-addressed audio machinery
+deduplicates identical displayed sentences within one record only when their
+effective spoken inputs also agree: all their slots must be linked, even when
+one clip satisfies several. If the effective inputs diverge at the same target,
+retain the existing structural refusal in
+`src/japanese_anki/audio_cmd.py:1163-1190`
+(`prepare_example_audio_profiles`), invoked by
+`application/audio.py:466-473` during planning before confirmation. Its current
+diagnostic names the record and duplicate displayed sentence; no new positional
+diagnostic is required. Never choose one input automatically.
+Slot count and unique clip count are different numbers. The plan's example
+requests must cover this
+expected set exactly when sentence audio is enabled; an empty request list
+cannot pass merely because every selected clip is current. This counts fields
+and artifact identities; it does not judge Japanese or classify conjugation
+cells as sentences. A source job uses only its accepted selection; whole-deck
+audio work uses the entire explicitly resolved deck.
+
 The authority binds the prospective enumeration from `plan_targeted_audio_revision` over
 the **final post-enrichment merged reviewed records**, not the post-promotion ones.
 `ledger.word_audio_request:550` derives its provider input from `_selected_pitch_pattern`
@@ -1320,6 +1354,15 @@ becomes `failed_before_send` and is forgotten; removed evidence refuses rather t
 billing again; an unknown outcome is never resent; nonempty frames are never silently
 discarded. The build's ledger before-digest is taken after this phase completes, under
 the `.janki-audio-operation` lock the finish holds through publication.
+
+Before `audio_complete`, every expected enabled slot must have its canonical
+`examples[*].audio` reference written, pointing to the bound target whose bytes
+exist and whose ledger entry is current for the exact request and profile.
+File creation alone is insufficient. Missing references, missing/stale bytes,
+an incomplete writer transaction or an unaccounted paid attempt leave the job
+unfinished and resumable. An explicit owner opt-out binds zero new example
+requests, preserves existing references/media, and is recorded and displayed
+as omitted by owner; it is never reported as successful sentence generation.
 
 ### 7.11 `packaged`, then `complete`
 
@@ -1447,6 +1490,22 @@ paid call. The download offer is minted only from a verified `complete` receipt;
 `assistant_packages`' closed resolver registry re-resolves it and re-verifies
 `package_sha256` on every read (`workbench/assistant_packages.py:90-118`), and a restart
 remints an in-memory token from that durable receipt.
+
+Sentence-audio proof also crosses the artifact boundary. Preserve the current
+word note's two export slots (`main_example()` and `example_in("casual")`);
+the actual exporter determines which stored examples reach fields and which
+fields the enabled card directions draw. Before confirmation, disclose any
+additional stored examples using that existing export warning, with stored
+and exported slot counts separate. Native sentence generation still covers all
+expected stored examples and links them canonically; this adds no note fields
+or new card directions. For each exported expected slot, the note's stored
+sound reference and the APKG media entry must match the proven target/hash.
+Check the stored card fields and packaged bytes, not only the audio plan or
+aggregate media count; word clips cannot satisfy sentence coverage. The final
+interactive HTML preview resolves the sentence clips drawn by its cards into playable
+audio using the real card rendering. A preview before generation marks missing
+planned clips as pending; after an explicit opt-out it states that sentence
+audio was omitted. Never mark a generated clip playable before its media exists.
 
 ### 7.12 Aggregate scope and counts
 
@@ -1581,8 +1640,9 @@ widen scope into new protected work, or write canonical content.
 | action | who acts | authority |
 |---|---|---|
 | `study_job_status`, `inspect_source_layout`, `inspect_capture_proposals` | model or owner (read: ids, hashes, states, counts, pointers, verdicts) | none |
-| `open_source_part_editor`, `open_layout_editor`, `open_curation_editor`, `open_review_editor` (review flags and that part's coverage reason), `open_disposition_editor` | model may open; the owner acts inside | none |
+| `open_source_part_editor`, `open_layout_editor`, `open_curation_editor`, `open_review_editor` (review flags, coverage reason and audio preference), `open_disposition_editor` | model may open; the owner acts inside | none |
 | region publish, layout save, curation apply, choice edit, `create_study_job` | **owner only**, direct bound action → local CAS write | the action itself; no second dialog |
+| sentence-audio include/opt-out control within the review editor | **owner only**, bound action → `choices.include_example_audio` CAS write | the action itself, with no written reason or second dialog; missing choice defaults to include; no paid call or canonical write |
 | review-flag selection, a part's coverage reason, a zero-landed part's disposition, a held row's exclusion or deferral | **owner only**, direct bound action → local CAS write into the job's `choices`, saved against the exact `job_id`/part/staging-sha256/rendering fingerprints it was taken over | the action itself; no second dialog and no paid work. It writes no staging review mark, no coverage approval and no canonical byte: §7 projects these saved decisions, and the one **Apply and finish** confirmation authorizes their exact writes |
 | new destination deck | owner | existing exact deck-creation confirmation (the local job write rides inside it) |
 | `extract_study_parts` | model plans, owner confirms | one-use confirmation |
@@ -1591,6 +1651,13 @@ widen scope into new protected work, or write canonical content.
 | `resume_study_job`, reserved-unsent dispatch | model may request; runs only under recorded authority after fresh binding checks | none new |
 | `finish_study_job` | model plans, owner confirms | one confirmation |
 | promotion, canonical and saved-fact writes | executed under the finish authority | that authority, never a bare model action |
+
+The audio preference is job-wide: its owner control binds `job_id` and the
+job document's CAS revision only. It carries no part, staging hash or rendering
+fingerprint, and staging/rendering changes do not stale it. The finish
+confirmation re-discloses and binds the effective choice together with fresh
+exact clip requests. Saving a preference never changes an already-recorded
+finish authority.
 
 An owner control — the region editor's publish, the layout editor's save, the
 curation editor's apply, the review and disposition editors' save, the CLI's
@@ -1621,9 +1688,14 @@ that rendering's Japanese never enters ordinary model context.
 **Schema extensions.** `ai_schema.AssistantActionIntent.kind` is a closed
 `Literal` under `extra="forbid"`, so each intent above is added there or cannot
 be emitted. `AssistantActionOptions` (also `extra="forbid"`) gains only
-`retry_child_indices: list[int]` and
-`include_example_audio: Literal[True, False] | None`; `concurrency_limit` and
-`deck_scope` are reused unchanged. It gains **no capture-selection field**:
+`retry_child_indices: list[int]`; `concurrency_limit` and `deck_scope` are
+reused unchanged. `include_example_audio` belongs to the job's owner-controlled
+`choices`, **not** `AssistantActionOptions`: the earlier proposed model field
+is removed from this plan. The model may open the review editor's audio control and plan using
+the effective saved/default choice; it cannot emit an opt-out. The owner's
+control saves the Boolean choice via `record_choice` without another
+confirmation; spending still requires the one exact finish confirmation.
+An audio preference needs no written reason. It gains **no capture-selection field**:
 `capture_proposal_sha256` is not added anywhere, because anything on
 `AssistantActionOptions` is model-emittable by construction — it is a field of
 `AssistantActionIntent`, itself a field of `AssistantAgentAnswer.action_intents`.
@@ -1680,7 +1752,7 @@ still-supported service, and none is a shim over a retired one:
   (--exclude | --defer) [--records ID …]
   (--reason TEXT | --reason-file FILE)`
 - `janki study status [JOB]` · `janki study preview JOB --output FILE`
-- `janki study finish JOB [--example-audio] [--yes]` · `janki study resume JOB`
+- `janki study finish JOB [--example-audio | --no-example-audio] [--yes]` · `janki study resume JOB`
 
 Assignment has no CLI today. Concrete extension: factor
 `assistant_assignment.plan_assignment_for_paths(config, *, proposal_path,
@@ -1727,10 +1799,14 @@ absence meaning the whole zero-landed part; and exactly one of `--reason TEXT` o
 typed on the command line or written in an owner-authored file — nothing derives
 it from model output, and **`--yes` never manufactures a reason, a review flag or
 a disposition**; it answers only a consent prompt that already exists. `janki
-study finish`'s audio selector is spelled `--example-audio` rather than
-`--examples`, because beside `--records` and `--flag` that spelling reads as a row
-selector; it is exactly §9.1's `include_example_audio`, the same selection `janki
-audio --examples` makes.
+study finish`'s mutually exclusive `--example-audio` / `--no-example-audio`
+flags set the owner's saved audio choice via the same CAS service as the
+Assistant control. With neither flag, use the saved choice or default to
+sentence audio included; parser omission is `None`, never an implicit `false`.
+The positive flag can re-enable a previously opted-out choice. They select
+§9.1's `include_example_audio`, the same sentence scope `janki audio --examples`
+makes. These names avoid confusing audio selection with row-selection flags.
+There is no separate old opt-in-only interpretation or fallback flag path.
 
 The existing protected owner coverage route is untouched and stays usable: the
 workbench control and the Assistant's `approve_coverage` action still record a
@@ -1814,7 +1890,10 @@ A study job is complete only when **all** of these hold:
 4. The aggregate scope re-resolves to exactly the selected canonical projection,
    with agreeing owner bindings (§7.10).
 5. `ledger.pending_audio` is empty and every selected clip is current by exact
-   request and profile.
+   request and profile. Sentence inclusion is resolved as §7.10 specifies;
+   every independently derived expected sentence slot is linked in canonical
+   content and covered by current media, or the receipt records the owner's
+   explicit opt-out. A word-only plan cannot vacuously satisfy this condition.
 6. The package exists and its bytes hash to the receipt's `package_sha256`; its
    **whole-deck** inventory — every note GUID, the field bytes and template and
    stylesheet hashes, every media name and sha256, and the note/card/media
@@ -1822,7 +1901,10 @@ A study job is complete only when **all** of these hold:
    validated note by note against the bound whole-deck projection the build consumed,
    and the job's selection GUIDs and their media are contained in it. Selection coverage is a separate
    containment check and is never compared against whole-deck totals.
-   The export-ledger entry is recorded.
+   Each exported sentence slot's sound reference also resolves inside the
+   actual APKG to its proven bytes; stored examples beyond the note's export
+   slots remain explicitly disclosed, with their canonical references and
+   media retained (§7.11). The export-ledger entry is recorded.
 7. The finish receipt state is `complete`, reached in this order: package
    receipt, then the final preview receipt, then `complete` and the download
    offer. A preview that fails after the package is proven leaves a packaged

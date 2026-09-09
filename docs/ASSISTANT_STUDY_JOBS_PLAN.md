@@ -126,16 +126,33 @@ equivalent over the same application services and the same authority.
     effects wait for step 11's one confirmation. Unresolved identity, ownership or coverage blockers
     are listed **before** the confirmation, naming every part that is not ready.
     Opening or flipping the preview approves nothing.
-11. **One Apply-and-finish confirmation (§7).** The bound review flags, coverage
-    decisions, promotions, reference-fact writes, selected audio, build and
+11. **One Apply-and-finish confirmation (§7).** Sentence audio is included by
+    default for every accepted example in the job's exact selection; the owner
+    can explicitly opt out. Show word clips and sentence slots/unique clips
+    separately, including current, recoverable and provider-required counts,
+    the provider/model and whether generation is API billed. A default buys
+    nothing: the same exact confirmation authorizes the enumerated calls.
+    The bound review flags, coverage decisions, promotions, reference-fact writes, selected audio, build and
     package execute under one durable finish authority. Those owner decisions
     were made in step 10; their exact writes execute under the receipt. There is
     no phase-by-phase approval ladder.
-12. **Download in-thread** from a verified `complete` receipt (§9.6).
+12. **Download in-thread** from a verified `complete` receipt (§9.6), after
+    checking every expected sentence slot's canonical audio reference and
+    current media, plus every exported slot's packaged sound reference. The
+    final HTML preview plays the clips its cards draw; stored examples beyond
+    the existing two export slots are disclosed before confirmation (§7.11).
+    A preview before generation labels planned missing audio pending. An explicit opt-out
+    is shown as sentence audio omitted by the owner, never as generated audio.
 
 No temporary scripts, no YAML surgery, no code edits during the run, no new
 notetype, no new paid writing path. Verb study is an existing-or-new
 *vocabulary word profile*.
+
+Audio scope follows the requested task: this source job covers its accepted
+record selection, while a request to voice a whole existing deck resolves all
+of that deck's records. Neither scope expands silently. Sentence audio here
+means the records' example sentences; the source-form table does not create
+additional synthesis requests.
 
 ---
 
@@ -155,7 +172,7 @@ the joins required before dependent behavior can land.
 | S3 | Source preparation (§3) + amendments A, B | S0 | new `application/source_parts.py`; `inputs.py`; `pyproject.toml`; workbench region-editor widget; `ai_schema.py`, `application/assistant_context.py`, `workbench/assistant_adapter.py`; `cli.py` (`janki source-parts`); `tests/fixtures/synthetic_table.pdf`; tests | The typed region editor needs its broker seam **now**: the closed source-editor intents (`open_source_part_editor`, recipe-token-bound `plan_source_parts`/publish) and the `source_part` `ResourceKind`, discovery and snapshot land here; S4 adds the job kind and job actions. `pyproject.toml` adds the optional `sources` extra **and `japanese-anki[sources]` to `[dev]`**, because `scripts/bootstrap.sh` installs `.[dev]` and a skip would report green for code nobody ran — the render and publication tests run for real, **no skips**. A synthetic PDF yields reviewed parts under a bound receipt published into `config.scan_inbox`; an interrupted publication resumes; rendering is confined to the worker process. Deletes `prompts/assistant-agent.md:150,153-154` and the `docs/DESIGN.md:337-338` parenthetical. |
 | S4 | Study job, job actions, CLI, busy replies, deck-creation integration (§1, §2, §9) + amendment E | S1–S3 | new `application/study_job.py`; `ai_schema.py`; `application/assistant_context.py`; `application/assistant_assignment.py`; `application/extraction_batch.py`; `workbench/assistant.py`, `assistant_adapter.py`, `assistant_batch_surface.py`; `cli.py`; tests | Adds the `study_job` kind, the job intents/actions of §9.1 and the optional `job_id` of §2.4 — a jobless manifest's bytes and fingerprints are unchanged. The job uses the consistent choice/intent/outcome writers and reserves the layout and owner-decision namespaces; S5 adds `append_layout` with its datatype, and S6 adds the decision controls. A job resumes after process death with no new approval; a new destination deck is created through the existing exact confirmation before batch planning, and the local job write rides inside it; local status, preview and capture inspection answer while a batch runs; a lost backlink is rediscovered by reserved id and hash. Deletes the generic "Earlier model call needs attention" branch for the batch-blocked case only. |
 | S5 | Layout, `source_forms`, cross-part curation (§4, §6) + amendments C, D | S4 | `extract.py`, `models.py`, `io.py`, `staging.py`, `exporters/anki.py`, `card_preview.py`, `application/extraction.py`, `application/extraction_batch.py`, `application/card_change_staging.py`, `application/promotion.py`, `application/study_job.py`, new `application/study_curation.py`; `application/assistant_promotion.py`, `application/card_revision_finish.py`, `workbench/assistant_adapter.py`; `cli.py`, `cli_extract_batches.py`, `workbench/dispatch.py`, `workbench/render.py`, `workbench/server.py`; `ai_schema.py`, `application/assistant_context.py`; new `prompts/extract-table-layout.md`, `prompts/README.md`, `docs/CARD_DESIGN.md`; tests | Owns the whole layout/capture-propagation/curation capability set and its broker additions, and its amendments land before any of it is enabled. `application/extraction.py` carries the layout into the saved request manifest and reads it **back from that manifest** for recovery; `cli_extract_batches.py`, `plan_extraction_batch`, retries and the one whole-input `plan_extraction` call transport aligned per-child `layouts`, retaining the cross-input staging-collision check; dispatch expectations freeze the layout, and `plan_corpus_extraction`/`revalidate_extraction_request` reproduce it on initial dispatch and resume; the exact prompt-provenance validator requires `table_layout` only for the new mode, and `coverage_block` treats both table modes identically; every `extract.MODES` consumer is updated explicitly rather than silently widened — a `table-layout` mode with no bound layout refuses at the CLI, at `workbench/dispatch.py` and on the server's offered-mode route. `append_layout` atomically appends an immutable layout revision and updates its part binding; `staging.py` gains the prepare/apply pair with explicit field/cell **delete**; the pending-curation barrier lands in **both** `promotion.decide_promotion` (plan) and `promotion.execute_promotion` (execution) under the shared coordination lock taken **before** the sorted file locks. Acceptance: the response-schema fingerprint is byte-for-byte unchanged while the request fingerprint changes; `source_forms` round-trips through serializer, merge, exporter and preview; blank versus absent holds; ordinary unlabelled extraction stays fully supported; no historical record is mutated by loading it. Deletions: none. |
-| S6 | Projected review/promotion, prepared-writer finish, publication (§7) + amendment F | S5 | new `application/study_finish.py`; `application/promotion.py`, `application/coverage.py`, `staging.py`, `workbench/review.py`, `application/assistant_staging_review.py`, `application/assistant_staging_actions.py`, `application/assistant_promotion.py`, `application/enrichment.py`, `enrich.py`, `io.py`, `application/deck_package.py`, `application/character_notes.py`, `kanji.py`, `jpdb_kanji.py`; `workbench/assistant_packages.py`, `workbench/assistant_adapter.py`, `workbench/assistant.py`; `ai_schema.py`, `application/assistant_context.py`, `cli.py`; tests | Appends the finish actions, their broker schema and CLI, plus owner-only review/coverage/disposition editors and `janki study review`, `coverage`, `disposition` here; they save local choices and apply them only under the finish authority. S4 does not claim to implement these controls. Adds the source-review projection with the injected canonical chain and aggregate prepared pattern-store snapshot through `decide_promotion`/`check_pattern_review`, writer-prepared review/coverage/promotion/enrichment payloads (`coverage._approval_payload(approved_at=…)` frozen at prepare time), the `enrich.py` fact/record-snapshot decision helper, an explicit prepared `kanji_store` argument through the application projection, and frozen keyed `DictionaryFactBook`, and `deck_package` prepare/publish/recover. The package planner gains the two-store `reference_sha256` projection and `assert_projection_realized`; strict `_assert_same` remains for the resulting concrete plan. Prepared promotion/enrichment thread every frozen ledger date, and `staging.render_coverage_approval` factors the existing coverage writer into the coalesced prepare path. Free word-card reference preparation uses the prepared-facts seam in `application/character_notes.py` specified in §7.9 and binds the canonical `kanji.save_store` / `jpdb_kanji.save_readings` payloads in the authority — **no `kanji_notes` entry, no character note and no kanji card is created**. `source_forms` is preserved untouched through projection, promotion, enrichment and the archive. Acceptance: a crash at each phase boundary resumes from the durable intent rather than a lost return value; §9.6 completion holds; the package downloads in-thread. Deletes the hard-wired `kanji_finish.inspect_kanji_finish` call in `assistant_packages._resolve`. |
+| S6 | Projected review/promotion, prepared-writer finish, publication (§7) + amendment F | S5 | new `application/study_finish.py`; `card_preview.py`, `docs/CARD_DESIGN.md`; `application/promotion.py`, `application/coverage.py`, `staging.py`, `workbench/review.py`, `application/assistant_staging_review.py`, `application/assistant_staging_actions.py`, `application/assistant_promotion.py`, `application/enrichment.py`, `enrich.py`, `io.py`, `application/deck_package.py`, `application/character_notes.py`, `kanji.py`, `jpdb_kanji.py`; `workbench/assistant_packages.py`, `workbench/assistant_adapter.py`, `workbench/assistant.py`; `ai_schema.py`, `application/assistant_context.py`, `cli.py`; tests | Appends the finish actions, their broker schema and CLI, plus owner-only review/coverage/disposition editors and `janki study review`, `coverage`, `disposition` here; they save local choices and apply them only under the finish authority. S4 does not claim to implement these controls. Adds the source-review projection with the injected canonical chain and aggregate prepared pattern-store snapshot through `decide_promotion`/`check_pattern_review`, writer-prepared review/coverage/promotion/enrichment payloads (`coverage._approval_payload(approved_at=…)` frozen at prepare time), the `enrich.py` fact/record-snapshot decision helper, an explicit prepared `kanji_store` argument through the application projection, and frozen keyed `DictionaryFactBook`, and `deck_package` prepare/publish/recover. The package planner gains the two-store `reference_sha256` projection and `assert_projection_realized`; strict `_assert_same` remains for the resulting concrete plan. Prepared promotion/enrichment thread every frozen ledger date, and `staging.render_coverage_approval` factors the existing coverage writer into the coalesced prepare path. Free word-card reference preparation uses the prepared-facts seam in `application/character_notes.py` specified in §7.9 and binds the canonical `kanji.save_store` / `jpdb_kanji.save_readings` payloads in the authority — **no `kanji_notes` entry, no character note and no kanji card is created**. `source_forms` is preserved untouched through projection, promotion, enrichment and the archive. Acceptance: sentence audio defaults on, every expected example is linked canonically, each exported sound reference resolves to its packaged bytes, and final HTML audio plays (pending/opt-out states remain explicit); a crash at each phase boundary resumes from the durable intent rather than a lost return value; §9.6 completion holds; the package downloads in-thread. Deletes the hard-wired `kanji_finish.inspect_kanji_finish` call in `assistant_packages._resolve`. |
 | S7 | Vertical-slice acceptance | S6 | tests and docs only | The whole §1 journey runs **offline end to end** over the synthetic fixture with fake providers, and the CLI is proven equivalent over the same services, including review → literal owner coverage → disposition → finish for an unmeasured table, with no paid coverage call. A live run over a real private PDF with real paid calls is **optional**, needs the owner's exact source and call consent at the time it is made, and is not required to finish this work. |
 
 ### 10.1 File inventory
@@ -242,6 +259,30 @@ containment). **Busy** (local status, preview and capture inspection answer
 while a batch runs; ordinary prose gets the deterministic busy reply and
 dispatches nothing).
 
+**Sentence-audio delivery (S6/S7).** Omitted options include sentence audio in
+both surfaces; an explicit saved opt-out suppresses new sentence generation
+and is visible in the confirmation, receipt and preview. Test default-on,
+opt-out and re-enable; reject a model-emitted opt-out and a stale job-CAS
+audio control. A staging re-render preserves the saved preference but the
+finish still binds fresh exact requests. Independently count
+expected example slots, including several slots sharing one clip. Equal displayed
+sentences with divergent effective spoken inputs must refuse before confirmation
+through the existing structural collision check. Mutants
+that drop a slot from the plan, save bytes without the canonical reference,
+leave a stale ledger profile or omit the referenced APKG media must fail.
+Interrupt after a partial run and prove completed/captured clips are reused
+without rebilling. The S6 integration lead owns the independent slot census
+and its binding; S6-E supplies final enriched records and S6-B proves stored
+sound references and media hashes with multi-example fixtures, including a
+duplicate slot. Word-only fixtures cannot establish sentence coverage. S7
+runs the real Assistant/CLI default through fake synthesis, canonical linking,
+APKG inspection and playable final HTML; before generation it checks the
+pending-audio presentation. Include a record with an extra stored example to
+prove it stays voiced/linked canonically, is disclosed as unrendered, and does
+not invent a third note field or distort exported-slot counts. These checks
+add no Japanese-content audit. S6 owns any required `card_preview.py` changes
+and the corresponding `docs/CARD_DESIGN.md` audio rules.
+
 `make gates` is expected to reach the sample build only after S0. Until then the
 five baseline failures above are the only known ones, and no other failure is
 treated as known.
@@ -295,8 +336,10 @@ coordination; it does not ask the owner to approve interfaces.
 | S6-E: reference facts and enrichment | `enrich.py`, `application/enrichment.py`, `application/character_notes.py`, `kanji.py`, `jpdb_kanji.py`; frozen fact book, prepared reference stores, dictionary projection and apply/recover. | Tests use explicit synthetic canonical snapshots while S6-P develops. References are prepared over S6-P's post-promotion projection and before the word-enrichment projection, then applied before vocabulary enrichment, as §7 specifies. Supplies exact after-records and reference hashes for audio/package planning. |
 | S6-B: package preparation and recovery | `application/deck_package.py`; reference-hash projection, realization comparison, durable package evidence, publication and recovery tests. | Tests use contract-shaped post-audio records, reference hashes and audio-completion proofs. Integration must use the actual finish/audio writer proofs, including free VOICEVOX completion; fixture proofs grant no production authority. |
 
-The integration lead owns `application/study_finish.py` and the combined
-surface work in S6. In particular, it constructs the preview from real prepared
+The integration lead owns `application/study_finish.py`, S6’s `card_preview.py`
+and `docs/CARD_DESIGN.md` audio changes, and the combined surface work in S6.
+The preview files are edited in S5→S6 order; S6 starts from S5’s integrated
+source-form rendering. In particular, it constructs the preview from real prepared
 facts, wires owner review/coverage/disposition choices, composes the three
 packages, proves audio completion, and connects package download/resume. It may
 prepare tests while packages run; it does not land a coordinator that calls
@@ -441,7 +484,9 @@ paragraph:**
 > That receipt-backed **Apply and finish** contract also covers a source-study
 > job: one authority binds a set of reviewed source proposals, the owner's
 > review and coverage decisions taken over the rendered cards, their promotions,
-> the reference facts already visible in that review, the selected audio, the
+> the reference facts already visible in that review, selected word audio and
+> sentence audio included by default for every accepted example slot unless
+> the owner explicitly opts out, the
 > build and the package. Each phase's prepared payload is durable before its
 > first effect, so an interruption resumes from that intent rather than a lost
 > return value. It aggregates existing single-receipt scopes without replacing
@@ -449,6 +494,12 @@ paragraph:**
 > proven from artifacts — every accounted paid attempt, each part's exact
 > disposition, and the bound whole-deck package inventory — rather than from a
 > batch surface's completeness label.
+
+> Default inclusion grants no spending authority: the same finish confirmation
+> enumerates exact requests and discloses provider/model, API billing and
+> separate word/sentence counts. Completion proves canonical sentence links,
+> current media, sound references and bytes inside the package, and playable
+> audio in the final HTML preview. An explicit opt-out is recorded and displayed.
 
 ### 11.1 `AGENTS.md` data-lifecycle entries
 
@@ -487,6 +538,10 @@ is added.
 W5/W7 notes are not rewritten. `docs/CARD_DESIGN.md` gains the source-form
 rules: what the card renders from `source_forms`, and that the witness table
 beside the preview is a supplementary review aid rather than the card.
+It also specifies pending sentence audio before generation, playable linked
+audio in the final preview, and visible owner opt-out, retaining navigation,
+Show Answer and independent disclosures. These audio-preview additions land
+with S6; the source-form display additions remain in S5.
 `README.md` and `docs/IMPORTING.md` gain the Assistant PDF-to-deck journey.
 `prompts/README.md` records the new `extract-table-layout.md` template and the
 shared tool-argument wording added to the three existing extraction files.
