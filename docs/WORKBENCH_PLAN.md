@@ -1007,6 +1007,14 @@ future work):
 
 ### [~] W7 Conversational workbench
 
+**Proposed follow-up, 2026-09-09:** the
+[Assistant study-jobs implementation plan](ASSISTANT_STUDY_JOBS_PLAN.md) and
+its [detailed contracts](ASSISTANT_STUDY_JOBS_CONTRACTS.md) specify source-part
+preparation, captured-answer recovery, source-form card fields, and resumable
+source-deck completion through the Assistant. This work is not implemented;
+the [plan review record](ASSISTANT_STUDY_JOBS_REVIEW.md) tracks its adversarial
+review separately from W7's shipped behavior.
+
 *Owner correction 2026-08-31. The earlier read-only design reproduced the
 problem this surface was meant to solve: ordinary iteration still had to be
 submitted to an agent in a coding interface. The owner may delegate supported
