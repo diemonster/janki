@@ -787,7 +787,20 @@ def _deck_declared_record_versions_from_document(
     deck_path: Path,
     raw: Any,
 ) -> list[VocabularyRecord]:
-    """Return durable versions after the shared complete deck validation."""
+    """Return durable versions after the shared complete deck validation.
+
+    The kind comes from the document this call was handed, so a supplied
+    revision is classified by its own bytes rather than by whatever the file on
+    disk happens to say.
+    """
+    if _deck_kind_from_document(deck_path, raw) == "kanji":
+        # Same reason as `deck_declared_ids`: a character deck's `source:` is
+        # the curated character store, and its notes are `kanji:理` identities
+        # rather than vocabulary records. It owns no word or sentence audio, so
+        # resolving it as a word list would refuse every audio census in a
+        # repository that studies characters — for a deck with nothing to
+        # preserve.
+        return []
     _resolve_deck_records_document(deck_path, raw)
     deck_config = raw.get("deck") or {}
     by_id: dict[str, VocabularyRecord] = {}
@@ -982,7 +995,11 @@ def deck_kind(deck_path: Path) -> str:
     "has 6 fields where this deck writes 27" against the rule deck's pinned
     `model_id`, advising a Merge Notetypes re-import that fixes nothing.
     """
-    raw = load_structured(deck_path)
+    return _deck_kind_from_document(deck_path, load_structured(deck_path))
+
+
+def _deck_kind_from_document(deck_path: Path, raw: Any) -> str:
+    """The same answer and the same refusals for a file or exact deck bytes."""
     if not isinstance(raw, dict):
         raise DataError(f"Deck file must contain a mapping: {deck_path}")
     section = raw.get("deck") or {}

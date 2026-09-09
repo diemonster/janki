@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from japanese_anki import cli
+from japanese_anki import cli, kanji_notes
 from japanese_anki import ledger as ledger_mod
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application.audio import (
@@ -20,6 +20,7 @@ from japanese_anki.application.audio import (
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.io import (
+    DataError,
     RecordsRevision,
     load_records_snapshot,
     load_structured,
@@ -137,6 +138,44 @@ def _drill_project(tmp_path: Path) -> tuple[ProjectConfig, Path, VocabularyRecor
     return config, deck, item
 
 
+def _character_deck(config: ProjectConfig) -> Path:
+    """A configured character deck reading the curated character store.
+
+    Its `source:` is a JSON *object* of character notes rather than a list of
+    vocabulary records, which is exactly what the audio owner census used to
+    hand to the vocabulary loader.
+    """
+    config.deck_dir.mkdir(parents=True, exist_ok=True)
+    deck = config.deck_dir / "genki-ii-kanji.yaml"
+    deck.write_text(
+        "deck:\n"
+        "  name: Genki II Kanji\n"
+        "  kind: kanji\n"
+        "  deck_id: 1500000002\n"
+        "  model_id: 1500000102\n"
+        "  source: ../data/kanji_notes.json\n"
+        "  include_ids: [kanji:理]\n",
+        encoding="utf-8",
+    )
+    config.kanji_notes_file.parent.mkdir(parents=True, exist_ok=True)
+    kanji_notes.save_notes(
+        config.kanji_notes_file,
+        {
+            "理": kanji_notes.CharacterNote(
+                character="理",
+                id="kanji:理",
+                meanings=("logic", "reason"),
+                stroke_count=11,
+                kanjidic_readings=(
+                    kanji_notes.KanjidicReading(kind="on", reading="リ"),
+                ),
+                sources=("kanjiapi.dev (KANJIDIC2)",),
+            )
+        },
+    )
+    return deck
+
+
 def _word_identity(item: VocabularyRecord, provider: Provider) -> tuple[str, str, bool, str]:
     utterance, forced, _warning = ledger_mod.word_audio_request(item)
     target = f"janki-{ledger_mod.word_audio_filename_fingerprint(item)}{provider.suffix}"
@@ -208,6 +247,128 @@ def test_targeted_audio_plan_binds_exact_ids_providers_and_distinct_clip_counts(
         "paid-network",
     )
     assert len(plan.fingerprint) == 64
+
+
+def test_targeted_example_planning_reads_a_character_deck_as_the_kind_it_is(
+    tmp_path: Path,
+) -> None:
+    """A character deck owns no word or sentence audio.
+
+    Its `source:` is the curated character store, and handing that store to the
+    vocabulary loader refused the whole plan — a sentence request blocked by a
+    deck that can never hold one of its clips.
+    """
+    item = _record("話す", "はなす", "話します。")
+    config = _project(tmp_path, [item])
+    deck = _character_deck(config)
+    deck_before = deck.read_text(encoding="utf-8")
+
+    plan = plan_targeted_audio(
+        config,
+        [item.id],
+        examples=True,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=Provider("openai-realtime", "cedar"),
+    )
+
+    assert plan.record_ids == (item.id,)
+    assert plan.example_counts == audio_application.AudioClipCounts(
+        total=1,
+        current=0,
+        recoverable=0,
+        provider_required=1,
+    )
+    assert [record.id for record in plan.protected_records] == [item.id]
+    assert deck.read_text(encoding="utf-8") == deck_before
+
+
+def test_targeted_example_audio_is_generated_with_a_character_deck_configured(
+    tmp_path: Path,
+) -> None:
+    item = _record("話す", "はなす", "話します。")
+    config = _project(tmp_path, [item])
+    deck = _character_deck(config)
+    deck_before = deck.read_text(encoding="utf-8")
+    store_before = config.kanji_notes_file.read_text(encoding="utf-8")
+    sentences = RecordingProvider("openai-realtime", "cedar")
+
+    outcome = audio_application.execute_targeted_audio(
+        config,
+        [item.id],
+        examples=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=sentences,
+    )
+
+    assert outcome.succeeded, outcome.stopped_by
+    assert [spoken for spoken, _forced in sentences.said] == ["話します。"]
+    voiced = load_records_snapshot(config.normalized_file)[0][0]
+    assert voiced.examples[0].audio.startswith("audio/janki-")
+    assert (config.media_dir / voiced.examples[0].audio).is_file()
+    assert deck.read_text(encoding="utf-8") == deck_before
+    assert config.kanji_notes_file.read_text(encoding="utf-8") == store_before
+
+
+def test_a_character_decks_source_still_stales_a_running_audio_transaction(
+    tmp_path: Path,
+) -> None:
+    """The census stops reading the character store as a word list; it does not
+    stop depending on it. Every configured deck's `source:` is still locked and
+    revalidated before paid bytes reach canonical media."""
+    item = _record("話す", "はなす", "話します。")
+    config = _project(tmp_path, [item])
+    _character_deck(config)
+
+    class EditsCharacterStoreDuringSynthesis(RecordingProvider):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if not self.said:
+                store = dict(kanji_notes.load_notes(config.kanji_notes_file))
+                store["説"] = kanji_notes.CharacterNote(
+                    character="説",
+                    id="kanji:説",
+                    meanings=("explanation",),
+                )
+                kanji_notes.save_notes(config.kanji_notes_file, store)
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    sentences = EditsCharacterStoreDuringSynthesis("openai-realtime", "cedar")
+    outcome = audio_application.execute_targeted_audio(
+        config,
+        [item.id],
+        examples=True,
+        word_provider=RecordingProvider("voicevox", 7),
+        sentence_provider=sentences,
+    )
+
+    assert outcome.state == "finalization-stopped"
+    assert "changed after its locked snapshot" in (outcome.stopped_by or "")
+    assert outcome.pending_recovery is True
+    assert outcome.media_published is False
+
+
+def test_an_unknown_deck_kind_still_refuses_the_durable_audio_owner_census(
+    tmp_path: Path,
+) -> None:
+    item = _record("話す", "はなす", "話します。")
+    config = _project(tmp_path, [item])
+    config.deck_dir.mkdir(parents=True, exist_ok=True)
+    (config.deck_dir / "typo.yaml").write_text(
+        "deck:\n"
+        "  name: Typo\n"
+        "  kind: kanjy\n"
+        "  deck_id: 1500000003\n"
+        "  model_id: 1500000103\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match="unknown deck kind 'kanjy'"):
+        plan_targeted_audio(
+            config,
+            [item.id],
+            examples=True,
+            word_provider=Provider("voicevox", 7),
+            sentence_provider=Provider("openai-realtime", "cedar"),
+        )
 
 
 def test_empty_targeted_audio_never_widens_to_the_corpus(tmp_path: Path) -> None:
@@ -959,6 +1120,35 @@ def test_projected_drill_audio_plan_equals_the_plan_after_exact_bytes_land(
     )
 
     assert projected == landed
+
+
+def test_projected_drill_audio_plan_ignores_a_character_deck_beside_it(
+    tmp_path: Path,
+) -> None:
+    """The revision planner censuses every other deck live, character decks
+    included, while it projects only the deck the revision describes."""
+    config, deck, _item = _drill_project(tmp_path)
+    _character_deck(config)
+    expected = records_revision(deck)
+    assert expected.text is not None
+    proposed = RecordsRevision(
+        expected.path,
+        expected.text.replace("日本語が話せます。", "来週は日本語が話せます。"),
+    )
+
+    projected = audio_application.plan_deck_audio_revision(
+        config,
+        deck,
+        proposed,
+        word_provider=Provider("voicevox", 7),
+        sentence_provider=Provider("openai-realtime", "cedar"),
+    )
+
+    assert [clip.request_input for clip in projected.clips] == [
+        "来週は日本語が話せます。",
+        "英語も、話せる？",
+    ]
+    assert "kanji:理" not in {record.id for record in projected.protected_records}
 
 
 def test_paid_deck_audio_preflight_checks_exact_required_clips_without_side_effects(

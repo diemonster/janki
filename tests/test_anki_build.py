@@ -11,10 +11,12 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.anki import (
     AnkiBuildError,
     build_deck,
+    deck_declared_record_versions,
+    deck_declared_record_versions_from_revision,
     deck_selection,
     resolve_deck_records,
 )
-from japanese_anki.io import DataError
+from japanese_anki.io import DataError, RecordsRevision
 from japanese_anki.jpdb_kanji import (
     BoundExample,
     CharacterReadings,
@@ -22,6 +24,7 @@ from japanese_anki.jpdb_kanji import (
     ReadingUsage,
     save_readings,
 )
+from japanese_anki.kanji_notes import CharacterNote, save_notes
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +74,59 @@ def test_intake_tag_cannot_also_be_excluded_by_its_deck() -> None:
             },
             Path("week-3.yaml"),
         )
+
+
+def test_the_declared_record_census_classifies_the_document_it_is_given(
+    tmp_path: Path,
+) -> None:
+    """A character deck declares character notes, not vocabulary records.
+
+    The durable-media census asks what a deck file keeps alive, and it asks it
+    of exact bytes: a supplied revision is classified by its own `kind:`, not by
+    whatever the file on disk says at that moment.
+    """
+    _project(tmp_path)
+    _write_records(
+        tmp_path,
+        [VocabularyRecord(
+            id="word:本:ほん", expression="本", reading="ほん", meanings=["book"]
+        )],
+    )
+    save_notes(
+        tmp_path / "kanji_notes.json",
+        {"理": CharacterNote(character="理", id="kanji:理", meanings=("logic",))},
+    )
+    deck = tmp_path / "decks" / "characters.yaml"
+    character_text = (
+        "deck:\n"
+        "  name: C\n"
+        "  kind: kanji\n"
+        "  deck_id: 1500000002\n"
+        "  model_id: 1500000102\n"
+        '  source: "../kanji_notes.json"\n'
+    )
+    word_text = 'name: W\ndeck:\n  source: "../vocabulary.json"\n'
+    deck.write_text(character_text, encoding="utf-8")
+
+    assert deck_declared_record_versions(deck) == []
+    assert [
+        record.id
+        for record in deck_declared_record_versions_from_revision(
+            deck, RecordsRevision(deck, word_text)
+        )
+    ] == ["word:本:ほん"]
+
+    deck.write_text(word_text, encoding="utf-8")
+
+    assert [record.id for record in deck_declared_record_versions(deck)] == [
+        "word:本:ほん"
+    ]
+    assert (
+        deck_declared_record_versions_from_revision(
+            deck, RecordsRevision(deck, character_text)
+        )
+        == []
+    )
 
 
 def test_builds_importable_package(tmp_path: Path) -> None:
