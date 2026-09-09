@@ -18,14 +18,10 @@ from pathlib import Path
 from typing import Literal
 
 from japanese_anki import audio_cmd, ledger, status
+from japanese_anki.application import deck_capabilities
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters import pattern_cards
-from japanese_anki.exporters.anki import (
-    deck_declared_record_versions,
-    deck_declared_record_versions_from_revision,
-    deck_kind,
-)
 from japanese_anki.io import (
     DataError,
     RecordsRevision,
@@ -183,17 +179,6 @@ def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
     return (chosen or config.tts_provider or "voicevox").strip().lower()
 
 
-def _drill_audio_records_for_deck(config: ProjectConfig, deck_path: Path) -> list[VocabularyRecord]:
-    """Return a conjugation deck's synthetic audio owners, if it has any."""
-    if deck_kind(deck_path) != "conjugation":
-        return []
-    raw = load_structured(deck_path)
-    section = raw.get("deck") or {} if isinstance(raw, Mapping) else {}
-    if not isinstance(section, Mapping) or section.get("drill_examples") is None:
-        return []
-    return pattern_cards.drill_audio_records(deck_path, config)
-
-
 def _all_durable_audio_records(
     config: ProjectConfig,
     deck_paths: Sequence[Path],
@@ -202,11 +187,25 @@ def _all_durable_audio_records(
     deck_revisions: Mapping[Path, RecordsRevision] | None = None,
     drill_overrides: Mapping[Path, Sequence[VocabularyRecord]] | None = None,
 ) -> list[VocabularyRecord]:
-    """Every record-shaped owner that can keep a media reference alive."""
+    """Every record-shaped owner that can keep a media reference alive.
+
+    The per-deck question belongs to
+    :mod:`japanese_anki.application.deck_capabilities`; what stays here is the
+    corpus-level assembly and the two ``drill-audio:`` refusals that only a
+    whole-repository view can make.  Those refusals are why this consumes the
+    declared and drill halves in separate passes: a synthetic owner colliding
+    with a record version declared by a *later* deck has to be caught too.
+    """
     revisions = {path.resolve(): revision for path, revision in (deck_revisions or {}).items()}
     projected_drills = {
         path.resolve(): list(records) for path, records in (drill_overrides or {}).items()
     }
+    # Every kind first, before anything reads a source. A known kind with no
+    # capability row refuses the whole census rather than contributing an
+    # empty owner set that would make its clips look unreferenced.
+    for deck_path in deck_paths:
+        target = deck_path.resolve()
+        deck_capabilities.deck_capability(target, revision=revisions.get(target))
     durable = list(
         normalized_records
         if normalized_records is not None
@@ -214,11 +213,10 @@ def _all_durable_audio_records(
     )
     for deck_path in deck_paths:
         target = deck_path.resolve()
-        revision = revisions.get(target)
         durable.extend(
-            deck_declared_record_versions_from_revision(target, revision)
-            if revision is not None
-            else deck_declared_record_versions(target)
+            deck_capabilities.declared_media_owners(
+                target, revision=revisions.get(target)
+            )
         )
     ordinary_ids = {record.id for record in durable}
     drill_origins: dict[str, Path] = {}
@@ -226,15 +224,8 @@ def _all_durable_audio_records(
         target = deck_path.resolve()
         drill_records = projected_drills.get(target)
         if drill_records is None:
-            revision = revisions.get(target)
-            drill_records = (
-                pattern_cards.drill_audio_records_from_revision(
-                    target,
-                    config,
-                    revision,
-                )
-                if revision is not None
-                else _drill_audio_records_for_deck(config, target)
+            drill_records = deck_capabilities.drill_media_owners(
+                config, target, revision=revisions.get(target)
             )
         for record in drill_records:
             if record.id in ordinary_ids:
@@ -771,18 +762,35 @@ def _deck_audio_plan_scope(
     words: bool,
     examples: bool,
 ) -> tuple[Path, list[Path]]:
-    """Validate the shared examples-only scope for disk and revision plans."""
-    if words or not examples:
-        raise AudioPlanError(
-            "Deck-authored drill audio supports --examples only; word audio "
-            "belongs to the canonical vocabulary records."
-        )
+    """Validate the shared deck-scoped clip scope for disk and revision plans.
+
+    The deck is resolved first because the answer is the deck's, not the
+    flags': which clip kinds a deck-scoped call may ask for is exactly what
+    its capability row states.
+    """
     target = deck_path.resolve()
     known = [path.resolve() for path in status.deck_files(config)]
     if target not in known:
         raise AudioPlanError(
             f"Deck audio target {target} is not a configured deck under "
             f"{config.deck_dir.resolve()}."
+        )
+    capability = deck_capabilities.deck_capability(target)
+    named_kind = capability.kind or "vocabulary"
+    if not capability.owns_drill_examples:
+        raise AudioPlanError(
+            f"Deck-authored audio needs a deck that owns drill examples; "
+            f"{target} is a {named_kind} deck."
+        )
+    if words and not capability.synthesizes_word_audio:
+        raise AudioPlanError(
+            f"A {named_kind} deck synthesizes no word audio; word audio belongs "
+            "to the canonical vocabulary records."
+        )
+    if not examples or not capability.synthesizes_example_audio:
+        raise AudioPlanError(
+            f"A {named_kind} deck's own audio is example audio; there is no "
+            "other clip kind for a deck-scoped call to voice."
         )
     return target, known
 

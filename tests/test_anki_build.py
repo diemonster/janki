@@ -13,6 +13,8 @@ from japanese_anki.exporters.anki import (
     build_deck,
     deck_declared_record_versions,
     deck_declared_record_versions_from_revision,
+    deck_kind,
+    deck_kind_from_revision,
     deck_selection,
     resolve_deck_records,
 )
@@ -127,6 +129,83 @@ def test_the_declared_record_census_classifies_the_document_it_is_given(
         )
         == []
     )
+
+
+def test_a_revisions_deck_kind_is_read_from_the_bytes_it_carries(
+    tmp_path: Path,
+) -> None:
+    """The classification seam a capability caller needs.
+
+    `deck_kind` and this share one document reader, so a caller asking what a
+    proposed deck *is* gets the same answer and the same refusals as the census
+    that reads the same bytes — rather than a second YAML parse that could
+    drift.
+    """
+    _project(tmp_path)
+    deck = tmp_path / "decks" / "characters.yaml"
+    character_text = (
+        "deck:\n"
+        "  name: C\n"
+        "  kind: kanji\n"
+        '  source: "../kanji_notes.json"\n'
+    )
+    deck.write_text(character_text, encoding="utf-8")
+
+    assert deck_kind(deck) == "kanji"
+    assert (
+        deck_kind_from_revision(
+            deck, RecordsRevision(deck, 'name: W\ndeck:\n  source: "../vocabulary.json"\n')
+        )
+        == ""
+    )
+    assert (
+        deck_kind_from_revision(deck, RecordsRevision(deck, "deck:\n  kind: PATTERN\n"))
+        == "pattern"
+    )
+
+
+@pytest.mark.parametrize(
+    ("revision", "message"),
+    [
+        pytest.param(
+            lambda deck: RecordsRevision(deck.parent / "other.yaml", "deck: {}\n"),
+            "cannot describe",
+            id="another-deck",
+        ),
+        pytest.param(
+            lambda deck: RecordsRevision(deck, None),
+            "no longer exists",
+            id="absent",
+        ),
+        pytest.param(
+            lambda deck: RecordsRevision(deck, "deck: [\n"),
+            "Could not parse",
+            id="unparsable",
+        ),
+        pytest.param(
+            lambda deck: RecordsRevision(deck, "deck:\n  kind: patern\n"),
+            "unknown deck kind",
+            id="typo",
+        ),
+        pytest.param(
+            lambda deck: RecordsRevision(deck, "- a list\n"),
+            "must contain a mapping",
+            id="not-a-mapping",
+        ),
+    ],
+)
+def test_classifying_a_revision_refuses_exactly_as_the_census_does(
+    tmp_path: Path,
+    revision,  # noqa: ANN001 - a factory bound to the deck path below
+    message: str,
+) -> None:
+    _project(tmp_path)
+    deck = tmp_path / "decks" / "d.yaml"
+
+    with pytest.raises(DataError, match=message):
+        deck_kind_from_revision(deck, revision(deck))
+    with pytest.raises(DataError, match=message):
+        deck_declared_record_versions_from_revision(deck, revision(deck))
 
 
 def test_builds_importable_package(tmp_path: Path) -> None:

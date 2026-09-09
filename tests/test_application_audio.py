@@ -18,7 +18,9 @@ from japanese_anki.application.audio import (
     plan_corpus_audio,
     plan_targeted_audio,
 )
+from japanese_anki.application.deck_capabilities import DeckCapabilityError
 from japanese_anki.config import ProjectConfig
+from japanese_anki.exporters import anki
 from japanese_anki.io import (
     DataError,
     RecordsRevision,
@@ -344,6 +346,47 @@ def test_a_character_decks_source_still_stales_a_running_audio_transaction(
     assert "changed after its locked snapshot" in (outcome.stopped_by or "")
     assert outcome.pending_recovery is True
     assert outcome.media_published is False
+
+
+def test_a_deck_kind_with_no_media_capability_stops_the_run_before_any_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A known kind the capability table has no row for is not "no media".
+
+    Answering it with an empty owner set would leave whatever it keeps alive
+    looking unreferenced, so the whole transaction refuses before a clip is
+    synthesized and before anything is published or pruned.
+    """
+    monkeypatch.setattr(anki, "KNOWN_DECK_KINDS", (*anki.KNOWN_DECK_KINDS, "flashcards"))
+    item = _record("話す", "はなす", "話します。")
+    config = _project(tmp_path, [item])
+    config.deck_dir.mkdir(parents=True)
+    (config.deck_dir / "flashcards.yaml").write_text(
+        "deck:\n"
+        "  kind: flashcards\n"
+        "  name: Flashcards\n"
+        "  deck_id: 41\n"
+        "  model_id: 42\n"
+        "  source: ../vocabulary.json\n",
+        encoding="utf-8",
+    )
+    normalized_before = config.normalized_file.read_text(encoding="utf-8")
+    sentences = RecordingProvider("openai-realtime", "cedar")
+
+    with pytest.raises(DeckCapabilityError, match="flashcards"):
+        audio_application.execute_targeted_audio(
+            config,
+            [item.id],
+            examples=True,
+            word_provider=RecordingProvider("voicevox", 7),
+            sentence_provider=sentences,
+        )
+
+    assert sentences.said == []
+    assert not config.ledger_file.exists()
+    assert not (config.media_dir / "audio").exists()
+    assert config.normalized_file.read_text(encoding="utf-8") == normalized_before
 
 
 def test_an_unknown_deck_kind_still_refuses_the_durable_audio_owner_census(
@@ -1151,6 +1194,70 @@ def test_projected_drill_audio_plan_ignores_a_character_deck_beside_it(
     assert "kanji:理" not in {record.id for record in projected.protected_records}
 
 
+def test_a_projected_drill_override_still_wins_over_the_file_census(
+    tmp_path: Path,
+) -> None:
+    """The revision planner supplies the drill owners it has already projected.
+
+    Routing the per-deck question through the capability table must not make
+    the census recompute them from the file on disk: the whole point of the
+    projection is that the deck bytes have not landed yet.
+    """
+    config, deck, _item = _drill_project(tmp_path)
+    expected = records_revision(deck)
+    assert expected.text is not None
+    proposed = RecordsRevision(
+        expected.path,
+        expected.text.replace("日本語が話せます。", "来週は日本語が話せます。"),
+    )
+    owner = "drill-audio:1047286103:potential:word:話す:はなす"
+
+    projected = audio_application._all_durable_audio_records(
+        config,
+        [deck],
+        [],
+        deck_revisions={deck: proposed},
+        drill_overrides={deck: [_record("差替", "さしかえ", "差し替えました。")]},
+    )
+
+    assert [record.id for record in projected if record.id.startswith("drill-audio:")] == []
+    assert "word:差替:さしかえ" in {record.id for record in projected}
+    # Without the override the same census reads the deck's own owners.
+    from_file = audio_application._all_durable_audio_records(config, [deck], [])
+    assert owner in {record.id for record in from_file}
+
+
+def test_every_configured_decks_source_stays_in_the_audio_lock_set(
+    tmp_path: Path,
+) -> None:
+    """The lock and staleness set is not narrowed by kind.
+
+    A `kanji` deck's `source:` is no longer parsed as vocabulary, but it is
+    still a dependency the census read: it stays locked and revalidated, or a
+    concurrent edit to it could not stale a running transaction.
+    """
+    config, drill_deck, _item = _drill_project(tmp_path)
+    character_deck = _character_deck(config)
+    plain = config.deck_dir / "plain.yaml"
+    plain.write_text(
+        "deck:\n"
+        "  name: Plain\n"
+        "  deck_id: 11\n"
+        "  model_id: 12\n"
+        "  source: ../vocabulary.json\n",
+        encoding="utf-8",
+    )
+
+    sources = audio_application._audio_deck_source_paths(
+        [character_deck, drill_deck, plain]
+    )
+
+    assert sources == {
+        config.kanji_notes_file.resolve(),
+        config.normalized_file.resolve(),
+    }
+
+
 def test_paid_deck_audio_preflight_checks_exact_required_clips_without_side_effects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1597,6 +1704,44 @@ def test_a_vocabulary_record_cannot_alias_a_synthetic_drill_audio_owner(
     alias = replace(_record("別", "べつ"), id=owner)
     config.normalized_file.write_text(
         json.dumps([item.to_dict(), alias.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    sentences = RecordingProvider("openai-realtime", "cedar")
+
+    with pytest.raises(AudioPlanError, match="collides with a durable vocabulary"):
+        audio_application.execute_deck_audio(
+            config,
+            deck,
+            examples=True,
+            word_provider=RecordingProvider("voicevox", 7),
+            sentence_provider=sentences,
+        )
+
+    assert sentences.said == []
+    assert not config.ledger_file.exists()
+
+
+def test_a_drill_owner_colliding_with_a_later_decks_inline_note_refuses(
+    tmp_path: Path,
+) -> None:
+    """Every deck's declared ids are known before any drill owner is examined.
+
+    The census cannot answer one deck at a time: a synthetic `drill-audio:`
+    owner aliasing a record version declared by a deck read *after* it is the
+    same collision, and it has to be refused with the same certainty.
+    """
+    config, deck, _item = _drill_project(tmp_path)
+    later = config.deck_dir / "z-later.yaml"
+    later.write_text(
+        "deck:\n"
+        "  name: Later\n"
+        "  deck_id: 51\n"
+        "  model_id: 52\n"
+        "notes:\n"
+        '  - id: "drill-audio:1047286103:potential:word:話す:はなす"\n'
+        "    expression: 別\n"
+        "    reading: べつ\n"
+        "    meanings: [other]\n",
         encoding="utf-8",
     )
     sentences = RecordingProvider("openai-realtime", "cedar")

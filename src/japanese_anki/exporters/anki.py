@@ -769,6 +769,15 @@ def deck_declared_record_versions_from_revision(
     revision: RecordsRevision,
 ) -> list[VocabularyRecord]:
     """Project the preservation census from exact proposed deck bytes."""
+    target, raw = _deck_document_from_revision(deck_path, revision)
+    return _deck_declared_record_versions_from_document(target, raw)
+
+
+def _deck_document_from_revision(
+    deck_path: Path,
+    revision: RecordsRevision,
+) -> tuple[Path, Any]:
+    """Bind exact proposed deck bytes to the deck they claim to describe."""
     target = deck_path.resolve()
     if revision.path.resolve() != target:
         raise DataError(
@@ -780,7 +789,7 @@ def deck_declared_record_versions_from_revision(
         raw = yaml.load(revision.text, Loader=YAML_LOADER)
     except yaml.YAMLError as exc:
         raise DataError(f"Could not parse {target}: {exc}") from exc
-    return _deck_declared_record_versions_from_document(target, raw)
+    return target, raw
 
 
 def _deck_declared_record_versions_from_document(
@@ -996,6 +1005,18 @@ def deck_kind(deck_path: Path) -> str:
     `model_id`, advising a Merge Notetypes re-import that fixes nothing.
     """
     return _deck_kind_from_document(deck_path, load_structured(deck_path))
+
+
+def deck_kind_from_revision(deck_path: Path, revision: RecordsRevision) -> str:
+    """What kind of deck exact proposed bytes describe.
+
+    The same classification and the same refusals as :func:`deck_kind`, read
+    from the supplied revision instead of the file on disk — so a caller
+    projecting a proposed deck asks about the deck it is proposing. It lives
+    beside :func:`deck_declared_record_versions_from_revision`, which classifies
+    the same document, rather than being a second YAML parse somewhere else.
+    """
+    return _deck_kind_from_document(*_deck_document_from_revision(deck_path, revision))
 
 
 def _deck_kind_from_document(deck_path: Path, raw: Any) -> str:

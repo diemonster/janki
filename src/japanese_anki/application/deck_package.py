@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Literal
 
 from japanese_anki import ledger, patterns, status
-from japanese_anki.application import deck_build
+from japanese_anki.application import deck_build, deck_capabilities
 from japanese_anki.application.build import _record_gaps
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -360,6 +360,17 @@ def _finish_plan(config: ProjectConfig, **values: object) -> DeckPackagePlan:
     output = values.get("output_path")
     if not isinstance(output, Path):
         raise DeckPackageError("Deck package plan needs one output path.")
+    # Every planner ends here, so this is where the capability table's media
+    # column is checked against what the planner actually bound. A `pattern`
+    # or `kanji` package is a legitimate package with no media at all; a
+    # media input under one of those kinds means a planner and the table
+    # disagree about what the artifact contains.
+    capability = deck_capabilities.capability(str(values.get("kind")))
+    if not capability.packages_media and values.get("media_inputs"):
+        raise DeckPackageError(
+            f"A {capability.kind} deck packages no media, but this plan binds "
+            f"media inputs for {output}."
+        )
     output_revision, output_identity = _output_binding(output)
     draft = DeckPackagePlan(  # type: ignore[arg-type]
         output_revision=output_revision,
@@ -589,8 +600,18 @@ def _plan_kanji(config: ProjectConfig, target: Path) -> DeckPackagePlan:
     )
 
 
+def _package_capability(target: Path) -> deck_capabilities.DeckMediaCapability:
+    """Resolve a configured deck's media contract before any planner runs.
+
+    Refused here rather than inside a planner: a kind with no capability row
+    has no stated media contract, so nothing may package, publish or prune for
+    it — and a planner that ran first would already have read its inputs.
+    """
+    return deck_capabilities.capability(deck_kind(target))
+
+
 def _plan_unlocked(config: ProjectConfig, target: Path) -> DeckPackagePlan:
-    kind = deck_kind(target)
+    kind = _package_capability(target).kind
     if kind in {"", "vocabulary"}:
         return _plan_vocabulary(config, target)
     if kind == "pattern":
@@ -633,7 +654,13 @@ def plan_deck_package(
 
     _assert_whole_deck(record_ids)
     target = _known_deck(config, deck_path)
-    if deck_kind(target) == "conjugation":
+    try:
+        kind = _package_capability(target).kind
+    except DeckPackageError:
+        raise
+    except (JankiError, OSError, ValueError) as exc:
+        raise DeckPackageError(f"Could not plan deck package: {exc}") from exc
+    if kind == "conjugation":
         try:
             return _wrap_conjugation(
                 config,
@@ -984,7 +1011,7 @@ def execute_deck_package_locked(
     target = _known_deck(config, expected.deck_path)
     if target != expected.deck_path:
         raise DeckPackageError("The configured deck changed after confirmation.")
-    current_kind = deck_kind(target) or "vocabulary"
+    current_kind = _package_capability(target).kind or "vocabulary"
     if current_kind != expected.kind:
         raise DeckPackageError(
             "The deck package kind changed after confirmation; reload and "
