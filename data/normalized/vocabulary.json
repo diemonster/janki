@@ -18,7 +18,7 @@
         "furigana": "私[わたし]はいつもめがねをかけます。",
         "romaji": "watashi wa itsumo megane o kakemasu.",
         "english": "I always wear glasses.",
-        "audio": "",
+        "audio": "audio/janki-899acef35f21.wav",
         "register": "polite"
       },
       {
@@ -26,7 +26,7 @@
         "furigana": "家[いえ]ではめがねをかけない。",
         "romaji": "ie de wa megane o kakenai.",
         "english": "I don't wear glasses at home.",
-        "audio": "",
+        "audio": "audio/janki-f2043e1ed3e8.wav",
         "register": "casual"
       }
     ],
@@ -96,7 +96,7 @@
         "furigana": "明日[あした]は 雪[ゆき]が 降[ふ]ります。",
         "romaji": "ashita wa yuki ga furimasu.",
         "english": "It will snow tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-8e8daaf0a679.wav",
         "register": "polite"
       },
       {
@@ -104,7 +104,7 @@
         "furigana": "昨日[きのう]、 雨[あめ]が 降[ふ]った。",
         "romaji": "kinou, ame ga futta.",
         "english": "It rained yesterday.",
-        "audio": "",
+        "audio": "audio/janki-82185e39fb6b.wav",
         "register": "casual"
       }
     ],
@@ -167,7 +167,7 @@
         "furigana": "妹[いもうと]に 本[ほん]をあげます。",
         "romaji": "Imouto ni hon o agemasu.",
         "english": "I'll give my little sister a book.",
-        "audio": "",
+        "audio": "audio/janki-92a69d76e0e1.wav",
         "register": "polite"
       },
       {
@@ -175,7 +175,7 @@
         "furigana": "このチケット、あげるよ。",
         "romaji": "Kono chiketto, ageru yo.",
         "english": "I'll give you this ticket.",
-        "audio": "",
+        "audio": "audio/janki-4703912c5630.wav",
         "register": "casual"
       }
     ],
@@ -248,7 +248,7 @@
         "furigana": "机[つくえ]の 上[うえ]に 本[ほん]があります。",
         "romaji": "Tsukue no ue ni hon ga arimasu.",
         "english": "There is a book on the desk.",
-        "audio": "",
+        "audio": "audio/janki-a9499385702f.wav",
         "register": "polite"
       },
       {
@@ -256,7 +256,7 @@
         "furigana": "冷蔵庫[れいぞうこ]にビールある？",
         "romaji": "Reizouko ni biiru aru?",
         "english": "Is there any beer in the fridge?",
-        "audio": "",
+        "audio": "audio/janki-7a3a04e22b1f.wav",
         "register": "casual"
       }
     ],
@@ -323,7 +323,7 @@
         "furigana": "父[ちち]は 今[いま]、 家[いえ]にいます。",
         "romaji": "Chichi wa ima, ie ni imasu.",
         "english": "My father is at home right now.",
-        "audio": "",
+        "audio": "audio/janki-84ad3b0a3f4c.wav",
         "register": "polite"
       },
       {
@@ -331,7 +331,7 @@
         "furigana": "教室[きょうしつ]に 誰[だれ]もいない。",
         "romaji": "Kyoushitsu ni dare mo inai.",
         "english": "There's nobody in the classroom.",
-        "audio": "",
+        "audio": "audio/janki-ac5a63a93f23.wav",
         "register": "casual"
       }
     ],
@@ -403,7 +403,7 @@
         "furigana": "今日[きょう]は 私[わたし]がおごります。",
         "romaji": "Kyou wa watashi ga ogorimasu.",
         "english": "I'll treat you today.",
-        "audio": "",
+        "audio": "audio/janki-d37803812e6c.wav",
         "register": "polite"
       },
       {
@@ -411,7 +411,7 @@
         "furigana": "先輩[せんぱい]が 晩[ばん]ご 飯[はん]をおごってくれた。",
         "romaji": "Senpai ga bangohan o ogotte kureta.",
         "english": "My senior treated me to dinner.",
-        "audio": "",
+        "audio": "audio/janki-44761a3ed898.wav",
         "register": "casual"
       }
     ],
@@ -483,7 +483,7 @@
         "furigana": "夕食[ゆうしょく]のあとで、 お 皿[さら]を 洗[あら]います。",
         "romaji": "Yuushoku no ato de, osara o araimasu.",
         "english": "I wash the dishes after dinner.",
-        "audio": "",
+        "audio": "audio/janki-ff05e1a47086.wav",
         "register": "polite"
       },
       {
@@ -491,7 +491,7 @@
         "furigana": "今日[きょう]はぼくが お 皿[さら]を 洗[あら]うよ。",
         "romaji": "Kyou wa boku ga osara o arau yo.",
         "english": "I'll wash the dishes today.",
-        "audio": "",
+        "audio": "audio/janki-a037a497d53c.wav",
         "register": "casual"
       }
     ],
@@ -561,7 +561,7 @@
         "furigana": "もう お 腹[なか]が 空[す]きました。",
         "romaji": "Mou onaka ga sukimashita.",
         "english": "I'm already hungry.",
-        "audio": "",
+        "audio": "audio/janki-1c09ae27b6cc.wav",
         "register": "polite"
       },
       {
@@ -569,7 +569,7 @@
         "furigana": "お 腹[なか]が 空[す]いた！ 何[なに]か 食[た]べよう。",
         "romaji": "Onaka ga suita! Nanika tabeyou.",
         "english": "I'm hungry! Let's eat something.",
-        "audio": "",
+        "audio": "audio/janki-cd2ca476dd76.wav",
         "register": "casual"
       }
     ],
@@ -635,7 +635,7 @@
         "furigana": "銀行[ぎんこう]で お 金[かね]をおろします。",
         "romaji": "Ginkou de okane o oroshimasu.",
         "english": "I withdraw money at the bank.",
-        "audio": "",
+        "audio": "audio/janki-d938a275dc23.wav",
         "register": "polite"
       },
       {
@@ -643,7 +643,7 @@
         "furigana": "コンビニで お 金[かね]をおろした。",
         "romaji": "Konbini de okane o oroshita.",
         "english": "I withdrew money at the convenience store.",
-        "audio": "",
+        "audio": "audio/janki-beb702ed3f39.wav",
         "register": "casual"
       }
     ],
@@ -716,7 +716,7 @@
         "furigana": "毎晩[まいばん]、 寝[ね]る 前[まえ]にお 風呂[ふろ]に 入[はい]ります。",
         "romaji": "maiban, neru mae ni ofuro ni hairimasu.",
         "english": "I take a bath before bed every night.",
-        "audio": "",
+        "audio": "audio/janki-0ebba4cd745c.wav",
         "register": "polite"
       },
       {
@@ -724,7 +724,7 @@
         "furigana": "山[やま]から 帰[かえ]ってお 風呂[ふろ]に 入[はい]った。",
         "romaji": "yama kara kaette ofuro ni haitta.",
         "english": "I came back from the mountains and took a bath.",
-        "audio": "",
+        "audio": "audio/janki-5fa6fc7cf2fa.wav",
         "register": "casual"
       }
     ],
@@ -798,7 +798,7 @@
         "furigana": "駅[えき]まで 三十分[さんじゅっぷん]かかります。",
         "romaji": "Eki made sanjuppun kakarimasu.",
         "english": "It takes thirty minutes to the station.",
-        "audio": "",
+        "audio": "audio/janki-06d96c6db128.wav",
         "register": "polite"
       },
       {
@@ -806,7 +806,7 @@
         "furigana": "東京[とうきょう]まで 二時間[にじかん]かかった。",
         "romaji": "Toukyou made nijikan kakatta.",
         "english": "It took two hours to get to Tokyo.",
-        "audio": "",
+        "audio": "audio/janki-11b01c961c95.wav",
         "register": "casual"
       }
     ],
@@ -871,7 +871,7 @@
         "furigana": "友[とも]だちがコーヒーをくれました。",
         "romaji": "Tomodachi ga koohii o kuremashita.",
         "english": "A friend gave me a coffee.",
-        "audio": "",
+        "audio": "audio/janki-faeafe616a97.wav",
         "register": "polite"
       },
       {
@@ -879,7 +879,7 @@
         "furigana": "兄[あに]がギターをくれた。",
         "romaji": "Ani ga gitaa o kureta.",
         "english": "My older brother gave me a guitar.",
-        "audio": "",
+        "audio": "audio/janki-cf7347ca2189.wav",
         "register": "casual"
       }
     ],
@@ -945,7 +945,7 @@
         "furigana": "週末[しゅうまつ]は 家[いえ]でごろごろします。",
         "romaji": "Shuumatsu wa ie de gorogoro shimasu.",
         "english": "On weekends I laze around at home.",
-        "audio": "",
+        "audio": "audio/janki-6b3bd28ed449.wav",
         "register": "polite"
       },
       {
@@ -953,7 +953,7 @@
         "furigana": "雨[あめ]だから、 一日中[いちにちじゅう]ごろごろする。",
         "romaji": "Ame dakara, ichinichijuu gorogoro suru.",
         "english": "It's raining, so I'll do nothing all day.",
-        "audio": "",
+        "audio": "audio/janki-9645131e0827.wav",
         "register": "casual"
       }
     ],
@@ -1023,7 +1023,7 @@
         "furigana": "毎晩[まいばん]、 日本語[にほんご]の 宿題[しゅくだい]をします。",
         "romaji": "Maiban, nihongo no shukudai o shimasu.",
         "english": "I do my Japanese homework every night.",
-        "audio": "",
+        "audio": "audio/janki-738ce246958b.wav",
         "register": "polite"
       },
       {
@@ -1031,7 +1031,7 @@
         "furigana": "じゃあ、ラーメンにする。",
         "romaji": "Jaa, raamen ni suru.",
         "english": "Okay, I'll go with ramen.",
-        "audio": "",
+        "audio": "audio/janki-33fbcf9f0434.wav",
         "register": "casual"
       }
     ],
@@ -1106,7 +1106,7 @@
         "furigana": "ここでたばこを 吸[す]ってもいいですか。",
         "romaji": "Koko de tabako o sutte mo ii desu ka.",
         "english": "May I smoke here?",
-        "audio": "",
+        "audio": "audio/janki-edb1089556d7.wav",
         "register": "polite"
       },
       {
@@ -1114,7 +1114,7 @@
         "furigana": "父[ちち]は 毎日[まいにち]たばこを 吸[す]う。",
         "romaji": "Chichi wa mainichi tabako o suu.",
         "english": "My dad smokes every day.",
-        "audio": "",
+        "audio": "audio/janki-9414f7880bfe.wav",
         "register": "casual"
       }
     ],
@@ -1187,7 +1187,7 @@
         "furigana": "暗[くら]いので、 電気[でんき]をつけます。",
         "romaji": "Kurai node, denki o tsukemasu.",
         "english": "It's dark, so I'll turn on the light.",
-        "audio": "",
+        "audio": "audio/janki-0e8ccf26e9e2.wav",
         "register": "polite"
       },
       {
@@ -1195,7 +1195,7 @@
         "furigana": "エアコンつけるね。",
         "romaji": "Eakon tsukeru ne.",
         "english": "I'm turning on the air conditioner.",
-        "audio": "",
+        "audio": "audio/janki-03f9bb3911a9.wav",
         "register": "casual"
       }
     ],
@@ -1268,7 +1268,7 @@
         "furigana": "駅前[えきまえ]に 新[あたら]しいカフェができました。",
         "romaji": "Ekimae ni atarashii kafe ga dekimashita.",
         "english": "A new cafe opened in front of the station.",
-        "audio": "",
+        "audio": "audio/janki-ec24d3ac454d.wav",
         "register": "polite"
       },
       {
@@ -1276,7 +1276,7 @@
         "furigana": "新[あたら]しいアプリができた。",
         "romaji": "Atarashii apuri ga dekita.",
         "english": "The new app is finished.",
-        "audio": "",
+        "audio": "audio/janki-7ace69cd94b3.wav",
         "register": "casual"
       }
     ],
@@ -1347,7 +1347,7 @@
         "furigana": "電車[でんしゃ]で 傘[かさ]をなくしました。",
         "romaji": "Densha de kasa o nakushimashita.",
         "english": "I lost my umbrella on the train.",
-        "audio": "",
+        "audio": "audio/janki-1c0b89787a1f.wav",
         "register": "polite"
       },
       {
@@ -1355,7 +1355,7 @@
         "furigana": "また 鍵[かぎ]をなくしたの?",
         "romaji": "Mata kagi o nakushita no?",
         "english": "Did you lose your keys again?",
-        "audio": "",
+        "audio": "audio/janki-73237337af46.wav",
         "register": "casual"
       }
     ],
@@ -1428,7 +1428,7 @@
         "furigana": "来年[らいねん]、エンジニアになります。",
         "romaji": "Rainen, enjinia ni narimasu.",
         "english": "I will become an engineer next year.",
-        "audio": "",
+        "audio": "audio/janki-11a76e9e0ebe.wav",
         "register": "polite"
       },
       {
@@ -1436,7 +1436,7 @@
         "furigana": "妹[いもうと]はプログラマーになる。",
         "romaji": "Imouto wa puroguramaa ni naru.",
         "english": "My little sister is going to become a programmer.",
-        "audio": "",
+        "audio": "audio/janki-dd67abff6e58.wav",
         "register": "casual"
       }
     ],
@@ -1508,7 +1508,7 @@
         "furigana": "駅[えき]までこの 道[みち]をまっすぐ 行[い]きます。",
         "romaji": "eki made kono michi o massugu ikimasu.",
         "english": "I go straight along this road to the station.",
-        "audio": "",
+        "audio": "audio/janki-4cb8c0a3b618.wav",
         "register": "polite"
       },
       {
@@ -1516,7 +1516,7 @@
         "furigana": "次[つぎ]の 交差点[こうさてん]までまっすぐ 行[い]くね。",
         "romaji": "tsugi no kousaten made massugu iku ne.",
         "english": "I'll go straight to the next intersection.",
-        "audio": "",
+        "audio": "audio/janki-ab0919e00ffd.wav",
         "register": "casual"
       }
     ],
@@ -1587,7 +1587,7 @@
         "furigana": "友[とも]だちに 誕生日[たんじょうび]のプレゼントをもらいました。",
         "romaji": "Tomodachi ni tanjoubi no purezento o moraimashita.",
         "english": "I got a birthday present from my friend.",
-        "audio": "",
+        "audio": "audio/janki-fc87404c00cc.wav",
         "register": "polite"
       },
       {
@@ -1595,7 +1595,7 @@
         "furigana": "姉[あね]に 古[ふる]いギターをもらった。",
         "romaji": "Ane ni furui gitaa o moratta.",
         "english": "I got an old guitar from my older sister.",
-        "audio": "",
+        "audio": "audio/janki-9520a249fb82.wav",
         "register": "casual"
       }
     ],
@@ -1668,7 +1668,7 @@
         "furigana": "来月[らいげつ]、 会社[かいしゃ]をやめます。",
         "romaji": "Raigetsu, kaisha o yamemasu.",
         "english": "I'm quitting the company next month.",
-        "audio": "",
+        "audio": "audio/janki-465fd3a94217.wav",
         "register": "polite"
       },
       {
@@ -1676,7 +1676,7 @@
         "furigana": "たばこをやめた。",
         "romaji": "Tabako o yameta.",
         "english": "I quit smoking.",
-        "audio": "",
+        "audio": "audio/janki-c61c23c2158a.wav",
         "register": "casual"
       }
     ],
@@ -1749,7 +1749,7 @@
         "furigana": "週末[しゅうまつ]に 宿題[しゅくだい]をやります。",
         "romaji": "Shuumatsu ni shukudai o yarimasu.",
         "english": "I'll do my homework on the weekend.",
-        "audio": "",
+        "audio": "audio/janki-06c5e71b9973.wav",
         "register": "polite"
       },
       {
@@ -1757,7 +1757,7 @@
         "furigana": "今日[きょう]はギターの 練習[れんしゅう]をやる。",
         "romaji": "Kyou wa gitaa no renshuu o yaru.",
         "english": "I'm going to practice guitar today.",
-        "audio": "",
+        "audio": "audio/janki-a98c5d407b4d.wav",
         "register": "casual"
       }
     ],
@@ -1829,7 +1829,7 @@
         "furigana": "仕事[しごと]の 前[まえ]にシャツにアイロンをかけます。",
         "romaji": "Shigoto no mae ni shatsu ni airon o kakemasu.",
         "english": "I iron my shirt before work.",
-        "audio": "",
+        "audio": "audio/janki-a4bc1e01e65d.wav",
         "register": "polite"
       },
       {
@@ -1837,7 +1837,7 @@
         "furigana": "明日[あした]シャツにアイロンをかけるね。",
         "romaji": "Ashita shatsu ni airon o kakeru ne.",
         "english": "I'll iron the shirt tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-1d1195592d37.wav",
         "register": "casual"
       }
     ],
@@ -1913,7 +1913,7 @@
         "furigana": "月曜日[げつようび]の 朝[あさ]にゴミを 出[だ]します。",
         "romaji": "Getsuyoubi no asa ni gomi o dashimasu.",
         "english": "I take out the trash on Monday mornings.",
-        "audio": "",
+        "audio": "audio/janki-e1dfe7f5ab41.wav",
         "register": "polite"
       },
       {
@@ -1921,7 +1921,7 @@
         "furigana": "今日[きょう]はゴミを 出[だ]す 日[ひ]だよ。",
         "romaji": "Kyou wa gomi o dasu hi da yo.",
         "english": "Today is trash day.",
-        "audio": "",
+        "audio": "audio/janki-77d51cef7d4f.wav",
         "register": "casual"
       }
     ],
@@ -1993,7 +1993,7 @@
         "furigana": "彼[かれ]はよく 授業[じゅぎょう]をサボります。",
         "romaji": "Kare wa yoku jugyou o saborimasu.",
         "english": "He often skips class.",
-        "audio": "",
+        "audio": "audio/janki-57641623edd2.wav",
         "register": "polite"
       },
       {
@@ -2001,7 +2001,7 @@
         "furigana": "明日[あした]の 授業[じゅぎょう]、サボろうかな。",
         "romaji": "Ashita no jugyou, saborou kana.",
         "english": "Maybe I'll skip tomorrow's class.",
-        "audio": "",
+        "audio": "audio/janki-6c7672b69f03.wav",
         "register": "casual"
       }
     ],
@@ -2073,7 +2073,7 @@
         "furigana": "毎朝[まいあさ]、 シャワーを 浴[あ]びます。",
         "romaji": "Maiasa, shawaa o abimasu.",
         "english": "I take a shower every morning.",
-        "audio": "",
+        "audio": "audio/janki-1df009ab9a6f.wav",
         "register": "polite"
       },
       {
@@ -2081,7 +2081,7 @@
         "furigana": "先[さき]にシャワーを 浴[あ]びるね。",
         "romaji": "Saki ni shawaa o abiru ne.",
         "english": "I'll take a shower first.",
-        "audio": "",
+        "audio": "audio/janki-10870e710477.wav",
         "register": "casual"
       }
     ],
@@ -2154,7 +2154,7 @@
         "furigana": "来月[らいげつ]からダイエットします。",
         "romaji": "Raigetsu kara daietto shimasu.",
         "english": "I'm going on a diet starting next month.",
-        "audio": "",
+        "audio": "audio/janki-340559bbe25f.wav",
         "register": "polite"
       },
       {
@@ -2162,7 +2162,7 @@
         "furigana": "夏[なつ]までダイエットしよう。",
         "romaji": "Natsu made daietto shiyou.",
         "english": "Let's diet until summer.",
-        "audio": "",
+        "audio": "audio/janki-cee7925c95eb.wav",
         "register": "casual"
       }
     ],
@@ -2231,7 +2231,7 @@
         "furigana": "来月[らいげつ]、 彼女[かのじょ]にプロポーズします。",
         "romaji": "raigetsu, kanojo ni puropoozu shimasu.",
         "english": "I'm going to propose to my girlfriend next month.",
-        "audio": "",
+        "audio": "audio/janki-0e2a1520746b.wav",
         "register": "polite"
       },
       {
@@ -2239,7 +2239,7 @@
         "furigana": "京都[きょうと]でプロポーズしたんだ。",
         "romaji": "kyouto de puropoozu shita n da.",
         "english": "I proposed in Kyoto.",
-        "audio": "",
+        "audio": "audio/janki-1217bb849cc4.wav",
         "register": "casual"
       }
     ],
@@ -2308,7 +2308,7 @@
         "furigana": "銀行[ぎんこう]でお 金[かね]を 下[お]ろします。",
         "romaji": "ginkou de okane o oroshimasu.",
         "english": "I withdraw money at the bank.",
-        "audio": "",
+        "audio": "audio/janki-a48f97617fbf.wav",
         "register": "polite"
       },
       {
@@ -2316,7 +2316,7 @@
         "furigana": "旅行[りょこう]の 前[まえ]に 少[すこ]しお 金[かね]を 下[お]ろした。",
         "romaji": "ryokou no mae ni sukoshi okane o oroshita.",
         "english": "I withdrew a little money before the trip.",
-        "audio": "",
+        "audio": "audio/janki-17c180abafae.wav",
         "register": "casual"
       }
     ],
@@ -2389,7 +2389,7 @@
         "furigana": "電車[でんしゃ]に 乗[の]り 遅[おく]れました。",
         "romaji": "Densha ni noriokuremashita.",
         "english": "I missed the train.",
-        "audio": "",
+        "audio": "audio/janki-0760927e052b.wav",
         "register": "polite"
       },
       {
@@ -2397,7 +2397,7 @@
         "furigana": "寝坊[ねぼう]してバスに 乗[の]り 遅[おく]れた。",
         "romaji": "Nebou shite basu ni noriokureta.",
         "english": "I overslept and missed the bus.",
-        "audio": "",
+        "audio": "audio/janki-e42ff7e8d4ec.wav",
         "register": "casual"
       }
     ],
@@ -2464,7 +2464,7 @@
         "furigana": "毎朝[まいあさ]、 電車[でんしゃ]に 乗[の]ります。",
         "romaji": "Maiasa, densha ni norimasu.",
         "english": "I get on the train every morning.",
-        "audio": "",
+        "audio": "audio/janki-69fc56a3e7e4.wav",
         "register": "polite"
       },
       {
@@ -2472,7 +2472,7 @@
         "furigana": "バスに 乗[の]ろう。",
         "romaji": "Basu ni norou.",
         "english": "Let's take the bus.",
-        "audio": "",
+        "audio": "audio/janki-f770e35bdda9.wav",
         "register": "casual"
       }
     ],
@@ -2546,7 +2546,7 @@
         "furigana": "レストランを 予約[よやく]しました。",
         "romaji": "Resutoran o yoyaku shimashita.",
         "english": "I reserved a restaurant.",
-        "audio": "",
+        "audio": "audio/janki-74bf9f7f8679.wav",
         "register": "polite"
       },
       {
@@ -2554,7 +2554,7 @@
         "furigana": "ホテル、もう 予約[よやく]した?",
         "romaji": "Hoteru, mou yoyaku shita?",
         "english": "Have you booked the hotel yet?",
-        "audio": "",
+        "audio": "audio/janki-2ae81cc7c906.wav",
         "register": "casual"
       }
     ],
@@ -2624,7 +2624,7 @@
         "furigana": "このバンドは 若[わか]い 人[ひと]に 人気[にんき]があります。",
         "romaji": "Kono bando wa wakai hito ni ninki ga arimasu.",
         "english": "This band is popular with young people.",
-        "audio": "",
+        "audio": "audio/janki-d217d9c159ac.wav",
         "register": "polite"
       },
       {
@@ -2632,7 +2632,7 @@
         "furigana": "あのラーメン 屋[や]、すごく 人気[にんき]があるよ。",
         "romaji": "Ano raamen-ya, sugoku ninki ga aru yo.",
         "english": "That ramen place is really popular.",
-        "audio": "",
+        "audio": "audio/janki-e9562098acda.wav",
         "register": "casual"
       }
     ],
@@ -2699,7 +2699,7 @@
         "furigana": "姉[あね]は 大学生[だいがくせい]と 付[つ]き 合[あ]っています。",
         "romaji": "Ane wa daigakusei to tsukiatte imasu.",
         "english": "My older sister is dating a university student.",
-        "audio": "",
+        "audio": "audio/janki-d273c544fd13.wav",
         "register": "polite"
       },
       {
@@ -2707,7 +2707,7 @@
         "furigana": "ちょっと 買[か]い 物[もの]に 付[つ]き 合[あ]ってくれない?",
         "romaji": "Chotto kaimono ni tsukiatte kurenai?",
         "english": "Will you keep me company shopping for a bit?",
-        "audio": "",
+        "audio": "audio/janki-39ffa25d3e48.wav",
         "register": "casual"
       }
     ],
@@ -2781,7 +2781,7 @@
         "furigana": "今日[きょう]はかぜで 学校[がっこう]を 休[やす]みます。",
         "romaji": "Kyou wa kaze de gakkou o yasumimasu.",
         "english": "I'm going to miss school today because of a cold.",
-        "audio": "",
+        "audio": "audio/janki-380f285f1feb.wav",
         "register": "polite"
       },
       {
@@ -2789,7 +2789,7 @@
         "furigana": "疲[つか]れたから、 少[すこ]し 休[やす]むね。",
         "romaji": "Tsukareta kara, sukoshi yasumu ne.",
         "english": "I'm tired, so I'm going to rest a bit.",
-        "audio": "",
+        "audio": "audio/janki-735b512d7fee.wav",
         "register": "casual"
       }
     ],
@@ -2863,7 +2863,7 @@
         "furigana": "明日[あした]、 友[とも]だちに 会[あ]います。",
         "romaji": "Ashita, tomodachi ni aimasu.",
         "english": "I'm meeting a friend tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-2a4620dc7d5e.wav",
         "register": "polite"
       },
       {
@@ -2871,7 +2871,7 @@
         "furigana": "今日[きょう]、 駅[えき]で 妹[いもうと]に 会[あ]うよ。",
         "romaji": "Kyou, eki de imouto ni au yo.",
         "english": "I'm meeting my little sister at the station today.",
-        "audio": "",
+        "audio": "audio/janki-4d9455935724.wav",
         "register": "casual"
       }
     ],
@@ -2945,7 +2945,7 @@
         "furigana": "そのシャツはよく 似合[にあ]いますね。",
         "romaji": "Sono shatsu wa yoku niaimasu ne.",
         "english": "That shirt looks really good on you.",
-        "audio": "",
+        "audio": "audio/janki-fd13d46c091a.wav",
         "register": "polite"
       },
       {
@@ -2953,7 +2953,7 @@
         "furigana": "その 帽子[ぼうし]、 似合[にあ]ってるよ。",
         "romaji": "Sono boushi, niatteru yo.",
         "english": "That hat looks good on you.",
-        "audio": "",
+        "audio": "audio/janki-a8daee85a91b.wav",
         "register": "casual"
       }
     ],
@@ -3021,7 +3021,7 @@
         "furigana": "今[いま]、 東京[とうきょう]に 住[す]んでいます。",
         "romaji": "ima, toukyou ni sunde imasu.",
         "english": "I live in Tokyo now.",
-        "audio": "",
+        "audio": "audio/janki-a0d5da6ed6a3.wav",
         "register": "polite"
       },
       {
@@ -3029,7 +3029,7 @@
         "furigana": "大学[だいがく]の 近[ちか]くに 住[す]んでる。",
         "romaji": "daigaku no chikaku ni sunderu.",
         "english": "I live near the university.",
-        "audio": "",
+        "audio": "audio/janki-ccb9f04a08ba.wav",
         "register": "casual"
       }
     ],
@@ -3102,7 +3102,7 @@
         "furigana": "今晩[こんばん]、カレーを 作[つく]ります。",
         "romaji": "konban, karee o tsukurimasu.",
         "english": "I'll make curry tonight.",
-        "audio": "",
+        "audio": "audio/janki-03edcacde5f2.wav",
         "register": "polite"
       },
       {
@@ -3110,7 +3110,7 @@
         "furigana": "週末[しゅうまつ]にアプリを 作[つく]った。",
         "romaji": "shuumatsu ni apuri o tsukutta.",
         "english": "I made an app over the weekend.",
-        "audio": "",
+        "audio": "audio/janki-f889c0b8e73f.wav",
         "register": "casual"
       }
     ],
@@ -3183,7 +3183,7 @@
         "furigana": "仕事[しごと]でパソコンを 使[つか]います。",
         "romaji": "Shigoto de pasokon o tsukaimasu.",
         "english": "I use a computer at work.",
-        "audio": "",
+        "audio": "audio/janki-7921a07db33f.wav",
         "register": "polite"
       },
       {
@@ -3191,7 +3191,7 @@
         "furigana": "このアプリ、よく 使[つか]う。",
         "romaji": "Kono apuri, yoku tsukau.",
         "english": "I use this app a lot.",
-        "audio": "",
+        "audio": "audio/janki-d0b30ab02f51.wav",
         "register": "casual"
       }
     ],
@@ -3265,7 +3265,7 @@
         "furigana": "旅行[りょこう]の 前[まえ]に 保険[ほけん]に 入[はい]ります。",
         "romaji": "Ryokou no mae ni hoken ni hairimasu.",
         "english": "I buy insurance before a trip.",
-        "audio": "",
+        "audio": "audio/janki-8c3b6e2881f1.wav",
         "register": "polite"
       },
       {
@@ -3273,7 +3273,7 @@
         "furigana": "もう 保険[ほけん]に 入[はい]った?",
         "romaji": "Mou hoken ni haitta?",
         "english": "Have you bought insurance yet?",
-        "audio": "",
+        "audio": "audio/janki-9f5a38df3451.wav",
         "register": "casual"
       }
     ],
@@ -3344,7 +3344,7 @@
         "furigana": "図書館[としょかん]で 本[ほん]を 借[か]ります。",
         "romaji": "Toshokan de hon o karimasu.",
         "english": "I borrow books at the library.",
-        "audio": "",
+        "audio": "audio/janki-51318a37e99b.wav",
         "register": "polite"
       },
       {
@@ -3352,7 +3352,7 @@
         "furigana": "ちょっとペン 借[か]りるよ。",
         "romaji": "Chotto pen kariru yo.",
         "english": "I'm borrowing your pen for a sec.",
-        "audio": "",
+        "audio": "audio/janki-3795a2149463.wav",
         "register": "casual"
       }
     ],
@@ -3425,7 +3425,7 @@
         "furigana": "兄[あに]はソフトウェア 会社[かいしゃ]で 働[はたら]いています。",
         "romaji": "ani wa sofutowea kaisha de hataraite imasu.",
         "english": "My older brother works at a software company.",
-        "audio": "",
+        "audio": "audio/janki-11f0f24d9d36.wav",
         "register": "polite"
       },
       {
@@ -3433,7 +3433,7 @@
         "furigana": "土曜日[どようび]も 働[はたら]くの？",
         "romaji": "doyoubi mo hataraku no?",
         "english": "Do you work on Saturdays too?",
-        "audio": "",
+        "audio": "audio/janki-bad591677448.wav",
         "register": "casual"
       }
     ],
@@ -3507,7 +3507,7 @@
         "furigana": "部屋[へや]に 入[はい]ってもいいですか。",
         "romaji": "Heya ni haitte mo ii desu ka.",
         "english": "May I come into the room?",
-        "audio": "",
+        "audio": "audio/janki-04e1ab9a82f7.wav",
         "register": "polite"
       },
       {
@@ -3515,7 +3515,7 @@
         "furigana": "喫茶店[きっさてん]に 入[はい]ろう。",
         "romaji": "Kissaten ni hairou.",
         "english": "Let's go into a coffee shop.",
-        "audio": "",
+        "audio": "audio/janki-925e0f9ca38b.wav",
         "register": "casual"
       }
     ],
@@ -3588,7 +3588,7 @@
         "furigana": "かばんにパソコンを 入[い]れます。",
         "romaji": "Kaban ni pasokon o iremasu.",
         "english": "I put my laptop in my bag.",
-        "audio": "",
+        "audio": "audio/janki-12c99a523a47.wav",
         "register": "polite"
       },
       {
@@ -3596,7 +3596,7 @@
         "furigana": "コーヒーに 砂糖[さとう]を 入[い]れる？",
         "romaji": "Koohii ni satou o ireru?",
         "english": "Do you put sugar in your coffee?",
-        "audio": "",
+        "audio": "audio/janki-c4aa0d4baa1f.wav",
         "register": "casual"
       }
     ],
@@ -3669,7 +3669,7 @@
         "furigana": "明日[あした]、 家族[かぞく]と 出[で]かけます。",
         "romaji": "Ashita, kazoku to dekakemasu.",
         "english": "I'm going out with my family tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-9087808fee12.wav",
         "register": "polite"
       },
       {
@@ -3677,7 +3677,7 @@
         "furigana": "今[いま]から 出[で]かけるよ。",
         "romaji": "Ima kara dekakeru yo.",
         "english": "I'm heading out now.",
-        "audio": "",
+        "audio": "audio/janki-7dacb528915c.wav",
         "register": "casual"
       }
     ],
@@ -3751,7 +3751,7 @@
         "furigana": "かばんからノートを 出[だ]します。",
         "romaji": "Kaban kara nooto o dashimasu.",
         "english": "I take a notebook out of my bag.",
-        "audio": "",
+        "audio": "audio/janki-080a310ab24a.wav",
         "register": "polite"
       },
       {
@@ -3759,7 +3759,7 @@
         "furigana": "かばんから 財布[さいふ]を 出[だ]した。",
         "romaji": "Kaban kara saifu o dashita.",
         "english": "I took my wallet out of my bag.",
-        "audio": "",
+        "audio": "audio/janki-94170b4c2d12.wav",
         "register": "casual"
       }
     ],
@@ -3838,7 +3838,7 @@
         "furigana": "明日[あした]の 会議[かいぎ]に 出[で]ます。",
         "romaji": "Ashita no kaigi ni demasu.",
         "english": "I will attend tomorrow's meeting.",
-        "audio": "",
+        "audio": "audio/janki-e208c6a85a06.wav",
         "register": "polite"
       },
       {
@@ -3846,7 +3846,7 @@
         "furigana": "七時[しちじ]に 家[いえ]を 出[で]た。",
         "romaji": "Shichiji ni ie o deta.",
         "english": "I left the house at seven.",
-        "audio": "",
+        "audio": "audio/janki-c4adf0f43ce0.wav",
         "register": "casual"
       }
     ],
@@ -3919,7 +3919,7 @@
         "furigana": "この 漢字[かんじ]が 分[わ]かりますか。",
         "romaji": "Kono kanji ga wakarimasu ka.",
         "english": "Do you understand this kanji?",
-        "audio": "",
+        "audio": "audio/janki-05998bacba79.wav",
         "register": "polite"
       },
       {
@@ -3927,7 +3927,7 @@
         "furigana": "ごめん、 よく 分[わ]からない。",
         "romaji": "Gomen, yoku wakaranai.",
         "english": "Sorry, I don't really understand.",
-        "audio": "",
+        "audio": "audio/janki-f04c5cb87ed1.wav",
         "register": "casual"
       }
     ],
@@ -3994,7 +3994,7 @@
         "furigana": "ナイフで 野菜[やさい]を 切[き]ります。",
         "romaji": "naifu de yasai o kirimasu.",
         "english": "I cut the vegetables with a knife.",
-        "audio": "",
+        "audio": "audio/janki-a049136638f1.wav",
         "register": "polite"
       },
       {
@@ -4002,7 +4002,7 @@
         "furigana": "髪[かみ]を 切[き]った。",
         "romaji": "kami o kitta.",
         "english": "I got my hair cut.",
-        "audio": "",
+        "audio": "audio/janki-5867752bc2c4.wav",
         "register": "casual"
       }
     ],
@@ -4076,7 +4076,7 @@
         "furigana": "彼女[かのじょ]と 別[わか]れました。",
         "romaji": "Kanojo to wakaremashita.",
         "english": "I broke up with my girlfriend.",
-        "audio": "",
+        "audio": "audio/janki-00270ab23c32.wav",
         "register": "polite"
       },
       {
@@ -4084,7 +4084,7 @@
         "furigana": "駅[えき]で 友達[ともだち]と 別[わか]れた。",
         "romaji": "Eki de tomodachi to wakareta.",
         "english": "I parted from my friend at the station.",
-        "audio": "",
+        "audio": "audio/janki-b192494df496.wav",
         "register": "casual"
       }
     ],
@@ -4157,7 +4157,7 @@
         "furigana": "毎日[まいにち]、 日本語[にほんご]を 勉強[べんきょう]します。",
         "romaji": "Mainichi, nihongo o benkyou shimasu.",
         "english": "I study Japanese every day.",
-        "audio": "",
+        "audio": "audio/janki-7ea81c8aefe1.wav",
         "register": "polite"
       },
       {
@@ -4165,7 +4165,7 @@
         "furigana": "今日[きょう]は 家[いえ]で 勉強[べんきょう]する。",
         "romaji": "Kyou wa ie de benkyou suru.",
         "english": "I'm going to study at home today.",
-        "audio": "",
+        "audio": "audio/janki-610903dcaad1.wav",
         "register": "casual"
       }
     ],
@@ -4235,7 +4235,7 @@
         "furigana": "来年[らいねん]、 大学[だいがく]を 卒業[そつぎょう]します。",
         "romaji": "Rainen, daigaku o sotsugyou shimasu.",
         "english": "I will graduate from university next year.",
-        "audio": "",
+        "audio": "audio/janki-3abc151bb6b1.wav",
         "register": "polite"
       },
       {
@@ -4243,7 +4243,7 @@
         "furigana": "兄[あに]は 去年[きょねん]、 高校[こうこう]を 卒業[そつぎょう]した。",
         "romaji": "Ani wa kyonen, koukou o sotsugyou shita.",
         "english": "My older brother graduated from high school last year.",
-        "audio": "",
+        "audio": "audio/janki-e12c7c0a2d6b.wav",
         "register": "casual"
       }
     ],
@@ -4313,7 +4313,7 @@
         "furigana": "明日[あした]の 会議[かいぎ]に 参加[さんか]します。",
         "romaji": "Ashita no kaigi ni sanka shimasu.",
         "english": "I will take part in tomorrow's meeting.",
-        "audio": "",
+        "audio": "audio/janki-987cc9fdaf42.wav",
         "register": "polite"
       },
       {
@@ -4321,7 +4321,7 @@
         "furigana": "来週[らいしゅう]のマラソンに 参加[さんか]するよ。",
         "romaji": "Raishuu no marason ni sanka suru yo.",
         "english": "I'm going to run in next week's marathon.",
-        "audio": "",
+        "audio": "audio/janki-1658280907d1.wav",
         "register": "casual"
       }
     ],
@@ -4392,7 +4392,7 @@
         "furigana": "来学期[らいがっき]は 日本語[にほんご]のクラスを 取[と]ります。",
         "romaji": "Raigakki wa nihongo no kurasu o torimasu.",
         "english": "I'm taking a Japanese class next semester.",
-        "audio": "",
+        "audio": "audio/janki-8f26fda4f014.wav",
         "register": "polite"
       },
       {
@@ -4400,7 +4400,7 @@
         "furigana": "テストでいい 点[てん]を 取[と]った。",
         "romaji": "Tesuto de ii ten o totta.",
         "english": "I got a good grade on the test.",
-        "audio": "",
+        "audio": "audio/janki-dbc8d146e7ae.wav",
         "register": "casual"
       }
     ],
@@ -4473,7 +4473,7 @@
         "furigana": "毎日[まいにち]ドラムを 叩[たた]きます。",
         "romaji": "Mainichi doramu o tatakimasu.",
         "english": "I play the drums every day.",
-        "audio": "",
+        "audio": "audio/janki-b12b1508707f.wav",
         "register": "polite"
       },
       {
@@ -4481,7 +4481,7 @@
         "furigana": "一緒[いっしょ]に 太鼓[たいこ]を 叩[たた]こう。",
         "romaji": "Issho ni taiko o tatakou.",
         "english": "Let's play the taiko drums together.",
-        "audio": "",
+        "audio": "audio/janki-0e45f216aa04.wav",
         "register": "casual"
       }
     ],
@@ -4554,7 +4554,7 @@
         "furigana": "銀行[ぎんこう]の 前[まえ]で 右[みぎ]に 曲[ま]がります。",
         "romaji": "ginkou no mae de migi ni magarimasu.",
         "english": "I'll turn right in front of the bank.",
-        "audio": "",
+        "audio": "audio/janki-fce11e9ecb24.wav",
         "register": "polite"
       },
       {
@@ -4562,7 +4562,7 @@
         "furigana": "次[つぎ]の 角[かど]を 右[みぎ]に 曲[ま]がってね。",
         "romaji": "tsugi no kado o migi ni magatte ne.",
         "english": "Turn right at the next corner.",
-        "audio": "",
+        "audio": "audio/janki-8ed67a72dd50.wav",
         "register": "casual"
       }
     ],
@@ -4635,7 +4635,7 @@
         "furigana": "弟[おとうと]はトランペットを 吹[ふ]きます。",
         "romaji": "Otouto wa toranpetto o fukimasu.",
         "english": "My little brother plays the trumpet.",
-        "audio": "",
+        "audio": "audio/janki-9efdb60b0643.wav",
         "register": "polite"
       },
       {
@@ -4643,7 +4643,7 @@
         "furigana": "フルートを 吹[ふ]くのが 好[す]き。",
         "romaji": "Furuuto o fuku no ga suki.",
         "english": "I like playing the flute.",
-        "audio": "",
+        "audio": "audio/janki-7dd5b1fbce74.wav",
         "register": "casual"
       }
     ],
@@ -4717,7 +4717,7 @@
         "furigana": "風邪[かぜ]で 咳[せき]が 出[で]ます。",
         "romaji": "Kaze de seki ga demasu.",
         "english": "I have a cough because of a cold.",
-        "audio": "",
+        "audio": "audio/janki-10c0c92e0f61.wav",
         "register": "polite"
       },
       {
@@ -4725,7 +4725,7 @@
         "furigana": "夜[よる]になると 咳[せき]が 出[で]る。",
         "romaji": "Yoru ni naru to seki ga deru.",
         "english": "I start coughing when night comes.",
-        "audio": "",
+        "audio": "audio/janki-f1347bce2f9f.wav",
         "register": "casual"
       }
     ],
@@ -4788,7 +4788,7 @@
         "furigana": "暑[あつ]くて 喉[のど]が 乾[かわ]きました。",
         "romaji": "Atsukute nodo ga kawakimashita.",
         "english": "It was hot and I got thirsty.",
-        "audio": "",
+        "audio": "audio/janki-697fb01e7a9d.wav",
         "register": "polite"
       },
       {
@@ -4796,7 +4796,7 @@
         "furigana": "喉[のど]が 乾[かわ]いた。 水[みず]ある？",
         "romaji": "Nodo ga kawaita. Mizu aru?",
         "english": "I'm thirsty. Is there any water?",
-        "audio": "",
+        "audio": "audio/janki-8ea1e3264147.wav",
         "register": "casual"
       }
     ],
@@ -4863,7 +4863,7 @@
         "furigana": "昼[ひる]ごはんの 時[とき]、 同僚[どうりょう]と 喋[しゃべ]ります。",
         "romaji": "Hirugohan no toki, douryou to shaberimasu.",
         "english": "I chat with my colleagues at lunchtime.",
-        "audio": "",
+        "audio": "audio/janki-553fee2a2b56.wav",
         "register": "polite"
       },
       {
@@ -4871,7 +4871,7 @@
         "furigana": "昨日[きのう]、 妹[いもうと]と 三時間[さんじかん] 喋[しゃべ]った。",
         "romaji": "Kinou, imouto to sanjikan shabetta.",
         "english": "Yesterday I chatted with my little sister for three hours.",
-        "audio": "",
+        "audio": "audio/janki-4bce916c9451.wav",
         "register": "casual"
       }
     ],
@@ -4945,7 +4945,7 @@
         "furigana": "弟[おとうと]と 喧嘩[けんか]しました。",
         "romaji": "Otouto to kenka shimashita.",
         "english": "I had a fight with my little brother.",
-        "audio": "",
+        "audio": "audio/janki-61648d84f00e.wav",
         "register": "polite"
       },
       {
@@ -4953,7 +4953,7 @@
         "furigana": "兄[あに]とまた 喧嘩[けんか]した。",
         "romaji": "Ani to mata kenka shita.",
         "english": "I got into a fight with my older brother again.",
-        "audio": "",
+        "audio": "audio/janki-9d9e60d516c2.wav",
         "register": "casual"
       }
     ],
@@ -5023,7 +5023,7 @@
         "furigana": "彼[かれ]は 時々[ときどき] 嘘[うそ]をつきます。",
         "romaji": "Kare wa tokidoki uso o tsukimasu.",
         "english": "He sometimes tells lies.",
-        "audio": "",
+        "audio": "audio/janki-bee62a002b92.wav",
         "register": "polite"
       },
       {
@@ -5031,7 +5031,7 @@
         "furigana": "嘘[うそ]をつくのはよくないよ。",
         "romaji": "Uso o tsuku no wa yokunai yo.",
         "english": "Telling lies isn't a good thing.",
-        "audio": "",
+        "audio": "audio/janki-6f102cb07324.wav",
         "register": "casual"
       }
     ],
@@ -5105,7 +5105,7 @@
         "furigana": "お 金[かね]がなくて 困[こま]っています。",
         "romaji": "Okane ga nakute komatte imasu.",
         "english": "I'm in trouble because I have no money.",
-        "audio": "",
+        "audio": "audio/janki-5ebbdff6fa44.wav",
         "register": "polite"
       },
       {
@@ -5113,7 +5113,7 @@
         "furigana": "道[みち]が 分[わ]からなくて 困[こま]った。",
         "romaji": "Michi ga wakaranakute komatta.",
         "english": "I didn't know the way and had a hard time.",
-        "audio": "",
+        "audio": "audio/janki-ae5079aaf0af.wav",
         "register": "casual"
       }
     ],
@@ -5180,7 +5180,7 @@
         "furigana": "駅前[えきまえ]の 店[みせ]で 古[ふる]いレコードを 売[う]っています。",
         "romaji": "ekimae no mise de furui rekoodo o utte imasu.",
         "english": "They sell old records at the shop in front of the station.",
-        "audio": "",
+        "audio": "audio/janki-06d612fbdb76.wav",
         "register": "polite"
       },
       {
@@ -5188,7 +5188,7 @@
         "furigana": "使[つか]わないギターをネットで 売[う]るつもり。",
         "romaji": "tsukawanai gitaa o netto de uru tsumori.",
         "english": "I'm planning to sell the guitar I don't use online.",
-        "audio": "",
+        "audio": "audio/janki-3abe3520d609.wav",
         "register": "casual"
       }
     ],
@@ -5261,7 +5261,7 @@
         "furigana": "最近[さいきん]、 少[すこ]し 太[ふと]りました。",
         "romaji": "saikin, sukoshi futorimashita.",
         "english": "I've gained a little weight recently.",
-        "audio": "",
+        "audio": "audio/janki-57d7c672e89a.wav",
         "register": "polite"
       },
       {
@@ -5269,7 +5269,7 @@
         "furigana": "ケーキばかり 食[た]べると 太[ふと]るよ。",
         "romaji": "keeki bakari taberu to futoru yo.",
         "english": "You'll gain weight if you only eat cake.",
-        "audio": "",
+        "audio": "audio/janki-8f508c941e1f.wav",
         "register": "casual"
       }
     ],
@@ -5343,7 +5343,7 @@
         "furigana": "コンサートは 七時[しちじ]に 始[はじ]まります。",
         "romaji": "Konsaato wa shichiji ni hajimarimasu.",
         "english": "The concert starts at seven.",
-        "audio": "",
+        "audio": "audio/janki-bce10b503112.wav",
         "register": "polite"
       },
       {
@@ -5351,7 +5351,7 @@
         "furigana": "授業[じゅぎょう]がもう 始[はじ]まったよ。",
         "romaji": "Jugyou ga mou hajimatta yo.",
         "english": "Class has already started.",
-        "audio": "",
+        "audio": "audio/janki-460bad8a44f6.wav",
         "register": "casual"
       }
     ],
@@ -5418,7 +5418,7 @@
         "furigana": "九時[くじ]に 会議[かいぎ]を 始[はじ]めます。",
         "romaji": "Kuji ni kaigi o hajimemasu.",
         "english": "We'll start the meeting at nine.",
-        "audio": "",
+        "audio": "audio/janki-726a4bcad853.wav",
         "register": "polite"
       },
       {
@@ -5426,7 +5426,7 @@
         "furigana": "そろそろ 勉強[べんきょう]を 始[はじ]めよう。",
         "romaji": "Sorosoro benkyou o hajimeyou.",
         "english": "Let's start studying soon.",
-        "audio": "",
+        "audio": "audio/janki-4b490f3f9403.wav",
         "register": "casual"
       }
     ],
@@ -5501,7 +5501,7 @@
         "furigana": "いつも 十一時[じゅういちじ]に 寝[ね]ます。",
         "romaji": "Itsumo juuichiji ni nemasu.",
         "english": "I always go to bed at eleven.",
-        "audio": "",
+        "audio": "audio/janki-52b24154bc69.wav",
         "register": "polite"
       },
       {
@@ -5509,7 +5509,7 @@
         "furigana": "昨日[きのう]は 早[はや]く 寝[ね]た。",
         "romaji": "Kinou wa hayaku neta.",
         "english": "I went to bed early yesterday.",
-        "audio": "",
+        "audio": "audio/janki-0d6a107d0f58.wav",
         "register": "casual"
       }
     ],
@@ -5582,7 +5582,7 @@
         "furigana": "山[やま]に 行[い]くとき、 登山靴[とざんぐつ]を 履[は]きます。",
         "romaji": "yama ni iku toki, tozangutsu o hakimasu.",
         "english": "I wear hiking boots when I go to the mountains.",
-        "audio": "",
+        "audio": "audio/janki-15bf47ab2969.wav",
         "register": "polite"
       },
       {
@@ -5590,7 +5590,7 @@
         "furigana": "新[あたら]しいジーンズを 履[は]いた。",
         "romaji": "atarashii jiinzu o haita.",
         "english": "I put on my new jeans.",
-        "audio": "",
+        "audio": "audio/janki-c2275bae7e9c.wav",
         "register": "casual"
       }
     ],
@@ -5663,7 +5663,7 @@
         "furigana": "次[つぎ]の 角[かど]を 左[ひだり]に 曲[ま]がります。",
         "romaji": "tsugi no kado o hidari ni magarimasu.",
         "english": "I'll turn left at the next corner.",
-        "audio": "",
+        "audio": "audio/janki-769c3cbb2eec.wav",
         "register": "polite"
       },
       {
@@ -5671,7 +5671,7 @@
         "furigana": "あの 信号[しんごう]で 左[ひだり]に 曲[ま]がって。",
         "romaji": "ano shingou de hidari ni magatte.",
         "english": "Turn left at that traffic light.",
-        "audio": "",
+        "audio": "audio/janki-6b1f9b62dd6f.wav",
         "register": "casual"
       }
     ],
@@ -5746,7 +5746,7 @@
         "furigana": "今日[きょう]は 六時[ろくじ]に 家[いえ]に 帰[かえ]ります。",
         "romaji": "Kyou wa rokuji ni ie ni kaerimasu.",
         "english": "I'm going home at six today.",
-        "audio": "",
+        "audio": "audio/janki-f69c155f6baf.wav",
         "register": "polite"
       },
       {
@@ -5754,7 +5754,7 @@
         "furigana": "もう 帰[かえ]るね。",
         "romaji": "Mou kaeru ne.",
         "english": "I'm heading home now.",
-        "audio": "",
+        "audio": "audio/janki-534ff374ab5f.wav",
         "register": "casual"
       }
     ],
@@ -5827,7 +5827,7 @@
         "furigana": "どうぞ、ここに 座[すわ]ってください。",
         "romaji": "Douzo, koko ni suwatte kudasai.",
         "english": "Please sit here.",
-        "audio": "",
+        "audio": "audio/janki-6985d4381118.wav",
         "register": "polite"
       },
       {
@@ -5835,7 +5835,7 @@
         "furigana": "窓[まど]の 近[ちか]くに 座[すわ]ろう。",
         "romaji": "Mado no chikaku ni suwarou.",
         "english": "Let's sit near the window.",
-        "audio": "",
+        "audio": "audio/janki-b32500a326a9.wav",
         "register": "casual"
       }
     ],
@@ -5908,7 +5908,7 @@
         "furigana": "妹[いもうと]はピアノを 弾[ひ]きます。",
         "romaji": "Imouto wa piano o hikimasu.",
         "english": "My little sister plays the piano.",
-        "audio": "",
+        "audio": "audio/janki-705b7a748241.wav",
         "register": "polite"
       },
       {
@@ -5916,7 +5916,7 @@
         "furigana": "ギター 弾[ひ]ける？",
         "romaji": "Gitaa hikeru?",
         "english": "Can you play guitar?",
-        "audio": "",
+        "audio": "audio/janki-e6f77d80de90.wav",
         "register": "casual"
       }
     ],
@@ -5989,7 +5989,7 @@
         "furigana": "駅[えき]の 前[まえ]で 待[ま]ちます。",
         "romaji": "Eki no mae de machimasu.",
         "english": "I'll wait in front of the station.",
-        "audio": "",
+        "audio": "audio/janki-d5ddce667762.wav",
         "register": "polite"
       },
       {
@@ -5997,7 +5997,7 @@
         "furigana": "ちょっと 待[ま]って。",
         "romaji": "Chotto matte.",
         "english": "Wait a second.",
-        "audio": "",
+        "audio": "audio/janki-34169ede65bb.wav",
         "register": "casual"
       }
     ],
@@ -6070,7 +6070,7 @@
         "furigana": "母[はは]は 私[わたし]の 健康[けんこう]を 心配[しんぱい]しています。",
         "romaji": "Haha wa watashi no kenkou o shinpai shite imasu.",
         "english": "My mother worries about my health.",
-        "audio": "",
+        "audio": "audio/janki-b72659b084a6.wav",
         "register": "polite"
       },
       {
@@ -6078,7 +6078,7 @@
         "furigana": "心配[しんぱい]しないで、 大丈夫[だいじょうぶ]だよ。",
         "romaji": "Shinpai shinaide, daijoubu da yo.",
         "english": "Don't worry, it's fine.",
-        "audio": "",
+        "audio": "audio/janki-c528daa95916.wav",
         "register": "casual"
       }
     ],
@@ -6143,7 +6143,7 @@
         "furigana": "電車[でんしゃ]にかさを 忘[わす]れました。",
         "romaji": "Densha ni kasa o wasuremashita.",
         "english": "I left my umbrella on the train.",
-        "audio": "",
+        "audio": "audio/janki-fdb5ef1f76d3.wav",
         "register": "polite"
       },
       {
@@ -6151,7 +6151,7 @@
         "furigana": "パスワードを 忘[わす]れちゃった。",
         "romaji": "Pasuwaado o wasurechatta.",
         "english": "I forgot the password.",
-        "audio": "",
+        "audio": "audio/janki-8eae520b1eab.wav",
         "register": "casual"
       }
     ],
@@ -6224,7 +6224,7 @@
         "furigana": "明日[あした]は 雨[あめ]が 降[ふ]ると 思[おも]います。",
         "romaji": "ashita wa ame ga furu to omoimasu.",
         "english": "I think it will rain tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-59935ed17a3f.wav",
         "register": "polite"
       },
       {
@@ -6232,7 +6232,7 @@
         "furigana": "いい 映画[えいが]だと 思[おも]った。",
         "romaji": "ii eiga da to omotta.",
         "english": "I thought it was a good movie.",
-        "audio": "",
+        "audio": "audio/janki-a4a4b505b32e.wav",
         "register": "casual"
       }
     ],
@@ -6298,7 +6298,7 @@
         "furigana": "時間[じかん]がないので、 急[いそ]ぎます。",
         "romaji": "Jikan ga nai node, isogimasu.",
         "english": "There's no time, so I'll hurry.",
-        "audio": "",
+        "audio": "audio/janki-9b86ced2b6da.wav",
         "register": "polite"
       },
       {
@@ -6306,7 +6306,7 @@
         "furigana": "早[はや]く！ 急[いそ]いで！",
         "romaji": "Hayaku! Isoide!",
         "english": "Quick! Hurry up!",
-        "audio": "",
+        "audio": "audio/janki-cc4a09566c89.wav",
         "register": "casual"
       }
     ],
@@ -6380,7 +6380,7 @@
         "furigana": "この 映画[えいが]に 感動[かんどう]しました。",
         "romaji": "Kono eiga ni kandou shimashita.",
         "english": "I was moved by this movie.",
-        "audio": "",
+        "audio": "audio/janki-180ff0d7b595.wav",
         "register": "polite"
       },
       {
@@ -6388,7 +6388,7 @@
         "furigana": "彼女[かのじょ]の 歌[うた]に 感動[かんどう]した。",
         "romaji": "Kanojo no uta ni kandou shita.",
         "english": "I was moved by her singing.",
-        "audio": "",
+        "audio": "audio/janki-2e7c3e672eba.wav",
         "register": "casual"
       }
     ],
@@ -6453,7 +6453,7 @@
         "furigana": "母[はは]の 料理[りょうり]を 手伝[てつだ]います。",
         "romaji": "Haha no ryouri o tetsudaimasu.",
         "english": "I help my mother with the cooking.",
-        "audio": "",
+        "audio": "audio/janki-3a7a24b59460.wav",
         "register": "polite"
       },
       {
@@ -6461,7 +6461,7 @@
         "furigana": "引[ひ]っ 越[こ]し、 手伝[てつだ]おうか。",
         "romaji": "Hikkoshi, tetsudaou ka.",
         "english": "Shall I help you with the move?",
-        "audio": "",
+        "audio": "audio/janki-852b93ce069b.wav",
         "register": "casual"
       }
     ],
@@ -6534,7 +6534,7 @@
         "furigana": "毎月[まいつき]、 家賃[やちん]を 払[はら]います。",
         "romaji": "Maitsuki, yachin o haraimasu.",
         "english": "I pay the rent every month.",
-        "audio": "",
+        "audio": "audio/janki-1684f3cfc029.wav",
         "register": "polite"
       },
       {
@@ -6542,7 +6542,7 @@
         "furigana": "今日[きょう]は 私[わたし]が 払[はら]うよ。",
         "romaji": "Kyou wa watashi ga harau yo.",
         "english": "I'll pay today.",
-        "audio": "",
+        "audio": "audio/janki-78c2e13a9e36.wav",
         "register": "casual"
       }
     ],
@@ -6616,7 +6616,7 @@
         "furigana": "明日[あした]、 傘[かさ]を 持[も]っていきます。",
         "romaji": "Ashita, kasa o motte ikimasu.",
         "english": "I'll take an umbrella tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-3f865dc24149.wav",
         "register": "polite"
       },
       {
@@ -6624,7 +6624,7 @@
         "furigana": "ハイキングに 水[みず]を 持[も]っていくね。",
         "romaji": "Haikingu ni mizu o motte iku ne.",
         "english": "I'll take water along on the hike.",
-        "audio": "",
+        "audio": "audio/janki-11056d4e59fb.wav",
         "register": "casual"
       }
     ],
@@ -6697,7 +6697,7 @@
         "furigana": "明日[あした]、 ノートパソコンを 持[も]ってきます。",
         "romaji": "ashita, nooto pasokon o motte kimasu.",
         "english": "I'll bring my laptop tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-6cf0a9ae834a.wav",
         "register": "polite"
       },
       {
@@ -6705,7 +6705,7 @@
         "furigana": "パーティーに 何[なに]か 持[も]ってくる？",
         "romaji": "paatii ni nanika motte kuru?",
         "english": "Are you bringing something to the party?",
-        "audio": "",
+        "audio": "audio/janki-bb51c1febb5e.wav",
         "register": "casual"
       }
     ],
@@ -6779,7 +6779,7 @@
         "furigana": "重[おも]いかばんを 持[も]ちます。",
         "romaji": "Omoi kaban o mochimasu.",
         "english": "I will carry the heavy bag.",
-        "audio": "",
+        "audio": "audio/janki-21f2732d4cd9.wav",
         "register": "polite"
       },
       {
@@ -6787,7 +6787,7 @@
         "furigana": "その 荷物[にもつ]、 持[も]つよ。",
         "romaji": "Sono nimotsu, motsu yo.",
         "english": "I'll carry that bag for you.",
-        "audio": "",
+        "audio": "audio/janki-e09f97c7d0b2.wav",
         "register": "casual"
       }
     ],
@@ -6861,7 +6861,7 @@
         "furigana": "このゴミを 捨[す]てます。",
         "romaji": "Kono gomi o sutemasu.",
         "english": "I'll throw this trash away.",
-        "audio": "",
+        "audio": "audio/janki-1a926d4a6229.wav",
         "register": "polite"
       },
       {
@@ -6869,7 +6869,7 @@
         "furigana": "古[ふる]い 雑誌[ざっし]は 捨[す]てるよ。",
         "romaji": "Furui zasshi wa suteru yo.",
         "english": "I'm throwing away the old magazines.",
-        "audio": "",
+        "audio": "audio/janki-b193961c1324.wav",
         "register": "casual"
       }
     ],
@@ -6943,7 +6943,7 @@
         "furigana": "週末[しゅうまつ]に 部屋[へや]を 掃除[そうじ]します。",
         "romaji": "Shuumatsu ni heya o souji shimasu.",
         "english": "I clean my room on the weekend.",
-        "audio": "",
+        "audio": "audio/janki-3dd35e2e702a.wav",
         "register": "polite"
       },
       {
@@ -6951,7 +6951,7 @@
         "furigana": "明日[あした]、 キッチンを 掃除[そうじ]しよう。",
         "romaji": "ashita, kitchin'osoujishiyou.",
         "english": "Let's clean the kitchen tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-7470ed060a3a.wav",
         "register": "casual"
       }
     ],
@@ -7022,7 +7022,7 @@
         "furigana": "土曜日[どようび]に 部屋[へや]に 掃除機[そうじき]をかけます。",
         "romaji": "Doyoubi ni heya ni soujiki o kakemasu.",
         "english": "I vacuum the room on Saturdays.",
-        "audio": "",
+        "audio": "audio/janki-da847a4228a3.wav",
         "register": "polite"
       },
       {
@@ -7030,7 +7030,7 @@
         "furigana": "あとで 掃除機[そうじき]をかけるよ。",
         "romaji": "Ato de soujiki o kakeru yo.",
         "english": "I'll vacuum later.",
-        "audio": "",
+        "audio": "audio/janki-5dcfee3bff28.wav",
         "register": "casual"
       }
     ],
@@ -7104,7 +7104,7 @@
         "furigana": "今[いま]、 新[あたら]しいアパートを 探[さが]しています。",
         "romaji": "Ima, atarashii apaato o sagashite imasu.",
         "english": "I'm looking for a new apartment now.",
-        "audio": "",
+        "audio": "audio/janki-7a402b3a9a8c.wav",
         "register": "polite"
       },
       {
@@ -7112,7 +7112,7 @@
         "furigana": "鍵[かぎ]を 探[さが]してる。",
         "romaji": "Kagi o sagashiteru.",
         "english": "I'm looking for my keys.",
-        "audio": "",
+        "audio": "audio/janki-6ce99114ecdd.wav",
         "register": "casual"
       }
     ],
@@ -7186,7 +7186,7 @@
         "furigana": "妹[いもうと]は 毎日[まいにち] 絵[え]を 描[か]きます。",
         "romaji": "imouto wa mainichi e o kakimasu.",
         "english": "My little sister draws pictures every day.",
-        "audio": "",
+        "audio": "audio/janki-66952cd04bd7.wav",
         "register": "polite"
       },
       {
@@ -7194,7 +7194,7 @@
         "furigana": "週末[しゅうまつ]に 山[やま]の 絵[え]を 描[か]いた。",
         "romaji": "shuumatsu ni yama no e o kaita.",
         "english": "I painted a picture of the mountains over the weekend.",
-        "audio": "",
+        "audio": "audio/janki-6ae55b57a5f5.wav",
         "register": "casual"
       }
     ],
@@ -7267,7 +7267,7 @@
         "furigana": "山[やま]で 写真[しゃしん]をたくさん 撮[と]りました。",
         "romaji": "Yama de shashin o takusan torimashita.",
         "english": "I took a lot of pictures in the mountains.",
-        "audio": "",
+        "audio": "audio/janki-b46823115458.wav",
         "register": "polite"
       },
       {
@@ -7275,7 +7275,7 @@
         "furigana": "ここで 写真[しゃしん]を 撮[と]ろう。",
         "romaji": "Koko de shashin o torou.",
         "english": "Let's take a picture here.",
-        "audio": "",
+        "audio": "audio/janki-69b11779a516.wav",
         "register": "casual"
       }
     ],
@@ -7350,7 +7350,7 @@
         "furigana": "妻[つま]に 日本語[にほんご]を 教[おし]えます。",
         "romaji": "Tsuma ni nihongo o oshiemasu.",
         "english": "I teach my wife Japanese.",
-        "audio": "",
+        "audio": "audio/janki-90f6ec23a864.wav",
         "register": "polite"
       },
       {
@@ -7358,7 +7358,7 @@
         "furigana": "あとで 使[つか]い 方[かた]を 教[おし]えるよ。",
         "romaji": "Ato de tsukaikata o oshieru yo.",
         "english": "I'll show you how to use it later.",
-        "audio": "",
+        "audio": "audio/janki-14904c7160ac.wav",
         "register": "casual"
       }
     ],
@@ -7431,7 +7431,7 @@
         "furigana": "毎晩[まいばん]、 犬[いぬ]と 散歩[さんぽ]します。",
         "romaji": "Maiban, inu to sanpo shimasu.",
         "english": "I take a walk with my dog every night.",
-        "audio": "",
+        "audio": "audio/janki-f7d152b2702d.wav",
         "register": "polite"
       },
       {
@@ -7439,7 +7439,7 @@
         "furigana": "公園[こうえん]を 散歩[さんぽ]しようか。",
         "romaji": "Kouen o sanpo shiyou ka.",
         "english": "Shall we take a walk in the park?",
-        "audio": "",
+        "audio": "audio/janki-614d5dfa95af.wav",
         "register": "casual"
       }
     ],
@@ -7509,7 +7509,7 @@
         "furigana": "晩[ばん]ごはんの 後[あと]で 散歩[さんぽ]に 行[い]きます。",
         "romaji": "Bangohan no ato de sanpo ni ikimasu.",
         "english": "I go for a walk after dinner.",
-        "audio": "",
+        "audio": "audio/janki-15d5f48d3783.wav",
         "register": "polite"
       },
       {
@@ -7517,7 +7517,7 @@
         "furigana": "犬[いぬ]と 散歩[さんぽ]に 行[い]こう。",
         "romaji": "Inu to sanpo ni ikou.",
         "english": "Let's go for a walk with the dog.",
-        "audio": "",
+        "audio": "audio/janki-ff511e721715.wav",
         "register": "casual"
       }
     ],
@@ -7587,7 +7587,7 @@
         "furigana": "今晩[こんばん]は 私[わたし]が 料理[りょうり]します。",
         "romaji": "Konban wa watashi ga ryouri shimasu.",
         "english": "I'll cook tonight.",
-        "audio": "",
+        "audio": "audio/janki-f2530a5491b0.wav",
         "register": "polite"
       },
       {
@@ -7595,7 +7595,7 @@
         "furigana": "週末[しゅうまつ]はいつも 家[いえ]で 料理[りょうり]する。",
         "romaji": "Shuumatsu wa itsumo ie de ryouri suru.",
         "english": "I always cook at home on weekends.",
-        "audio": "",
+        "audio": "audio/janki-94581acc4173.wav",
         "register": "casual"
       }
     ],
@@ -7665,7 +7665,7 @@
         "furigana": "夏休[なつやす]みに 日本[にほん]を 旅行[りょこう]します。",
         "romaji": "Natsuyasumi ni Nihon o ryokou shimasu.",
         "english": "I'll travel around Japan during summer vacation.",
-        "audio": "",
+        "audio": "audio/janki-273cd8a3a692.wav",
         "register": "polite"
       },
       {
@@ -7673,7 +7673,7 @@
         "furigana": "来月[らいげつ]、 家族[かぞく]と 旅行[りょこう]する。",
         "romaji": "Raigetsu, kazoku to ryokou suru.",
         "english": "Next month I'm traveling with my family.",
-        "audio": "",
+        "audio": "audio/janki-88d7801a9189.wav",
         "register": "casual"
       }
     ],
@@ -7743,7 +7743,7 @@
         "furigana": "毎日[まいにち]、 日本語[にほんご]で 日記[にっき]を 書[か]きます。",
         "romaji": "Mainichi, nihongo de nikki o kakimasu.",
         "english": "I write my diary in Japanese every day.",
-        "audio": "",
+        "audio": "audio/janki-89f25f48396c.wav",
         "register": "polite"
       },
       {
@@ -7751,7 +7751,7 @@
         "furigana": "名前[なまえ]をここに 書[か]いて。",
         "romaji": "Namae o koko ni kaite.",
         "english": "Write your name here.",
-        "audio": "",
+        "audio": "audio/janki-b6f2fac36461.wav",
         "register": "casual"
       }
     ],
@@ -7825,7 +7825,7 @@
         "furigana": "今朝[けさ]は 朝寝坊[あさねぼう]しました。",
         "romaji": "Kesa wa asanebou shimashita.",
         "english": "I overslept this morning.",
-        "audio": "",
+        "audio": "audio/janki-d9135eaa8e22.wav",
         "register": "polite"
       },
       {
@@ -7833,7 +7833,7 @@
         "furigana": "日曜日[にちようび]はいつも 朝寝坊[あさねぼう]する。",
         "romaji": "Nichiyoubi wa itsumo asanebou suru.",
         "english": "I always sleep in on Sundays.",
-        "audio": "",
+        "audio": "audio/janki-9f037dbc3f33.wav",
         "register": "casual"
       }
     ],
@@ -7896,7 +7896,7 @@
         "furigana": "友[とも]だちが 日本[にほん]から 来[き]ます。",
         "romaji": "Tomodachi ga Nihon kara kimasu.",
         "english": "My friend is coming from Japan.",
-        "audio": "",
+        "audio": "audio/janki-e77c5ac09f54.wav",
         "register": "polite"
       },
       {
@@ -7904,7 +7904,7 @@
         "furigana": "明日[あした]、 うちに 来[く]る?",
         "romaji": "Ashita, uchi ni kuru?",
         "english": "Are you coming over tomorrow?",
-        "audio": "",
+        "audio": "audio/janki-51811210d199.wav",
         "register": "casual"
       }
     ],
@@ -7978,7 +7978,7 @@
         "furigana": "明日[あした]、 東京[とうきょう]を 案内[あんない]します。",
         "romaji": "Ashita, Toukyou o annai shimasu.",
         "english": "I'll show you around Tokyo tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-e2046be79541.wav",
         "register": "polite"
       },
       {
@@ -7986,7 +7986,7 @@
         "furigana": "京都[きょうと]を 案内[あんない]してあげるよ。",
         "romaji": "Kyouto o annai shite ageru yo.",
         "english": "I'll show you around Kyoto.",
-        "audio": "",
+        "audio": "audio/janki-b57ba4180d71.wav",
         "register": "casual"
       }
     ],
@@ -8056,7 +8056,7 @@
         "furigana": "カラオケで 日本[にほん]の 歌[うた]を 歌[うた]います。",
         "romaji": "karaoke de nihon no uta o utaimasu.",
         "english": "I sing Japanese songs at karaoke.",
-        "audio": "",
+        "audio": "audio/janki-b72062878fce.wav",
         "register": "polite"
       },
       {
@@ -8064,7 +8064,7 @@
         "furigana": "一緒[いっしょ]に 歌[うた]おう。",
         "romaji": "issho ni utaou.",
         "english": "Let's sing together.",
-        "audio": "",
+        "audio": "audio/janki-d95b755eebd0.wav",
         "register": "casual"
       }
     ],
@@ -8137,7 +8137,7 @@
         "furigana": "駅[えき]まで 歩[ある]きます。",
         "romaji": "Eki made arukimasu.",
         "english": "I walk to the station.",
-        "audio": "",
+        "audio": "audio/janki-cfcc84da1990.wav",
         "register": "polite"
       },
       {
@@ -8145,7 +8145,7 @@
         "furigana": "山[やま]を 歩[ある]くのが 好[す]き。",
         "romaji": "Yama o aruku no ga suki.",
         "english": "I like walking in the mountains.",
-        "audio": "",
+        "audio": "audio/janki-49030402a4cf.wav",
         "register": "casual"
       }
     ],
@@ -8218,7 +8218,7 @@
         "furigana": "朝[あさ]ごはんの 後[あと]で 歯[は]を 磨[みが]きます。",
         "romaji": "Asagohan no ato de ha o migakimasu.",
         "english": "I brush my teeth after breakfast.",
-        "audio": "",
+        "audio": "audio/janki-3102a4e80503.wav",
         "register": "polite"
       },
       {
@@ -8226,7 +8226,7 @@
         "furigana": "もう 歯[は]を 磨[みが]いた？",
         "romaji": "Mou ha o migaita?",
         "english": "Did you brush your teeth already?",
-        "audio": "",
+        "audio": "audio/janki-d94180be7e61.wav",
         "register": "casual"
       }
     ],
@@ -8300,7 +8300,7 @@
         "furigana": "車[くるま]に 気[き]をつけてください。",
         "romaji": "Kuruma ni ki o tsukete kudasai.",
         "english": "Please watch out for cars.",
-        "audio": "",
+        "audio": "audio/janki-a53d171788b4.wav",
         "register": "polite"
       },
       {
@@ -8308,7 +8308,7 @@
         "furigana": "風邪[かぜ]に 気[き]をつけてね。",
         "romaji": "Kaze ni ki o tsukete ne.",
         "english": "Be careful not to catch a cold.",
-        "audio": "",
+        "audio": "audio/janki-62ee8f44964f.wav",
         "register": "casual"
       }
     ],
@@ -8381,7 +8381,7 @@
         "furigana": "旅行[りょこう]の 日[ひ]を 決[き]めます。",
         "romaji": "Ryokou no hi o kimemasu.",
         "english": "I'll decide on the day of the trip.",
-        "audio": "",
+        "audio": "audio/janki-99fdd181e5fe.wav",
         "register": "polite"
       },
       {
@@ -8389,7 +8389,7 @@
         "furigana": "今夜[こんや]の 店[みせ]、もう 決[き]めた？",
         "romaji": "Kon'ya no mise, mou kimeta?",
         "english": "Have you already decided on tonight's restaurant?",
-        "audio": "",
+        "audio": "audio/janki-02df35312836.wav",
         "register": "casual"
       }
     ],
@@ -8463,7 +8463,7 @@
         "furigana": "京都[きょうと]のホテルに 泊[と]まります。",
         "romaji": "Kyouto no hoteru ni tomarimasu.",
         "english": "I'm staying at a hotel in Kyoto.",
-        "audio": "",
+        "audio": "audio/janki-97e34111ca91.wav",
         "register": "polite"
       },
       {
@@ -8471,7 +8471,7 @@
         "furigana": "今夜[こんや]、 友[とも]だちの 家[いえ]に 泊[と]まる。",
         "romaji": "Kon'ya, tomodachi no ie ni tomaru.",
         "english": "I'm staying at my friend's place tonight.",
-        "audio": "",
+        "audio": "audio/janki-ac41483b0d36.wav",
         "register": "casual"
       }
     ],
@@ -8544,7 +8544,7 @@
         "furigana": "その 映画[えいが]を 見[み]て 泣[な]きました。",
         "romaji": "Sono eiga o mite nakimashita.",
         "english": "I watched that movie and cried.",
-        "audio": "",
+        "audio": "audio/janki-8c22404368fd.wav",
         "register": "polite"
       },
       {
@@ -8552,7 +8552,7 @@
         "furigana": "赤[あか]ちゃんが 泣[な]いてる。",
         "romaji": "Akachan ga naiteru.",
         "english": "The baby is crying.",
-        "audio": "",
+        "audio": "audio/janki-d037ce4d16bd.wav",
         "register": "casual"
       }
     ],
@@ -8627,7 +8627,7 @@
         "furigana": "足元[あしもと]に 注意[ちゅうい]してください。",
         "romaji": "ashimoto ni chuui shite kudasai.",
         "english": "Please watch your step.",
-        "audio": "",
+        "audio": "audio/janki-8e7b99598990.wav",
         "register": "polite"
       },
       {
@@ -8635,7 +8635,7 @@
         "furigana": "明日[あした]は 雨[あめ]だから、 道[みち]に 注意[ちゅうい]してね。",
         "romaji": "ashita wa ame dakara, michi ni chuui shite ne.",
         "english": "It's going to rain tomorrow, so watch out on the road.",
-        "audio": "",
+        "audio": "audio/janki-5a6b8f301746.wav",
         "register": "casual"
       }
     ],
@@ -8705,7 +8705,7 @@
         "furigana": "夏[なつ]に 海[うみ]で 泳[およ]ぎます。",
         "romaji": "Natsu ni umi de oyogimasu.",
         "english": "I swim in the ocean in summer.",
-        "audio": "",
+        "audio": "audio/janki-1226e471bec0.wav",
         "register": "polite"
       },
       {
@@ -8713,7 +8713,7 @@
         "furigana": "今日[きょう]はプールで 泳[およ]いだ。",
         "romaji": "Kyou wa puuru de oyoida.",
         "english": "I swam in the pool today.",
-        "audio": "",
+        "audio": "audio/janki-0cf15c55f8c2.wav",
         "register": "casual"
       }
     ],
@@ -8786,7 +8786,7 @@
         "furigana": "ご 飯[はん]の 前[まえ]に 手[て]を 洗[あら]います。",
         "romaji": "gohan no mae ni te o araimasu.",
         "english": "I wash my hands before meals.",
-        "audio": "",
+        "audio": "audio/janki-c3fd1743faee.wav",
         "register": "polite"
       },
       {
@@ -8794,7 +8794,7 @@
         "furigana": "今日[きょう]は 車[くるま]を 洗[あら]った。",
         "romaji": "kyou wa kuruma o aratta.",
         "english": "I washed the car today.",
-        "audio": "",
+        "audio": "audio/janki-71a19766129b.wav",
         "register": "casual"
       }
     ],
@@ -8868,7 +8868,7 @@
         "furigana": "日曜日[にちようび]に 洗濯[せんたく]します。",
         "romaji": "Nichiyoubi ni sentaku shimasu.",
         "english": "I do laundry on Sundays.",
-        "audio": "",
+        "audio": "audio/janki-9eca1c04524d.wav",
         "register": "polite"
       },
       {
@@ -8876,7 +8876,7 @@
         "furigana": "今日[きょう]は 洗濯[せんたく]しなかった。",
         "romaji": "Kyou wa sentaku shinakatta.",
         "english": "I didn't do laundry today.",
-        "audio": "",
+        "audio": "audio/janki-6d28bd84bef7.wav",
         "register": "casual"
       }
     ],
@@ -8947,7 +8947,7 @@
         "furigana": "部屋[へや]を 出[で]る 時[とき]、 電気[でんき]を 消[け]します。",
         "romaji": "Heya o deru toki, denki o keshimasu.",
         "english": "I turn off the light when I leave the room.",
-        "audio": "",
+        "audio": "audio/janki-1f5005289736.wav",
         "register": "polite"
       },
       {
@@ -8955,7 +8955,7 @@
         "furigana": "テレビを 消[け]して。",
         "romaji": "Terebi o keshite.",
         "english": "Turn off the TV.",
-        "audio": "",
+        "audio": "audio/janki-407c6956a396.wav",
         "register": "casual"
       }
     ],
@@ -9028,7 +9028,7 @@
         "furigana": "毎朝[まいあさ]、 この 橋[はし]を 渡[わた]ります。",
         "romaji": "maiasa, kono hashi o watarimasu.",
         "english": "I cross this bridge every morning.",
-        "audio": "",
+        "audio": "audio/janki-fc0e8279336b.wav",
         "register": "polite"
       },
       {
@@ -9036,7 +9036,7 @@
         "furigana": "気[き]をつけて 道[みち]を 渡[わた]ってね。",
         "romaji": "ki o tsukete michi o watatte ne.",
         "english": "Cross the street carefully.",
-        "audio": "",
+        "audio": "audio/janki-fd7a7e1c09e6.wav",
         "register": "casual"
       }
     ],
@@ -9109,7 +9109,7 @@
         "furigana": "子[こ]どもは 熱[ねつ]があります。",
         "romaji": "Kodomo wa netsu ga arimasu.",
         "english": "My child has a fever.",
-        "audio": "",
+        "audio": "audio/janki-975f54573bc8.wav",
         "register": "polite"
       },
       {
@@ -9117,7 +9117,7 @@
         "furigana": "熱[ねつ]があるから、 今日[きょう]は 家[いえ]にいる。",
         "romaji": "Netsu ga aru kara, kyou wa ie ni iru.",
         "english": "I have a fever, so I'm staying home today.",
-        "audio": "",
+        "audio": "audio/janki-243582134381.wav",
         "register": "casual"
       }
     ],
@@ -9180,7 +9180,7 @@
         "furigana": "来年[らいねん]、 日本[にほん]に 留学[りゅうがく]します。",
         "romaji": "Rainen, nihon ni ryuugaku shimasu.",
         "english": "I'm going to study abroad in Japan next year.",
-        "audio": "",
+        "audio": "audio/janki-3902882c2929.wav",
         "register": "polite"
       },
       {
@@ -9188,7 +9188,7 @@
         "furigana": "兄[あに]は 京都[きょうと]に 留学[りゅうがく]した。",
         "romaji": "Ani wa kyouto ni ryuugaku shita.",
         "english": "My older brother studied abroad in Kyoto.",
-        "audio": "",
+        "audio": "audio/janki-3287d742920e.wav",
         "register": "casual"
       }
     ],
@@ -9258,7 +9258,7 @@
         "furigana": "今日[きょう]は 仕事[しごと]で 疲[つか]れました。",
         "romaji": "Kyou wa shigoto de tsukaremashita.",
         "english": "I got tired from work today.",
-        "audio": "",
+        "audio": "audio/janki-a654a5decb44.wav",
         "register": "polite"
       },
       {
@@ -9266,7 +9266,7 @@
         "furigana": "山[やま]を 歩[ある]いて 疲[つか]れた。",
         "romaji": "Yama o aruite tsukareta.",
         "english": "I hiked in the mountains and got tired.",
-        "audio": "",
+        "audio": "audio/janki-de4909a83766.wav",
         "register": "casual"
       }
     ],
@@ -9332,7 +9332,7 @@
         "furigana": "毎日[まいにち] 歩[ある]いて、 少[すこ]し 痩[や]せました。",
         "romaji": "mainichi aruite, sukoshi yasemashita.",
         "english": "I walked every day and lost a little weight.",
-        "audio": "",
+        "audio": "audio/janki-cb445632241f.wav",
         "register": "polite"
       },
       {
@@ -9340,7 +9340,7 @@
         "furigana": "最近[さいきん]ちょっと 痩[や]せた。",
         "romaji": "saikin chotto yaseta.",
         "english": "I've lost a bit of weight lately.",
-        "audio": "",
+        "audio": "audio/janki-22aadf791ea3.wav",
         "register": "casual"
       }
     ],
@@ -9414,7 +9414,7 @@
         "furigana": "会議[かいぎ]で 新[あたら]しいアプリを 発表[はっぴょう]します。",
         "romaji": "Kaigi de atarashii apuri o happyou shimasu.",
         "english": "I'll present the new app at the meeting.",
-        "audio": "",
+        "audio": "audio/janki-41c0f964506e.wav",
         "register": "polite"
       },
       {
@@ -9422,7 +9422,7 @@
         "furigana": "明日[あした]、 クラスで 発表[はっぴょう]する。",
         "romaji": "Ashita, kurasu de happyou suru.",
         "english": "I'm giving a presentation in class tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-5ae7840a5807.wav",
         "register": "casual"
       }
     ],
@@ -9492,7 +9492,7 @@
         "furigana": "夏[なつ]に 富士山[ふじさん]に 登[のぼ]ります。",
         "romaji": "Natsu ni Fujisan ni noborimasu.",
         "english": "I'm going to climb Mt. Fuji in the summer.",
-        "audio": "",
+        "audio": "audio/janki-82bbb8beec1a.wav",
         "register": "polite"
       },
       {
@@ -9500,7 +9500,7 @@
         "furigana": "先週[せんしゅう]、 友達[ともだち]と 山[やま]に 登[のぼ]った。",
         "romaji": "Senshuu, tomodachi to yama ni nobotta.",
         "english": "Last week I climbed a mountain with friends.",
-        "audio": "",
+        "audio": "audio/janki-958395600b23.wav",
         "register": "casual"
       }
     ],
@@ -9574,7 +9574,7 @@
         "furigana": "明日[あした]、 自転車[じてんしゃ]を 直[なお]します。",
         "romaji": "Ashita, jitensha o naoshimasu.",
         "english": "I'll fix the bicycle tomorrow.",
-        "audio": "",
+        "audio": "audio/janki-0524d4dda308.wav",
         "register": "polite"
       },
       {
@@ -9582,7 +9582,7 @@
         "furigana": "作文[さくぶん]の 間違[まちが]いを 直[なお]したよ。",
         "romaji": "Sakubun no machigai o naoshita yo.",
         "english": "I corrected the mistakes in the essay.",
-        "audio": "",
+        "audio": "audio/janki-b1dea8386f7b.wav",
         "register": "casual"
       }
     ],
@@ -9656,7 +9656,7 @@
         "furigana": "先生[せんせい]に 相談[そうだん]します。",
         "romaji": "Sensei ni soudan shimasu.",
         "english": "I'll consult my teacher.",
-        "audio": "",
+        "audio": "audio/janki-9693da3f2569.wav",
         "register": "polite"
       },
       {
@@ -9664,7 +9664,7 @@
         "furigana": "ちょっと 相談[そうだん]してもいい？",
         "romaji": "Chotto soudan shite mo ii?",
         "english": "Can I talk something over with you?",
-        "audio": "",
+        "audio": "audio/janki-124296bbbd14.wav",
         "register": "casual"
       }
     ],
@@ -9734,7 +9734,7 @@
         "furigana": "電車[でんしゃ]は 十時[じゅうじ]に 東京[とうきょう] 駅[えき]に 着[つ]きます。",
         "romaji": "Densha wa juuji ni Toukyou eki ni tsukimasu.",
         "english": "The train arrives at Tokyo Station at ten o'clock.",
-        "audio": "",
+        "audio": "audio/janki-afd6cfd79e91.wav",
         "register": "polite"
       },
       {
@@ -9742,7 +9742,7 @@
         "furigana": "もう 空港[くうこう]に 着[つ]いた?",
         "romaji": "Mou kuukou ni tsuita?",
         "english": "Have you arrived at the airport yet?",
-        "audio": "",
+        "audio": "audio/janki-7fb5956c65a9.wav",
         "register": "casual"
       }
     ],
@@ -9817,7 +9817,7 @@
         "furigana": "今日[きょう]は 新[あたら]しいシャツを 着[き]ます。",
         "romaji": "kyou wa atarashii shatsu o kimasu.",
         "english": "I'm going to wear a new shirt today.",
-        "audio": "",
+        "audio": "audio/janki-cb1929418c38.wav",
         "register": "polite"
       },
       {
@@ -9825,7 +9825,7 @@
         "furigana": "寒[さむ]いからセーターを 着[き]る。",
         "romaji": "samui kara seetaa o kiru.",
         "english": "It's cold, so I'll put on a sweater.",
-        "audio": "",
+        "audio": "audio/janki-3854a0616b84.wav",
         "register": "casual"
       }
     ],
@@ -9898,7 +9898,7 @@
         "furigana": "家[いえ]に 帰[かえ]ったら、 すぐに 着替[きが]えます。",
         "romaji": "Ie ni kaettara, sugu ni kigaemasu.",
         "english": "When I get home, I change clothes right away.",
-        "audio": "",
+        "audio": "audio/janki-810e93386c36.wav",
         "register": "polite"
       },
       {
@@ -9906,7 +9906,7 @@
         "furigana": "ちょっと 待[ま]って、 着替[きが]えるから。",
         "romaji": "Chotto matte, kigaeru kara.",
         "english": "Wait a second, I'm going to change.",
-        "audio": "",
+        "audio": "audio/janki-de8009644e4e.wav",
         "register": "casual"
       }
     ],
@@ -9980,7 +9980,7 @@
         "furigana": "その 歌手[かしゅ]の 名前[なまえ]を 知[し]っていますか。",
         "romaji": "sono kashu no namae o shitte imasu ka.",
         "english": "Do you know that singer's name?",
-        "audio": "",
+        "audio": "audio/janki-f2ee3046fcaa.wav",
         "register": "polite"
       },
       {
@@ -9988,7 +9988,7 @@
         "furigana": "そのニュース、 知[し]らなかった。",
         "romaji": "sono nyuusu, shiranakatta.",
         "english": "I didn't know about that news.",
-        "audio": "",
+        "audio": "audio/janki-469db4e62ac7.wav",
         "register": "casual"
       }
     ],
