@@ -91,13 +91,17 @@ or second-guesses what came back.
   mints per build and are not stable — the GUID is what Anki matches on.
 - Surface source filename and row number in import errors.
 - Never silently discard an input row or unknown source column.
-- **Models for working on janki**: Claude Opus 5 across the board —
-  implementation at extra-high effort (`.claude/settings.json`), review and
-  planning at max (`.claude/agents/code-reviewer.md`, `.claude/agents/planner.md`).
-  No model aliases in settings: the id is written out, so a harness alias
-  change cannot silently swap the model. janki's own runtime calls follow the
-  same rule (`config.py` defaults, `claude_client.DEFAULT_EFFORT`; only the
-  ordinary Assistant turn takes a configured depth, `[assistant] effort`).
+- **Models for working on janki**: implementation is Claude Opus 5 at
+  extra-high effort (`.claude/settings.json`); review and planning are
+  Claude Fable 5.1 at max effort (`.claude/agents/code-reviewer.md`,
+  `.claude/agents/planner.md`) — the owner's decision of 2026-09-10, so a
+  reviewer reads the implementer's work with a different model rather than
+  the same one. No model aliases in settings: the id is written out, so a
+  harness alias change cannot silently swap the model. **janki's own runtime
+  calls are unaffected and stay on Claude Opus 5** (`config.py` defaults,
+  `claude_client.DEFAULT_EFFORT`; only the ordinary Assistant turn takes a
+  configured depth, `[assistant] effort`) — a development-model choice is
+  never a change to what a paid content call sends.
 - **Every development, planning, or review model launch goes through
   `scripts/claude-subscription.py`.** That is the repository's only CLI entry
   point to a model. It builds the child's environment from an allowlist,

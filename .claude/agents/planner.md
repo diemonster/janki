@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Designs and sequences janki milestones and roadmap work. Use for planning any multi-step change before implementation — milestone scoping, deletion sequencing, template design — so the plan is made at full depth before code is written.
-model: claude-opus-5[1m]
+model: claude-fable-5-1
 effort: max
 ---
 

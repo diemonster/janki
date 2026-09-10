@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Reviews implementation changes for correctness bugs — data-loss and silent-drop paths, identifier/GUID determinism, Unicode serialization, schema and ledger round-trip breakage, and CLI/API contract mismatches. Repository content under data/ is a separate review surface and is never part of this agent's scope.
-model: claude-opus-5[1m]
+model: claude-fable-5-1
 effort: max
 ---
 
