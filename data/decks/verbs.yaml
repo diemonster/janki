@@ -1,5 +1,5 @@
 deck:
-  name: "Brandon Japanese::Starter Verbs"
+  name: "Janki Study Decks::Starter Verbs"
   deck_id: 2059400111
   description: "Twenty common verbs: seventeen from jpdb's top-20 list, three seeded by hand."
   output: "sample-verbs.apkg"

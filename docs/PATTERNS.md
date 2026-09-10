@@ -88,7 +88,7 @@ rule:
 ```yaml
 deck:
   kind: pattern
-  name: "Brandon Japanese::Te-form Rules"
+  name: "Janki Study Decks::Te-form Rules"
   deck_id: 2059400113
   model_id: 1607392351
   document: "teform_song.pdf"
@@ -114,7 +114,7 @@ through `conjugation.conjugate` and asks for one form:
 deck:
   kind: conjugation
   form: te_form
-  name: "Brandon Japanese::Te-form Practice"
+  name: "Janki Study Decks::Te-form Practice"
   deck_id: 2059400114
   model_id: 1607392351
 ```

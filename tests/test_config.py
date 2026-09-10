@@ -479,7 +479,7 @@ def test_the_repository_config_loads_without_warnings(
     config = ProjectConfig.load(PROJECT_ROOT)
 
     assert capsys.readouterr().err == ""
-    assert config.name == "Brandon Japanese"
+    assert config.name == "Janki Study Decks"
     assert config.deck_dir == PROJECT_ROOT / "data/decks"
     assert config.ledger_file == PROJECT_ROOT / "data/ledger.json"
     assert config.revise_provider == "claude-code"

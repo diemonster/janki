@@ -1,5 +1,5 @@
 deck:
-  name: "Brandon Japanese::Medical Vocabulary and Phrases"
+  name: "Janki Study Decks::Medical Vocabulary and Phrases"
   deck_id: 2059400130
   description: "Body parts, illnesses, symptoms and drugstore phrases from the Meguro Language Center sheet (BP1-21)."
   output: "medical-conditions-vocab.apkg"

@@ -1,5 +1,5 @@
 [project]
-name = "Brandon Japanese"
+name = "Janki Study Decks"
 
 [paths]
 raw_dir = "data/inbox/shirabe"
@@ -21,7 +21,7 @@ scan_inbox = "data/inbox/scans"
 # janki copies the collection to a temp directory and opens the copy, and never
 # writes to yours.
 profile = "User 1"
-default_deck_name = "Brandon Japanese"
+default_deck_name = "Janki Study Decks"
 default_deck_id = 2059400110
 model_id_base = 1607392310
 
