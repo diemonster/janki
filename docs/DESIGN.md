@@ -84,6 +84,22 @@ are the quality mechanism: **when the output is wrong or thin, expand the
 template.** A bare word list has no source sentences, so its template writes
 them; everything else about the card contract is shared.
 
+A source whose printed forms the owner has bound carries that binding as
+labelled request metadata: one explicit owner-assigned layout revision per
+child, with opaque stable column identities, the exact printed witnesses the
+owner recorded for each, and the owner's ordered display labels. The model
+returns those identities as keys of the existing conjugation map; the
+response contract and its fingerprint are unchanged, and only the request
+fingerprint changes. This is a complete additional extraction template, not a
+branch in an existing one and not a fourth card-writing path: `extract`,
+`enrich --ai` and `revise` remain the three. One confirmed batch carries one
+mode, with each child bound to its own explicit layout revision. Janki
+matches no printed label at runtime and owns no header detector: the returned
+key set must be a subset of the identities the request supplied, an unknown
+identity refuses for a person to settle, an omitted identity is absent and a
+supplied empty value is a printed blank. Ordinary unlabelled extraction
+remains a fully supported input shape.
+
 Extraction's structural accounting is separate from judging the Japanese. One
 deterministic staging row represents each stable word ID; if the parsed answer
 proposes that ID more than once, the fingerprinted staging metadata preserves
@@ -188,6 +204,19 @@ in the deck definition; renaming the deck does not rederive it, and no reviewed
 shared identity is ever migrated into a scope. A copy is a distinct record, so
 one record still belongs to one word deck. The owner chooses shared or
 standalone in the Assistant's single, exact deck-creation confirmation.
+
+A record may carry an optional canonical `source_forms` table: the exact
+ordered columns its source printed, each with a stable identity and the
+owner's display label, and the cells keyed by those identities. A blank
+printed cell is a declared row with an empty value; an absent column stays
+absent; two columns may share a display label because their identities
+differ. Where it is present it selects the rows of the same Anki
+`Conjugations` field the deck already ships; where it is absent the existing
+map still does. No notetype, GUID or card direction changes, and no existing
+record is rewritten by adding this field. Per-archive provenance and the
+source's own witnesses are preserved beside it across hole-filling merges; a
+conflict with existing nonempty canonical content is disclosed under ordinary
+promotion, never silently overridden.
 
 **Kanji is a distinct content type.** An explicit character target produces one
 character note with identity `kanji:<character>` and GUID
