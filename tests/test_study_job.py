@@ -502,11 +502,15 @@ def test_a_successor_supersedes_only_an_intent_an_outcome_already_closed(
     ]
 
 
-@pytest.mark.parametrize("kind", ["curation", "finish"])
+@pytest.mark.parametrize("kind", ["finish"])
 def test_append_intent_refuses_a_kind_whose_owning_service_does_not_exist(
     tmp_path: Path, kind: str
 ) -> None:
-    """The datatype carries all five kinds; only the shipped ones are writable."""
+    """The datatype carries all five kinds; only the shipped ones are writable.
+
+    ``curation`` left this list when `application/study_curation.py` shipped;
+    ``finish`` stays until the study-finish authority does.
+    """
 
     config = _project(tmp_path)
     job = _job(config)

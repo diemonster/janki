@@ -112,13 +112,25 @@ def _fields() -> tuple[dict[str, Any], dict[str, Any]]:
     )
 
 
-def test_the_action_schema_gains_only_the_study_intents_s4_implements() -> None:
+def test_the_action_schema_gains_only_the_study_intents_its_services_implement() -> None:
+    """Reads and editor openings are emittable; owner decisions never are.
+
+    S5 added the two editor openings and one more read, because a model may
+    ask for the owner's editor and may ask what the owner already bound. What
+    it may not do is *act* inside one: `curate_study_job` and every later
+    owner-decision kind stay absent from this closed Literal, so no model turn
+    can emit them at all.
+    """
+
     intent, _options = _fields()
     kinds = set(intent["properties"]["kind"]["enum"])
 
     assert {
         "study_job_status",
         "inspect_capture_proposals",
+        "inspect_source_layout",
+        "open_layout_editor",
+        "open_curation_editor",
         "extract_study_parts",
         "retry_study_parts",
         "stage_capture_proposal",
@@ -129,8 +141,8 @@ def test_the_action_schema_gains_only_the_study_intents_s4_implements() -> None:
     assert not kinds & {
         "create_study_job",
         "record_study_choice",
-        "open_layout_editor",
-        "open_curation_editor",
+        "save_source_layout",
+        "apply_study_curation",
         "open_review_editor",
         "open_disposition_editor",
         "curate_study_job",
@@ -163,6 +175,16 @@ def test_action_options_gain_retry_indices_and_no_owner_decision_field() -> None
         "review_flags",
         "study_coverage_reason",
         "disposition",
+        # S5's owner decisions: no geometry, identity, witness, display label,
+        # layout revision or curation choice is a field of this model.
+        "layout_id",
+        "layout_revision",
+        "column_id",
+        "column_ids",
+        "display_label",
+        "label_witnesses",
+        "source_forms",
+        "curation_choice",
     }
     # The separate `approve_coverage` relay keeps its existing owner-literal
     # field; this plan neither removes nor widens it.

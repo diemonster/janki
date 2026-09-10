@@ -17,6 +17,7 @@ of why the asking changed.
 | `extract-auto.md` | `janki extract` with no `--mode` | system |
 | `extract-table.md` | `janki extract --mode table` | system |
 | `extract-prose.md` | `janki extract --mode prose` | system |
+| `extract-table-layout.md` | a confirmed `table-layout` batch, whose part carries an owner-bound layout | system |
 | `enrich-bare-word.md` | `janki enrich --ai` | system |
 | `revise-conjugation-deck.md` | confirmed conjugation-deck `revise` | system |
 | `revise-cards.md` | confirmed canonical-card `revise` | system |
@@ -44,19 +45,34 @@ and the current message. That is data, not instruction.
 The terse schema labels and Codex transport preamble described above are the
 other Python-owned pieces of request structure.
 
+A `table-layout` request's user turn also carries the owner's bound layout as
+labelled data: the layout's identity and revision, and per column its opaque
+id, printed position, the exact printed headings the owner recorded and the
+display label they chose. It is in Python for the same reason every other user
+turn is — it is the owner's data, it differs per part, and a template that
+described columns would be a second, drifting definition of what was sent. The
+response contract does not change for it: the model returns those ids as keys
+of the existing `conjugations` map, so the extraction response schema and its
+fingerprint are exactly what they were.
+
 ## The rules that keep this a directory of files
 
 **One file per pass and input shape.** A prompt that would need an `if` in its
-instruction prose is two prompts. That is why extraction has three files rather
-than one file and three rule blocks: the modes ask for genuinely different
+instruction prose is two prompts. That is why extraction has four files rather
+than one file and four rule blocks: the modes ask for genuinely different
 work, and reading `extract-table.md` should not require mentally deleting the
-prose paragraphs. The cost is that shared closing paragraph, duplicated three
-times. That is the intended trade — a reader of one file needs no other file.
+prose paragraphs. `extract-table-layout.md` is a complete file for the same
+reason — it is not `extract-table.md` plus a rule block, and the two differ in
+exactly the place a reader would otherwise have to hold both in their head: one
+asks for the printed column headings as keys, the other forbids reading a
+heading at all and asks for the opaque ids the request itself supplies. The
+cost is that shared closing paragraph, duplicated four times. That is the
+intended trade — a reader of one file needs no other file.
 
 The last of those duplicated closing paragraphs asks for the answer as the bare
 schema object through the structured-output tool: every required field present,
 no property the schema does not define, no wrapper object and no JSON string
-standing in for the object. It is byte-identical in all three files and has no
+standing in for the object. It is byte-identical in all four files and has no
 Python counterpart — no branch selects a variant of it. It is there because the
 alternative is a decoder that repairs answers: a reply whose tool argument
 arrived wrapped or stringified is still a reply somebody paid for, and
@@ -93,7 +109,7 @@ assertion goes — it reads these files, so a retired clause is a failing test
 rather than a silent weakening.
 
 Today that holds for `enrich-bare-word.md`, both `revise-*.md` files,
-`assistant-agent.md`, the three `extract-*.md` files, and
+`assistant-agent.md`, the four `extract-*.md` files, and
 `approve-coverage.md`. Assertions living in tests read the files too: they once
 read Python constants holding byte-identical copies, which meant deleting a
 clause from the live template changed nothing anyone would notice.

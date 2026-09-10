@@ -145,11 +145,18 @@ def _meanings_html(values: list[str], limit: int) -> str:
     )
 
 
-def _conjugation_html(values: dict[str, str]) -> str:
-    if not values:
+def _conjugation_rows_html(rows: Sequence[tuple[str, str]]) -> str:
+    """The one row renderer, over ``(label, value)`` pairs in the given order.
+
+    Ordered pairs rather than a mapping, because the printed table's order is
+    its columns' ordinals and two of its columns may carry the same display
+    label. A dict cannot hold that; the computed map's insertion order is the
+    same list one pair at a time.
+    """
+    if not rows:
         return ""
     items = []
-    for label, value in values.items():
+    for label, value in rows:
         items.append(
             "<div class=\"conjugation-row\">"
             f"<span class=\"conjugation-label\">{html.escape(label)}</span>"
@@ -157,6 +164,28 @@ def _conjugation_html(values: dict[str, str]) -> str:
             "</div>"
         )
     return "".join(items)
+
+
+def _conjugation_html(values: dict[str, str]) -> str:
+    return _conjugation_rows_html(list(values.items()))
+
+
+def _conjugation_field(record: VocabularyRecord) -> str:
+    """The same ``Conjugations`` field, selecting the printed table when there
+    is one.
+
+    A record whose source printed a table and whose ``conjugations`` later
+    fills from the dictionary engine keeps both; only the printed table
+    renders, because the printed table is what that source taught. A blank cell
+    renders its declared row with an empty value and an absent column renders
+    no row, so a present table that declares columns and filled none of them
+    for this word draws nothing at all — a fallback there would print derived
+    forms under a source that printed none.
+    """
+    table = record.source_forms
+    if table is not None:
+        return _conjugation_rows_html(table.rows())
+    return _conjugation_html(record.conjugations)
 
 
 def _source_text(record: VocabularyRecord) -> str:
@@ -465,7 +494,7 @@ def _field_values(
         html.escape(example.furigana),
         html.escape(example.romaji),
         html.escape(example.english),
-        _conjugation_html(record.conjugations),
+        _conjugation_field(record),
         html.escape(record.usage_notes).replace("\n", "<br>"),
         audio_field,
         image_field,

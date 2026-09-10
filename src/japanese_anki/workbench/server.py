@@ -45,7 +45,7 @@ from enum import Enum, auto
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import claude_client, extract, inputs, jpdb, ledger, operations, staging
+from japanese_anki import claude_client, inputs, jpdb, ledger, operations, staging
 from japanese_anki import status as status_module
 from japanese_anki.application import (
     ANSWER_EMPTY,
@@ -71,6 +71,7 @@ from japanese_anki.application import (
     run_model_coverage,
     source_detail,
     source_journeys,
+    study_curation,
 )
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import build as build_application
@@ -153,6 +154,7 @@ from japanese_anki.workbench.finish import (
 from japanese_anki.workbench.render import (
     FAILURE_STYLE_SOURCE,
     INTAKE_SCRIPT_SOURCE,
+    OFFERED_EXTRACTION_MODES,
     STYLE,
     FailureView,
     render_addition,
@@ -1343,15 +1345,22 @@ class _WorkbenchHandler(LocalOnlyHandler):
     def _wants_mode(self) -> str | None:
         """The page kind a person chose on the consent form, if any.
 
-        Only janki's two real modes are honoured; anything else is the
-        default, because a mode this code does not recognise must not reach
+        Only the modes this page actually offers are honoured; anything else is
+        the default, because a mode this code does not recognise must not reach
         `prompt_name` and pick a prompt by accident.
+
+        `table-layout` is excluded by name, not by omission from `MODES`: it is
+        reachable by URL the moment that tuple grows, and this route describes a
+        source the desk chose rather than a study job's bound part, so there is
+        no layout for it to send. Falling back to the default here rather than
+        raising keeps an edited query string from turning a read-only
+        description into an error page; the paid form refuses it outright.
         """
         query = self.path.split("?", 1)
         if len(query) != 2:
             return None
         asked = dict(parse_qsl(query[1])).get("mode", "")
-        return asked if asked in extract.MODES else None
+        return asked if asked in OFFERED_EXTRACTION_MODES else None
 
     def _wants_edit(self) -> bool:
         query = self.path.split("?", 1)
@@ -3065,6 +3074,25 @@ class _WorkbenchHandler(LocalOnlyHandler):
         submission: PromotionSubmission | CheckedPromotionSubmission,
     ) -> None:
         """Re-plan, consult readings when needed, and call the shared writer."""
+        session = self.server.session
+        try:
+            # The staging mutation coordination lock, before every janki lock
+            # this route reaches. Held across the re-plan, the reading check
+            # and the write, so a curation decision published in that window
+            # cannot slip between the barrier gate and the file it guards.
+            with study_curation.curation_guard(session.config):
+                self._promote_under_guard(name, staging_path, submission)
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, str(exc), truth=_ErrorTruth.LOCAL_WRITE_UNKNOWN)
+            return
+
+    def _promote_under_guard(
+        self,
+        name: str,
+        staging_path: Path,
+        submission: PromotionSubmission | CheckedPromotionSubmission,
+    ) -> None:
+        """The whole promotion route, with the coordination guard held."""
         session = self.server.session
         try:
             offline = decide_promotion(

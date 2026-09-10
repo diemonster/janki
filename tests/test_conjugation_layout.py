@@ -46,6 +46,7 @@ from japanese_anki.card_preview import (  # noqa: E402
     render_card_preview,
     write_card_preview,
 )
+from japanese_anki.models import SourceFormsTable  # noqa: E402
 
 #: The exact reported value, and labels long enough to cause the squeeze.
 SHORT_VALUE = "いけなかった"
@@ -222,5 +223,101 @@ def test_a_long_conjugation_label_leaves_its_value_a_full_line_on_a_phone(
                         )
 
                 context.close()
+        finally:
+            browser.close()
+
+
+#: A printed table with one filled cell, one the source printed *blank*, and a
+#: declared column this row has no cell for at all. The three states §4.4
+#: distinguishes, measured rather than asserted from the HTML.
+SOURCE_FORM_COLUMNS = [
+    {"id": "col-9f3a71", "label": LONG_LABELS[0]},
+    {"id": "col-2b8d04", "label": "Polite"},
+    {"id": "col-7ac511", "label": "Negative"},
+]
+SOURCE_FORM_CELLS = {"col-9f3a71": SHORT_VALUE, "col-2b8d04": ""}
+SOURCE_FORMS_TABLE = SourceFormsTable.from_dict(
+    {"columns": SOURCE_FORM_COLUMNS, "cells": SOURCE_FORM_CELLS}
+)
+
+
+def _measure_source_forms(page, width: int) -> dict:
+    """The same measurement pass, over a card whose rows come from the table."""
+    page.set_viewport_size({"width": width, "height": 900})
+    index = page.evaluate(
+        """() => {
+          const cards = Array.from(
+            document.querySelectorAll('[data-preview-card]'));
+          return cards.findIndex((c) =>
+            (c.getAttribute('data-direction') || '').toLowerCase()
+              .includes('recognition')
+            || (c.getAttribute('data-template') || '').toLowerCase()
+              .includes('recognition'));
+        }"""
+    )
+    assert index >= 0, "the preview drew no recognition card to measure"
+    page.select_option("#preview-jump", str(index))
+    if page.get_attribute("#preview-flip", "aria-pressed") != "true":
+        page.click("#preview-flip")
+    answer = page.locator("[data-preview-card]:visible [data-preview-answer]")
+    assert answer.count() == 1, "exactly one answer is on screen"
+    return answer.evaluate(MEASURE)
+
+
+def test_a_blank_printed_cell_keeps_its_own_row_on_a_phone(tmp_path: Path) -> None:
+    """A printed blank is study content, so it has to be visible as a row.
+
+    An empty `.conjugation-value` in a two-column flex row is exactly the shape
+    this file exists to catch: without its own row a reader cannot tell that
+    the source printed the column and left it empty. The absent third column
+    draws nothing at all, which is the different fact beside it.
+
+    Mutant: skip a row whose value is empty in
+    `exporters/anki._conjugation_rows_html`, or draw a row for a declared
+    column this record has no cell for.
+    """
+    config = _project(tmp_path)
+    record = dataclasses.replace(
+        HANASU,
+        conjugations={},
+        source_forms=SOURCE_FORMS_TABLE,
+    )
+    _words(tmp_path, [record])
+    deck = _word_deck(tmp_path)
+    page_path = write_card_preview(
+        render_card_preview(config, deck), tmp_path / "preview.html"
+    )
+
+    with sync_api.sync_playwright() as driver:
+        browser = _launch_installed_chrome(driver)
+        try:
+            context = browser.new_context(
+                viewport={"width": PHONE, "height": 900}, color_scheme="light"
+            )
+            page = context.new_page()
+            page.goto(page_path.as_uri())
+            page.wait_for_selector("#preview-flip")
+
+            measured = _measure_source_forms(page, PHONE)
+
+            labels = [row["label"] for row in measured["rows"]]
+            # The filled column and the printed blank, in printed order. The
+            # column this row has no cell for draws no row.
+            assert labels == [LONG_LABELS[0], "Polite"]
+            assert measured["pageOverflow"] <= 1
+            assert measured["cardOverflow"] <= 1
+            blank = next(row for row in measured["rows"] if row["label"] == "Polite")
+            filled = next(
+                row for row in measured["rows"] if row["label"] == LONG_LABELS[0]
+            )
+            assert blank["value"] == ""
+            # Its own row, on its own line, below the filled one.
+            assert blank["rowBox"]["height"] > 0
+            assert blank["rowBox"]["top"] >= filled["rowBox"]["bottom"] - 1
+            assert len(blank["labelLines"]) >= 1
+            assert blank["labelBox"]["height"] > 0
+            assert blank["rowOverflow"] <= 1
+
+            context.close()
         finally:
             browser.close()

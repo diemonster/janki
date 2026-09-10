@@ -225,6 +225,11 @@ class ExtractionDispatchExpectation:
     #: separately from the request fingerprint because a re-scoped or edited
     #: destination can leave the prompt — and so the fingerprint — identical.
     destination_deck_sha256: str = ""
+    #: The complete frozen layout this confirmation was rendered over, for a
+    #: layout-bound request. The whole object rather than its identity pair:
+    #: an identity resolved against today's mutable binding could name a
+    #: different set of columns than the one somebody agreed to send.
+    table_layout: extract.TableLayout | None = None
 
     def __post_init__(self) -> None:
         # These paths are authority and destination bindings, not display
@@ -242,6 +247,18 @@ class ExtractionDispatchExpectation:
                 self,
                 "destination_deck",
                 Path(os.path.realpath(self.destination_deck)),
+            )
+        # Mode and layout pair here as well as in the provenance, so a manifest
+        # read back with one half of the pair missing refuses at the value
+        # rather than at the request it would have rebuilt.
+        if (self.mode == extract.LAYOUT_MODE) != (self.table_layout is not None):
+            raise extract.ExtractError(
+                f"A {extract.LAYOUT_MODE} request carries exactly one bound "
+                f"layout and every other mode carries none; this one names "
+                f"{self.mode or 'auto'} mode with "
+                + ("a layout." if self.table_layout is not None else "no layout.")
+                ,
+                code="extract-layout-misaligned",
             )
 
 
@@ -440,6 +457,7 @@ def extraction_provider_plan(
     env: Mapping[str, str] | None = None,
     runner: Callable[..., Any] = subprocess.run,
     which: Callable[..., str | None] = shutil.which,
+    layout: extract.TableLayout | None = None,
 ) -> Any | None:
     """The exact provider request for one source, or None on the API path.
 
@@ -447,6 +465,10 @@ def extraction_provider_plan(
     request identity the owner confirms and the journal records. The explicit
     Anthropic API path keeps building its request inside the client, which is
     what its existing recovery and tests describe.
+
+    ``layout`` is this one input's bound layout. It reaches the planned user
+    turn here, so the saved manifest and channels describe the request that is
+    actually sent rather than one that merely resembles it.
     """
     if provider == revision_provider.ANTHROPIC_API_PROVIDER:
         return None
@@ -456,7 +478,7 @@ def extraction_provider_plan(
         style_guide=style_guide,
         task_template=system,
         system_blocks=tuple(claude_client.system_blocks(style_guide, system)),
-        user_turn=extract.prompt_for(item.origin_path.name, known),
+        user_turn=extract.prompt_for(item.origin_path.name, known, layout=layout),
         schema=extract.candidate_schema(),
         effort=claude_client.effort_for(model),
         input_blocks=(item.content_block(),),
@@ -564,6 +586,11 @@ def run_extraction_call(
             client=transport.client,
             capture=capture,
             provenance=dict(target.provenance),
+            # This transport builds its own turn inside the client, so the
+            # layout has to travel with it. Read back from the target's own
+            # saved provenance, never from a job document: the request that is
+            # sent and the request that was recorded are then the same object.
+            layout=extract.layout_from_provenance(target.provenance),
         )
     if transport.prepared is None:
         raise extract.ExtractError(
@@ -757,6 +784,48 @@ def durable_inbox_root(config: ProjectConfig) -> Path:
     return config.scan_inbox
 
 
+def _aligned_layouts(
+    prepared: Sequence[PreparedInput],
+    *,
+    mode: str | None,
+    layouts: Sequence[extract.TableLayout | None],
+) -> tuple[extract.TableLayout | None, ...]:
+    """One layout per input under the layout mode, none under any other.
+
+    Checked before anything is planned, exactly as the batch planner's
+    ``lineage`` length check is: a misalignment is a mistake about the request,
+    not a discovery to make after touching a provider.
+    """
+    supplied = tuple(layouts)
+    if mode == extract.LAYOUT_MODE:
+        if len(supplied) != len(prepared) or any(
+            item is None for item in supplied
+        ):
+            raise extract.ExtractError(
+                f"A {extract.LAYOUT_MODE} extraction sends one bound layout per "
+                f"source, in order: {len(prepared)} source(s) need "
+                f"{len(prepared)} layout(s), and this call supplied "
+                f"{sum(1 for item in supplied if item is not None)} of "
+                f"{len(supplied)}. Nothing was planned.",
+                code="extract-layout-misaligned",
+            )
+        for item in supplied:
+            if not isinstance(item, extract.TableLayout):
+                raise extract.ExtractError(
+                    "A bound source-form layout is an immutable TableLayout "
+                    "revision, not an identity pair. Nothing was planned.",
+                    code="extract-layout-misaligned",
+                )
+        return supplied
+    if any(item is not None for item in supplied):
+        raise extract.ExtractError(
+            f"A source-form layout is only sent under {extract.LAYOUT_MODE}; "
+            f"this call names {mode or 'auto'} mode. Nothing was planned.",
+            code="extract-layout-misaligned",
+        )
+    return (None,) * len(prepared)
+
+
 def plan_extraction(
     config: ProjectConfig,
     prepared: Sequence[PreparedInput],
@@ -765,6 +834,7 @@ def plan_extraction(
     model: str,
     style_guide: str,
     system: str,
+    layouts: Sequence[extract.TableLayout | None] = (),
     force: bool = False,
     scope_id: str = "",
     provider: str | None = None,
@@ -786,7 +856,16 @@ def plan_extraction(
     told to skip — are filtered to that one namespace. A shared run therefore
     stops suppressing words only a standalone deck has, and a scoped run stops
     suppressing the shared words it exists to copy.
+
+    ``layouts`` is aligned to the complete ``prepared`` sequence: one entry per
+    input, in order. Under ``table-layout`` every entry is a layout, because a
+    layout-bound part with no bound layout is exactly the request nobody
+    authored; under every other mode every entry is absent. A single-source
+    caller supplies a one-element sequence. Both mismatches refuse **before**
+    any provider request is planned, so a misaligned call cannot probe a login
+    or send a page.
     """
+    bound_layouts = _aligned_layouts(prepared, mode=mode, layouts=layouts)
     existing: list[VocabularyRecord] = (
         load_records(config.normalized_file)
         if config.normalized_file.exists()
@@ -820,8 +899,8 @@ def plan_extraction(
     patterns.load_store(config.patterns_file)
 
     planned: list[ExtractionTarget] = []
-    for item, staging_path, fingerprint in zip(
-        prepared, targets, fingerprints, strict=True
+    for item, staging_path, fingerprint, layout in zip(
+        prepared, targets, fingerprints, bound_layouts, strict=True
     ):
         # One provider request per source, planned once. The subscription
         # transport probes the local login here — before consent, and long
@@ -837,6 +916,7 @@ def plan_extraction(
             env=provider_env,
             runner=provider_runner,
             which=provider_which,
+            layout=layout,
         )
         planned.append(
             ExtractionTarget(
@@ -854,6 +934,7 @@ def plan_extraction(
                     known=skip_list,
                     source_sha256=fingerprint,
                     provider_plan=provider_plan,
+                    layout=layout,
                 ),
                 provider_plan=provider_plan,
             )
@@ -878,6 +959,7 @@ def plan_corpus_extraction(
     *,
     mode: str | None,
     model: str,
+    layout: extract.TableLayout | None = None,
     force: bool = False,
     scope_id: str = "",
     provider: str | None = None,
@@ -901,6 +983,8 @@ def plan_corpus_extraction(
         model=model,
         style_guide=claude_client.read_style_guide(config.root),
         system=prompts.load(config.root, extract.prompt_name(mode)),
+        # One source, so the aligned sequence is one element long.
+        layouts=(layout,),
         force=force,
         scope_id=scope_id,
         provider=provider,
@@ -1592,7 +1676,15 @@ def complete_extraction(
         raise operations.OperationError(refusal)
 
     item = target.item
-    built = extract.build_records(result.candidates, item, known)
+    # The frozen layout from the saved request manifest, never the current
+    # mutable job document: the record this writes describes the request that
+    # was paid for, whatever the owner has since repointed.
+    built = extract.build_records(
+        result.candidates,
+        item,
+        known,
+        layout=extract.layout_from_provenance(target_provenance),
+    )
     records = built.records
     coverage = extract.coverage_block(
         result,
@@ -1890,6 +1982,12 @@ def revalidate_extraction_request(
             expected.source,
             mode=expected.mode,
             model=expected.model,
+            # The expectation's own frozen layout, never a fresh lookup: the
+            # request-fingerprint comparison below is what refuses a layout
+            # that has changed or gone missing since the confirmation, on
+            # initial dispatch, on an unsent resume and on a selected retry
+            # alike.
+            layout=expected.table_layout,
             force=force,
             scope_id=expected.scope_id,
             provider_env=provider_env,

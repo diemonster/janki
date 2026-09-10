@@ -21,6 +21,13 @@ The owner-decision commands ``review``, ``coverage`` and ``disposition`` are
 deliberately absent: the job schema reserves their choice keys, the editors
 that record them ship with the finish, and a CLI that saved one now would be
 recording a decision over a rendering nobody had seen.
+
+``layout`` and ``curate`` are here, and both are owner-authored throughout.
+The layout file is written by the owner: janki runs no header detector, mints
+no column identity of its own and matches no printed label, and no
+model-emittable field carries a geometry, an identity, a witness, a display
+label or a revision. ``curate`` settles one identity's printed cells across
+every part that staged it, over the current edited staged values.
 """
 
 from __future__ import annotations
@@ -28,9 +35,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import json
 import sys
 from pathlib import Path
 from typing import Any
+
+from japanese_anki.errors import JankiError
 
 
 def _core() -> Any:
@@ -55,6 +65,14 @@ def _deck_creation() -> Any:
 
 def _source_parts() -> Any:
     return importlib.import_module("japanese_anki.application.source_parts")
+
+
+def _extract() -> Any:
+    return importlib.import_module("japanese_anki.extract")
+
+
+def _curation() -> Any:
+    return importlib.import_module("japanese_anki.application.study_curation")
 
 
 def _confirm_paid(prompt: str, *, yes: bool) -> bool:
@@ -86,6 +104,15 @@ def _print_status(config: Any, status: Any) -> None:
     if status.choices:
         for key in sorted(status.choices):
             print(f"  Choice {key}: {status.choices[key]}")
+    for part in sorted(status.layout_bindings):
+        print(f"  Layout {part}: {status.layout_bindings[part]}")
+    if status.pending_curation_intents:
+        print(
+            f"  {len(status.pending_curation_intents)} curation decision(s) "
+            "recorded and not finished; promotion of the files they name is "
+            "blocked until they are: "
+            + ", ".join(status.pending_curation_intents)
+        )
     for part in status.parts:
         if part.missing:
             print(f"  Parts {part.recipe_id}: unresolved — {part.refusal}")
@@ -292,6 +319,301 @@ def _select_parts(core: Any, config: Any, args: argparse.Namespace) -> int:
     return 0
 
 
+def _command_layout(config: Any, args: argparse.Namespace) -> int:
+    """Bind one owner-authored layout revision to one published part.
+
+    The layout file is the owner's. It carries the opaque column identities
+    they minted at review, the exact printed strings they recorded as each
+    column's witnesses, their ordered display labels, and the revision they
+    are saving. janki reads no header, matches no label and mints no identity;
+    it appends the revision and repoints the binding in one compare-and-swap
+    write, and refuses to rewrite a revision it already recorded.
+    """
+
+    core = _core()
+    extract = _extract()
+    if not args.layout:
+        job = core.load_study_job(config, args.job)
+        bound = core.job_layout_bindings(job)
+        if not bound:
+            print(
+                f"Study job {args.job} binds no source-form layout. Write one "
+                "and save it with --part PART --layout FILE."
+            )
+            return 0
+        for part in sorted(bound):
+            layout = bound[part]
+            print(f"{part}: layout {layout.identity}")
+            for column in layout.columns:
+                print(
+                    f"  {column.ordinal}. {column.column_id} — "
+                    f"{column.display_label} (printed: "
+                    + " | ".join(column.label_witnesses)
+                    + ")"
+                )
+        return 0
+    if not args.part:
+        print("Name the published part this layout covers with --part NAME.")
+        return 1
+    published = core.job_published_parts(config, args.job)
+    if args.part not in published:
+        print(
+            f"This job has not published {args.part}. It published: "
+            + (", ".join(published) if published else "nothing yet")
+            + "."
+        )
+        return 1
+    try:
+        written = Path(args.layout).read_bytes()
+    except OSError as exc:
+        print(f"error: could not read the layout file {args.layout}: {exc}")
+        return 1
+    try:
+        parsed = json.loads(written.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise extract.ExtractError(
+            f"The layout file {args.layout} is not readable JSON: {exc}",
+            code="extract-layout-invalid",
+        ) from exc
+    layout = extract.TableLayout.from_wire(parsed, where=str(args.layout))
+    job = core.load_study_job(config, args.job)
+    core.append_layout(
+        config,
+        args.job,
+        layout,
+        bind=(args.part,),
+        allow_identical=bool(args.rebind),
+        expected_revision=job.revision,
+    )
+    print(
+        f"Bound {args.part} to layout {layout.identity} "
+        f"({len(layout.columns)} column(s))."
+    )
+    print(
+        "A local owner decision: the revision is immutable, nothing was sent, "
+        "and no card or deck definition changed."
+    )
+    return 0
+
+
+def _curation_choices(curation: Any, config: Any, args: argparse.Namespace) -> Any:
+    """The exact choices the owner typed, and the words they typed them in."""
+
+    if args.choose:
+        record_id, _, part = str(args.choose).partition("=")
+        if not record_id or not part:
+            print("--choose names one identity and one part: RECORD_ID=PART.")
+            return None, ""
+        source = None
+        for group in curation.read_curation_groups(config, args.job):
+            if group.record_id != record_id:
+                continue
+            for occurrence in group.occurrences:
+                if occurrence.part_name == part:
+                    source = occurrence
+        if source is None:
+            print(
+                f"{part} stages no proposal for {record_id}, so there is no "
+                "table there to adopt."
+            )
+            return None, ""
+        return (
+            (
+                curation.CurationChoice(
+                    record_id=record_id,
+                    action="replace",
+                    key="",
+                    value=source.forms_wire,
+                ),
+            ),
+            f"adopt {part}'s source_forms for {record_id}",
+        )
+    if args.drop_table:
+        return (
+            (
+                curation.CurationChoice(
+                    record_id=args.record, action="remove", key=""
+                ),
+            ),
+            f"remove source_forms from {args.record}",
+        )
+    if args.remove:
+        return (
+            (
+                curation.CurationChoice(
+                    record_id=args.record, action="remove", key=args.column
+                ),
+            ),
+            f"remove source_forms[{args.column}] from {args.record}",
+        )
+    value = "" if args.blank else args.set
+    return (
+        (
+            curation.CurationChoice(
+                record_id=args.record,
+                action="replace",
+                key=args.column,
+                value=value,
+            ),
+        ),
+        f"set source_forms[{args.column}] of {args.record} to {value!r}",
+    )
+
+
+def _print_open_curation_intents(curation: Any, config: Any, job_id: str) -> None:
+    """Every recorded decision this job has not closed, and how to close it.
+
+    Printed where an owner already is when they go looking: the digest an
+    abandonment has to carry is here rather than in a second command, and a
+    decision no replay can finish says so instead of being listed beside one
+    that can.
+    """
+
+    try:
+        barriers = [
+            barrier
+            for barrier in curation.open_curation_barriers(config)
+            if barrier.job_id == job_id
+        ]
+    except JankiError as exc:
+        print(f"This job's recorded decisions could not be read: {exc}")
+        return
+    for barrier in barriers:
+        print(
+            f"Open decision {barrier.intent_id} ({barrier.decision}) over "
+            + ", ".join(barrier.paths)
+        )
+        print(f"  intent digest {barrier.intent_sha256}")
+        if barrier.unsatisfiable:
+            print(
+                "  at neither recorded digest, so no replay can finish it: "
+                + ", ".join(barrier.unsatisfiable)
+            )
+            print(
+                f"  close it with --abandon {barrier.intent_id} --expect "
+                f"{barrier.intent_sha256}"
+            )
+        elif barrier.remaining:
+            print(
+                "  still to be written: " + ", ".join(barrier.remaining) + "; "
+                f"finish it with --resume {barrier.intent_id}"
+            )
+
+
+def _command_curate(config: Any, args: argparse.Namespace) -> int:
+    """Settle one identity's printed cells across every part that staged it."""
+
+    curation = _curation()
+    if args.resume and args.abandon:
+        print(
+            "Finishing a decision and closing it unwritten are two different "
+            "decisions; name one. Nothing was written."
+        )
+        return 1
+    if args.resume:
+        outcome = curation.resume_curation(config, args.job, args.resume)
+        print(f"Curation {outcome.intent_id}: {outcome.detail}")
+        for path in outcome.written:
+            print(f"  wrote {path}")
+        for path in outcome.already_current:
+            print(f"  already at the recorded result: {path}")
+        return 0
+    if args.abandon:
+        # The owner's own decision, and never inferred: janki neither picks the
+        # intent nor supplies the digest that names it.
+        if not args.expect:
+            print(
+                "--abandon closes the exact decision you read, so name its "
+                "digest with --expect SHA256. `janki study curate "
+                f"{args.job}` prints it. Nothing was closed."
+            )
+            return 1
+        outcome = curation.abandon_intent(
+            config,
+            args.job,
+            args.abandon,
+            expected_intent_sha256=args.expect,
+        )
+        print(f"Curation {outcome.intent_id} abandoned: {outcome.detail}")
+        for path, digest in outcome.observed:
+            print(f"  observed {path} at {digest}")
+        print(
+            "Its record and evidence stay in this job's log. Decide again over "
+            "these files with an ordinary `janki study curate` command."
+        )
+        return 0
+
+    acting = bool(args.choose or args.drop_table or args.column)
+    if not acting:
+        _print_open_curation_intents(curation, config, args.job)
+        groups = curation.read_curation_groups(config, args.job)
+        if not groups:
+            print(
+                f"Study job {args.job} has no staged proposals to curate yet. "
+                "Nothing was read from a model and nothing was written."
+            )
+            return 0
+        for group in groups:
+            marker = " [parts disagree]" if group.conflicting else ""
+            print(f"{group.record_id} ({group.expression}){marker}")
+            for occurrence in group.occurrences:
+                table = occurrence.source_forms
+                cells = (
+                    ", ".join(
+                        f"{column.id}={table.cells[column.id]!r}"
+                        for column in table.columns
+                        if column.id in table.cells
+                    )
+                    if table is not None
+                    else "no printed table"
+                )
+                print(f"  {occurrence.part_name}: {cells or 'no printed cells'}")
+        print(
+            "Looking at these changes nothing. Settle one with --record ID "
+            "--column CELL, --record ID --drop-table, or --choose ID=PART."
+        )
+        return 0
+
+    if args.column and not args.record:
+        print("--column names the cell of one identity; name it with --record ID.")
+        return 1
+    if args.drop_table and not args.record:
+        print("--drop-table removes one identity's table; name it with --record ID.")
+        return 1
+    if args.column and not (args.remove or args.blank or args.set is not None):
+        print(
+            "Say what to do with that cell: --set TEXT, --blank (the printed "
+            "blank), or --remove."
+        )
+        return 1
+
+    choices, decision = _curation_choices(curation, config, args)
+    if choices is None:
+        return 1
+    if args.note:
+        decision = f"{decision} — {args.note}"
+    plan = curation.plan_curation(config, args.job, choices, decision=decision)
+    print(f"{decision}.")
+    for update in plan.prepared:
+        print(f"  {update.staging_path}: {update.sha256_before} → {update.sha256_after}")
+    for absent in plan.absent:
+        print(f"  no staged occurrence of {absent}; nothing to settle for it")
+    outcome = curation.apply_curation(config, plan)
+    print(f"Curation {outcome.intent_id}: {outcome.detail}")
+    if outcome.supersedes:
+        # The replan §6.2 describes: the decision it settles again keeps its
+        # own record and evidence, and this one says which it was.
+        print(
+            f"  recorded over closed decision {outcome.supersedes}, which "
+            "keeps its own record and evidence in this job's log"
+        )
+    print(
+        "A local owner decision over already-staged proposals: nothing was "
+        "sent, nothing was promoted, and no paid retry was needed."
+    )
+    return 0
+
+
 def _command_extract(config: Any, args: argparse.Namespace) -> int:
     """Plan this job's batch over its published parts, then send it once."""
 
@@ -306,11 +628,18 @@ def _command_extract(config: Any, args: argparse.Namespace) -> int:
         f"Batch {plan.batch_id} would send {len(plan.children)} source(s) to "
         f"{plan.model} through {plan.provider}, {plan.concurrency_limit} at a time:"
     )
+    # One confirmed batch carries one mode, and where the owner bound printed
+    # columns the job pinned it rather than the flag: say which, and say which
+    # revision each child is sent under, before anything is agreed to.
+    modes = sorted({child.expectation.mode or "auto" for child in plan.children})
+    print(f"Mode: {', '.join(modes)}")
     for child in plan.children:
+        bound = child.expectation.table_layout
         print(
             f"  {child.index}. {child.source.name} — source sha256 "
             f"{child.source_sha256}, request {child.request_fingerprint}, "
             f"operation {child.operation_id}"
+            + (f", layout {bound.identity}" if bound is not None else "")
         )
     print(f"Consent fingerprint: {plan.fingerprint}")
     if not _confirm_paid(
@@ -452,6 +781,8 @@ def _command_resume(config: Any, args: argparse.Namespace) -> int:
 _COMMANDS = {
     "new": _command_new,
     "parts": _command_parts,
+    "layout": _command_layout,
+    "curate": _command_curate,
     "extract": _command_extract,
     "recover": _command_recover,
     "assign": _command_assign,
@@ -520,11 +851,124 @@ def add_study_parser(subparsers: Any, path: Any, handler: Any) -> None:
         ),
     )
 
+    layout = commands.add_parser(
+        "layout",
+        help=(
+            "Bind one owner-written source-form layout to one published part. "
+            "With no --layout, print what this job already binds."
+        ),
+    )
+    layout.add_argument("job", metavar="JOB")
+    layout.add_argument("--part", default="", metavar="PART")
+    layout.add_argument(
+        "--layout",
+        type=path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Your own layout file: the opaque column ids you minted, each "
+            "column's printed position, the exact printed headings you "
+            "recorded and your display labels. janki reads no header and "
+            "matches no label."
+        ),
+    )
+    layout.add_argument(
+        "--rebind",
+        action="store_true",
+        help=(
+            "Accept a file that saves a revision this job already records "
+            "identically, and point this part at it. A revision whose columns "
+            "differ is always refused: it is immutable."
+        ),
+    )
+
+    curate = commands.add_parser(
+        "curate",
+        help=(
+            "Settle one identity's printed cells across every part that staged "
+            "it. With no action, list what the parts propose."
+        ),
+    )
+    curate.add_argument("job", metavar="JOB")
+    curate.add_argument("--record", default="", metavar="ID")
+    curate.add_argument("--column", default="", metavar="CELL_ID")
+    curate.add_argument("--set", default=None, metavar="TEXT")
+    curate.add_argument(
+        "--blank",
+        action="store_true",
+        help="The printed blank: a declared row whose value the source left empty.",
+    )
+    curate.add_argument(
+        "--remove",
+        action="store_true",
+        help="Delete that one cell. Absent is a different fact from blank.",
+    )
+    curate.add_argument(
+        "--drop-table",
+        action="store_true",
+        help="Delete this identity's whole printed table from every staged copy.",
+    )
+    curate.add_argument(
+        "--choose",
+        default="",
+        metavar="RECORD_ID=PART",
+        help=(
+            "Adopt the table that part staged for this identity into every "
+            "other part's staged copy of it."
+        ),
+    )
+    curate.add_argument(
+        "--note",
+        default="",
+        metavar="TEXT",
+        help="Your own words about the decision, recorded with it.",
+    )
+    curate.add_argument(
+        "--resume",
+        default="",
+        metavar="INTENT",
+        help=(
+            "Finish a decision that was recorded but not completely written. "
+            "It writes exactly the text that decision recorded."
+        ),
+    )
+    curate.add_argument(
+        "--abandon",
+        default="",
+        metavar="INTENT",
+        help=(
+            "Close a recorded decision without writing it, when a bound file "
+            "has moved to neither digest it recorded and no replay can finish "
+            "it. Records the mixed snapshot it measures; reverts nothing and "
+            "deletes no evidence. Needs --expect."
+        ),
+    )
+    curate.add_argument(
+        "--expect",
+        default="",
+        metavar="SHA256",
+        help=(
+            "The digest of the exact intent --abandon closes, as this job "
+            "records it. `janki study curate JOB` and the promotion refusal "
+            "both print it."
+        ),
+    )
+
     extract = commands.add_parser(
         "extract", help="Send this job's published parts as one confirmed batch."
     )
     extract.add_argument("job", metavar="JOB")
-    extract.add_argument("--mode", default=None, metavar="MODE")
+    extract.add_argument(
+        "--mode",
+        default=None,
+        metavar="MODE",
+        help=(
+            "Send these parts under one named extraction mode. Omit it: a job "
+            "whose parts carry bound source-form layouts pins the layout mode "
+            "from those bindings, and every other batch lets the model judge "
+            "each page."
+        ),
+    )
     extract.add_argument("--concurrency", type=int, default=2, metavar="N")
     extract.add_argument(
         "--yes",

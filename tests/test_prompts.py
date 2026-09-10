@@ -25,6 +25,7 @@ SHIPPED = (
     "style-guide",
     "extract-auto",
     "extract-table",
+    "extract-table-layout",
     "extract-prose",
     "enrich-bare-word",
     "revise-conjugation-deck",
@@ -33,14 +34,25 @@ SHIPPED = (
     "approve-coverage",
 )
 
-#: The complete vocabulary-card contract has exactly these four input shapes.
+#: The complete vocabulary-card contract has exactly these five input shapes.
 #: Revision writes an existing conjugation drill's narrower card shape, while
 #: the style guide is shared context and approve-coverage counts source units.
 RICH_TEMPLATES = (
     "extract-auto",
     "extract-table",
+    "extract-table-layout",
     "extract-prose",
     "enrich-bare-word",
+)
+
+#: Every complete extraction template. The shared closing paragraphs and the
+#: whole-source accounting rules are asserted over all of them, so a fourth
+#: file cannot ship with a quietly weakened copy of one.
+EXTRACTION_TEMPLATES = (
+    "extract-auto",
+    "extract-table",
+    "extract-table-layout",
+    "extract-prose",
 )
 
 CARD_WRITING_TEMPLATES = (
@@ -210,8 +222,15 @@ def test_the_directory_holds_no_file_nothing_sends() -> None:
     assert on_disk == {*SHIPPED, "README"}
 
 
-def test_card_writing_has_exactly_six_task_templates() -> None:
-    """Three source shapes, enrichment, and the two explicit revision shapes."""
+def test_card_writing_has_exactly_seven_task_templates() -> None:
+    """Four source shapes, enrichment, and the two explicit revision shapes.
+
+    The fourth source shape is `extract-table-layout`: a table whose printed
+    form columns the owner has already bound. It is a complete additional
+    template rather than a branch inside `extract-table`, and it is not a
+    fourth card-*writing* path — `extract`, `enrich --ai` and `revise` are
+    still the three.
+    """
     assert set(SHIPPED) - {
         "style-guide",
         "assistant-agent",
@@ -219,7 +238,7 @@ def test_card_writing_has_exactly_six_task_templates() -> None:
     } == set(
         CARD_WRITING_TEMPLATES
     )
-    assert len(CARD_WRITING_TEMPLATES) == 6
+    assert len(CARD_WRITING_TEMPLATES) == 7
 
 
 def test_repository_agent_returns_only_prose_and_one_closed_intent() -> None:
@@ -448,7 +467,7 @@ def test_prose_explicit_teaching_requires_one_total_compact_selection() -> None:
     ) in text
 
 
-@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+@pytest.mark.parametrize("name", EXTRACTION_TEMPLATES)
 def test_extraction_patterns_can_be_taught_without_a_heading(name: str) -> None:
     """Repeated evidence teaches only a bounded general construction."""
     text = " ".join(prompts.load(REPO_ROOT, name).split())
@@ -473,7 +492,7 @@ def test_extraction_patterns_can_be_taught_without_a_heading(name: str) -> None:
     ) not in text
 
 
-@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+@pytest.mark.parametrize("name", EXTRACTION_TEMPLATES)
 def test_extraction_document_kinds_name_the_source_shapes(name: str) -> None:
     """One whole-source primary purpose resolves mixed and embedded material."""
     text = " ".join(prompts.load(REPO_ROOT, name).split())
@@ -505,7 +524,7 @@ def test_extraction_document_kinds_name_the_source_shapes(name: str) -> None:
     assert "Use unknown for anything else." not in text
 
 
-@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+@pytest.mark.parametrize("name", EXTRACTION_TEMPLATES)
 def test_extraction_has_a_final_pattern_completeness_check(name: str) -> None:
     """Candidate completion cannot consume the pattern half of the paid answer."""
     text = " ".join(prompts.load(REPO_ROOT, name).split())
@@ -541,7 +560,7 @@ def test_extraction_has_a_final_pattern_completeness_check(name: str) -> None:
     ) not in text
 
 
-@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+@pytest.mark.parametrize("name", EXTRACTION_TEMPLATES)
 def test_extraction_patterns_keep_marked_errors_out_of_templates(name: str) -> None:
     """The model transcribes source-taught corrections; it never performs one."""
     text = " ".join(prompts.load(REPO_ROOT, name).split())
@@ -579,7 +598,7 @@ def test_extraction_patterns_keep_marked_errors_out_of_templates(name: str) -> N
     assert "create a pattern from the correction" not in text
 
 
-@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+@pytest.mark.parametrize("name", EXTRACTION_TEMPLATES)
 def test_every_extraction_candidate_gets_a_final_completeness_check(name: str) -> None:
     """One structured object is a card, not a stub the reviewer must author."""
     text = " ".join(prompts.load(REPO_ROOT, name).split())
@@ -608,7 +627,7 @@ def test_every_extraction_candidate_gets_a_final_completeness_check(name: str) -
     assert "usage_notes may remain empty when there is no useful nuance." in text
 
 
-@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+@pytest.mark.parametrize("name", EXTRACTION_TEMPLATES)
 def test_every_extraction_prompt_prioritizes_complete_cards_before_patterns(
     name: str,
 ) -> None:
@@ -913,7 +932,7 @@ def test_each_rich_input_shape_has_a_complete_distinct_template() -> None:
     """Each file stands alone and asks for the same complete card contract."""
     texts = {name: prompts.load(REPO_ROOT, name) for name in RICH_TEMPLATES}
 
-    assert len(set(texts.values())) == 4
+    assert len(set(texts.values())) == 5
     for name, text in texts.items():
         lowered = text.lower()
         assert "gloss" in lowered, name

@@ -51,7 +51,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import ledger, operations
+from japanese_anki import extract, ledger, operations
 from japanese_anki.application import extraction_batch, source_parts
 from japanese_anki.application.extraction import durable_inbox_root
 from japanese_anki.config import ProjectConfig
@@ -81,8 +81,11 @@ __all__ = [
     "StudyJobPreview",
     "StudyJobStatus",
     "append_intent",
+    "append_layout",
     "append_outcome",
     "discover_actions",
+    "job_layout_bindings",
+    "job_part_layouts",
     "dispatch_job_batch",
     "job_destination_deck",
     "job_part_sources",
@@ -90,6 +93,7 @@ __all__ = [
     "list_study_jobs",
     "load_study_job",
     "new_intent_id",
+    "parts_with_bound_layouts",
     "open_study_job",
     "plan_job_batch_retry",
     "plan_job_extraction_batch",
@@ -125,10 +129,11 @@ JOB_KINDS = ("source_extraction",)
 #: reserves a service's ids is only meaningful once that service exists.
 INTENT_KINDS = ("source_parts", "extract_batch", "retry", "curation", "finish")
 
-#: The kinds whose owning service ships today. ``curation`` belongs to the
-#: cross-part curation writer and ``finish`` to the study-finish authority;
-#: appending one before its writer exists would reserve ids nothing can honour.
-_WRITABLE_INTENT_KINDS = ("source_parts", "extract_batch", "retry")
+#: The kinds whose owning service ships today. ``finish`` belongs to the
+#: study-finish authority; appending one before its writer exists would reserve
+#: ids nothing can honour. ``curation`` joined this list with
+#: ``application/study_curation.py``.
+_WRITABLE_INTENT_KINDS = ("source_parts", "extract_batch", "retry", "curation")
 
 #: How an intent ends. Nothing else closes one, and nothing reopens it.
 OUTCOME_STATES = ("applied", "refused", "abandoned")
@@ -702,6 +707,155 @@ def record_choice(
     )
 
 
+def append_layout(
+    config: ProjectConfig,
+    job_id: str,
+    layout: extract.TableLayout,
+    *,
+    bind: Sequence[str] = (),
+    allow_identical: bool = False,
+    expected_revision: str,
+) -> StudyJob:
+    """Append one immutable layout revision and repoint its parts, in one save.
+
+    The sole creator of a ``(layout_id, revision)``. It refuses an existing key
+    whose content differs, so neither a choice edit nor a re-Save can rewrite a
+    revision a dispatched child already bound; an identical re-Save is a
+    refusal too unless the caller says ``allow_identical``, because saving the
+    same revision twice is usually a stale editor rather than a decision.
+
+    ``bind`` names the parts this revision now covers. The append and the
+    repoint are **one** compare-and-swap write: a crash between two writes
+    would otherwise leave a binding pointing at a revision that does not exist,
+    or a revision nothing points at with the owner believing they had bound it.
+    Repointing a part at a revision this job already recorded needs no new
+    revision and goes through :func:`record_choice`.
+
+    The owner authors every part of this: the geometry, the opaque column
+    identities, the printed witnesses, the display labels and which part each
+    revision covers. No model-emittable field carries any of them, and nothing
+    here reads a heading, a cell or a word.
+    """
+
+    if not isinstance(layout, extract.TableLayout):
+        raise StudyJobError(
+            "A study job layout is an immutable TableLayout revision the owner "
+            "authored, not an identity pair."
+        )
+    wanted = list(dict.fromkeys(str(name) for name in bind))
+    if any(not name.strip() for name in wanted):
+        raise StudyJobError(
+            "A layout binding names the published part it covers, by name."
+        )
+    job = _at_revision(config, job_id, expected_revision)
+    key = _layout_key(layout.layout_id, layout.revision)
+    frozen = _plain(layout.to_wire())
+    held = job.layouts.get(key)
+    if held is not None:
+        if held != frozen:
+            raise StudyJobError(
+                f"Study job {job_id} already records layout {layout.identity} "
+                "with different columns. A layout revision is immutable — a "
+                "dispatched child may already have been sent under it — so save "
+                "the change as a new revision instead. Nothing was written."
+            )
+        if not allow_identical:
+            raise StudyJobError(
+                f"Study job {job_id} already records layout {layout.identity} "
+                "exactly as saved. Nothing was written."
+            )
+    layouts = dict(job.layouts)
+    layouts[key] = frozen
+    choices = dict(job.choices)
+    if wanted:
+        bindings = dict(choices.get("part_layout_bindings") or {})
+        for name in wanted:
+            bindings[name] = [layout.layout_id, layout.revision]
+        # Through the same checker an ordinary choice edit uses, over the
+        # layouts this write is about to publish: one binding per part, and
+        # every binding pointing at a revision that exists.
+        choices["part_layout_bindings"] = _checked_layout_bindings(bindings, layouts)
+    return _save(
+        StudyJob(
+            path=job.path,
+            revision=job.revision,
+            header=job.header,
+            choices=choices,
+            layouts=layouts,
+            intents=job.intents,
+            outcomes=job.outcomes,
+        ),
+        expected_revision=job.revision,
+    )
+
+
+def job_layout_bindings(job: StudyJob) -> dict[str, extract.TableLayout]:
+    """Every part this job binds a layout to, with that exact revision.
+
+    Read from the job's own two namespaces: the mutable reference in
+    ``choices`` and the immutable revision in ``layouts``. A replay never comes
+    through here — a dispatched child reads its layout back from the request it
+    saved — so repointing a binding afterwards cannot redefine a paid request.
+    """
+
+    bindings = job.choices.get("part_layout_bindings")
+    if not isinstance(bindings, Mapping):
+        return {}
+    found: dict[str, extract.TableLayout] = {}
+    for part, reference in bindings.items():
+        if (
+            not isinstance(reference, Sequence)
+            or isinstance(reference, str)
+            or len(reference) != 2
+        ):
+            raise StudyJobError(
+                f"The layout binding for {part} is not one (layout_id, revision) "
+                "pair; this job document was hand-edited."
+            )
+        key = _layout_key(str(reference[0]), reference[1])
+        frozen = job.layouts.get(key)
+        if frozen is None:
+            raise StudyJobError(
+                f"The layout binding for {part} names layout {key}, which this "
+                "job does not record. Nothing was planned."
+            )
+        found[str(part)] = extract.TableLayout.from_wire(
+            frozen, where=f"study job {job.header.job_id} layout {key}"
+        )
+    return found
+
+
+def job_part_layouts(config: ProjectConfig, job_id: str) -> dict[str, str]:
+    """Part name → the ``layout_id@revision`` this job binds it to. Reads only."""
+
+    job = load_study_job(config, job_id)
+    return {
+        part: _layout_key(layout.layout_id, layout.revision)
+        for part, layout in job_layout_bindings(job).items()
+    }
+
+
+def parts_with_bound_layouts(config: ProjectConfig) -> dict[str, tuple[str, ...]]:
+    """Every part name some job binds a layout to, and which jobs those are.
+
+    Used by the surfaces that plan a *bare* extraction over a corpus file: a
+    part whose printed columns an owner bound must not be sent under `auto`,
+    which would silently ask `extract-auto` for a table nobody described. An
+    unreadable sibling job is skipped rather than blocking every other one.
+    """
+
+    found: dict[str, list[str]] = {}
+    for job_id in list_study_jobs(config):
+        try:
+            job = load_study_job(config, job_id)
+            bindings = job_layout_bindings(job)
+        except (JankiError, OSError):
+            continue
+        for part in bindings:
+            found.setdefault(part, []).append(job_id)
+    return {part: tuple(jobs) for part, jobs in sorted(found.items())}
+
+
 def append_intent(
     config: ProjectConfig,
     job_id: str,
@@ -919,6 +1073,46 @@ def _resolve_batch(
     )
 
 
+def _resolve_curation(
+    config: ProjectConfig, job_id: str, intent: ActionIntent
+) -> _Resolution:
+    """A curation decision, whose artifact is the payload it recorded itself.
+
+    There is nothing to go and find: ``reserves["prepared"]`` holds the
+    complete prepared text of every file the decision covers, which is what
+    makes a curation resume a replay rather than a recomputation. So the
+    reference names this job's own document and the exact hash of that
+    recorded payload, and an intent that recorded no usable payload is
+    unresolved for that stated reason rather than for a missing file.
+    """
+
+    prepared = intent.reserves.get("prepared")
+    if not isinstance(prepared, list) or not prepared:
+        return _Resolution(None, "the intent records no prepared file update")
+    for entry in prepared:
+        if not isinstance(entry, Mapping) or not {
+            "staging_path",
+            "sha256_before",
+            "sha256_after",
+            "content_after",
+        } <= set(entry):
+            return _Resolution(
+                None, "the intent's recorded file updates are not readable"
+            )
+    payload = json.dumps(_plain(prepared), ensure_ascii=False, sort_keys=True)
+    return _Resolution(
+        ActionReference(
+            intent_id=intent.intent_id,
+            kind=intent.kind,
+            path=study_job_path(config, job_id),
+            sha256=hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+            job_id=job_id,
+            reserves=intent.reserves,
+        ),
+        "",
+    )
+
+
 def _resolve_intent(
     config: ProjectConfig, job_id: str, intent: ActionIntent
 ) -> _Resolution:
@@ -926,6 +1120,8 @@ def _resolve_intent(
         return _resolve_source_parts(config, intent)
     if intent.kind in ("extract_batch", "retry"):
         return _resolve_batch(config, job_id, intent)
+    if intent.kind == "curation":
+        return _resolve_curation(config, job_id, intent)
     return _Resolution(
         None, f"janki cannot resolve a {intent.kind!r} intent's artifact yet"
     )
@@ -1220,18 +1416,87 @@ def plan_job_extraction_batch(
     job_id: str,
     **plan_options: Any,
 ) -> Any:
-    """Plan this job's batch over its own published parts. Nothing is sent."""
+    """Plan this job's batch over its own published parts. Nothing is sent.
+
+    One confirmed batch carries one mode, and **the job pins it**. Where the
+    owner has bound layouts, every part in this batch must be bound and the
+    mode is the layout one: a caller that named none gets it from those
+    bindings, because no surface carries a mode the owner chose — the binding
+    is the choice. A mixed selection is two confirmations, not one request with
+    two shapes, so the parts they excluded are named with the control that
+    narrows the batch to a set that shares a mode. Naming an incompatible mode
+    explicitly still refuses: a bound part sent under ``auto`` would silently
+    ask ``extract-auto`` for a table nobody described.
+    """
 
     job = load_study_job(config, job_id)
     parts = job_part_sources(config, job_id)
+    names = [path.name for path, _lineage in parts]
+    bound = job_layout_bindings(job)
+    options = dict(plan_options)
+    mode, layouts = _batch_mode_and_layouts(
+        job_id, names, bound, options.pop("mode", None)
+    )
     return extraction_batch.plan_extraction_batch(
         config,
         [path for path, _lineage in parts],
+        mode=mode,
         destination_deck=job_destination_deck(config, job),
         lineage=[lineage for _path, lineage in parts],
+        layouts=layouts,
         job_id=job_id,
-        **plan_options,
+        **options,
     )
+
+
+def _batch_mode_and_layouts(
+    job_id: str,
+    names: Sequence[str],
+    bound: Mapping[str, extract.TableLayout],
+    mode: Any,
+) -> tuple[Any, tuple[extract.TableLayout | None, ...]]:
+    """The one pinned mode and the aligned per-child layouts under it.
+
+    ``mode`` is what the caller asked for, which for both surfaces' ordinary
+    route is nothing at all. What comes back is what this batch is actually
+    sent as: pinned from the owner's bindings when they bound one, and left
+    exactly as the caller named it otherwise.
+    """
+
+    covered = [name for name in names if name in bound]
+    if not covered:
+        if mode == extract.LAYOUT_MODE:
+            raise StudyJobError(
+                f"Study job {job_id} binds no source-form layout to the part(s) "
+                f"this batch covers, so there is nothing to send under "
+                f"{extract.LAYOUT_MODE}. Bind one with `janki study layout JOB "
+                "--part PART --layout FILE`, or send these parts under an "
+                "ordinary mode. Nothing was planned."
+            )
+        return mode, ()
+    plain = [name for name in names if name not in bound]
+    if plain:
+        raise StudyJobError(
+            f"Study job {job_id} binds a source-form layout to "
+            + ", ".join(covered)
+            + " but not to "
+            + ", ".join(plain)
+            + ". One confirmed batch carries one mode, so send the bound parts "
+            "and the ordinary ones as separate batches — narrow this one with "
+            "`janki study parts JOB --select NAME …`. Nothing was planned."
+        )
+    if mode and mode != extract.LAYOUT_MODE:
+        raise StudyJobError(
+            f"Study job {job_id} binds a source-form layout to "
+            + ", ".join(covered)
+            + f", so this batch is sent as {extract.LAYOUT_MODE}, not "
+            + f"{mode}. A bound part sent under another mode would "
+            "ask for a table nobody described. Nothing was planned."
+        )
+    # Pinned, not inferred: the owner bound these columns to these parts, and
+    # that binding is the decision. Nothing here reads a heading or chooses a
+    # layout, and a caller that named the mode gets the same one back.
+    return extract.LAYOUT_MODE, tuple(bound[name] for name in names)
 
 
 def plan_job_batch_retry(
@@ -1591,6 +1856,74 @@ def _resume_publication(
     )
 
 
+def _curation_intent_digest(
+    config: ProjectConfig, job_id: str, intent_id: str
+) -> str:
+    """The digest an abandonment of this intent has to carry, or ``""``.
+
+    Read back from the document rather than remembered, so the value printed
+    in a refusal is the one the owner's control will be checked against.
+    """
+
+    from japanese_anki.application import study_curation
+
+    try:
+        job = load_study_job(config, job_id)
+        return study_curation.curation_intent_digest(job.intent(intent_id))
+    except (JankiError, OSError):
+        return ""
+
+
+def _resume_curation(
+    config: ProjectConfig,
+    job_id: str,
+    reference: ActionReference,
+) -> JobResumeAction:
+    """Finish a curation decision that was recorded but not completely written.
+
+    The curation service is the writer, exactly as the publication service and
+    the batch service are: this replays the recorded text through
+    ``resume_curation`` under its own coordination guard, recomputes nothing
+    from today's staged values, and appends no outcome of its own — that
+    service closes its own intent. A refusal (a bound file at neither recorded
+    digest) leaves the intent open with its exact evidence reported, because
+    it is a state only a person can settle. Spending nothing and asking
+    nothing: an interrupted local decision is ordinary recovery.
+    """
+
+    from japanese_anki.application import study_curation
+
+    try:
+        outcome = study_curation.resume_curation(config, job_id, reference.intent_id)
+    except (JankiError, OSError) as exc:
+        return JobResumeAction(
+            intent_id=reference.intent_id,
+            kind=reference.kind,
+            closed=False,
+            detail=(
+                f"This job's recorded curation decision could not be finished: "
+                f"{exc} Nothing else was adopted in its place and this job's "
+                "record of it stays open. If a bound file has moved to neither "
+                "digest it recorded, no replay can ever finish it: close it "
+                "without writing it with `janki study curate "
+                f"{job_id} --abandon {reference.intent_id} --expect "
+                f"{_curation_intent_digest(config, job_id, reference.intent_id)}`"
+                ", or the same control on this job's desk, and then decide "
+                "again over the files as they now stand."
+            ),
+        )
+    return JobResumeAction(
+        intent_id=reference.intent_id,
+        kind=reference.kind,
+        closed=True,
+        detail=(
+            f"Curation {outcome.intent_id}: {outcome.detail} The recorded "
+            "decision was replayed exactly as it was written down; nothing was "
+            "recomputed, sent or promoted."
+        ),
+    )
+
+
 def _resume_batch(
     config: ProjectConfig,
     job_id: str,
@@ -1681,6 +2014,8 @@ def resume_job_actions(
             actions.append(
                 _resume_publication(config, job_id, intent, resolution.reference)
             )
+        elif intent.kind == "curation":
+            actions.append(_resume_curation(config, job_id, resolution.reference))
         else:
             actions.append(
                 _resume_batch(config, job_id, resolution.reference, dispatch_options)
@@ -1841,6 +2176,13 @@ class StudyJobStatus:
     deck_current: bool
     choices: Mapping[str, Any]
     layout_count: int
+    #: Part name → the ``layout_id@revision`` it is bound to. Identities only:
+    #: which columns a revision declares is read from the layout itself, and
+    #: the request that was sent records its own frozen copy.
+    layout_bindings: Mapping[str, str]
+    #: Curation intents this job recorded and no outcome has closed. Each one
+    #: is a barrier over the exact staging files it named.
+    pending_curation_intents: tuple[str, ...]
     parts: tuple[StudyJobPartsStatus, ...]
     batches: tuple[StudyJobBatchStatus, ...]
     open_intents: tuple[str, ...]
@@ -1862,6 +2204,8 @@ class StudyJobStatus:
             "deck_current": self.deck_current,
             "choices": _plain(self.choices),
             "layout_count": self.layout_count,
+            "layout_bindings": dict(self.layout_bindings),
+            "pending_curation_intents": list(self.pending_curation_intents),
             "parts": [entry.to_dict() for entry in self.parts],
             "batches": [entry.to_dict() for entry in self.batches],
             "open_intents": list(self.open_intents),
@@ -2065,6 +2409,15 @@ def study_job_status(config: ProjectConfig, job_id: str) -> StudyJobStatus:
         deck_current=deck_current,
         choices=job.choices,
         layout_count=len(job.layouts),
+        layout_bindings={
+            part: _layout_key(layout.layout_id, layout.revision)
+            for part, layout in job_layout_bindings(job).items()
+        },
+        pending_curation_intents=tuple(
+            intent.intent_id
+            for intent in job.intents
+            if intent.kind == "curation" and intent.intent_id not in closed
+        ),
         parts=tuple(parts),
         batches=tuple(batches),
         open_intents=tuple(

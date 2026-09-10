@@ -257,6 +257,12 @@ class ExtractionBatchChild:
         if expectation.destination_deck is not None:
             value["destination_deck"] = str(expectation.destination_deck)
             value["destination_deck_sha256"] = expectation.destination_deck_sha256
+        # Serialized only for the layout-bound mode, gated exactly as
+        # `destination_deck`, `retry_of` and `lineage` are, so an ordinary
+        # child's manifest bytes, `manifest_sha256` and consent fingerprint
+        # are exactly what they were before layouts existed.
+        if expectation.table_layout is not None:
+            value["table_layout"] = expectation.table_layout.to_wire()
         if expectation.replacement_revision is not None:
             revision = expectation.replacement_revision
             value["replacement_revision"] = {
@@ -283,6 +289,7 @@ class ExtractionBatchChild:
             else None
         )
         deck = raw.get("destination_deck")
+        layout_raw = raw.get("table_layout")
         expectation = ExtractionDispatchExpectation(
             source=Path(str(raw["source"])),
             provider=str(raw["provider"]),
@@ -298,13 +305,40 @@ class ExtractionBatchChild:
             scope_id=str(raw.get("scope_id", "")),
             destination_deck=None if deck is None else Path(str(deck)),
             destination_deck_sha256=str(raw.get("destination_deck_sha256", "")),
+            # The expectation's own ``__post_init__`` enforces the same
+            # mode/layout pairing the planner does, so a hand-edited manifest
+            # naming one without the other refuses here.
+            table_layout=(
+                None
+                if layout_raw is None
+                else extract.TableLayout.from_wire(layout_raw)
+            ),
         )
         lineage_raw = raw.get("lineage")
+        provenance = raw.get("provenance") or {}
+        # The expectation and the saved provenance must name the identical
+        # frozen layout. Neither is read from a job's current choices, and a
+        # manifest whose two halves disagree is one janki will not rebuild a
+        # request from.
+        saved_layout = extract.layout_from_provenance(provenance)
+        if (
+            saved_layout.to_wire() if saved_layout is not None else None
+        ) != (
+            expectation.table_layout.to_wire()
+            if expectation.table_layout is not None
+            else None
+        ):
+            raise extract.ExtractError(
+                f"Batch child {raw.get('index')} names one source-form layout "
+                "in its confirmed expectation and another in the request it "
+                "saved; janki will not guess which one was sent.",
+                code="extract-layout-manifest-mismatch",
+            )
         return cls(
             index=int(raw["index"]),
             operation_id=str(raw["operation_id"]),
             expectation=expectation,
-            provenance=raw.get("provenance") or {},
+            provenance=provenance,
             lineage=(
                 SourcePartLineage.from_dict(lineage_raw)
                 if isinstance(lineage_raw, Mapping)
@@ -619,6 +653,7 @@ def plan_extraction_batch(
     concurrency_limit: int = 2,
     force: bool = False,
     lineage: Sequence[SourcePartLineage] = (),
+    layouts: Sequence[extract.TableLayout | None] = (),
     job_id: str = "",
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
@@ -630,6 +665,12 @@ def plan_extraction_batch(
     sending it are two separate actions, and splitting one is a third that
     happened before this was called. Each part is sent whole — there is no
     sampling, no first-page-only, and no row detection anywhere in here.
+
+    A batch's mode is one scalar. ``layouts`` is a sequence aligned to
+    ``sources``, refused for a length mismatch exactly as ``lineage`` already
+    is: under the one fixed mode every child may carry a *different* frozen
+    layout, so two different tables fit one confirmed ``table-layout`` batch
+    while parts needing another extraction mode are a separate confirmed batch.
 
     Nothing is journalled, nothing is written, and no provider is called
     beyond the login probe every extraction plan already makes.
@@ -656,6 +697,14 @@ def plan_extraction_batch(
             "Lineage describes each source in order, so there must be one entry "
             f"per source: {len(parts)} for {len(chosen_sources)} sources.",
             code="extract-batch-lineage",
+        )
+    bound_layouts = tuple(layouts)
+    if bound_layouts and len(bound_layouts) != len(chosen_sources):
+        raise extract.ExtractError(
+            "A bound source-form layout describes each source in order, so "
+            f"there must be one entry per source: {len(bound_layouts)} for "
+            f"{len(chosen_sources)} sources.",
+            code="extract-batch-layouts",
         )
     seen: dict[Path, int] = {}
     for position, source in enumerate(chosen_sources, start=1):
@@ -685,6 +734,10 @@ def plan_extraction_batch(
         model=chosen_model,
         style_guide=claude_client.read_style_guide(config.root),
         system=prompts.load(config.root, extract.prompt_name(mode)),
+        # One call over the whole prepared set, so the cross-source staging
+        # collision check still runs before any request is planned; the aligned
+        # layouts ride into it rather than into a second per-input loop.
+        layouts=bound_layouts,
         force=force,
         scope_id=batch_scope,
         provider=provider,
@@ -728,6 +781,10 @@ def plan_extraction_batch(
                     scope_id=plan.scope_id,
                     destination_deck=deck_path,
                     destination_deck_sha256=deck_sha256,
+                    # Frozen from the request that was just planned, not from
+                    # the caller's argument: the expectation and the saved
+                    # provenance then describe one object by construction.
+                    table_layout=extract.layout_from_provenance(target.provenance),
                 ),
                 provenance=target.provenance,
                 lineage=parts[position - 1] if parts else None,
@@ -1924,6 +1981,14 @@ def plan_extraction_batch_retry(
             tuple(child.lineage for child in selected)  # type: ignore[misc]
             if all(child.lineage is not None for child in selected)
             else ()
+        ),
+        # Each selected child's **complete** frozen layout, restored from the
+        # request it saved. The `(layout_id, revision)` pair alone is not a
+        # layout and is never sent to the planner: all columns, witnesses and
+        # labels come from the saved provenance, including for a jobless batch,
+        # so no current job lookup resolves a retry's request.
+        layouts=tuple(
+            extract.layout_from_provenance(child.provenance) for child in selected
         ),
         job_id=plan.job_id,
         provider_env=provider_env,

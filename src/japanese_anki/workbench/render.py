@@ -2681,6 +2681,12 @@ def render_reidentify(
 
 #: The mode choice, in what a person would recognise about their own handout
 #: rather than in `table` and `prose`, which are janki's words for prompts.
+#:
+#: `table-layout` is deliberately not here, and its absence is checked rather
+#: than assumed: this desk describes a source somebody picked off the corpus,
+#: and that mode sends the exact column layout an owner bound to one study
+#: job's part. Offering a radio for it would render a consent whose request
+#: could not be built.
 _MODES: tuple[tuple[str, str, str], ...] = (
     ("", "Choose automatically", "janki decides from the page. Start here."),
     (
@@ -2693,6 +2699,13 @@ _MODES: tuple[tuple[str, str, str], ...] = (
         "A lesson, dialogue or exercise",
         "Running text — janki picks out the words worth a card.",
     ),
+)
+
+#: The modes this desk offers and its GET route honours. Derived from `_MODES`
+#: so the radios and the query-string reader cannot drift apart, and exported
+#: because `server._wants_mode` is the other half of that one decision.
+OFFERED_EXTRACTION_MODES: frozenset[str] = frozenset(
+    value for value, _label, _hint in _MODES if value
 )
 
 

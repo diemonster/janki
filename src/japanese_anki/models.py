@@ -176,6 +176,163 @@ class ExampleSentence:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class SourceFormColumn:
+    """One column a source printed, by stable identity and display label.
+
+    ``id`` is the opaque identity the owner minted when they bound the table's
+    layout; ``label`` is the display string they chose for it. Two columns may
+    share a ``label`` precisely because the identities differ — the duplicate
+    heading that made a printed label unusable as a key is the thing opaque
+    identities remove.
+    """
+
+    id: str
+    label: str
+
+
+@dataclass(frozen=True, slots=True)
+class SourceFormsTable:
+    """The exact ordered columns a source printed, and the cells it filled.
+
+    ``columns`` is printed order. ``cells`` is keyed by column identity and is
+    preserved **verbatim**: a blank printed cell is a declared row with an
+    empty value, and a column this word has no cell for stays absent. That
+    distinction is what ``conjugations`` cannot carry — it trims its values and
+    drops the blank ones — and it is the whole reason this field exists rather
+    than being folded into that map.
+
+    ``cells`` is an ordinary mutable ``dict`` inside a frozen wrapper, so
+    ``frozen=True`` detaches nothing; ``io._copy_value``'s ``deepcopy`` is what
+    keeps a merged record from aliasing an import the caller is still writing.
+    """
+
+    columns: tuple[SourceFormColumn, ...] = ()
+    cells: dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> SourceFormsTable | None:
+        """The canonical wire ``{"columns": [{id,label}], "cells": {id: str}}``.
+
+        ``None`` for an absent or null key **and** for the one deliberately
+        defined empty table — no columns *and* no cells — because
+        ``repairs._require_canonical_record`` requires
+        ``to_dict → from_dict → to_dict`` to be equal, and an empty table that
+        existed in memory as a present object would also look non-empty to
+        ``io.merge_records``. A table that declares columns is never empty, so
+        provided columns are never silently discarded.
+
+        Structural refusals only. A duplicate identity makes the cell map
+        ambiguous and a cell naming no declared column has no label binding and
+        no witness: both are facts about the artifact, and neither reads the
+        text of a cell.
+        """
+        if data is None:
+            return None
+        raw = _checked_mapping(
+            data, "source_forms", "a mapping with 'columns' and 'cells'"
+        )
+        if not raw:
+            return None
+        unknown = set(raw) - {"columns", "cells"}
+        if unknown:
+            raise ModelError(
+                "'source_forms' holds only 'columns' and 'cells', not "
+                + ", ".join(sorted(repr(name) for name in unknown))
+            )
+        raw_columns = raw.get("columns")
+        if raw_columns is None:
+            raw_columns = []
+        if not isinstance(raw_columns, list | tuple):
+            raise ModelError(
+                "'source_forms.columns' must be a list of {id, label} mappings, "
+                f"got {type(raw_columns).__name__} ({_excerpt(raw_columns)})"
+            )
+        columns: list[SourceFormColumn] = []
+        seen: set[str] = set()
+        for position, entry in enumerate(raw_columns):
+            where = f"source_forms.columns[{position}]"
+            if not isinstance(entry, dict) or set(entry) != {"id", "label"}:
+                raise ModelError(
+                    f"'{where}' must be a mapping with exactly 'id' and 'label', "
+                    f"got {_excerpt(entry)}"
+                )
+            column_id = entry["id"]
+            label = entry["label"]
+            if not isinstance(column_id, str) or not column_id:
+                raise ModelError(
+                    f"'{where}.id' must be a nonblank column identity, got "
+                    f"{_excerpt(column_id)}"
+                )
+            if not isinstance(label, str):
+                raise ModelError(
+                    f"'{where}.label' must be text, got {type(label).__name__} "
+                    f"({_excerpt(label)})"
+                )
+            if column_id in seen:
+                raise ModelError(
+                    f"'source_forms' declares column {column_id!r} twice; two "
+                    "identities that are one identity make its cell ambiguous."
+                )
+            seen.add(column_id)
+            # Preserved exactly as supplied. The owner authored this identity
+            # and this label in their own editor; trimming or normalizing here
+            # would change the thing they bound.
+            columns.append(SourceFormColumn(id=column_id, label=label))
+        raw_cells = _checked_mapping(
+            raw.get("cells"), "source_forms.cells", "a mapping of column ids to text"
+        )
+        cells: dict[str, str] = {}
+        for key, value in raw_cells.items():
+            if not isinstance(key, str) or key not in seen:
+                raise ModelError(
+                    f"'source_forms.cells' holds {key!r}, which no declared "
+                    "column identifies. A cell with no column has no label "
+                    "binding and no witness."
+                )
+            if not isinstance(value, str):
+                raise ModelError(
+                    f"'source_forms.cells[{key!r}]' must be text, got "
+                    f"{type(value).__name__} ({_excerpt(value)})"
+                )
+            # Verbatim: no strip, no blank-dropping. A printed blank is study
+            # content and an absent column is a different fact.
+            cells[key] = value
+        if not columns and not cells:
+            return None
+        return cls(columns=tuple(columns), cells=cells)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Plain JSON containers, so both YAML writers and the JSON writer
+        see the shapes they already write."""
+
+        return {
+            "columns": [
+                {"id": column.id, "label": column.label} for column in self.columns
+            ],
+            "cells": dict(self.cells),
+        }
+
+    def is_blank(self) -> bool:
+        """The one empty spelling: no columns and no cells."""
+
+        return not self.columns and not self.cells
+
+    def rows(self) -> list[tuple[str, str]]:
+        """``(label, cell)`` for every declared column that has a cell.
+
+        Printed order. A blank cell is a row whose value is empty; a column
+        with no cell draws nothing. No code here matches a printed label or
+        reads a cell's text to decide either.
+        """
+
+        return [
+            (column.label, self.cells[column.id])
+            for column in self.columns
+            if column.id in self.cells
+        ]
+
+
 @dataclass(slots=True)
 class SourceReference:
     type: str = "manual"
@@ -238,6 +395,12 @@ class VocabularyRecord:
     # jpdb corpus rank. ``None`` is "never looked up"; the rank itself is a
     # number, so 0 would be a value and not a hole.
     frequency_rank: int | None = None
+    #: The exact table this record's source printed, when one was bound. It
+    #: selects the rows of the same Anki ``Conjugations`` field the deck already
+    #: ships; where it is absent the computed ``conjugations`` map still does.
+    #: ``None`` on every record written before or without a bound layout, and
+    #: omitted from ``to_dict`` there, so no existing record's bytes change.
+    source_forms: SourceFormsTable | None = None
     source: SourceReference = field(default_factory=SourceReference)
 
     @classmethod
@@ -282,6 +445,7 @@ class VocabularyRecord:
             pitch_accent=_string_list(data.get("pitch_accent"), "pitch_accent"),
             audio_accent=str(data.get("audio_accent", "")).strip(),
             frequency_rank=_optional_int(data.get("frequency_rank"), "frequency_rank"),
+            source_forms=SourceFormsTable.from_dict(data.get("source_forms")),
             source=SourceReference.from_dict(data.get("source")),
         )
 
@@ -294,6 +458,15 @@ class VocabularyRecord:
         for example in payload["examples"]:
             if not str(example.get("spoken_japanese") or "").strip():
                 example.pop("spoken_japanese", None)
+        # Sparse for the same reason, and plain containers for another:
+        # ``asdict`` would hand a tuple of column mappings through, which
+        # ``json.dumps`` and ``yaml.safe_dump`` both accept and the next reader
+        # would not. One canonical spelling on both sides is what keeps
+        # ``to_dict → from_dict → to_dict`` equal for every repair pass.
+        if self.source_forms is None:
+            payload.pop("source_forms", None)
+        else:
+            payload["source_forms"] = self.source_forms.to_dict()
         return payload
 
     @property

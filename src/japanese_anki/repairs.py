@@ -874,7 +874,15 @@ def _strict_data(text: str, path: Path) -> Any:
 def _validate_record_shape(raw: Any, where: str) -> None:
     if not isinstance(raw, Mapping):
         raise RepairError(f"{where} must be a record mapping")
-    record_fields = set(VocabularyRecord(id="", expression="").to_dict())
+    # The schema, not one record's emitted keys. ``to_dict`` is deliberately
+    # sparse — it omits ``source_forms`` when a record has no printed table —
+    # so an empty record's serialization is a subset of the canonical schema
+    # and reading it as the allowlist calls a legitimate field unknown. The
+    # nested check below already derives its set from ``fields(...)`` for the
+    # same reason. This admits the field to the *shape*; nothing here is a
+    # permission, and ``AUTOMATIC_FIELDS`` still decides what a repair may
+    # write.
+    record_fields = {item.name for item in fields(VocabularyRecord)}
     unknown = sorted(set(raw) - record_fields)
     if unknown:
         raise RepairError(f"{where} has unknown field(s): {', '.join(unknown)}")

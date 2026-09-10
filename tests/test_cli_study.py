@@ -30,7 +30,7 @@ from test_revision_provider import FakeClaudeRunner, _which
 from test_workbench_fixtures import RESPONSES
 
 from conftest import seed_prompts
-from japanese_anki import card_preview, claude_client, cli
+from japanese_anki import card_preview, claude_client, cli, extract, staging
 from japanese_anki.application import extraction_batch, study_job
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -761,3 +761,497 @@ def test_study_preview_writes_the_cards_and_prints_their_fingerprint(
     # the deck's real templates, and nothing about who looked at it.
     assert hashlib.sha256(output.read_bytes()).hexdigest() == fingerprint
     assert b"Show Answer" in output.read_bytes()
+
+
+# --- the owner writes the layout, and settles what the parts disagree about ----
+
+
+LAYOUT_FILE: dict[str, Any] = {
+    "layout_id": "layout-7c1f2a",
+    "revision": 1,
+    "columns": [
+        {
+            "column_id": "col-9f3a71",
+            "ordinal": 1,
+            "label_witnesses": ["plain form "],
+            "display_label": "Plain",
+        },
+        {
+            "column_id": "col-2b8d04",
+            "ordinal": 2,
+            "label_witnesses": ["polite form"],
+            "display_label": "Polite",
+        },
+    ],
+}
+
+
+def _layout_file(config: ProjectConfig, **overrides: Any) -> Path:
+    wire = json.loads(json.dumps(LAYOUT_FILE))
+    wire.update(overrides)
+    path = config.root / f"layout-{wire['revision']}.json"
+    path.write_text(json.dumps(wire, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_study_layout_binds_an_owner_written_revision_and_prints_it_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The owner authors the layout file; janki reads no header and no label.
+
+    The revision is immutable, so saving different columns under the same
+    `(layout_id, revision)` refuses, and with no `--layout` the command prints
+    the provenance back: identity, printed position, the exact printed
+    witnesses the owner recorded, and their display labels.
+
+    Mutant: let `study_job.append_layout` overwrite an existing revision, or
+    have the CLI mint the identity instead of reading the owner's file.
+    """
+
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    _source(config, "verbs.pdf", b"verbs")
+    _deck(config)
+    _run(config, "study", "new", "--source", "verbs.pdf", "--deck", "lesson")
+    job_id = _one_job(config)
+    _published_parts(config, job_id, ("verbs-p1.pdf", "verbs-p2.pdf"))
+    capsys.readouterr()
+
+    assert (
+        _run(
+            config,
+            "study",
+            "layout",
+            job_id,
+            "--part",
+            "verbs-p1.pdf",
+            "--layout",
+            str(_layout_file(config)),
+        )
+        == 0
+    )
+
+    told = capsys.readouterr().out
+    assert "Bound verbs-p1.pdf to layout layout-7c1f2a revision 1" in told
+    assert "nothing was sent" in told
+    saved = study_job.load_study_job(config, job_id)
+    assert set(saved.layouts) == {"layout-7c1f2a@1"}
+    assert saved.choices["part_layout_bindings"] == {
+        "verbs-p1.pdf": ["layout-7c1f2a", 1]
+    }
+
+    # The provenance display, with no --layout.
+    assert _run(config, "study", "layout", job_id) == 0
+    shown = capsys.readouterr().out
+    assert "verbs-p1.pdf: layout layout-7c1f2a revision 1" in shown
+    assert "col-9f3a71" in shown
+    assert "printed: plain form" in shown
+    assert "Plain" in shown
+
+    # An immutable revision is not rewritten by a second Save.
+    moved = json.loads(json.dumps(LAYOUT_FILE))
+    moved["columns"][0]["display_label"] = "Dictionary"
+    path = config.root / "layout-moved.json"
+    path.write_text(json.dumps(moved, ensure_ascii=False), encoding="utf-8")
+    assert (
+        _run(
+            config,
+            "study",
+            "layout",
+            job_id,
+            "--part",
+            "verbs-p1.pdf",
+            "--layout",
+            str(path),
+        )
+        == 1
+    )
+    assert "immutable" in capsys.readouterr().err
+    assert (
+        study_job.load_study_job(config, job_id).layouts["layout-7c1f2a@1"]
+        == LAYOUT_FILE
+    )
+    # A part this job never published is refused before anything is written.
+    assert (
+        _run(
+            config,
+            "study",
+            "layout",
+            job_id,
+            "--part",
+            "verbs-p9.pdf",
+            "--layout",
+            str(_layout_file(config, revision=2)),
+        )
+        == 1
+    )
+    assert "verbs-p9.pdf" in capsys.readouterr().out
+    assert set(study_job.load_study_job(config, job_id).layouts) == {
+        "layout-7c1f2a@1"
+    }
+    assert not config.operations_file.exists()
+
+
+def test_study_extract_pins_the_mode_this_job_bound_without_a_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """§4.2: `janki study extract JOB` sends a bound job under its binding.
+
+    The command every refusal in this area prints is the bare one, so the bare
+    one has to work: the job pins `table-layout` from the owner's own bindings
+    and the printed confirmation names the pinned mode and each child's layout
+    revision before the consent prompt.
+
+    Mutant: forward the parsed `--mode` unchanged out of
+    `plan_job_extraction_batch`, so the bare command refuses.
+    """
+    _no_api(monkeypatch)
+    monkeypatch.setattr(
+        "japanese_anki.cli_study.sys.stdin",
+        type("_NoTty", (), {"isatty": lambda self: False})(),
+    )
+    config = _project(tmp_path)
+    _source(config, "verbs.pdf", b"verbs")
+    _deck(config)
+    _run(config, "study", "new", "--source", "verbs.pdf", "--deck", "lesson")
+    job_id = _one_job(config)
+    _published_parts(config, job_id, ("verbs-p1.pdf", "verbs-p2.pdf"))
+    for part, revision in (("verbs-p1.pdf", 1), ("verbs-p2.pdf", 2)):
+        assert (
+            _run(
+                config,
+                "study",
+                "layout",
+                job_id,
+                "--part",
+                part,
+                "--layout",
+                str(_layout_file(config, revision=revision)),
+            )
+            == 0
+        )
+    monkeypatch.setattr(extraction_batch, "plan_extraction_batch", _planner(config))
+    capsys.readouterr()
+
+    code = _run(config, "study", "extract", job_id)
+
+    printed = capsys.readouterr().out
+    assert code == 1, printed
+    assert f"Mode: {extract.LAYOUT_MODE}" in printed
+    assert "layout layout-7c1f2a revision 1" in printed
+    assert "layout layout-7c1f2a revision 2" in printed
+    assert "Nothing was sent." in printed
+    assert not config.operations_file.exists()
+
+
+def _staged_curation_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[ProjectConfig, str, Path]:
+    """One job with a layout-bound part whose staged row prints a table."""
+
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    _source(config, "verbs.pdf", b"verbs")
+    _deck(config)
+    _run(config, "study", "new", "--source", "verbs.pdf", "--deck", "lesson")
+    job_id = _one_job(config)
+    _published_parts(config, job_id, ("verbs-p1.pdf",))
+    layout = json.loads(json.dumps(LAYOUT_FILE))
+    _run(
+        config,
+        "study",
+        "layout",
+        job_id,
+        "--part",
+        "verbs-p1.pdf",
+        "--layout",
+        str(_layout_file(config)),
+    )
+    answer = _answer()
+    for entry in answer["candidates"]:
+        entry["conjugations"] = {"col-9f3a71": "話す", "col-2b8d04": ""}
+    runner = FakeClaudeRunner(reply=_stream(answer))
+    plan = extraction_batch.plan_extraction_batch(
+        config,
+        [config.scan_inbox / "verbs-p1.pdf"],
+        mode="table-layout",
+        layouts=(extract.TableLayout.from_wire(layout),),
+        provider_env={},
+        provider_runner=runner,
+        provider_which=_which,
+    )
+    extraction_batch.dispatch_extraction_batch(
+        config,
+        plan,
+        provider_env={},
+        provider_runner=runner,
+        provider_which=_which,
+        provider_spawn=runner.spawn,
+    )
+    return config, job_id, config.staging_dir / "verbs-p1.pdf.yaml"
+
+
+def test_study_curate_lists_what_the_parts_stage_and_settles_one_cell(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The CLI half of the cross-source curation control.
+
+    With no action it lists what each part currently stages — a read. With one
+    it records the decision before its first write and applies it to every
+    staged occurrence of that identity.
+
+    Mutant: have `_command_curate` write through `staging.write_staging`
+    instead of the prepared pair, or apply before appending the intent.
+    """
+
+    config, job_id, staged = _staged_curation_job(tmp_path, monkeypatch)
+    before_meta = staging.read_staging(staged)[1]
+    capsys.readouterr()
+
+    assert _run(config, "study", "curate", job_id) == 0
+    listed = capsys.readouterr().out
+    assert "verbs-p1.pdf: col-9f3a71='話す'" in listed
+    assert "Looking at these changes nothing" in listed
+    assert staged.read_text(encoding="utf-8")
+
+    records, _meta = staging.read_staging(staged)
+    subject = next(
+        record for record in records if record.source_forms is not None
+    )
+
+    assert (
+        _run(
+            config,
+            "study",
+            "curate",
+            job_id,
+            "--record",
+            subject.id,
+            "--column",
+            "col-2b8d04",
+            "--set",
+            "話します",
+        )
+        == 0
+    )
+
+    told = capsys.readouterr().out
+    assert "set source_forms[col-2b8d04]" in told
+    assert "nothing was promoted" in told
+    after, after_meta = staging.read_staging(staged)
+    changed = next(record for record in after if record.id == subject.id)
+    assert changed.source_forms.cells["col-2b8d04"] == "話します"
+    # The machine accounting and provenance beside it are byte-for-byte equal.
+    assert after_meta == before_meta
+    saved = study_job.load_study_job(config, job_id)
+    curation = [item for item in saved.intents if item.kind == "curation"]
+    assert len(curation) == 1
+    assert curation[0].intent_id in saved.closed_intent_ids
+
+
+def test_study_curate_abandons_a_wedged_decision_over_its_exact_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The CLI half of §6.2's abandonment, and the digest it binds.
+
+    A decision recorded and then overtaken by an ordinary edit is at neither
+    digest it wrote down, so no replay can finish it and the barrier holds the
+    file forever. `--abandon` closes it: it names the intent, needs the digest
+    the listing prints, records the snapshot it measures, reverts nothing and
+    deletes no evidence.
+
+    Mutant: let `_command_curate` abandon without `--expect`, or pass a digest
+    janki computed for itself instead of the owner's.
+    """
+    from japanese_anki.application import study_curation
+
+    config, job_id, staged = _staged_curation_job(tmp_path, monkeypatch)
+    records, _meta = staging.read_staging(staged)
+    subject = next(record for record in records if record.source_forms is not None)
+    plan = study_curation.plan_curation(
+        config,
+        job_id,
+        (
+            study_curation.CurationChoice(
+                record_id=subject.id,
+                action="replace",
+                key="col-2b8d04",
+                value="話します",
+            ),
+        ),
+        decision="the polite column prints 話します here",
+    )
+    # The crash, then the ordinary edit that overtakes it.
+    intent = study_curation._curation_intent(plan)
+    study_job.append_intent(
+        config,
+        job_id,
+        intent,
+        expected_revision=study_job.load_study_job(config, job_id).revision,
+    )
+    staged.write_text(
+        staged.read_text(encoding="utf-8") + "\n# a later hand edit\n",
+        encoding="utf-8",
+    )
+    wedged = staged.read_bytes()
+    digest = study_curation.curation_intent_digest(intent)
+    capsys.readouterr()
+
+    # The listing an owner reads first names the state and carries the digest.
+    assert _run(config, "study", "curate", job_id) == 0
+    listed = capsys.readouterr().out
+    assert f"Open decision {intent.intent_id}" in listed
+    assert f"intent digest {digest}" in listed
+    assert "no replay can finish it" in listed
+
+    # janki neither picks the decision nor supplies the digest that names it.
+    assert _run(config, "study", "curate", job_id, "--abandon", intent.intent_id) == 1
+    assert "--expect SHA256" in capsys.readouterr().out
+    assert (
+        _run(
+            config,
+            "study",
+            "curate",
+            job_id,
+            "--abandon",
+            intent.intent_id,
+            "--expect",
+            "0" * 64,
+        )
+        == 1
+    )
+    assert intent.intent_id not in study_job.load_study_job(
+        config, job_id
+    ).closed_intent_ids
+    capsys.readouterr()
+
+    assert (
+        _run(
+            config,
+            "study",
+            "curate",
+            job_id,
+            "--abandon",
+            intent.intent_id,
+            "--expect",
+            digest,
+        )
+        == 0
+    )
+
+    told = capsys.readouterr().out
+    assert f"Curation {intent.intent_id} abandoned" in told
+    assert "observed staging/verbs-p1.pdf.yaml at " in told
+    assert "Nothing was written" in told
+    # Nothing restored, nothing deleted: the file still holds the later edit
+    # and the intent is still in the log, now with its terminal outcome.
+    assert staged.read_bytes() == wedged
+    saved = study_job.load_study_job(config, job_id)
+    assert intent in saved.intents
+    assert intent.intent_id in saved.closed_intent_ids
+    assert study_curation.pending_curation_refusal(config, staged) == ""
+
+
+def test_study_curate_refuses_a_second_decision_while_one_is_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """§6.2 at the command line: settle the open decision, then decide again.
+
+    A recorded decision whose files still hold their `sha256_before` bytes is
+    finishable. Writing a fresh choice over them would make it unsatisfiable
+    the moment it landed and leave the barrier holding the file — so the
+    ordinary `--record … --set …` command refuses first, names the open
+    decision and both routes, and records nothing. After the route it names is
+    taken, the same command applies and says which closed decision it was
+    recorded over.
+
+    Mutant: delete the unresolved-predecessor block from
+    `study_curation.apply_curation`.
+    """
+    from japanese_anki.application import study_curation
+
+    config, job_id, staged = _staged_curation_job(tmp_path, monkeypatch)
+    records, _meta = staging.read_staging(staged)
+    subject = next(record for record in records if record.source_forms is not None)
+    plan = study_curation.plan_curation(
+        config,
+        job_id,
+        (
+            study_curation.CurationChoice(
+                record_id=subject.id,
+                action="replace",
+                key="col-2b8d04",
+                value="話します",
+            ),
+        ),
+        decision="the polite column prints 話します here",
+    )
+    # The crash between the fsynced intent and its writes. Nothing has moved,
+    # so `--resume` can still finish it.
+    intent = study_curation._curation_intent(plan)
+    study_job.append_intent(
+        config,
+        job_id,
+        intent,
+        expected_revision=study_job.load_study_job(config, job_id).revision,
+    )
+    digest = study_curation.curation_intent_digest(intent)
+    before = staged.read_bytes()
+    capsys.readouterr()
+
+    assert (
+        _run(
+            config,
+            "study",
+            "curate",
+            job_id,
+            "--record",
+            subject.id,
+            "--column",
+            "col-2b8d04",
+            "--set",
+            "話しました",
+        )
+        == 1
+    )
+
+    refusal = capsys.readouterr().err
+    assert intent.intent_id in refusal
+    assert f"--resume {intent.intent_id}" in refusal
+    assert f"--abandon {intent.intent_id} --expect {digest}" in refusal
+    assert "Nothing was recorded and nothing was written." in refusal
+    assert staged.read_bytes() == before
+    saved = study_job.load_study_job(config, job_id)
+    assert [item.intent_id for item in saved.intents if item.kind == "curation"] == [
+        intent.intent_id
+    ]
+
+    assert _run(config, "study", "curate", job_id, "--resume", intent.intent_id) == 0
+    capsys.readouterr()
+
+    assert (
+        _run(
+            config,
+            "study",
+            "curate",
+            job_id,
+            "--record",
+            subject.id,
+            "--column",
+            "col-2b8d04",
+            "--set",
+            "話しました",
+        )
+        == 0
+    )
+
+    told = capsys.readouterr().out
+    assert f"recorded over closed decision {intent.intent_id}" in told
+    after, _meta = staging.read_staging(staged)
+    changed = next(record for record in after if record.id == subject.id)
+    assert changed.source_forms.cells["col-2b8d04"] == "話しました"
+    saved = study_job.load_study_job(config, job_id)
+    replan = saved.intents[-1]
+    assert replan.kind == "curation"
+    assert replan.supersedes == intent.intent_id
+    assert replan.intent_id in saved.closed_intent_ids

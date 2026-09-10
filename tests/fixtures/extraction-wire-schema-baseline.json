@@ -1,0 +1,8 @@
+{
+  "base_commit": "43990b1a850c9bbb0b2d0b8cf929a6462404e2ed",
+  "response_schema_fingerprint": "5447a46cd799d057b49f4f023ea1a4f881e617f0d79f0d22ef207f890fb03346",
+  "artifact_sha256": "cf45457974c455aa76481267ae40f1587e5d19ee4854423b1e17ef99635d2ec3",
+  "anthropic_version": "0.121.0",
+  "pydantic_version": "2.13.5",
+  "qualification": "Measured before any S5 layout code; schema only, no source/provider call"
+}

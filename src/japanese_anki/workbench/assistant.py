@@ -552,11 +552,15 @@ class StudyJobActionChoice:
     ``operation_id`` is empty except for a capture inspection or a retry-free
     batch reference, where it names the exact model call whose saved reply may
     be read. ``target`` is empty except for a part control, where it names the
-    exact published part the owner's click includes or excludes.
+    exact published part the owner's click includes or excludes, and a curation
+    apply, where it names the exact identity and the exact part whose staged
+    printed forms the owner is adopting.
 
     Nothing here is paid: the reads change nothing, a part selection is a
     reversible local preference, opening the region editor writes nothing at
-    all, and resuming runs only under authority the journal already records.
+    all, a curation apply writes already-staged review documents through the
+    sole staging writer, and resuming runs only under authority the journal
+    already records.
     """
 
     action: str
@@ -621,10 +625,10 @@ def _validate_study_job_choices(value: Any) -> tuple[StudyJobChoice, ...]:
                     "Only a capture inspection names a model call, and it always "
                     "names one."
                 )
-            if (option.action in _STUDY_JOB_CHOICES) != bool(option.target):
+            if (option.action in _STUDY_JOB_TARGETED) != bool(option.target):
                 raise TypeError(
-                    "Only a part control names a published part, and it always "
-                    "names one."
+                    "Only a part control or a curation apply names its own "
+                    "subject, and it always names one."
                 )
     return value
 
@@ -640,10 +644,11 @@ def _validate_study_job_starts(value: Any) -> tuple[StudyJobStartChoice, ...]:
     return value
 
 
-#: Every control the study-job desk may render: three reads, the owner's own
-#: part editor and part selections, and one resume. The owner decisions that
-#: carry a rendering fingerprint — review flags, coverage reasons, dispositions
-#: — are not here: their editors ship with the finish.
+#: Every control the study-job desk may render: the reads, the owner's own
+#: part editor and part selections, the layout and curation views, one bound
+#: curation apply, and one resume. The owner decisions that carry a rendering
+#: fingerprint — review flags, coverage reasons, dispositions — are not here:
+#: their editors ship with the finish.
 _STUDY_JOB_ACTIONS = (
     "status",
     "preview",
@@ -652,19 +657,47 @@ _STUDY_JOB_ACTIONS = (
     "parts",
     "include-part",
     "exclude-part",
+    "layout",
+    "edit-layout",
+    "curate",
+    "adopt-forms",
+    "abandon-curation",
 )
 
 #: The reads. Deliberately available while a batch is running, because the
 #: whole point of this desk is to say what a live batch is doing. Opening the
 #: region editor is one of them: it renders pages for the owner to look at and
 #: writes nothing — publishing is a separate control inside that editor.
-_STUDY_JOB_READS = ("status", "preview", "inspect-capture", "parts")
+#: Opening the layout editor is the same shape, and so are the layout and
+#: curation views: they show what the owner bound and what the parts currently
+#: stage, and they save nothing.
+_STUDY_JOB_READS = (
+    "status",
+    "preview",
+    "inspect-capture",
+    "parts",
+    "layout",
+    "edit-layout",
+    "curate",
+)
 
 #: The owner's reversible local preferences. A CAS write into `choices` and
 #: nothing else: no paid call, no canonical byte, no review or coverage mark.
 #: They stay usable while a batch runs, and the control is not consumed by one
 #: click, because choosing a subset of parts means clicking several times.
 _STUDY_JOB_CHOICES = ("include-part", "exclude-part")
+
+#: The owner's bound curation apply, and the owner's bound close-without-
+#: writing for a decision already recorded. Both write into the job document
+#: or the staged review documents through their sole writers under the shared
+#: coordination guard, so unlike a preference each is consumed by its one
+#: click — a second click would be a second decision over state the first one
+#: moved. They stay available while a batch runs, because they are local
+#: controls and §9.4 keeps those usable.
+_STUDY_JOB_APPLIES = ("adopt-forms", "abandon-curation")
+
+#: Every control whose payload names something other than a model call.
+_STUDY_JOB_TARGETED = (*_STUDY_JOB_CHOICES, *_STUDY_JOB_APPLIES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -804,6 +837,27 @@ class RevisionCallbacks(Protocol):
         self, *, job_id: str, part_name: str, include: bool
     ) -> str | Awaitable[str]:
         """Save which published parts this job's next batch covers. Local write."""
+
+    def study_job_layout_text(self, *, job_id: str) -> str | Awaitable[str]:
+        """Say which printed columns this job binds, and to which parts."""
+
+    def open_study_job_layout_editor(
+        self, *, job_id: str
+    ) -> str | Awaitable[str]:
+        """Open the owner's layout editor over this job's published parts."""
+
+    def study_job_curation_text(self, *, job_id: str) -> str | Awaitable[str]:
+        """Say what each part currently stages, and where they disagree."""
+
+    def apply_study_job_curation(
+        self, *, job_id: str, target: str
+    ) -> str | Awaitable[str]:
+        """Write one part's printed forms into every staged copy. Local write."""
+
+    def abandon_study_job_curation(
+        self, *, job_id: str, target: str
+    ) -> str | Awaitable[str]:
+        """Close one recorded decision without writing it. Local write."""
 
     def study_job_status_text(self, *, job_id: str) -> str | Awaitable[str]:
         """Say where one job stands, derived from the stores that know."""
@@ -4028,6 +4082,35 @@ def create_assistant_core(
                                     operation_id=operation_id,
                                 )
                             )
+                        elif job_action == "layout":
+                            # What the owner bound, shown back to them:
+                            # identities, printed positions, the exact printed
+                            # witnesses they recorded and their display labels.
+                            # Nothing here authors any of those.
+                            told = str(
+                                await _call_callback(
+                                    callbacks.study_job_layout_text,
+                                    job_id=job_id,
+                                )
+                            )
+                        elif job_action == "edit-layout":
+                            # The owner's own layout editor, over the job whose
+                            # row was clicked. Opening it renders that job's
+                            # published parts and saved revisions and writes
+                            # nothing; Save is a control inside the editor.
+                            told = str(
+                                await _call_callback(
+                                    callbacks.open_study_job_layout_editor,
+                                    job_id=job_id,
+                                )
+                            )
+                        elif job_action == "curate":
+                            told = str(
+                                await _call_callback(
+                                    callbacks.study_job_curation_text,
+                                    job_id=job_id,
+                                )
+                            )
                         elif job_action == "parts":
                             # The job the owner clicked decides which job a
                             # publication out of this editor belongs to. The
@@ -4105,6 +4188,42 @@ def create_assistant_core(
                         )
                         return
                     yield self._message_event(thread, saved)
+                    return
+                if job_action in _STUDY_JOB_APPLIES:
+                    # The owner's own curation controls. Each is a local write
+                    # — one over already-staged review documents, one over this
+                    # job's own log — and each consumes its control, because a
+                    # second click would be a second decision over state the
+                    # first one moved. Both stay available while a batch runs,
+                    # because they are local controls.
+                    self._study_job_selectors.pop(capability, None)
+                    curation_callback = (
+                        callbacks.abandon_study_job_curation
+                        if job_action == "abandon-curation"
+                        else callbacks.apply_study_job_curation
+                    )
+                    try:
+                        applied = str(
+                            await _call_callback(
+                                curation_callback,
+                                job_id=job_id,
+                                target=part_name,
+                            )
+                        )
+                    except (
+                        JankiError,
+                        RevisionRefusal,
+                        OSError,
+                        TypeError,
+                        ValueError,
+                    ) as error:
+                        yield NoticeEvent(
+                            level="danger",
+                            title="Study job curation not applied",
+                            message=str(error),
+                        )
+                        return
+                    yield self._message_event(thread, applied)
                     return
                 if thread.id in self._busy_threads:
                     yield ErrorEvent(

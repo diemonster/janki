@@ -59,9 +59,21 @@ def test_the_documented_record_shows_every_field_a_record_can_carry() -> None:
 
 #: Fields the doc may legitimately differ from the collection on, because they
 #: are illustration rather than fact: prose a person wrote, sentences that grow,
-#: file paths, and the import that happened to see this word first.
+#: file paths, the import that happened to see this word first, and the table a
+#: source printed — `source_forms` exists only where an owner bound one part's
+#: printed columns, so the schema doc has to show its shape without claiming
+#: this repository's own 話す came from such a page.
 ILLUSTRATIVE = frozenset(
-    {"usage_notes", "examples", "audio", "audio_accent", "image", "source", "tags"}
+    {
+        "usage_notes",
+        "examples",
+        "audio",
+        "audio_accent",
+        "image",
+        "source",
+        "source_forms",
+        "tags",
+    }
 )
 
 

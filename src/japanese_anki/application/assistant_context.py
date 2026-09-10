@@ -313,6 +313,14 @@ def _display_pattern_set(entry: patterns.PatternSet, *, source_name: str) -> dic
     value["source_name"] = _safe_name(source_name)
     # Prompt provenance is extensible. Only request-identity scalars cross the
     # boundary, so a future prompt body or local path cannot hitch a ride.
+    #
+    # A layout-bound request records a nested `table_layout` block — the
+    # owner's opaque column identities, the exact printed headings they
+    # recorded and their display labels. It is not a scalar, so this filter
+    # already drops it, and that is correct rather than an oversight: those
+    # strings are the owner's own reading of a page they have seen and the
+    # model has not, and the request fingerprint beside them already says the
+    # request differed. Do not add it here.
     provenance = value.get("prompt_provenance")
     if isinstance(provenance, Mapping):
         value["prompt_provenance"] = {

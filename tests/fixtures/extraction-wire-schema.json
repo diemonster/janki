@@ -1,0 +1,295 @@
+{
+  "$defs": {
+    "CandidateRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "description": "Confidence.",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "conjugations": {
+          "additionalProperties": false,
+          "description": "Source conjugation columns: each printed column label to that row's supplied form, in printed order. Empty when none.",
+          "properties": {},
+          "title": "Conjugations",
+          "type": "object"
+        },
+        "context": {
+          "description": "The line or cell this was read from, verbatim.\n\n{minLength: 1}",
+          "title": "Context",
+          "type": "string"
+        },
+        "examples": {
+          "description": "{maxItems: 2, minItems: 2}",
+          "items": {
+            "$ref": "#/$defs/GeneratedExample"
+          },
+          "title": "Examples",
+          "type": "array"
+        },
+        "expression": {
+          "description": "The word as written, in Japanese.",
+          "title": "Expression",
+          "type": "string"
+        },
+        "inclusion_reason": {
+          "description": "In prose mode, why this word is worth a card.",
+          "title": "Inclusion Reason",
+          "type": "string"
+        },
+        "meanings": {
+          "description": "English glosses.",
+          "items": {
+            "description": "{minLength: 1}",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Meanings",
+          "type": "array"
+        },
+        "ordinal": {
+          "description": "One-based row ordinal within the section. Required for a table candidate.\n\n{minimum: 0}",
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "page": {
+          "description": "1-indexed page this was read from.\n\n{minimum: 1}",
+          "title": "Page",
+          "type": "integer"
+        },
+        "part_of_speech": {
+          "description": "Part of speech, if known.",
+          "title": "Part Of Speech",
+          "type": "string"
+        },
+        "reading": {
+          "description": "Kana reading.",
+          "title": "Reading",
+          "type": "string"
+        },
+        "section": {
+          "description": "Stable lowercase section slug. Required for a table candidate.",
+          "title": "Section",
+          "type": "string"
+        },
+        "source_chapters": {
+          "description": "Chapter labels teaching this word, exactly as printed, in printed order. Empty when none.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Chapters",
+          "type": "array"
+        },
+        "source_kind": {
+          "description": "Whether this candidate comes from a table/list source unit or from prose selection.",
+          "enum": [
+            "table",
+            "prose"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "usage_notes": {
+          "description": "Usage note.",
+          "title": "Usage Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "meanings",
+        "examples",
+        "usage_notes",
+        "expression",
+        "reading",
+        "part_of_speech",
+        "page",
+        "context",
+        "confidence",
+        "inclusion_reason",
+        "source_kind",
+        "section",
+        "ordinal"
+      ],
+      "title": "CandidateRecord",
+      "type": "object"
+    },
+    "GeneratedExample": {
+      "additionalProperties": false,
+      "properties": {
+        "english": {
+          "description": "Natural English translation.\n\n{minLength: 1}",
+          "title": "English",
+          "type": "string"
+        },
+        "furigana": {
+          "description": "Sentence with Anki furigana.\n\n{minLength: 1}",
+          "title": "Furigana",
+          "type": "string"
+        },
+        "japanese": {
+          "description": "Japanese sentence.\n\n{minLength: 1}",
+          "title": "Japanese",
+          "type": "string"
+        },
+        "romaji": {
+          "description": "Sentence in Hepburn romaji.\n\n{minLength: 1}",
+          "title": "Romaji",
+          "type": "string"
+        },
+        "speech_level": {
+          "description": "Speech level.",
+          "enum": [
+            "polite",
+            "casual"
+          ],
+          "title": "Speech Level",
+          "type": "string"
+        }
+      },
+      "required": [
+        "japanese",
+        "speech_level",
+        "furigana",
+        "romaji",
+        "english"
+      ],
+      "title": "GeneratedExample",
+      "type": "object"
+    },
+    "SourcePattern": {
+      "additionalProperties": false,
+      "properties": {
+        "examples": {
+          "description": "Source examples.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Examples",
+          "type": "array"
+        },
+        "gloss": {
+          "description": "English gloss.\n\n{default: }",
+          "title": "Gloss",
+          "type": "string"
+        },
+        "template": {
+          "description": "Pattern template.",
+          "title": "Template",
+          "type": "string"
+        },
+        "where": {
+          "description": "Source location.\n\n{default: }",
+          "title": "Where",
+          "type": "string"
+        }
+      },
+      "required": [
+        "template"
+      ],
+      "title": "SourcePattern",
+      "type": "object"
+    },
+    "SourceUnitRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "description": "The complete source row or cell text, verbatim.\n\n{minLength: 1}",
+          "title": "Context",
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "candidate",
+            "duplicate",
+            "non-vocabulary",
+            "unreadable"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        },
+        "ordinal": {
+          "description": "One-based row ordinal within the section.\n\n{minimum: 1}",
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "page": {
+          "description": "One-based page number.\n\n{minimum: 1}",
+          "title": "Page",
+          "type": "integer"
+        },
+        "reason": {
+          "description": "Disposition reason.\n\n{default: }",
+          "title": "Reason",
+          "type": "string"
+        },
+        "section": {
+          "description": "Stable lowercase slug for the table or list section.\n\n{minLength: 1}",
+          "title": "Section",
+          "type": "string"
+        }
+      },
+      "required": [
+        "page",
+        "section",
+        "ordinal",
+        "context",
+        "disposition"
+      ],
+      "title": "SourceUnitRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/CandidateRecord"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "document_kind": {
+      "description": "Document kind.\n\n{default: unknown}",
+      "enum": [
+        "pattern",
+        "lesson",
+        "vocabulary",
+        "unknown"
+      ],
+      "title": "Document Kind",
+      "type": "string"
+    },
+    "document_title": {
+      "description": "Document title.\n\n{default: }",
+      "title": "Document Title",
+      "type": "string"
+    },
+    "model_reported_unit_count": {
+      "description": "Reported source-unit count.\n\n{default: 0, minimum: 0}",
+      "title": "Model Reported Unit Count",
+      "type": "integer"
+    },
+    "patterns": {
+      "items": {
+        "$ref": "#/$defs/SourcePattern"
+      },
+      "title": "Patterns",
+      "type": "array"
+    },
+    "source_units": {
+      "items": {
+        "$ref": "#/$defs/SourceUnitRecord"
+      },
+      "title": "Source Units",
+      "type": "array"
+    }
+  },
+  "title": "Extraction",
+  "type": "object"
+}

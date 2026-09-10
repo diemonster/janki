@@ -233,6 +233,40 @@ set, so changing `cards:` mints a *different* notetype and orphans scheduling.
 A deck can pin `deck.model_id` / `deck.model_name` to prevent that; pinning is
 the sanctioned way to change the card set with review history intact.
 
+## Printed source forms
+
+A record may carry an optional canonical `source_forms` table: the exact
+ordered columns its source printed, each with a stable identity and the owner's
+display label, and the cells keyed by those identities. It is written only by
+an extraction whose part the owner bound a layout to, and only from that
+request's own frozen layout.
+
+**The card renders the same `Conjugations` field.** Where `source_forms` is
+present it selects that field's rows; where it is absent the computed
+`conjugations` map still does. A record that carries both keeps both, and only
+the printed table renders — the source printed those forms, and a derived form
+under a source that printed none would be a silent override.
+
+- A **blank** printed cell renders its declared row with an empty value: the
+  source said this form is not used, which is study content.
+- An **absent** column renders no row at all. Absent and blank are different
+  facts, and the distinction is carried rather than inferred.
+- Two columns may share a display label, because their identities differ. The
+  rows keep the source's printed order, not the labels' order.
+- A present table that declares columns and holds no cells for this word draws
+  no rows and no fallback.
+
+Nothing here changes `FIELD_NAMES`, the `model_id` derivation, a GUID or a card
+direction, and no existing record is rewritten by the field arriving. The
+`card_preview` HTML builds through the real exporters, so the owner's review
+shows the rendered rows rather than a summary of them, and the source-form
+witness table beside that preview is a supplementary review aid — it is not the
+card.
+
+At a narrow width a conjugation row wraps to its own line label-above-value;
+a blank-valued row still occupies its row rather than collapsing, so a reader
+can see that the source left it empty.
+
 ## Conjugation drill context
 
 A lesson-specific conjugation deck may add a deck-wide `form_note` and a

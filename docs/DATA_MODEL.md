@@ -38,6 +38,18 @@ examples:
     furigana: "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]すよ。"
     english: "I speak Japanese with my wife every day."
     register: "casual"
+source_forms:                      # sparse: written only by an extraction whose
+                                   # part the owner bound a layout to, and
+                                   # omitted entirely everywhere else
+  columns:                         # the columns the source printed, in printed
+    - id: "col-9f3a71"             # order. `id` is the opaque identity the
+      label: "Plain"               # owner minted; `label` is the display string
+    - id: "col-2b8d04"             # they chose. Two columns may share a label
+      label: "Polite"              # because the identities differ
+  cells:                           # keyed by those identities, verbatim
+    col-9f3a71: "話す"
+    col-2b8d04: ""                 # a *blank* the source printed. A column this
+                                   # row has no cell for is simply absent
 conjugations:
   plain: "話す"
   negative: "話さない"
@@ -78,6 +90,15 @@ it out.
 Everything else is filled by an importer, by `janki enrich`, or by you, and an
 empty field means nobody knew — janki never guesses one, and `janki status`
 counts what is missing.
+
+`source_forms` is the other sparse field: absent, `null`, and "no columns and
+no cells" are one canonical value, so a record that never had a printed table
+serializes exactly as it always did. Its cells are preserved verbatim — no
+trim, no blank-dropping — because a printed blank and an absent column are
+different facts, and `conjugations` cannot carry that distinction. Where it is
+present it selects the rows of the Anki `Conjugations` field; where it is
+absent the computed map still does. No dictionary or AI pass writes it, and no
+automatic repair may target it.
 
 `examples[].spoken_japanese` is the sparse exception to the usual explicit
 empty fields: it is omitted when unused. A nonblank value is the exact TTS

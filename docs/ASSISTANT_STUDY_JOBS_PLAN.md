@@ -5,7 +5,7 @@ at `55682fb`. The original planning document changed no production code,
 prompts, tests or data. The owner has now authorized implementing the plan;
 that authorization covers code, tests and documents only.
 
-**Where the work stands.** **S0–S3 are complete and integrated on `main`.**
+**Where the work stands.** **S0–S4 are complete and integrated on `main`.**
 Each landed its own mutation-proven tests, passed an independent code review,
 and had `make gates` run on the integrated primary checkout:
 
@@ -15,12 +15,15 @@ and had `make gates` run on the integrated primary checkout:
 | S1 — media capabilities | `cf2eb3c` | 5313 passed, Ruff clean, sample build, 405.69s |
 | S2 — capture recovery | `3bcd222` | 5365 passed, Ruff clean, sample build, 454.96s |
 | S3 — source preparation (amendments A/B at `c71cbbb`, behaviour at `45c8bd3`) | `c71cbbb` + `45c8bd3` | 5410 passed, Ruff clean, sample build, 451.04s |
+| S4 — study job, job actions, CLI, busy replies, deck-creation integration (authority at `43990b1`, behaviour at `2a3338e`) | `43990b1` + `2a3338e` | 5504 passed, 774 pre-existing warnings, Ruff clean, sample build, 464.21s |
 
-**S4 is under implementation** against the integrated `45c8bd3` base (§10.3,
-wave 2). **S5–S7 remain pending and unimplemented.** S7's synthetic inputs and
-fake-provider fixtures may be prepared in parallel with S4, but preparing them
-is not S7 acceptance: the vertical slice passes only where §10's S7 row says it
-does.
+**S5 is under implementation** against the integrated `2a3338e` base, with its
+C/D amendments already committed at `f05a3e8` (§10.3, wave 3). **S6–S7 remain
+pending and unimplemented.** S7's synthetic inputs and fake-provider fixtures
+may be prepared in parallel, but preparing them is not S7 acceptance: the
+vertical slice passes only where §10's S7 row says it does. Test modules
+prepared ahead of a milestone are candidates for its owner to adopt and prove,
+not acceptance for it.
 
 `78da954` already landed one narrow repair next to S1's area, and it is not S1.
 It classifies the exact deck document it was handed before collecting

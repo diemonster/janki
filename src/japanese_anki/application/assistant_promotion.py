@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from japanese_anki import jpdb
 from japanese_anki.application import promotion as promotion_application
-from japanese_anki.application import promotion_action
+from japanese_anki.application import promotion_action, study_curation
 from japanese_anki.application.assignment import DeckOwnershipEvaluation
 from japanese_anki.application.assistant_context import (
     AssistantContextBroker,
@@ -46,6 +46,7 @@ __all__ = [
     "AssistantPromotionExecution",
     "AssistantPromotionPlan",
     "execute_promotion_action",
+    "execute_promotion_action_under_guard",
     "plan_promotion_action",
 ]
 
@@ -514,7 +515,40 @@ def execute_promotion_action(
     client_factory: Callable[[], jpdb.JpdbClient] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> AssistantPromotionExecution:
-    """Re-plan one confirmed proposal, compare it, then use the sole writer."""
+    """Re-plan one confirmed proposal, compare it, then use the sole writer.
+
+    The guarded entry: it takes the staging mutation coordination lock before
+    any other janki lock, which is what makes the curation barrier race-safe at
+    the commit rather than only at planning. A caller that already holds a
+    staging, canonical, audio-operation or finish-record lock must use
+    :func:`execute_promotion_action_under_guard` instead — path locks are
+    deliberately non-reentrant, and acquiring this one from inside
+    `.janki-audio-operation` would invert the order every other entry keeps.
+    """
+
+    with study_curation.curation_guard(config):
+        return execute_promotion_action_under_guard(
+            config,
+            expected,
+            client_factory=client_factory,
+            progress=progress,
+        )
+
+
+def execute_promotion_action_under_guard(
+    config: ProjectConfig,
+    expected: AssistantPromotionPlan,
+    *,
+    client_factory: Callable[[], jpdb.JpdbClient] | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> AssistantPromotionExecution:
+    """The same execution when the caller already holds the coordination guard.
+
+    The revision finish takes the guard at its own outermost entry, before
+    `.janki-audio-operation`, and reaches this from inside both that lock and
+    its finish-record compare-and-swap lock. Re-entering the wrapper above from
+    there would deadlock on the non-reentrant flock.
+    """
 
     if expected.repository_root != config.root.resolve():
         raise AssistantPromotionError(

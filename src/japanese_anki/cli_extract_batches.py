@@ -49,6 +49,10 @@ def _recovery() -> Any:
     return importlib.import_module("japanese_anki.application.capture_recovery")
 
 
+def _extract() -> Any:
+    return importlib.import_module("japanese_anki.extract")
+
+
 def _ask(assume_yes: bool, question: str = "Send them? [y/N] ") -> bool:
     """The one owner question. ``--yes`` is consent given in advance, in words.
 
@@ -138,6 +142,12 @@ def run_batch_extraction(
     """Plan one batch over the already-preserved sources, ask once, dispatch."""
 
     core = _core()
+    # This route names files rather than a job's published parts, so no layout
+    # binding reaches it. Refused here, before the plan and before the login
+    # probe, in the same words every other unbound control uses.
+    _extract().refuse_unbound_layout_mode(
+        args.mode, control="janki extract-batch --mode"
+    )
     plan = core.plan_extraction_batch(
         config,
         [item.origin_path for item in prepared],

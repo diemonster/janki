@@ -51,6 +51,11 @@ from japanese_anki.workbench.assistant import (
 
 JOB_ID = "11111111-1111-4111-8111-111111111111"
 OPERATION_ID = "op-captured-1"
+#: One recorded curation decision and the digest of that exact intent. The
+#: close control carries both, so a control taken over one decision cannot
+#: close a different one or a rewritten version of the same one.
+ABANDON_INTENT_ID = "7b21c9de-0f44-4a2b-9d61-6c0e2a4f5b83"
+ABANDON_INTENT_SHA256 = "c" * 64
 
 
 def job_choice(
@@ -58,6 +63,8 @@ def job_choice(
     with_capture: bool = True,
     with_resume: bool = True,
     with_parts: bool = True,
+    with_curation: bool = False,
+    with_abandon: bool = False,
 ) -> StudyJobChoice:
     actions = [
         StudyJobActionChoice(action="status", label="Where this job stands"),
@@ -81,6 +88,41 @@ def job_choice(
                 action="include-part",
                 label="Put verbs-p4.png back in this job's next batch",
                 target="verbs-p4.png",
+            )
+        )
+    actions.append(
+        StudyJobActionChoice(
+            action="layout", label="See the printed columns this job binds"
+        )
+    )
+    actions.append(
+        StudyJobActionChoice(
+            action="edit-layout",
+            label="Set up the printed columns for these parts",
+        )
+    )
+    if with_curation:
+        actions.append(
+            StudyJobActionChoice(
+                action="curate", label="Settle what the parts disagree about"
+            )
+        )
+        actions.append(
+            StudyJobActionChoice(
+                action="adopt-forms",
+                label="Use verbs-p3.png's printed forms for 話す everywhere",
+                target="word:話す:はなす|verbs-p3.png",
+            )
+        )
+    if with_abandon:
+        actions.append(
+            StudyJobActionChoice(
+                action="abandon-curation",
+                label=(
+                    "Close curation 7b21c9de without writing it (adopt "
+                    "verbs-p3.png's forms) — no replay can finish it"
+                ),
+                target=f"{ABANDON_INTENT_ID}|{ABANDON_INTENT_SHA256}",
             )
         )
     if with_capture:
@@ -128,6 +170,11 @@ class _FakeStudyJobRevisions(_FakeRevisions):
     job_previewed: list[tuple[str, str]] = field(default_factory=list)
     captures_inspected: list[str] = field(default_factory=list)
     jobs_resumed: list[str] = field(default_factory=list)
+    layouts_read: list[str] = field(default_factory=list)
+    layout_editors_opened: list[str] = field(default_factory=list)
+    curations_read: list[str] = field(default_factory=list)
+    curations_applied: list[tuple[str, str]] = field(default_factory=list)
+    curations_abandoned: list[tuple[str, str]] = field(default_factory=list)
 
     def list_study_job_choices(self) -> tuple[StudyJobChoice, ...]:
         self.job_listed += 1
@@ -160,6 +207,27 @@ class _FakeStudyJobRevisions(_FakeRevisions):
     def study_job_status_text(self, *, job_id: str) -> str:
         self.job_status_read.append(job_id)
         return f"Study job {job_id}: 16 of 18 settled."
+
+    def study_job_layout_text(self, *, job_id: str) -> str:
+        self.layouts_read.append(job_id)
+        return "verbs-p3.png — layout layout-7c1f2a revision 1"
+
+    def open_study_job_layout_editor(self, *, job_id: str) -> str:
+        self.layout_editors_opened.append(job_id)
+        return f"[Open the layout editor](/layouts/{job_id[:8]})"
+
+    def study_job_curation_text(self, *, job_id: str) -> str:
+        self.curations_read.append(job_id)
+        return "2 identity(ies) staged; 1 of them the parts disagree about."
+
+    def apply_study_job_curation(self, *, job_id: str, target: str) -> str:
+        self.curations_applied.append((job_id, target))
+        return f"Wrote {target} into 2 staged file(s)."
+
+    def abandon_study_job_curation(self, *, job_id: str, target: str) -> str:
+        self.curations_abandoned.append((job_id, target))
+        intent_id, _, _digest = target.partition("|")
+        return f"Closed curation decision {intent_id} without writing it."
 
     def render_study_job_preview(
         self, *, job_id: str, deck_scope: str
@@ -660,5 +728,214 @@ def test_a_study_job_control_from_another_widget_is_refused() -> None:
         seen = _events(_post(sidecar, _action_request(thread_id, widget, tampered))[2])
         assert "This study job control is missing, stale" in json.dumps(seen)
         assert revisions.job_status_read == []
+    finally:
+        sidecar.close()
+
+
+def test_the_layout_and_curation_views_are_reads_that_answer_while_busy() -> None:
+    """§9.1: a model may open the owner's editor; the owner acts inside it.
+
+    Both views show what the owner bound and what the parts currently stage,
+    and neither saves anything — so, like every other read on this desk, they
+    survive a busy thread and stay usable more than once.
+
+    Mutant: move `"layout"` or `"curate"` out of `_STUDY_JOB_READS`, so they
+    fall through to the busy guard and consume their control.
+    """
+
+    revisions = _FakeStudyJobRevisions(
+        job_choices=(job_choice(with_curation=True),)
+    )
+    sidecar = _sidecar(revisions)
+    try:
+        thread_id, widget, _seen = _manage(sidecar)
+
+        seen_layout = _events(
+            _post(
+                sidecar,
+                _action_request(thread_id, widget, _job_action(widget, "layout")),
+            )[2]
+        )
+        seen_curate = _events(
+            _post(
+                sidecar,
+                _action_request(thread_id, widget, _job_action(widget, "curate")),
+            )[2]
+        )
+        again = _events(
+            _post(
+                sidecar,
+                _action_request(thread_id, widget, _job_action(widget, "layout")),
+            )[2]
+        )
+
+        assert revisions.layouts_read == [JOB_ID, JOB_ID]
+        assert revisions.curations_read == [JOB_ID]
+        assert "layout-7c1f2a revision 1" in json.dumps(
+            seen_layout, ensure_ascii=False
+        )
+        assert "the parts disagree about" in json.dumps(
+            seen_curate, ensure_ascii=False
+        )
+        assert "layout-7c1f2a revision 1" in json.dumps(again, ensure_ascii=False)
+        assert revisions.chatted == []
+        assert revisions.curations_applied == []
+    finally:
+        sidecar.close()
+
+
+def test_the_desk_opens_the_layout_editor_for_the_job_whose_row_was_clicked() -> None:
+    """§4.1/§9.1: the owner acts inside the editor, over that job's own parts.
+
+    Opening it is a read, like opening the region editor: it renders what the
+    job records and saves nothing, so it survives a busy thread and stays
+    usable more than once. The control carries the job whose row was clicked,
+    and a payload pointed at another one is refused with the control dropped.
+
+    Mutant: leave `"edit-layout"` out of `_STUDY_JOB_READS`, so it falls
+    through to the busy guard and consumes its control.
+    """
+
+    revisions = _FakeStudyJobRevisions(job_choices=(job_choice(),))
+    sidecar = _sidecar(revisions)
+    try:
+        thread_id, widget, _seen = _manage(sidecar)
+        click = _job_action(widget, "edit-layout")
+
+        opened = _events(_post(sidecar, _action_request(thread_id, widget, click))[2])
+        again = _events(_post(sidecar, _action_request(thread_id, widget, click))[2])
+        tampered = json.loads(json.dumps(click))
+        tampered["payload"]["job_id"] = "22222222-2222-4222-8222-222222222222"
+        refused = _events(
+            _post(sidecar, _action_request(thread_id, widget, tampered))[2]
+        )
+
+        assert revisions.layout_editors_opened == [JOB_ID, JOB_ID]
+        assert "/layouts/" in json.dumps(opened, ensure_ascii=False)
+        assert "/layouts/" in json.dumps(again, ensure_ascii=False)
+        assert "This study job control is missing, stale" in json.dumps(refused)
+        assert revisions.chatted == [], "opening an editor is not a model call"
+    finally:
+        sidecar.close()
+
+
+def test_the_curation_apply_control_is_bound_and_consumed_by_its_one_click() -> None:
+    """The owner's own curation apply: bound to one identity and one part.
+
+    It writes already-staged review documents through the sole staging writer,
+    so unlike a reversible preference it is consumed by its one click — a
+    second click would be a second decision over bytes the first one moved.
+
+    Mutant: put `"adopt-forms"` in `_STUDY_JOB_CHOICES` so the control survives
+    its click, or accept a posted target other than the rendered one.
+    """
+
+    revisions = _FakeStudyJobRevisions(
+        job_choices=(job_choice(with_curation=True),)
+    )
+    sidecar = _sidecar(revisions)
+    try:
+        thread_id, widget, _seen = _manage(sidecar)
+        click = _job_action(widget, "adopt-forms", "word:話す:はなす|verbs-p3.png")
+
+        applied = _events(_post(sidecar, _action_request(thread_id, widget, click))[2])
+        second = _events(_post(sidecar, _action_request(thread_id, widget, click))[2])
+
+        assert revisions.curations_applied == [
+            (JOB_ID, "word:話す:はなす|verbs-p3.png")
+        ]
+        assert "into 2 staged file(s)" in json.dumps(applied, ensure_ascii=False)
+        assert "missing, stale, already used" in json.dumps(second, ensure_ascii=False)
+        assert revisions.chatted == []
+    finally:
+        sidecar.close()
+
+
+def test_a_curation_control_pointed_at_another_identity_is_refused() -> None:
+    """The control binds the exact identity and part it was rendered for.
+
+    Mutant: read the identity and part from the posted body rather than from
+    the widget's own binding tuple.
+    """
+
+    revisions = _FakeStudyJobRevisions(
+        job_choices=(job_choice(with_curation=True),)
+    )
+    sidecar = _sidecar(revisions)
+    try:
+        thread_id, widget, _seen = _manage(sidecar)
+        click = _job_action(widget, "adopt-forms", "word:話す:はなす|verbs-p3.png")
+        tampered = json.loads(json.dumps(click))
+        tampered["payload"]["target"] = "word:走る:はしる|verbs-p9.png"
+
+        seen = _events(_post(sidecar, _action_request(thread_id, widget, tampered))[2])
+
+        assert "This study job control is missing, stale" in json.dumps(seen)
+        assert revisions.curations_applied == []
+    finally:
+        sidecar.close()
+
+
+def test_the_curation_abandon_control_is_bound_and_consumed_by_its_one_click() -> None:
+    """The owner's own close-without-writing, on the primary surface.
+
+    S5's own controls can land a job in a state no resume can leave — a durable
+    decision whose bound file has moved to neither digest it recorded — so the
+    Assistant has to reach the action that closes it. It writes this job's log
+    through the sole writer, so like the apply it is consumed by its one click.
+
+    Mutant: put `"abandon-curation"` in `_STUDY_JOB_READS` or
+    `_STUDY_JOB_CHOICES` so the control survives its click, or route it to
+    `apply_study_job_curation`.
+    """
+
+    revisions = _FakeStudyJobRevisions(
+        job_choices=(job_choice(with_curation=True, with_abandon=True),)
+    )
+    sidecar = _sidecar(revisions)
+    try:
+        thread_id, widget, _seen = _manage(sidecar)
+        target = f"{ABANDON_INTENT_ID}|{ABANDON_INTENT_SHA256}"
+        click = _job_action(widget, "abandon-curation", target)
+
+        closed = _events(_post(sidecar, _action_request(thread_id, widget, click))[2])
+        second = _events(_post(sidecar, _action_request(thread_id, widget, click))[2])
+
+        assert revisions.curations_abandoned == [(JOB_ID, target)]
+        assert revisions.curations_applied == []
+        assert ABANDON_INTENT_ID in json.dumps(closed, ensure_ascii=False)
+        assert "missing, stale, already used" in json.dumps(second, ensure_ascii=False)
+        assert revisions.chatted == []
+    finally:
+        sidecar.close()
+
+
+def test_an_abandon_control_carrying_another_digest_is_refused() -> None:
+    """The control binds the exact intent *and* the digest it was read at.
+
+    A desk row rendered before the decision changed must not close whatever is
+    open now, so the digest travels in the same bound tuple as the id.
+
+    Mutant: bind only the intent id, or read either half from the posted body.
+    """
+
+    revisions = _FakeStudyJobRevisions(
+        job_choices=(job_choice(with_curation=True, with_abandon=True),)
+    )
+    sidecar = _sidecar(revisions)
+    try:
+        thread_id, widget, _seen = _manage(sidecar)
+        click = _job_action(
+            widget,
+            "abandon-curation",
+            f"{ABANDON_INTENT_ID}|{ABANDON_INTENT_SHA256}",
+        )
+        tampered = json.loads(json.dumps(click))
+        tampered["payload"]["target"] = f"{ABANDON_INTENT_ID}|{'d' * 64}"
+
+        seen = _events(_post(sidecar, _action_request(thread_id, widget, tampered))[2])
+
+        assert "This study job control is missing, stale" in json.dumps(seen)
+        assert revisions.curations_abandoned == []
     finally:
         sidecar.close()

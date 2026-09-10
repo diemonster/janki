@@ -159,6 +159,12 @@ def parse_dispatch_form(body: bytes) -> DispatchSubmission:
     raw_mode = fields["mode"][0]
     if raw_mode and raw_mode not in extract.MODES:
         raise DispatchFormError("That extraction mode is not one this page offered.")
+    # Named explicitly rather than left to the tuple: this form carries a
+    # source, a model and a request fingerprint, and no owner-bound layout, so
+    # a posted `table-layout` would buy a request whose column identities
+    # nobody supplied. The desk's paid form never offers it.
+    if raw_mode == extract.LAYOUT_MODE:
+        raise DispatchFormError(extract.LAYOUT_MODE_REFUSAL)
     model = fields["model"][0].strip()
     if not model:
         raise DispatchFormError("That paid-action form names no model.")

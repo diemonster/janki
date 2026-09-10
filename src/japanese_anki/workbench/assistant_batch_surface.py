@@ -98,8 +98,16 @@ def plan_batch(
     concurrency_limit: int = 2,
     job_id: str = "",
 ) -> PreparedExtractionBatch:
-    """Plan one batch over exactly these preserved sources. Nothing is sent."""
+    """Plan one batch over exactly these preserved sources. Nothing is sent.
 
+    This is the jobless Assistant route: it names sources the owner disclosed,
+    not a study job's bound parts, so a layout-bound mode has nothing to send
+    and is refused before the plan.
+    """
+
+    from japanese_anki import extract
+
+    extract.refuse_unbound_layout_mode(mode, control="This extraction batch")
     return describe_batch(
         core().plan_extraction_batch(
             config,
@@ -113,6 +121,29 @@ def plan_batch(
     )
 
 
+def _mode_line(plan: Any) -> str:
+    """The one scalar mode this batch carries, named in its confirmation.
+
+    Read off the children's own frozen expectations rather than recomputed:
+    what the owner is agreeing to send is what the plan already froze. A batch
+    whose children somehow disagreed would say so rather than name one of them.
+    """
+
+    modes = {child.expectation.mode or "auto" for child in plan.children}
+    return f"Mode: {', '.join(sorted(modes))}"
+
+
+def _layout_lines(plan: Any) -> tuple[str, ...]:
+    """Each child's bound layout revision, or nothing when none is bound."""
+
+    return tuple(
+        f"{child.index}. {_name(child.source)} — layout "
+        f"{child.expectation.table_layout.identity}"
+        for child in plan.children
+        if child.expectation.table_layout is not None
+    )
+
+
 def describe_batch(plan: Any) -> PreparedExtractionBatch:
     """Render one already-planned core batch as its owner confirmation.
 
@@ -120,9 +151,15 @@ def describe_batch(plan: Any) -> PreparedExtractionBatch:
     its own published parts through its own service, and re-planning here to
     describe it would mint a second set of operation ids and compare a
     confirmation against a plan that no longer exists.
+
+    The pinned mode and every bound layout revision are named here, because
+    they are part of what one confirmation buys: a layout-bound child asks for
+    exactly the columns that revision declares, and nobody should confirm a
+    request whose shape the confirmation did not state.
     """
 
     listed = _child_lines(plan)
+    bound = _layout_lines(plan)
     effects = (
         f"Send these {len(plan.children)} whole sources to {plan.model}, "
         f"{plan.concurrency_limit} at a time:",
@@ -133,6 +170,16 @@ def describe_batch(plan: Any) -> PreparedExtractionBatch:
     disclosures = (
         f"These are {len(plan.children)} paid model calls through "
         f"{plan.provider}, not one.",
+        _mode_line(plan),
+        *(
+            (
+                "Each of these sources is sent under the printed-column layout "
+                "revision you bound to it:",
+                *bound,
+            )
+            if bound
+            else ()
+        ),
         "Each source is sent whole. Page ranges, row counts or other scope "
         "typed in chat are not applied.",
         "A source that fails leaves the ones that succeeded saved.",

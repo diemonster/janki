@@ -326,6 +326,13 @@ class _Capture:
     #: How many ``tool_use`` blocks named some other tool. Not proposals, and
     #: not silently dropped either: a refusal says how many were passed over.
     other_tool_blocks: int
+    #: The request as it was planned, read back from beside the captured bytes.
+    #: Kept because the owner-facing render below builds records directly
+    #: rather than through `complete_extraction`, so it needs the same frozen
+    #: layout the staging path reads from this same saved manifest — otherwise
+    #: a layout-bound proposal would draw with no source-form rows while
+    #: staging the identical proposal produced them.
+    provenance: Mapping[str, Any]
 
 
 def _frames(raw: bytes, *, operation_id: str) -> tuple[Any, ...]:
@@ -612,6 +619,7 @@ def _read_capture(config: ProjectConfig, operation_id: str) -> _Capture:
         child=child,
         proposals=tuple(proposals),
         other_tool_blocks=others,
+        provenance=provenance,
     )
 
 
@@ -857,8 +865,11 @@ def _records_for(
     """The canonical records one proposal would stage, built for display only.
 
     Through the same normalizer and record builder staging uses, in the mode
-    the request was made under, so what a reviewer looks at is what they would
-    get rather than a second rendering of it.
+    the request was made under and under the layout that request was sent with,
+    so what a reviewer looks at is what they would get rather than a second
+    rendering of it. This path calls both directly rather than through
+    `complete_extraction`, so the layout is passed here explicitly — read from
+    the captured provenance, exactly as the staging path reads it.
     """
     expectation = capture.child.expectation
     result = extract.normalize_response(
@@ -870,7 +881,12 @@ def _records_for(
         else []
     )
     known = frozenset(extract.known_ids(existing, scope_id=expectation.scope_id))
-    return extract.build_records(result.candidates, prepared, known).records
+    return extract.build_records(
+        result.candidates,
+        prepared,
+        known,
+        layout=extract.layout_from_provenance(capture.provenance),
+    ).records
 
 
 def _index_document(

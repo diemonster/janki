@@ -29,7 +29,7 @@ import json
 import re
 import sys
 from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, is_dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
@@ -382,6 +382,46 @@ def review_run_id(meta: Mapping[str, Any]) -> str | None:
     return value
 
 
+def _canonical_field_value(record: VocabularyRecord, field: str) -> Any:
+    """One replaceable field's durable wire value, with absent spelled ``None``.
+
+    :meth:`VocabularyRecord.to_dict` is what actually lands in
+    ``vocabulary.json``, which is why this seam describes it rather than the
+    dataclass attribute.  It is also deliberately **sparse**: a record with no
+    printed table carries no ``source_forms`` key at all, exactly as an example
+    with no human-authored replacement carries no ``spoken_japanese``.  Absent
+    is a state a proposal binds itself to — it is precisely the old value of a
+    revision that *adds* a table — so it is read with ``get`` and has one
+    spelling here.
+    """
+    return record.to_dict().get(field)
+
+
+def _holds_dataclass(value: Any) -> bool:
+    """Whether a supplied field value carries a record dataclass instance."""
+    if isinstance(value, list | tuple):
+        return any(_holds_dataclass(item) for item in value)
+    return is_dataclass(value) and not isinstance(value, type)
+
+
+def _supplied_field_value(record: VocabularyRecord, field: str, value: Any) -> Any:
+    """Spell a caller's old value the way :func:`_canonical_field_value` does.
+
+    The two producers of a ``(old, proposed)`` change map build it differently:
+    :mod:`japanese_anki.enrich` reads the record's dataclass attributes, and
+    ``application/card_change_staging`` reads the canonical wire the staging
+    file will hold.  They agree on every scalar, text list and string map, and
+    differ on the two nested fields — ``examples`` and ``source_forms``.  One
+    representation has to be the one this seam compares, and it is the wire,
+    because that is what the digest beside it describes.  A dataclass value is
+    folded through the record's own serializer rather than re-spelled here, so
+    the sparse rules stay defined in :mod:`japanese_anki.models` alone.
+    """
+    if not _holds_dataclass(value):
+        return value
+    return _canonical_field_value(replace(record, **{field: value}), field)
+
+
 def replacement_fingerprint(record: VocabularyRecord, field: str) -> str:
     """Bind one replaceable field's old wire value to its record and name.
 
@@ -397,7 +437,7 @@ def replacement_fingerprint(record: VocabularyRecord, field: str) -> str:
         raise StagingError(
             f"Cannot authorize staged replacement of {field!r}: {exc}"
         ) from exc
-    value = record.to_dict()[name]
+    value = _canonical_field_value(record, name)
     encoded = json.dumps(
         {"record_id": record.id, "field": name, "old_value": value},
         ensure_ascii=False,
@@ -461,8 +501,8 @@ def field_replacement_block(
                     f"Cannot fingerprint replacement {key}.{name}: its change must "
                     "be an (old, proposed) pair."
                 )
-            old_value = getattr(record, name)
-            if change[0] != old_value:
+            old_value = _canonical_field_value(record, name)
+            if _supplied_field_value(record, name, change[0]) != old_value:
                 raise StagingError(
                     f"Cannot fingerprint replacement {key}.{name}: the change says "
                     "its old value is different from the record supplied."
@@ -981,7 +1021,9 @@ def _replacement_authorization(
             if hmac.compare_digest(expected, actual):
                 continue
             proposed = incoming_by_id[record_id]
-            if old.to_dict()[name] == proposed.to_dict()[name]:
+            if _canonical_field_value(old, name) == _canonical_field_value(
+                proposed, name
+            ):
                 landed.append(name)
                 continue
             stale.append(f"{record_id}.{name}")
@@ -1206,6 +1248,13 @@ def _validate_prompt_provenance(
         raise StagingError(
             "[prompt-provenance-invalid] response schema version must be a positive integer"
         )
+    # Imported here rather than at module scope: `extract` imports `annotate`
+    # from this module, so the mode vocabulary has to be read at call time. It
+    # is read from `extract.MODES` rather than restated, or this validator
+    # would refuse the artifacts the same milestone teaches the planner to
+    # write.
+    from japanese_anki import extract as extract_module
+
     expected = (
         _PROMPT_PROVENANCE_FIELDS if version >= 3 else _PROMPT_PROVENANCE_V2_FIELDS
     )
@@ -1213,6 +1262,12 @@ def _validate_prompt_provenance(
     # legacy Anthropic API path does not have one to carry.
     if version >= 3 and provenance.get("provider") != "anthropic":
         expected = expected | _PROMPT_PROVENANCE_PROVIDER_FIELDS
+    # Required if and only if the mode is the layout-bound one. Exact set
+    # equality either way: ordinary modes keep their existing key sets
+    # unchanged, so a smuggled layout key on one of them still refuses, and a
+    # saved ordinary artifact is read without backfilling anything onto it.
+    if provenance.get("mode") == extract_module.LAYOUT_MODE:
+        expected = expected | {"table_layout"}
     if set(provenance) != expected:
         raise StagingError(
             "[prompt-provenance-invalid] an M7.4 coverage block needs the exact "
@@ -1249,10 +1304,21 @@ def _validate_prompt_provenance(
         raise StagingError(
             "[prompt-provenance-stale] prompt provenance and coverage name different sources"
         )
-    if provenance.get("mode") not in {"auto", "table", "prose"}:
+    if provenance.get("mode") not in {"auto", *extract_module.MODES}:
         raise StagingError(
-            "[prompt-provenance-invalid] extraction mode must be auto, table, or prose"
+            "[prompt-provenance-invalid] extraction mode must be one of: auto, "
+            + ", ".join(extract_module.MODES)
         )
+    # Validated through the one deserializer, so a staged layout that the
+    # planner could not have sent — an unknown container, a duplicate identity,
+    # a missing witness — refuses here rather than at the card.
+    try:
+        extract_module.layout_from_provenance(provenance)
+    except JankiError as exc:
+        raise StagingError(
+            f"[prompt-provenance-invalid] the saved source-form layout is not "
+            f"the exact request metadata this mode records: {exc}"
+        ) from exc
     for name in ("provider", "model"):
         value = provenance.get(name)
         if not isinstance(value, str) or not value.strip():
@@ -2144,6 +2210,224 @@ def render_staging_update(
     buffer = io.StringIO()
     _parser().dump(document, buffer)
     return buffer.getvalue()
+
+
+#: What one explicit structural edit may do to one field of one row.
+FIELD_OPERATION_ACTIONS: tuple[str, ...] = ("replace", "remove")
+
+
+@dataclass(frozen=True, slots=True)
+class FieldOperation:
+    """One explicit structural edit, naming the row by index **and** by id.
+
+    Both, because an index alone is a position in a file somebody may have
+    edited since it was read, and a mismatch is a refusal rather than an edit
+    to whichever row now sits there.
+
+    ``action`` is ``"replace"`` or ``"remove"``. ``key`` names one entry of the
+    field's ``cells`` mapping — the canonical ``source_forms`` shape — so
+    emptying a printed cell is ``replace`` with ``""`` (the printed-blank
+    spelling), removing that one cell is ``remove`` with a ``key``, and
+    removing the whole table is ``remove`` without one.
+    """
+
+    row_index: int
+    record_id: str
+    field: str
+    action: str
+    key: str | None = None
+    value: Any = None
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedStagingUpdate:
+    """The exact text one bound update would write, and the bytes it replaces.
+
+    ``text`` is the complete prepared file, not a digest: a digest cannot be
+    replayed after a crash, and a resume that had to recompute the payload from
+    a store that has since moved is not a resume.
+    """
+
+    text: str
+    sha256_before: str
+    sha256_after: str
+    #: Whether this prepared text actually differs from the file it read.
+    applied: bool
+
+
+def _operated_row(
+    raw_records: Sequence[Any],
+    original: Sequence[VocabularyRecord],
+    operation: FieldOperation,
+    *,
+    source: str,
+) -> MutableMapping[str, Any]:
+    """The one round-trip row this operation names, or a refusal."""
+
+    if operation.action not in FIELD_OPERATION_ACTIONS:
+        raise StagingError(
+            f"{source}: a staged field operation is "
+            f"{' or '.join(FIELD_OPERATION_ACTIONS)}, not {operation.action!r}"
+        )
+    index = operation.row_index
+    if (
+        isinstance(index, bool)
+        or not isinstance(index, int)
+        or not 0 <= index < len(raw_records)
+    ):
+        raise StagingError(
+            f"{source}: staged field operation names row {operation.row_index!r}, "
+            f"which is not one of this file's {len(raw_records)} row(s)"
+        )
+    if original[index].id != operation.record_id:
+        raise StagingError(
+            f"{source}: staged field operation names row {index} as record "
+            f"{operation.record_id!r}, but that row holds "
+            f"{original[index].id!r}. Nothing was written."
+        )
+    raw = raw_records[index]
+    if not isinstance(raw, MutableMapping):
+        raise StagingError(
+            f"Record in {source} must be a mapping, got {type(raw).__name__}"
+        )
+    if not isinstance(operation.field, str) or not operation.field:
+        raise StagingError(f"{source}: a staged field operation names one field")
+    return raw
+
+
+def _apply_field_operation(
+    raw_records: Sequence[Any],
+    original: Sequence[VocabularyRecord],
+    operation: FieldOperation,
+    *,
+    source: str,
+) -> None:
+    """Perform one explicit structural edit on the round-trip document.
+
+    Deleting a cell or a table is an ordinary local curation edit, not an
+    extraction defect, and it must never cost a paid retry — but
+    :func:`_apply_changes` writes only changed keys and never removes one,
+    which is exactly right for its own job of annotating a reviewed row without
+    adding twenty empty schema fields. Structural deletion lives only here.
+    """
+
+    raw = _operated_row(raw_records, original, operation, source=source)
+    field = operation.field
+    where = f"{source}: record {operation.row_index + 1} field {field!r}"
+    if operation.key is None:
+        if operation.action == "remove":
+            if field not in raw:
+                raise StagingError(
+                    f"{where} is already absent, so there is nothing to remove. "
+                    "Nothing was written."
+                )
+            del raw[field]
+            return
+        raw[field] = _plain(operation.value)
+        return
+
+    held = raw.get(field)
+    if not isinstance(held, MutableMapping) or not isinstance(
+        held.get("cells"), MutableMapping
+    ):
+        raise StagingError(
+            f"{where} carries no 'cells' mapping, so it has no cell "
+            f"{operation.key!r} to edit. Nothing was written."
+        )
+    cells = held["cells"]
+    if operation.action == "remove":
+        if operation.key not in cells:
+            raise StagingError(
+                f"{where} has no cell {operation.key!r}, so there is nothing to "
+                "remove. Nothing was written."
+            )
+        del cells[operation.key]
+        return
+    if not isinstance(operation.value, str):
+        raise StagingError(
+            f"{where} cell {operation.key!r} is text; a printed blank is the "
+            "empty string. Nothing was written."
+        )
+    cells[operation.key] = _plain(operation.value)
+
+
+def prepare_record_update(
+    path: Path,
+    records: Sequence[VocabularyRecord],
+    *,
+    operations: Sequence[FieldOperation] = (),
+) -> PreparedStagingUpdate:
+    """The exact text one bound record update would write, without writing it.
+
+    ``records`` is the complete expected list, positionally matched to the
+    rows already in the file: this annotates the rows a review holds, it does
+    not write a different set. The round-trip diff writes only what changed,
+    so comments, key order, quoting, unknown keys, ``coverage`` and
+    ``candidate_accounting`` stay exactly where the reviewer left them; the
+    explicit ``operations`` then perform the structural deletions that diff
+    cannot express.
+
+    The prepared text is re-read before it is returned and must parse to
+    exactly ``records`` with **byte-identical** metadata — the same self-check
+    the surgical example-authority writer already performs — so a caller can
+    prove the edit it is about to durably record touches nothing else.
+    """
+
+    path = Path(path)
+    document, captured_text, revision = _load_document_snapshot(path)
+    original, original_meta = read_staging_text(captured_text, source=str(path))
+    raw_records = document[_RECORDS_KEY] or []
+    if not (len(raw_records) == len(original) == len(records)):
+        raise StagingError(
+            f"{path} holds {len(raw_records)} row(s) but {len(records)} were "
+            "given. prepare_record_update annotates the rows already in a file."
+        )
+    for raw, before, after in zip(raw_records, original, records, strict=True):
+        if not isinstance(raw, MutableMapping):
+            raise StagingError(
+                f"Record in {path} must be a mapping, got {type(raw).__name__}"
+            )
+        _apply_changes(raw, before.to_dict(), after.to_dict())
+    for operation in operations:
+        _apply_field_operation(
+            raw_records, original, operation, source=str(path)
+        )
+
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    text = buffer.getvalue()
+    reparsed, reparsed_meta = read_staging_text(text, source=str(path))
+    _load_document_text(text, source=str(path))
+    if reparsed != list(records) or reparsed_meta != original_meta:
+        raise StagingError(
+            f"{path}: the prepared record update did not preserve the staged "
+            "document — it would change metadata or a row nobody edited. "
+            "Nothing was written."
+        )
+    after_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return PreparedStagingUpdate(
+        text=text,
+        sha256_before=revision,
+        sha256_after=after_digest,
+        applied=after_digest != revision,
+    )
+
+
+def apply_prepared_update(path: Path, prepared: PreparedStagingUpdate) -> Path:
+    """Write one prepared update under compare-and-swap on the bytes it read.
+
+    The caller holds this path's lock — the curation coordinator takes every
+    affected path's lock in sorted order and prechecks all of them before any
+    write, and path locks are deliberately non-reentrant.
+    """
+
+    path = Path(path)
+    atomic_write_text_bound(
+        path,
+        prepared.text,
+        expected_revision=prepared.sha256_before,
+    )
+    return path
 
 
 @_path_locked

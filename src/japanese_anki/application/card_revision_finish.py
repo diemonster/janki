@@ -31,6 +31,7 @@ from japanese_anki.application import (
     assistant_promotion,
     card_revision,
     deck_package,
+    study_curation,
 )
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import promotion as promotion_application
@@ -1062,7 +1063,15 @@ def plan_card_revision_finish(
         word_provider=word_provider,
         sentence_provider=sentence_provider,
     )
-    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+    # The coordination guard first, before every existing janki lock, and the
+    # existing internal order preserved after it. Planning takes it too: a plan
+    # computed against a half-applied curation would bind bytes a durable
+    # decision is still writing, and one outermost order at every entry is what
+    # makes "no code path may invert this ordering" checkable.
+    with (
+        study_curation.curation_guard(config),
+        exclusive_path_lock(config.root / ".janki-audio-operation"),
+    ):
         return _plan_locked(
             config,
             resource_id,
@@ -1092,7 +1101,10 @@ def plan_ai_enrichment_finish(
         word_provider=word_provider,
         sentence_provider=sentence_provider,
     )
-    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+    with (
+        study_curation.curation_guard(config),
+        exclusive_path_lock(config.root / ".janki-audio-operation"),
+    ):
         return _plan_locked(
             config,
             resource_id,
@@ -2096,7 +2108,14 @@ def _execute_record_locked(
         if proposal.exists():
             _ensure_exact_review(config, record)
             plan = _replan_live_promotion(config, record)
-            executed = assistant_promotion.execute_promotion_action(config, plan)
+            # The unguarded entry. This runs inside `.janki-audio-operation`
+            # and inside the finish record's own compare-and-swap lock, both
+            # taken under the coordination guard by this module's outermost
+            # entries; re-acquiring that non-reentrant guard here would invert
+            # the order and deadlock.
+            executed = assistant_promotion.execute_promotion_action_under_guard(
+                config, plan
+            )
             receipt = _promotion_receipt(
                 config,
                 executed.result,
@@ -2365,7 +2384,10 @@ def execute_card_revision_finish(
         word_provider=word_provider,
         sentence_provider=sentence_provider,
     )
-    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+    with (
+        study_curation.curation_guard(config),
+        exclusive_path_lock(config.root / ".janki-audio-operation"),
+    ):
         fresh = _plan_locked(
             config,
             expected.resource_id,
@@ -2446,7 +2468,10 @@ def resume_card_revision_finish(
 
     _emit(progress, "Preparing finish")
     path = _record_path(config, receipt_id)
-    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+    with (
+        study_curation.curation_guard(config),
+        exclusive_path_lock(config.root / ".janki-audio-operation"),
+    ):
         record, revision = _read_record(path)
         if record["state"] in {"audio_complete", "complete"}:
             words, sentences = None, None

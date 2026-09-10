@@ -1141,4 +1141,7 @@ def test_no_extraction_prompt_is_selected_by_a_python_instruction_branch() -> No
     ).read_text(encoding="utf-8")
 
     assert "structured-output tool exactly once" not in source
-    assert extract.MODES == ("table", "prose")
+    # Every mode is one complete template file, resolved by name. A fourth
+    # entry here means `prompts/extract-table-layout.md`, not a rule block
+    # somewhere in Python choosing between two askings.
+    assert extract.MODES == ("table", "prose", "table-layout")

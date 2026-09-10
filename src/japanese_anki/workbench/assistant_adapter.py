@@ -14,12 +14,19 @@ import json
 import re
 import secrets
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import card_preview, kanji_notes, operations, staging, status
+from japanese_anki import (
+    card_preview,
+    extract,
+    kanji_notes,
+    operations,
+    staging,
+    status,
+)
 from japanese_anki.application import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
@@ -56,6 +63,7 @@ from japanese_anki.application import (
     revision_apply,
     revision_finish,
     source_parts,
+    study_curation,
     study_job,
 )
 from japanese_anki.application.extraction import destination_deck_facts
@@ -105,6 +113,12 @@ from japanese_anki.workbench.assistant_previews import (
     AssistantPreviewOffer,
     LocalAssistantPreviewStore,
 )
+from japanese_anki.workbench.layout_editor import (
+    LayoutEditorError,
+    LayoutEditorOffer,
+    LocalLayoutEditorStore,
+    compose_layout,
+)
 from japanese_anki.workbench.source_part_editor import (
     LocalSourcePartEditorStore,
     SourcePartEditorError,
@@ -128,10 +142,26 @@ _STUDY_JOB_INTENTS = frozenset(
     {
         "study_job_status",
         "inspect_capture_proposals",
+        "inspect_source_layout",
+        "open_layout_editor",
+        "open_curation_editor",
         "extract_study_parts",
         "retry_study_parts",
         "stage_capture_proposal",
         "resume_study_job",
+    }
+)
+
+#: The study-job intents that only read or open a local owner editor. Each
+#: names one study job and nothing else: a model may ask to see what the owner
+#: bound and may open the editor, and it authors no identity, witness, display
+#: label, revision or curation choice on the way.
+_STUDY_JOB_READ_INTENTS = frozenset(
+    {
+        "study_job_status",
+        "inspect_source_layout",
+        "open_layout_editor",
+        "open_curation_editor",
     }
 )
 
@@ -482,6 +512,11 @@ class RevisionAssistantAdapter:
         init=False,
         repr=False,
     )
+    _layout_editors: LocalLayoutEditorStore | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
     # One rendered source-part plan, held whole and keyed by the fingerprint
     # the owner saw, for the same reason `_batch_plans` is: publishing binds
     # the plan that was shown rather than a fresh one compared against an old
@@ -558,6 +593,152 @@ class RevisionAssistantAdapter:
         )
         self._source_part_editors = store
         return store
+
+    def bind_layout_editors(
+        self,
+        editor_prefix: str,
+    ) -> LocalLayoutEditorStore:
+        """Build the store the isolated origin serves layout editors from.
+
+        The store carries this adapter's own owner route. No model-emittable
+        field carries a column identity, a printed witness, a display label or
+        a revision, so Save is an owner control inside the editor and nothing
+        else can reach it.
+        """
+
+        store = LocalLayoutEditorStore(
+            editor_prefix=editor_prefix,
+            save_layout=self._save_layout_for_owner,
+        )
+        self._layout_editors = store
+        return store
+
+    def _layout_editor_state(
+        self, config: ProjectConfig, job_id: str
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """This job's published parts with their bindings, and its revisions.
+
+        Read at open time and again after each save, so the editor always
+        offers exactly what the job document records. Nothing here is inferred
+        and nothing is written.
+        """
+
+        job = study_job.load_study_job(config, job_id)
+        bound = study_job.job_part_layouts(config, job_id)
+        parts = [
+            {"name": name, "bound": bound.get(name, "")}
+            for name in study_job.job_published_parts(config, job_id)
+        ]
+        layouts = [dict(wire) for wire in job.layouts.values()]
+        return parts, layouts
+
+    def open_layout_editor(self, *, job_id: str) -> LayoutEditorOffer:
+        """Open the owner's layout editor over one job's published parts.
+
+        A read. It saves nothing, binds nothing and reaches no provider — the
+        owner has not typed anything yet. The job whose editor this is comes
+        from this owner route alone; no posted request body can name another.
+        """
+
+        store = self._layout_editors
+        if store is None:
+            raise RevisionRefusal(
+                "This workbench is not serving layout editors, so there is no "
+                "editor to open. `janki study layout JOB --part PART --layout "
+                "FILE` saves the same revision from the terminal."
+            )
+        fresh_config = ProjectConfig.load(self.config.root)
+        try:
+            parts, layouts = self._layout_editor_state(fresh_config, job_id)
+            return store.open(job_id=job_id, parts=parts, layouts=layouts)
+        except (
+            JankiError,
+            LayoutEditorError,
+            OSError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+
+    def _save_layout_for_owner(
+        self, job_id: str, request: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """The editor's own Save control: one immutable revision, one CAS write.
+
+        The owner's click is the authority for a local write — a reversible
+        local save asks for no second confirmation and buys nothing. What it
+        may not do is invent an identity the owner never saw: janki mints the
+        opaque column and layout ids and the revision number here, keeps the
+        identity of every column the owner retained, and hands the result to
+        the job's sole layout writer, which refuses to rewrite a revision a
+        dispatched child may already have been sent under.
+        """
+
+        fresh_config = ProjectConfig.load(self.config.root)
+        _parts, layouts = self._layout_editor_state(fresh_config, job_id)
+        wire = compose_layout(request, layouts=layouts)
+        bind = request.get("bind")
+        if (
+            not isinstance(bind, list)
+            or not bind
+            or any(not isinstance(name, str) or not name for name in bind)
+        ):
+            raise LayoutEditorError(
+                "Name at least one published part this revision covers. "
+                "Nothing was saved."
+            )
+        published = study_job.job_published_parts(fresh_config, job_id)
+        unknown = [name for name in bind if name not in published]
+        if unknown:
+            raise LayoutEditorError(
+                "This job has not published "
+                + ", ".join(unknown)
+                + ". Nothing was saved."
+            )
+        layout = extract.TableLayout.from_wire(wire, where="this layout")
+        job = study_job.load_study_job(fresh_config, job_id)
+        study_job.append_layout(
+            fresh_config,
+            job_id,
+            layout,
+            bind=tuple(dict.fromkeys(bind)),
+            expected_revision=job.revision,
+        )
+        parts, saved = self._layout_editor_state(fresh_config, job_id)
+        return {
+            "ok": True,
+            "layout_id": layout.layout_id,
+            "revision": layout.revision,
+            "parts": [
+                {"index": index, "name": part["name"], "bound": part["bound"]}
+                for index, part in enumerate(parts)
+            ],
+            "layouts": saved,
+            "message": (
+                f"Saved layout {layout.identity} with {len(layout.columns)} "
+                "column(s) and pointed "
+                + ", ".join(dict.fromkeys(bind))
+                + " at it. The revision is immutable, nothing was sent, and no "
+                "card or deck definition changed."
+            ),
+        }
+
+    def open_study_job_layout_editor(self, *, job_id: str) -> str:
+        """Open this job's layout editor and say what it is for. Reads only."""
+
+        offer = self.open_layout_editor(job_id=job_id)
+        return (
+            f"### Set up the printed columns for study job {job_id[:8]}\n\n"
+            f"[Open the layout editor]({offer.url}) — {offer.part_count} "
+            f"published part(s), {offer.bound_count} of them already bound, "
+            f"{offer.layout_count} saved revision(s).\n\n"
+            "You type the printed headings exactly as the page prints them and "
+            "the labels you want on the card; janki mints the column "
+            "identities and the revision number and never reads a heading of "
+            "its own. Saving is a local decision: it appends an immutable "
+            "revision, points the parts you tick at it, makes no model call "
+            "and costs nothing."
+        )
 
     def open_source_part_editor(
         self, source_name: str, *, job_id: str = ""
@@ -4644,9 +4825,19 @@ class RevisionAssistantAdapter:
         The same deck focus that scopes a single extraction scopes this one:
         it decides which words janki already counts as had, not where the
         proposals land.
+
+        A published part is an ordinary disclosed source, so this route can be
+        handed one whose printed columns an owner already bound. Every resolved
+        source is checked for that binding on exactly the terms the
+        single-source route uses, before anything is planned: which mode a
+        bound part is sent under is a structural contract about the request,
+        not a judgement about the page.
         """
 
         destination = self._extraction_destination(deck_scope) if deck_scope else None
+        checked = ProjectConfig.load(self.config.root)
+        for source_path in source_paths:
+            self._refuse_layout_bound_part(checked, source_path)
         try:
             fresh_config = ProjectConfig.load(self.config.root)
             prepared = assistant_batch_surface.plan_batch(
@@ -4991,6 +5182,280 @@ class RevisionAssistantAdapter:
             "was created."
         )
 
+    #: How many curation controls one job's row offers. Past this the owner
+    #: settles the rest with `janki study curate JOB`, which writes through the
+    #: same CAS service and the same coordination lock.
+    _MAX_CURATION_CONTROLS = 24
+
+    def _curation_actions(
+        self, config: ProjectConfig, job_id: str
+    ) -> tuple[Any, ...]:
+        """One bound apply control per part of each disagreeing identity.
+
+        Only the identities whose parts actually disagree, because a control
+        that changed nothing would still be an owner decision to record. The
+        target names the exact identity and the exact part whose staged table
+        the owner is adopting; nothing else can arrive on the posted body.
+        """
+
+        try:
+            groups = study_curation.read_curation_groups(config, job_id)
+        except (JankiError, OSError, TypeError, ValueError):
+            return ()
+        actions: list[StudyJobActionChoice] = []
+        for group in groups:
+            if not group.conflicting:
+                continue
+            for occurrence in group.occurrences:
+                if len(actions) >= self._MAX_CURATION_CONTROLS:
+                    return tuple(actions)
+                actions.append(
+                    StudyJobActionChoice(
+                        action="adopt-forms",
+                        label=(
+                            f"Use {occurrence.part_name}'s printed forms for "
+                            f"{group.expression} everywhere"
+                        ),
+                        target=f"{group.record_id}|{occurrence.part_name}",
+                    )
+                )
+        return tuple(actions)
+
+    #: How many open decisions one job's row offers a close control for. Past
+    #: this the owner closes the rest with `janki study curate JOB --abandon`,
+    #: which is the same service under the same coordination guard.
+    _MAX_ABANDON_CONTROLS = 8
+
+    def _curation_abandon_actions(
+        self, config: ProjectConfig, job_id: str
+    ) -> tuple[Any, ...]:
+        """One bound close control per recorded decision this job has open.
+
+        The target carries the intent id **and** the digest of the exact intent
+        this render read, so a control taken over one decision cannot close a
+        different one, and a decision that was closed or replaced between the
+        render and the click refuses rather than landing on whatever is open
+        now. A decision no replay can finish says so on its own label; janki
+        never picks this over a resume.
+        """
+
+        try:
+            barriers = [
+                barrier
+                for barrier in study_curation.open_curation_barriers(config)
+                if barrier.job_id == job_id
+            ]
+        except (JankiError, OSError, TypeError, ValueError):
+            return ()
+        actions: list[StudyJobActionChoice] = []
+        for barrier in barriers[: self._MAX_ABANDON_CONTROLS]:
+            stuck = (
+                " — no replay can finish it"
+                if barrier.unsatisfiable
+                else ""
+            )
+            actions.append(
+                StudyJobActionChoice(
+                    action="abandon-curation",
+                    label=(
+                        f"Close curation {barrier.intent_id[:8]} without "
+                        f"writing it ({barrier.decision}){stuck}"
+                    ),
+                    target=f"{barrier.intent_id}|{barrier.intent_sha256}",
+                )
+            )
+        return tuple(actions)
+
+    def abandon_study_job_curation(self, *, job_id: str, target: str) -> str:
+        """Close one recorded decision without writing it. Owner only.
+
+        The bound owner control for the one state a resume cannot leave: the
+        intent is durable, a bound file has moved to neither digest it
+        recorded, and the barrier holds every file it named. It reverts
+        nothing, restores nothing and deletes no evidence — it records the
+        mixed snapshot it measured and appends the ``abandoned`` outcome, which
+        is what lets the owner decide again.
+        """
+
+        intent_id, _, expected = str(target).partition("|")
+        if not intent_id or not expected:
+            raise RevisionRefusal(
+                "That control does not name one recorded decision and the "
+                "digest it was read at. Nothing was closed."
+            )
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            outcome = study_curation.abandon_intent(
+                fresh_config,
+                job_id,
+                intent_id,
+                expected_intent_sha256=expected,
+            )
+        except RevisionRefusal:
+            raise
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        observed = "\n".join(
+            f"  {path} is at {digest}" for path, digest in outcome.observed
+        )
+        return (
+            f"Closed curation decision {outcome.intent_id} of study job "
+            f"{job_id[:8]} without writing it. {outcome.detail}\n"
+            f"{observed}\n"
+            "Its record and its evidence stay in this job's log, and the "
+            "files it named can be promoted again. Nothing was sent and "
+            "nothing was promoted."
+        )
+
+    def study_job_layout_text(self, *, job_id: str) -> str:
+        """What printed columns this job binds, and to which parts. Reads only.
+
+        Provenance, not a decision: identities, printed positions, the exact
+        printed strings the owner recorded as witnesses and the display labels
+        they chose. janki reads no header here and matches no label, and this
+        route saves nothing — the owner's own bound control does.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            job = study_job.load_study_job(fresh_config, job_id)
+            bound = study_job.job_layout_bindings(job)
+            published = study_job.job_published_parts(fresh_config, job_id)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        lines: list[str] = []
+        if bound:
+            for part in sorted(bound):
+                layout = bound[part]
+                lines.append(f"{part} — layout {layout.identity}")
+                for column in layout.columns:
+                    lines.append(
+                        f"  {column.ordinal}. {column.column_id} → "
+                        f"{column.display_label}  (printed: "
+                        + " | ".join(column.label_witnesses)
+                        + ")"
+                    )
+        else:
+            lines.append("This job binds no printed source-form layout yet.")
+        unbound = [name for name in published if name not in bound]
+        if unbound:
+            lines.append(
+                "No layout is bound for: " + ", ".join(unbound) + "."
+            )
+        lines.append(
+            "One confirmed batch carries one mode, so a job whose parts carry "
+            "layouts sends them together under that binding."
+        )
+        return "\n".join(lines)
+
+    def study_job_curation_text(self, *, job_id: str) -> str:
+        """What each part currently stages for each identity. Reads only.
+
+        The current edited staged values, joined at read time. Nothing is
+        merged, nothing is written, and where two parts disagree the
+        disagreement is shown rather than resolved.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            groups = study_curation.read_curation_groups(fresh_config, job_id)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        if not groups:
+            return (
+                f"Study job {job_id[:8]} has no staged proposals to settle yet."
+            )
+        conflicting = [group for group in groups if group.conflicting]
+        lines = [
+            f"{len(groups)} identity(ies) staged across this job's parts; "
+            f"{len(conflicting)} of them the parts disagree about."
+        ]
+        for group in conflicting:
+            lines.append(f"{group.expression} ({group.record_id})")
+            for occurrence in group.occurrences:
+                table = occurrence.source_forms
+                cells = (
+                    ", ".join(
+                        f"{column.id}={table.cells[column.id]!r}"
+                        for column in table.columns
+                        if column.id in table.cells
+                    )
+                    or "no printed cells"
+                    if table is not None
+                    else "no printed table"
+                )
+                lines.append(f"  {occurrence.part_name}: {cells}")
+        lines.append(
+            "Choosing between two Japanese values is yours. Use the control "
+            "beside a part to write its printed forms into every staged copy "
+            f"of that identity, or `janki study curate {job_id}`."
+        )
+        return "\n".join(lines)
+
+    def apply_study_job_curation(self, *, job_id: str, target: str) -> str:
+        """Write one part's printed forms into every staged copy. Owner only.
+
+        The bound owner control §9.1 names: it carries the exact identity and
+        part it was rendered from, records the decision before its first write,
+        takes the coordination guard and every affected path's lock, prechecks
+        all of them and only then writes. It spends nothing, promotes nothing
+        and reads no Japanese.
+        """
+
+        record_id, _, part_name = str(target).partition("|")
+        if not record_id or not part_name:
+            raise RevisionRefusal(
+                "That curation control does not name one identity and one part."
+            )
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            source = None
+            for group in study_curation.read_curation_groups(fresh_config, job_id):
+                if group.record_id != record_id:
+                    continue
+                for occurrence in group.occurrences:
+                    if occurrence.part_name == part_name:
+                        source = occurrence
+            if source is None:
+                raise RevisionRefusal(
+                    f"{part_name} no longer stages a proposal for {record_id}, "
+                    "so there is nothing to adopt. Nothing was written."
+                )
+            plan = study_curation.plan_curation(
+                fresh_config,
+                job_id,
+                (
+                    study_curation.CurationChoice(
+                        record_id=record_id,
+                        action="replace",
+                        key="",
+                        value=source.forms_wire,
+                    ),
+                ),
+                decision=(
+                    f"adopt {part_name}'s source_forms for {record_id}"
+                ),
+            )
+            outcome = study_curation.apply_curation(fresh_config, plan)
+        except RevisionRefusal:
+            raise
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        replaced = (
+            ""
+            if not outcome.supersedes
+            else (
+                f" It was recorded over closed decision {outcome.supersedes}, "
+                "which keeps its own record and evidence in this job's log."
+            )
+        )
+        return (
+            f"Wrote {part_name}'s printed forms for {record_id} into "
+            f"{len(outcome.written)} staged file(s). The decision was recorded "
+            f"as {outcome.intent_id} before the first write, nothing was sent, "
+            f"and nothing was promoted.{replaced}"
+        )
+
     def list_study_job_choices(self) -> tuple[Any, ...]:
         """Read-only durable job state for the local desk. Nothing is sent."""
 
@@ -5032,6 +5497,31 @@ class RevisionAssistantAdapter:
             actions.extend(
                 self._part_selection_actions(fresh_config, job_id, status)
             )
+            actions.append(
+                StudyJobActionChoice(
+                    action="layout",
+                    label="See the printed columns this job binds",
+                )
+            )
+            if status.parts:
+                # The owner route §4.1 requires: the columns, their printed
+                # witnesses and their display labels are typed inside this
+                # editor, and janki mints every identity there.
+                actions.append(
+                    StudyJobActionChoice(
+                        action="edit-layout",
+                        label="Set up the printed columns for these parts",
+                    )
+                )
+            if settled:
+                actions.append(
+                    StudyJobActionChoice(
+                        action="curate",
+                        label="Settle what the parts disagree about",
+                    )
+                )
+            actions.extend(self._curation_actions(fresh_config, job_id))
+            actions.extend(self._curation_abandon_actions(fresh_config, job_id))
             for batch in status.batches:
                 for child in batch.children:
                     if child.state == "result_captured":
@@ -5201,6 +5691,17 @@ class RevisionAssistantAdapter:
                     if part.missing
                     else f"{part.published_count} of {part.part_count} published"
                 )
+            )
+        for part in sorted(status.layout_bindings):
+            told.append(
+                f"- Printed columns for {part}: layout "
+                f"{status.layout_bindings[part]}, bound by the owner"
+            )
+        if status.pending_curation_intents:
+            told.append(
+                f"- {len(status.pending_curation_intents)} curation decision(s) "
+                "recorded and not finished; nothing they name is promoted until "
+                "they are"
             )
         for batch in status.batches:
             if batch.missing:
@@ -5495,11 +5996,24 @@ class RevisionAssistantAdapter:
                 "Only reading or recovering a saved reply, or naming which "
                 "batch to send part of again, names a model call."
             )
-        if intent.kind == "study_job_status":
+        if intent.kind in _STUDY_JOB_READ_INTENTS:
             job_id = self._resolve_study_job(config, intent.resource_ids[0])
-            return ChatReply(
-                text=f"{answer}\n\n{self.study_job_status_text(job_id=job_id)}"
-            )
+            if intent.kind == "study_job_status":
+                told = self.study_job_status_text(job_id=job_id)
+            elif intent.kind == "open_curation_editor":
+                told = self.study_job_curation_text(job_id=job_id)
+            elif intent.kind == "open_layout_editor":
+                # The model may ask for the editor; the owner acts inside it.
+                # Opening it renders the job's own parts and revisions and
+                # saves nothing, and no field of the intent carries a column,
+                # a witness, a label or a revision.
+                told = self.open_study_job_layout_editor(job_id=job_id)
+            else:
+                # `inspect_source_layout` reads what the owner already bound:
+                # identities, ordinals, printed witnesses and display labels.
+                # It authors none of them and saves nothing.
+                told = self.study_job_layout_text(job_id=job_id)
+            return ChatReply(text=f"{answer}\n\n{told}")
         if intent.kind == "resume_study_job":
             job_id = self._resolve_study_job(config, intent.resource_ids[0])
             return ChatReply(
@@ -5641,6 +6155,29 @@ class RevisionAssistantAdapter:
             focus_scope=deck_scope,
         )
 
+    def _refuse_layout_bound_part(
+        self, config: ProjectConfig, source_path: Path
+    ) -> None:
+        """Refuse a bare extraction of a part some job binds a layout to."""
+
+        try:
+            bound = study_job.parts_with_bound_layouts(config)
+        except (JankiError, OSError, TypeError, ValueError):
+            # A job store this reader cannot walk is not a reason to refuse an
+            # ordinary extraction of an unrelated source; the study job's own
+            # planner still refuses a bound part under the wrong mode.
+            return
+        jobs = bound.get(source_path.name)
+        if not jobs:
+            return
+        raise RevisionRefusal(
+            f"{source_path.name} is a source part whose printed columns study "
+            f"job {jobs[0]} has bound, so it is sent as a "
+            f"{extract.LAYOUT_MODE} batch under that binding rather than as an "
+            "ordinary extraction. Ask Janki to extract that job's own parts, "
+            f"or run `janki study extract {jobs[0]}`. Nothing was sent."
+        )
+
     def prepare_source_extraction(
         self,
         *,
@@ -5659,6 +6196,14 @@ class RevisionAssistantAdapter:
         destination: tuple[Path, str, str, str] | None = None
         if deck_scope:
             destination = self._extraction_destination(deck_scope)
+        # This route describes one corpus file under `auto`, which is right for
+        # every source somebody picked off the desk — and wrong for a part
+        # whose printed columns an owner already bound, because `extract-auto`
+        # would ask for a table nobody described. Refused rather than silently
+        # sent, and named so the owner knows which control does send it.
+        self._refuse_layout_bound_part(
+            ProjectConfig.load(self.config.root), source_path
+        )
         try:
             fresh_config = ProjectConfig.load(self.config.root)
             # Only a resolved destination changes the question being asked. An

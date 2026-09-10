@@ -39,6 +39,7 @@ from japanese_anki.application import deck_package as deck_package_application
 from japanese_anki.application import enrichment as enrichment_application
 from japanese_anki.application import kanji_addition as kanji_application
 from japanese_anki.application import promotion as promotion_application
+from japanese_anki.application import study_curation
 from japanese_anki.application.extraction import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
@@ -1914,6 +1915,10 @@ def command_extract(args: argparse.Namespace) -> int:
     already paid for is kept, and the error names what is left to do.
     """
     config = _load_config(args)
+    # Before the inputs are preserved and long before anything is planned: this
+    # command names files, not a study job's parts, so it has no owner-bound
+    # layout to send and must not resolve the layout template by accident.
+    extract.refuse_unbound_layout_mode(args.mode, control="janki extract --mode")
     prepared = prepare_inputs(
         [path for path in args.files],
         config.scan_inbox,
@@ -2473,6 +2478,19 @@ def command_promote(args: argparse.Namespace) -> int:
     """
     config = _load_config(args)
     path = args.file.resolve()
+    # The staging mutation coordination lock, taken before every other janki
+    # lock this command reaches. It is what makes the curation barrier
+    # race-safe at the commit: a decision published between this command's plan
+    # and its write cannot interleave with it, because publication takes the
+    # same guard.
+    with study_curation.curation_guard(config):
+        return _promote_under_guard(config, path, args)
+
+
+def _promote_under_guard(
+    config: ProjectConfig, path: Path, args: argparse.Namespace
+) -> int:
+    """The whole of `janki promote`, with the coordination guard held."""
 
     def offline() -> PromotionDecision:
         """Everything a dictionary cannot change, decided for free."""
@@ -4251,10 +4269,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     extract_parser.add_argument(
         "--mode",
+        # Every mode, so a person who types the layout-bound one is told what
+        # it needs rather than being shown a bare argparse choice list. The
+        # refusal is in `command_extract`, where the sentence can name the
+        # commands that do bind a layout.
         choices=extract.MODES,
         help=(
             "Force how the source is read. Omit to let the model judge each "
-            "page, which is right when one document holds both."
+            f"page, which is right when one document holds both. {extract.LAYOUT_MODE} "
+            "needs an owner-bound layout and is sent by `janki study extract`."
         ),
     )
     extract_parser.add_argument(

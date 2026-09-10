@@ -420,6 +420,56 @@ def _validate_replacement_shape(record_id: str, field: str, value: Any) -> None:
             and all(isinstance(item[name], str) for name in _EXAMPLE_FIELDS)
             for item in value
         )
+    elif field == "source_forms":
+        # Removing the table is not a replacement, and a revision proposal is
+        # the wrong boundary for it. `SourceFormsTable.from_dict` canonicalizes
+        # both `null` and the empty table to absence, and `io.merge_records`
+        # reads absence as a hole to keep the existing value in — so a proposal
+        # spelling either one would stage, review as a deletion and then
+        # promote to no change at all. Refused by name, at the shape check,
+        # rather than accepted and quietly ignored downstream. The route the
+        # refusal names is scoped on purpose: `--drop-table` rewrites a job's
+        # staged copies, and `_require_canonical_records` has already proved
+        # every record a revision can name is the canonical one, so it is not
+        # the remediation for the table this proposal is about.
+        if value is None or (
+            isinstance(value, Mapping)
+            and not value.get("columns")
+            and not value.get("cells")
+        ):
+            raise CardChangeStagingError(
+                f"Proposed record {record_id!r} would remove its "
+                f"{field!r} table, which a card revision cannot express: a "
+                "revision replaces a field's value, and an absent or empty "
+                "table is the same wire as leaving it alone. A revision names "
+                "canonical records, and a table already stored canonically is "
+                "not a revision's to take off. `janki study curate JOB "
+                "--record ID --drop-table` drops the table from a study job's "
+                "staged copies, so it reaches this card only while its "
+                "proposal is still unpromoted. Nothing was staged."
+            )
+        # The complete canonical shape, not "something `from_dict` will take":
+        # this field is outside `enrich.ENRICHABLE_FIELDS` and `AI_FIELDS`, so
+        # no dictionary or AI pass writes it and it is not on the automatic
+        # repair allow-list either. A replacement that arrived as a bare cell
+        # map would be accepted by the constructor as an empty table and
+        # silently discard the source's declared columns.
+        valid = (
+            isinstance(value, Mapping)
+            and set(value) == {"columns", "cells"}
+            and isinstance(value["columns"], list)
+            and all(
+                isinstance(column, Mapping)
+                and set(column) == {"id", "label"}
+                and all(isinstance(column[name], str) for name in ("id", "label"))
+                for column in value["columns"]
+            )
+            and isinstance(value["cells"], Mapping)
+            and all(
+                isinstance(key, str) and isinstance(item, str)
+                for key, item in value["cells"].items()
+            )
+        )
     if not valid:
         raise CardChangeStagingError(
             f"Proposed record {record_id!r} has a replacement for {field!r} that "
@@ -442,15 +492,22 @@ def _changes(
         old_wire = old.to_dict()
         new_wire = new.to_dict()
         for field in MERGEABLE_FIELDS:
-            if old_wire[field] == new_wire[field]:
+            # `.get`, because the canonical serialization is deliberately
+            # sparse for the optional fields — an absent `source_forms` key is
+            # the absent table, exactly as an unset `spoken_japanese` is absent
+            # from an example — and `MERGEABLE_FIELDS` is derived from the
+            # dataclass rather than from one record's emitted keys.
+            old_value = old_wire.get(field)
+            new_value = new_wire.get(field)
+            if old_value == new_value:
                 continue
             result.append(
                 CardFieldChange(
                     record_id=old.id,
                     expression=old.expression,
                     field=field,
-                    old_value=copy.deepcopy(old_wire[field]),
-                    proposed_value=copy.deepcopy(new_wire[field]),
+                    old_value=copy.deepcopy(old_value),
+                    proposed_value=copy.deepcopy(new_value),
                 )
             )
     if not result:

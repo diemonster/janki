@@ -254,6 +254,14 @@ def assistant_agent_schema() -> Any:
             # model-emittable field at all.
             "study_job_status",
             "inspect_capture_proposals",
+            # Reading what the owner bound, and opening the editors they act
+            # inside. No column identity, printed witness, display label,
+            # layout revision or curation choice is a field of this schema:
+            # the owner authors every one of them on their own bound control
+            # or through explicit CLI arguments.
+            "inspect_source_layout",
+            "open_layout_editor",
+            "open_curation_editor",
             "extract_study_parts",
             "retry_study_parts",
             "stage_capture_proposal",

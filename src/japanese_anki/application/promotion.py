@@ -2180,6 +2180,25 @@ def _unrewritable(path: Path) -> str:
     )
 
 
+def _pending_curation(config: ProjectConfig, staging_path: Path) -> str:
+    """Why a recorded cross-source curation decision blocks this file, if one does.
+
+    Imported at call time rather than at module scope: the curation service
+    reads the study job store, which reaches this package's own aggregate
+    module, and promotion is below it in the import graph. The gate itself is
+    inside :func:`decide_promotion`, so it applies identically to `janki
+    promote`, the workbench promotion, the Assistant's typed promotion action
+    and a study job's own finish.
+
+    A job document that cannot be read refuses here rather than being skipped,
+    because a skipped barrier is a lifted one.
+    """
+
+    from japanese_anki.application import study_curation
+
+    return study_curation.pending_curation_refusal(config, staging_path)
+
+
 def decide_promotion(
     config: ProjectConfig,
     staging_path: Path,
@@ -2273,6 +2292,17 @@ def decide_promotion(
             ),
             "archive",
         )
+
+    try:
+        curation = _pending_curation(config, staging_path)
+    except JankiError as exc:
+        # A job document a barrier could be hiding in, refused rather than
+        # skipped: a skipped barrier is a lifted one. Returned, not raised,
+        # because this function's contract is that a gate refusal comes back
+        # in `decision.error` for the command to re-raise and a page to render.
+        return blocked(PromoteError(str(exc)), "curation-pending")
+    if curation:
+        return blocked(PromoteError(curation), "curation-pending")
 
     try:
         # Both reads under the writer lock, so the bytes the write path's
@@ -2590,6 +2620,17 @@ def execute_promotion(
         if decision.error is None:
             raise PromoteError("A blocked promotion decision has no refusal")
         raise decision.error
+
+    # Rechecked here, not only at planning. A curation intent can be published
+    # while every bound staging file still holds its `sha256_before` bytes, so
+    # the wire compare-and-swap below would pass for a decision taken *before*
+    # that publication and consume a file a durable decision is about to
+    # rewrite. Planning alone cannot close that race; this recheck runs under
+    # the caller's coordination guard, which the intent's own publication also
+    # takes, so the two cannot interleave.
+    curation = _pending_curation(config, decision.staging_path)
+    if curation:
+        raise PromoteError(curation)
 
     path = decision.staging_path
     archive_base = (config.staging_dir / "done" / path.name).resolve()

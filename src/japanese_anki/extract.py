@@ -40,6 +40,7 @@ from japanese_anki.identifiers import (
 )
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import (
+    SourceFormsTable,
     SourceReference,
     VocabularyRecord,
     mark_provisional,
@@ -49,22 +50,29 @@ from japanese_anki.staging import annotate
 __all__ = [
     "CONFIDENCE_LEVELS",
     "EXTRACTION_SCHEMA_VERSION",
+    "LAYOUT_MODE",
+    "LAYOUT_MODE_REFUSAL",
     "MODES",
     "SOURCE_UNIT_DISPOSITIONS",
     "ExtractError",
     "ExtractionResult",
     "RecordBuild",
     "SourceUnit",
+    "TABLE_MODES",
+    "TableColumn",
+    "TableLayout",
     "build_records",
     "candidate_accounting_fingerprint",
     "candidate_schema",
     "context_fingerprint",
     "coverage_block",
     "extract_candidates",
+    "layout_from_provenance",
     "normalize_context",
     "normalize_response",
     "prompt_provenance",
     "prompt_for",
+    "refuse_unbound_layout_mode",
     "source_fingerprint",
     "staging_path",
     "staging_targets",
@@ -73,9 +81,21 @@ __all__ = [
     "validate_candidate_accounting_block",
 ]
 
+#: The mode a source whose printed columns the owner has bound is sent under.
+#: It is a complete additional template, not a branch inside `extract-table`,
+#: and it is never chosen for a source: the owner binds a layout to a part, and
+#: that binding is what makes this mode available for it.
+LAYOUT_MODE = "table-layout"
+
 #: ``--mode`` values. Omitting the flag lets the model judge each page for
 #: itself, which DESIGN_V2 makes the default because one PDF often holds both.
-MODES: tuple[str, ...] = ("table", "prose")
+MODES: tuple[str, ...] = ("table", "prose", LAYOUT_MODE)
+
+#: The modes that read a printed table. Both are exhaustive over the rows the
+#: source prints, so every mode branch that means "this page had a table"
+#: names this set rather than the literal ``"table"`` — an unlisted mode would
+#: otherwise skip the guard and the coverage block silently.
+TABLE_MODES: frozenset[str] = frozenset({"table", LAYOUT_MODE})
 
 #: What a candidate's ``confidence`` may say. Ordered worst-last so a reviewer
 #: reading top to bottom meets the shakiest guesses first.
@@ -103,6 +123,205 @@ class ExtractError(JankiError):
 
     def __str__(self) -> str:
         return f"[{self.code}] {super().__str__()}"
+
+
+@dataclass(frozen=True, slots=True)
+class TableColumn:
+    """One column of a layout the owner bound, exactly as they recorded it.
+
+    ``column_id`` is minted locally and opaquely when the owner reviews the
+    table; it is never a printed heading, which is what removes the
+    duplicate-heading collapse and stops any code from matching a label.
+    ``ordinal`` is printed order. ``label_witnesses`` are the exact printed
+    strings, preserved verbatim — janki never reads them, and trimming or
+    normalizing one would silently change what the request said. ``display_label``
+    is the one owner-chosen display string, and two columns may share it because
+    their identities differ.
+    """
+
+    column_id: str
+    ordinal: int
+    label_witnesses: tuple[str, ...]
+    display_label: str
+
+    def to_wire(self) -> dict[str, Any]:
+        return {
+            "column_id": self.column_id,
+            "ordinal": self.ordinal,
+            "label_witnesses": list(self.label_witnesses),
+            "display_label": self.display_label,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TableLayout:
+    """One immutable owner-assigned layout revision.
+
+    Immutable per ``(layout_id, revision)``: the study job's ``append_layout``
+    is the only writer that may create one, and a dispatched child's request
+    manifest freezes the whole object rather than the identity pair — all
+    columns, witnesses and labels come back from the saved provenance so a
+    retry sends the identical request without consulting a mutable binding.
+    """
+
+    layout_id: str
+    revision: int
+    columns: tuple[TableColumn, ...]
+
+    @property
+    def column_ids(self) -> tuple[str, ...]:
+        return tuple(column.column_id for column in self.columns)
+
+    @property
+    def identity(self) -> str:
+        """``layout_id revision N`` — how a refusal names this layout."""
+
+        return f"{self.layout_id} revision {self.revision}"
+
+    def to_wire(self) -> dict[str, Any]:
+        """The exact frozen JSON a request manifest records.
+
+        One canonical spelling, because the batch preview compares the staged
+        ``prompt_provenance`` with the child's planned copy after canonical
+        JSON: a layout serialized one way at plan time and another at staging
+        time is a preview failure a long way from its cause.
+        """
+
+        return {
+            "layout_id": self.layout_id,
+            "revision": self.revision,
+            "columns": [column.to_wire() for column in self.columns],
+        }
+
+    @classmethod
+    def from_wire(cls, raw: Any, *, where: str = "table_layout") -> TableLayout:
+        """Read one frozen layout back. Structural checks only."""
+
+        if not isinstance(raw, Mapping) or set(raw) != {
+            "layout_id",
+            "revision",
+            "columns",
+        }:
+            raise ExtractError(
+                f"{where} is one object holding layout_id, revision and columns.",
+                code="extract-layout-invalid",
+            )
+        layout_id = raw["layout_id"]
+        revision = raw["revision"]
+        if not isinstance(layout_id, str) or not layout_id.strip():
+            raise ExtractError(
+                f"{where}.layout_id is a nonblank identity.",
+                code="extract-layout-invalid",
+            )
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+            raise ExtractError(
+                f"{where}.revision is a positive whole number, not {revision!r}.",
+                code="extract-layout-invalid",
+            )
+        raw_columns = raw["columns"]
+        if not isinstance(raw_columns, list) or not raw_columns:
+            raise ExtractError(
+                f"{where}.columns is a nonempty ordered list of columns.",
+                code="extract-layout-invalid",
+            )
+        columns: list[TableColumn] = []
+        seen: set[str] = set()
+        for position, entry in enumerate(raw_columns, start=1):
+            spot = f"{where}.columns[{position}]"
+            if not isinstance(entry, Mapping) or set(entry) != {
+                "column_id",
+                "ordinal",
+                "label_witnesses",
+                "display_label",
+            }:
+                raise ExtractError(
+                    f"{spot} holds exactly column_id, ordinal, label_witnesses "
+                    "and display_label.",
+                    code="extract-layout-invalid",
+                )
+            column_id = entry["column_id"]
+            ordinal = entry["ordinal"]
+            witnesses = entry["label_witnesses"]
+            display_label = entry["display_label"]
+            if not isinstance(column_id, str) or not column_id.strip():
+                raise ExtractError(
+                    f"{spot}.column_id is a nonblank opaque identity.",
+                    code="extract-layout-invalid",
+                )
+            if column_id in seen:
+                raise ExtractError(
+                    f"{where} declares column {column_id!r} twice; one identity "
+                    "names one column.",
+                    code="extract-layout-invalid",
+                )
+            seen.add(column_id)
+            if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 1:
+                raise ExtractError(
+                    f"{spot}.ordinal is the column's one-based printed position.",
+                    code="extract-layout-invalid",
+                )
+            if (
+                not isinstance(witnesses, list)
+                or not witnesses
+                or any(not isinstance(item, str) for item in witnesses)
+            ):
+                raise ExtractError(
+                    f"{spot}.label_witnesses are the exact printed strings the "
+                    "owner recorded, at least one of them.",
+                    code="extract-layout-invalid",
+                )
+            if not isinstance(display_label, str) or not display_label:
+                raise ExtractError(
+                    f"{spot}.display_label is the owner's display string.",
+                    code="extract-layout-invalid",
+                )
+            columns.append(
+                TableColumn(
+                    column_id=column_id,
+                    ordinal=ordinal,
+                    # Verbatim, in the order they were recorded.
+                    label_witnesses=tuple(witnesses),
+                    display_label=display_label,
+                )
+            )
+        return cls(
+            layout_id=layout_id, revision=revision, columns=tuple(columns)
+        )
+
+
+def layout_from_provenance(provenance: Mapping[str, Any]) -> TableLayout | None:
+    """The frozen layout one saved request was sent with, or ``None``.
+
+    Pure, and over the saved provenance **and nothing else**: no job, no
+    config, no store. The binding in a job's ``choices`` is mutable and
+    repointable, so resolving one here would let today's choice redefine a
+    request somebody already paid for. Replay therefore reads the frozen layout
+    from the saved request manifest, exactly as it already reads the saved mode
+    back rather than today's.
+
+    Mode and layout must pair in both directions. A saved ordinary capture
+    normalizes to *no layout* rather than to an invented empty one: the absence
+    is the historical fact, and nothing is backfilled onto it.
+    """
+    mode = provenance.get("mode")
+    raw = provenance.get("table_layout")
+    if mode == LAYOUT_MODE:
+        if raw is None:
+            raise ExtractError(
+                f"A {LAYOUT_MODE} request records the exact layout it was sent "
+                "with; this provenance carries none, so janki cannot say which "
+                "columns were asked for.",
+                code="extract-layout-missing",
+            )
+        return TableLayout.from_wire(raw)
+    if raw is not None:
+        raise ExtractError(
+            f"This provenance records a table layout under {str(mode)!r} mode. "
+            f"Only {LAYOUT_MODE} sends one, so janki will not read the two as "
+            "one request.",
+            code="extract-layout-unexpected",
+        )
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,6 +536,33 @@ def candidate_schema() -> Any:
     return Extraction
 
 
+#: What a control that cannot carry a binding says when it is asked for the
+#: layout-bound mode. One sentence, spelled once, so the CLI, the batch command
+#: and both workbench routes refuse in the same words.
+LAYOUT_MODE_REFUSAL = (
+    f"{LAYOUT_MODE} extraction sends the exact layout the repository owner "
+    "bound to that source part, and this control carries no binding. Bind one "
+    "with `janki study layout JOB --part PART --layout FILE`, then send the "
+    "part with `janki study extract JOB`. Nothing was sent."
+)
+
+
+def refuse_unbound_layout_mode(mode: str | None, *, control: str) -> None:
+    """Refuse ``table-layout`` at an entry point that cannot bind a layout.
+
+    Every consumer of :data:`MODES` calls this explicitly rather than
+    inheriting the widened tuple: adding a mode to that tuple makes it typeable
+    at the CLI, postable on the workbench's paid form and reachable by URL on
+    the offered-mode route, and a request sent under it with no bound layout
+    would ask the model to key its answer by identities nobody supplied.
+    """
+    if mode == LAYOUT_MODE:
+        raise ExtractError(
+            f"{control}: {LAYOUT_MODE_REFUSAL}",
+            code="extract-layout-unbound",
+        )
+
+
 def prompt_name(mode: str | None) -> str:
     """The template one extraction mode sends.
 
@@ -337,9 +583,44 @@ def prompt_name(mode: str | None) -> str:
     )
 
 
+def _layout_block(layout: TableLayout) -> str:
+    """The labelled data turn one bound layout adds to the ordinary ask.
+
+    Data, in Python, rather than prose in a template: AGENTS keeps a branching
+    instruction out of the prompt files, and a template that described columns
+    would be a second, drifting definition of what was sent. Every part of the
+    layout the owner authored rides here — identity, revision, each column's
+    opaque id, its printed position, the exact printed headings recorded for it
+    and the owner's display label — because all of it is part of what the model
+    was told, so any of it differing is a different request.
+    """
+    lines = [
+        "",
+        "Printed source-form columns for this page, bound by the repository "
+        f"owner as layout {layout.layout_id} revision {layout.revision}:",
+    ]
+    for column in layout.columns:
+        witnesses = " | ".join(column.label_witnesses)
+        lines.append(
+            f"  {column.ordinal}. id={column.column_id}"
+            f"  display label: {column.display_label}"
+            f"  printed heading(s): {witnesses}"
+        )
+    lines.append(
+        "Key each row's `conjugations` map by these exact `id` values, never by "
+        "a printed heading and never by an id that is not listed above. Copy the "
+        "cell that row prints under that column as the value: an empty string "
+        "where the page printed a blank cell, and no key at all where that row "
+        "has no cell for that column."
+    )
+    return "\n".join(lines)
+
+
 def prompt_for(
     source_name: str,
     known: Sequence[str] = (),
+    *,
+    layout: TableLayout | None = None,
 ) -> str:
     """The user-turn text for one file.
 
@@ -351,11 +632,14 @@ def prompt_for(
     approved prose-selection targets with their rubric — binding a human's
     inventory of a page into the prompt so coverage could be scored against it.
     That was the pilot programme's question, and it was cancelled with it
-    (M8.4). What is left is the ordinary ask.
+    (M8.4). What is left is the ordinary ask, plus the owner's bound layout
+    when there is one.
     """
     lines = [f"Source file: {source_name}"]
     if known:
         lines.append("\nKnown expressions:\n" + "、".join(known))
+    if layout is not None:
+        lines.append(_layout_block(layout))
     return "\n".join(lines)
 
 
@@ -410,6 +694,7 @@ def prompt_provenance(
     known: Sequence[str] = (),
     source_sha256: str | None = None,
     provider_plan: Any | None = None,
+    layout: TableLayout | None = None,
 ) -> dict[str, Any]:
     """The stable inputs needed to explain a later model-output change.
 
@@ -421,8 +706,14 @@ def prompt_provenance(
     cannot explain the call that was actually made. Its durable manifest and
     exact planned channels ride along so the same request can be rebuilt,
     and its answer re-read, without re-planning from today's prompts.
+
+    ``table_layout`` is recorded **only when a layout is given**, so no
+    existing capture's provenance bytes change and an old capture still
+    normalizes to no layout. The response contract is untouched: the model
+    returns the supplied identities as keys of the existing conjugation map, so
+    ``response_schema_fingerprint`` is identical and only the request moves.
     """
-    user = prompt_for(prepared.origin_path.name, known)
+    user = prompt_for(prepared.origin_path.name, known, layout=layout)
     schema = candidate_schema()
     wire_schema = claude_client.wire_schema(schema)
     provenance: dict[str, Any] = {
@@ -444,6 +735,8 @@ def prompt_provenance(
             schema=wire_schema,
         ),
     }
+    if layout is not None:
+        provenance["table_layout"] = layout.to_wire()
     if provider_plan is None:
         return provenance
     provenance["provider"] = provider_plan.provider
@@ -481,6 +774,7 @@ def extract_candidates(
     client: Any | None = None,
     capture: Any | None = None,
     provenance: dict[str, Any] | None = None,
+    layout: TableLayout | None = None,
 ) -> ExtractionResult:
     """The normalized response one file yields, or a stable diagnostic.
 
@@ -490,6 +784,10 @@ def extract_candidates(
     the answer was cut mid-word: the visible half would look like a complete
     extraction and the rest would be lost silently, which is the one failure
     this whole command is arranged to avoid.
+
+    This transport builds its own user turn, so ``layout`` has to reach it:
+    a layout-bearing provenance beside a turn that never carried the block
+    would describe a request that was not sent.
     """
     try:
         call = claude_client.parse_call(
@@ -499,7 +797,9 @@ def extract_candidates(
                 prepared.content_block(),
                 {
                     "type": "text",
-                    "text": prompt_for(prepared.origin_path.name, known),
+                    "text": prompt_for(
+                        prepared.origin_path.name, known, layout=layout
+                    ),
                 },
             ],
             candidate_schema(),
@@ -536,6 +836,7 @@ def extract_candidates(
             mode=mode,
             known=known,
             source_sha256=prepared.source_sha256 or None,
+            layout=layout,
         )
     return extraction_result_from_call(
         call, prepared, model=model, mode=mode, provenance=provenance
@@ -654,9 +955,11 @@ def normalize_response(
         for candidate in candidates
         if str(getattr(candidate, "source_kind", "prose")) == "prose"
     )
-    if mode == "table" and prose_candidates:
+    # Both table modes, named explicitly rather than inherited: an unlisted
+    # mode string would silently skip this guard and the prose one below.
+    if mode in TABLE_MODES and prose_candidates:
         raise ExtractError(
-            f"{source_name}: table mode returned {len(prose_candidates)} prose "
+            f"{source_name}: {mode} mode returned {len(prose_candidates)} prose "
             "candidate(s).",
             code="extract-table-prose-candidate",
         )
@@ -1113,7 +1416,12 @@ def coverage_block(
 
     # A prose-only file has no table units to be exhaustive about; anything
     # else is unmeasured now that no oracle says what should have been there.
-    has_table = bool(actual) or mode == "table"
+    #
+    # Both table modes, inside the function rather than at a call site:
+    # `promote._verify_coverage_facts` re-derives this block from the saved
+    # mode, so a caller-side fix would make promotion regenerate a different
+    # block and refuse the file the extraction had just written.
+    has_table = bool(actual) or mode in TABLE_MODES
     status = "unmeasured" if has_table else "selection"
 
     dispositions = {
@@ -1160,7 +1468,9 @@ def coverage_block(
     return block
 
 
-def _raw_fields(candidate: Any, prepared: PreparedInput) -> dict[str, str]:
+def _raw_fields(
+    candidate: Any, prepared: PreparedInput, *, layout: TableLayout | None = None
+) -> dict[str, str]:
     """A candidate's provenance, stringified for ``raw_fields``.
 
     ``raw_fields`` is ``dict[str, str]`` and stays that way (DESIGN_V2: page
@@ -1191,6 +1501,15 @@ def _raw_fields(candidate: Any, prepared: PreparedInput) -> dict[str, str]:
     conjugations = dict(getattr(candidate, "conjugations", None) or {})
     if conjugations:
         fields["source_conjugations"] = json.dumps(conjugations, ensure_ascii=False)
+    # And, when the owner bound one, the exact request metadata that produced
+    # that map: the identity, the revision and each column's ordinal, printed
+    # witnesses and display label. Written beside the witness rather than
+    # derived later, so a reviewer can see which identity each key answered
+    # without consulting a job document that may since have been repointed.
+    if layout is not None:
+        fields["source_form_layout"] = json.dumps(
+            layout.to_wire(), ensure_ascii=False, sort_keys=True
+        )
     # The chapters the source itself printed, copied in printed order. Written
     # only when there are some: an empty list is the ordinary case and says
     # nothing. No tag is minted here — which labels become deck tags is a
@@ -1201,10 +1520,67 @@ def _raw_fields(candidate: Any, prepared: PreparedInput) -> dict[str, str]:
     return fields
 
 
+def _require_bound_columns(
+    candidates: Sequence[Any], prepared: PreparedInput, layout: TableLayout
+) -> None:
+    """Every returned key names a column the request supplied. Nothing else.
+
+    An artifact-identifier check, not a language read: it compares key sets and
+    never looks at a cell, a heading or a word. An unbound key would otherwise
+    become a card row with no label binding and no witness, so it refuses for a
+    person to settle rather than being dropped — a dropped key is a silent
+    discard of something already paid for.
+
+    A duplicate identity cannot survive ``dict[str, str]``, and a non-string
+    key or value already refuses at the serialization boundary, so this is the
+    one structural rule left. An answer that supplies no keys at all is a valid
+    all-absent table: the declared columns are still the layout's.
+    """
+    allowed = frozenset(layout.column_ids)
+    for candidate in candidates:
+        supplied = getattr(candidate, "conjugations", None) or {}
+        unknown = sorted(key for key in supplied if key not in allowed)
+        if unknown:
+            raise ExtractError(
+                f"{prepared.origin_path.name}: the answer returned source-form "
+                f"column id(s) {', '.join(repr(key) for key in unknown)} that "
+                f"layout {layout.identity} never supplied. janki matches no "
+                "printed label and will not guess which column was meant; "
+                "settle it against the page.",
+                code="extract-layout-unknown-column",
+            )
+
+
+def _source_forms_for(candidate: Any, layout: TableLayout) -> SourceFormsTable | None:
+    """The canonical table one layout-bound candidate's answer makes.
+
+    Declared columns in the layout's printed order, and the supplied cells
+    verbatim: a present empty string is a printed blank and an omitted
+    identity is absent. Nothing infers which column was meant, and nothing
+    inspects a cell to decide whether it counts.
+    """
+    supplied = dict(getattr(candidate, "conjugations", None) or {})
+    return SourceFormsTable.from_dict(
+        {
+            "columns": [
+                {"id": column.column_id, "label": column.display_label}
+                for column in layout.columns
+            ],
+            "cells": {
+                column.column_id: supplied[column.column_id]
+                for column in layout.columns
+                if column.column_id in supplied
+            },
+        }
+    )
+
+
 def build_records(
     candidates: Iterable[Any],
     prepared: PreparedInput,
     known_ids: Iterable[str] = (),
+    *,
+    layout: TableLayout | None = None,
 ) -> RecordBuild:
     """Build canonical records and account for every parsed schema proposal.
 
@@ -1218,8 +1594,17 @@ def build_records(
     decide which parts of the answers are better. Every member of a collision
     group, including the first, is therefore returned in original response
     order for a reviewer to compare.
+
+    ``layout`` is the frozen layout this answer's own request was sent with,
+    read back from the saved provenance. When there is one, every returned key
+    is checked against the identities that request supplied — over the whole
+    parsed list, before any partition, because a duplicate or unusable
+    proposal's unknown key is the same structural fault.
     """
-    plan = _candidate_plan(candidates)
+    parsed = tuple(candidates)
+    if layout is not None:
+        _require_bound_columns(parsed, prepared, layout)
+    plan = _candidate_plan(parsed)
     known = set(known_ids)
     fresh: list[VocabularyRecord] = []
     seen: list[VocabularyRecord] = []
@@ -1229,7 +1614,7 @@ def build_records(
         reading = str(getattr(candidate, "reading", "") or "").strip()
         candidate_id = stable_record_id(expression, reading)
         content = shared_ai_schema.adapt_rich_card(candidate)
-        raw_fields = _raw_fields(candidate, prepared)
+        raw_fields = _raw_fields(candidate, prepared, layout=layout)
         if content.romaji_rejected:
             raw_fields["ai_warnings"] = json.dumps(
                 list(content.romaji_rejected), ensure_ascii=False
@@ -1252,16 +1637,29 @@ def build_records(
             # rather than restating it here; the untouched transcription,
             # blank and clipped cells included, stays in
             # ``raw_fields["source_conjugations"]``.
-            conjugations=VocabularyRecord.from_dict(
-                {
-                    "id": candidate_id,
-                    "expression": expression,
-                    "reading": reading,
-                    "conjugations": dict(
-                        getattr(candidate, "conjugations", None) or {}
-                    ),
-                }
-            ).conjugations,
+            #
+            # Left empty for a layout-bound candidate: its keys are opaque
+            # column identities, not display labels, and the canonical table
+            # below carries them with their bound labels and their blanks. The
+            # computed map still exists as its own separate field, and a later
+            # dictionary pass may fill it without touching the printed table.
+            conjugations=(
+                {}
+                if layout is not None
+                else VocabularyRecord.from_dict(
+                    {
+                        "id": candidate_id,
+                        "expression": expression,
+                        "reading": reading,
+                        "conjugations": dict(
+                            getattr(candidate, "conjugations", None) or {}
+                        ),
+                    }
+                ).conjugations
+            ),
+            source_forms=(
+                None if layout is None else _source_forms_for(candidate, layout)
+            ),
             usage_notes=content.usage_notes,
             source=SourceReference(
                 type="extract",

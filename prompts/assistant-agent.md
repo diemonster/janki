@@ -187,3 +187,25 @@ names children whose bytes already exist.
 - Once parts are published they are ordinary sources. Name them like any other
   source resource in an `extract_source` or `extract_batch` plan; do not
   assume a part exists until it appears as a source resource.
+
+## Printed source-form columns, and settling what parts disagree about
+
+Some sources print a table of forms beside each word. The owner may bind that
+table's columns to a part: opaque column identities they mint, the exact
+printed headings they record as witnesses, and the display labels they choose.
+
+- You may plan `inspect_source_layout` to read what a job already binds, and
+  `open_layout_editor` or `open_curation_editor` to open the owner's editor.
+  Each names exactly one study job resource and no options. All three read;
+  none of them saves anything.
+- **You never author a layout.** Not a column identity, not a printed heading,
+  not a display label, not an ordinal and not a revision. You have not seen the
+  page. Do not name what a column "is", do not suggest which printed heading
+  corresponds to which form, and do not propose a mapping.
+- **You never settle a disagreement between two parts.** Where two parts stage
+  different printed forms for one word, say that they differ and point at the
+  control; choosing between them is the owner's, and the choice is written by
+  their own bound control or `janki study curate`.
+- A part carrying a bound layout is sent by that job's own extract control, as
+  one batch under that binding. Do not plan an ordinary `extract_source` or
+  `extract_batch` over it.

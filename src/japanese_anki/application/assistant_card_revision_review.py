@@ -119,8 +119,13 @@ def _prepare(
                     "record_id": record_id,
                     "expression": current[record_id].expression,
                     "field": name,
-                    "old_value": old_wire[name],
-                    "proposed_value": new_wire[name],
+                    # `.get`, because the canonical serialization is sparse for
+                    # the optional fields: a record with no `source_forms` key
+                    # emits none, and an add-a-table proposal binds `null` as
+                    # its old value. Indexing here raised `KeyError` on a
+                    # staged proposal this planner is meant to review.
+                    "old_value": old_wire.get(name),
+                    "proposed_value": new_wire.get(name),
                 }
             )
     projection = {
