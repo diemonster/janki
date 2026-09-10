@@ -658,3 +658,138 @@ def test_plan_rechecks_the_brokers_exact_proposal_byte_fingerprint(
             record_ids=(records[0].id,),
             instruction="Assign this card.",
         )
+
+
+# --- the path-keyed entry the CLI and a study job call ------------------------
+#
+# Contracts §9.3: factor `plan_assignment_for_paths` out of the existing
+# preparation, have the resource-id-keyed entry delegate to it, and give the
+# CLI the same call. `execute_assignment` stays the sole writer.
+
+
+def test_a_path_keyed_plan_matches_the_resource_keyed_one_and_writes_once(
+    tmp_path: Path,
+) -> None:
+    """Two ways to name the same two ends; one planner, one writer."""
+
+    config, proposal_path, deck_path, records = _project(tmp_path)
+    proposal_id, destination_id = _resources(config)
+    selected = (records[0].id,)
+
+    by_id = assistant_assignment.plan_assignment(
+        config,
+        proposal_resource_id=proposal_id,
+        destination_resource_id=destination_id,
+        record_ids=selected,
+        instruction="Assign this card.",
+    )
+    by_path = assistant_assignment.plan_assignment_for_paths(
+        config,
+        proposal_path=proposal_path,
+        destination_path=deck_path,
+        record_ids=selected,
+        instruction="Assign this card.",
+    )
+
+    # Same resolution, same service plan, same bytes to write.
+    assert by_path.proposal_path == by_id.proposal_path
+    assert by_path.destination_path == by_id.destination_path
+    assert by_path.service_fingerprint == by_id.service_fingerprint
+    assert by_path.assigned_records == by_id.assigned_records
+    # The plan says by which key it must be re-prepared, and a path-keyed plan
+    # carries no resource ids to re-prepare from.
+    assert by_path.proposal_resource_id == ""
+    assert by_path.destination_resource_id == ""
+    assert by_id.proposal_resource_id == proposal_id
+
+    execution = assistant_assignment.execute_assignment(config, by_path)
+    assert execution.assigned_record_ids == selected
+    written, meta = staging.read_staging(proposal_path)
+    assert meta["review_notes"] == "preserve this metadata"
+    assert "lesson-intake" in written[0].tags
+
+
+def test_the_path_keyed_entry_keeps_every_refusal_the_broker_route_has(
+    tmp_path: Path,
+) -> None:
+    """A path outside the staging census, and a proposal of the wrong kind."""
+
+    config, proposal_path, deck_path, records = _project(tmp_path)
+    outside = tmp_path / "elsewhere.yaml"
+    staging.write_staging(outside, records, {"source_file": "lesson.pdf"})
+
+    with pytest.raises(assistant_assignment.AssistantAssignmentError) as error:
+        assistant_assignment.plan_assignment_for_paths(
+            config,
+            proposal_path=outside,
+            destination_path=deck_path,
+            record_ids=(records[0].id,),
+            instruction="Assign this card.",
+        )
+    assert "staging" in str(error.value)
+
+    # The real proposal is untouched by that refusal.
+    assert staging.read_staging(proposal_path)[0] == list(records)
+
+
+def test_the_path_keyed_entry_refuses_a_proposal_of_the_wrong_kind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The one proposal-kind rule applies wherever a proposal is resolved."""
+
+    config, proposal_path, deck_path, records = _project(tmp_path)
+
+    class EnrichmentBroker:
+        def __init__(self, _config: ProjectConfig) -> None:
+            pass
+
+        def resource_id_for_proposal(self, _path: Path) -> str:
+            return "resource_proposal"
+
+        def proposal_context(self, resource_id: str) -> ProposalContext:
+            return ProposalContext(
+                resource_id=resource_id,
+                proposal_kind="ai_enrichment",
+                path=proposal_path.absolute(),
+                proposal_sha256=hashlib.sha256(proposal_path.read_bytes()).hexdigest(),
+            )
+
+    monkeypatch.setattr(
+        assistant_assignment, "AssistantContextBroker", EnrichmentBroker
+    )
+    with pytest.raises(
+        assistant_assignment.AssistantAssignmentError,
+        match="source-extraction proposals only",
+    ):
+        assistant_assignment.plan_assignment_for_paths(
+            config,
+            proposal_path=proposal_path,
+            destination_path=deck_path,
+            record_ids=(records[0].id,),
+            instruction="Assign this card.",
+        )
+    assert staging.read_staging(proposal_path)[0] == list(records)
+
+
+def test_a_plan_names_both_ends_by_resource_id_or_neither(tmp_path: Path) -> None:
+    """Half a key cannot be re-prepared, so it is not a plan at all.
+
+    The invariant is what makes `execute_assignment`'s re-preparation exact:
+    a plan resolved from two local paths and then re-planned from a resource
+    id would be a different resolution wearing the same fingerprint, which is
+    the one thing the comparison there cannot catch.
+    """
+
+    config, proposal_path, deck_path, records = _project(tmp_path)
+    plan = assistant_assignment.plan_assignment_for_paths(
+        config,
+        proposal_path=proposal_path,
+        destination_path=deck_path,
+        record_ids=(records[0].id,),
+        instruction="Assign this card.",
+    )
+
+    with pytest.raises(ValueError) as error:
+        replace(plan, proposal_resource_id="resource_something")
+    assert "both ends by resource id or neither" in str(error.value)
+    assert staging.read_staging(proposal_path)[0] == list(records)

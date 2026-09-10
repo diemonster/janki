@@ -83,6 +83,10 @@ class SourcePartEditorOffer:
     page_count: int
     byte_count: int
     sha256: str
+    #: The study job this editor was opened from, empty for a job-independent
+    #: one. Receipts stay job-independent either way (contracts §2.2); this is
+    #: only how the publish route knows whose intent to append first.
+    job_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +97,7 @@ class SourcePartEditorSession:
     document: SourcePartEditorDocument
     source_name: str
     parent_sha256: str
+    job_id: str = ""
 
 
 #: The editor's whole behaviour: draw, list, plan, publish. Deliberately one
@@ -470,7 +475,7 @@ class LocalSourcePartEditorStore:
 
     editor_prefix: str
     plan_recipe: Callable[[str, bytes], dict[str, Any]]
-    publish_plan: Callable[[str, str], dict[str, Any]]
+    publish_plan: Callable[..., dict[str, Any]]
     _sessions: dict[str, SourcePartEditorSession] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -484,8 +489,14 @@ class LocalSourcePartEditorStore:
         *,
         recipe_id: str,
         default_render_dpi: int = 200,
+        job_id: str = "",
     ) -> SourcePartEditorOffer:
-        """Mint one token, build the document it will be served as, keep both."""
+        """Mint one token, build the document it will be served as, keep both.
+
+        ``job_id`` comes from the adapter's own owner route, never from a
+        posted request body: the session decides which job an editor belongs
+        to exactly as it already decides which source it may name.
+        """
 
         token = secrets.token_urlsafe(_TOKEN_BYTES)
         url = f"{self.editor_prefix}{token}"
@@ -500,6 +511,7 @@ class LocalSourcePartEditorStore:
             document=document,
             source_name=sheet.parent_name,
             parent_sha256=sheet.parent_sha256,
+            job_id=job_id,
         )
         with self._lock:
             while len(self._sessions) >= MAX_EDITORS:
@@ -513,6 +525,7 @@ class LocalSourcePartEditorStore:
             page_count=document.page_count,
             byte_count=len(document.html),
             sha256=document.sha256,
+            job_id=job_id,
         )
 
     def read(self, token: str) -> SourcePartEditorDocument:
@@ -530,8 +543,9 @@ class LocalSourcePartEditorStore:
     def act(self, token: str, request: Any) -> dict[str, Any]:
         """One owner control from the open editor: render a plan, or publish.
 
-        The session decides which source this editor may name, so a recipe
-        posted here can only ever describe the document the owner opened.
+        The session decides which source this editor may name and which study
+        job it belongs to, so neither a recipe nor a job binding posted here
+        can describe anything but the document the owner opened.
         """
 
         session = self._session(token)
@@ -550,7 +564,9 @@ class LocalSourcePartEditorStore:
                 raise SourcePartEditorError(
                     "Publishing needs the exact plan fingerprint you reviewed."
                 )
-            return self.publish_plan(session.source_name, fingerprint)
+            return self.publish_plan(
+                session.source_name, fingerprint, job_id=session.job_id
+            )
         raise SourcePartEditorError(
             "A source-part editor either renders a plan or publishes one."
         )

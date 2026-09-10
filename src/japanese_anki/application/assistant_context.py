@@ -24,7 +24,12 @@ from pathlib import Path, PurePath
 from typing import Any, Literal
 
 from japanese_anki import kanji, ledger, operations, patterns, staging, status
-from japanese_anki.application import promotion, revision_apply, source_parts
+from japanese_anki.application import (
+    promotion,
+    revision_apply,
+    source_parts,
+    study_job,
+)
 from japanese_anki.application.detail import source_detail
 from japanese_anki.application.journey import (
     SourceJourney,
@@ -66,6 +71,7 @@ ResourceKind = Literal[
     "card",
     "source",
     "source_part",
+    "study_job",
     "status",
     "operations",
     "patterns",
@@ -404,7 +410,7 @@ class AssistantContextBroker:
                 # names may well be in the corpus.
                 **(
                     {"available": resource.available}
-                    if resource.kind == "source_part"
+                    if resource.kind in {"source_part", "study_job"}
                     else {}
                 ),
                 **({"proposal_kind": resource.subtype} if resource.kind == "proposal" else {}),
@@ -438,6 +444,8 @@ class AssistantContextBroker:
                 data, count = self._source_snapshot(resource)
             elif resource.kind == "source_part":
                 data, count = self._source_part_snapshot(resource)
+            elif resource.kind == "study_job":
+                data, count = self._study_job_snapshot(resource)
             elif resource.kind == "status":
                 data, count = self._status_snapshot()
             elif resource.kind == "operations":
@@ -561,6 +569,60 @@ class AssistantContextBroker:
             path=path,
             proposal_sha256=proposal_sha256,
         )
+
+    def study_job_id(self, resource_id: str) -> str:
+        """Resolve one opaque catalog id to exactly one current study job id.
+
+        An arbitrary string is never a path here either: the id has to be one
+        this broker discovered, and the key it carries has already cleared
+        ``study_job_path``'s uuid check when it was registered.
+        """
+
+        resource = self._resources.get(resource_id)
+        if resource is None or resource.kind != "study_job":
+            raise AssistantContextError(
+                f"Unknown Assistant study job {resource_id!r}; request a fresh catalog."
+            )
+        if not resource.available:
+            raise AssistantContextError(
+                "That study job's document could not be read; janki will not act "
+                "against it."
+            )
+        return resource.key
+
+    def resource_id_for_proposal(self, proposal: Path | str) -> str:
+        """Resolve a trusted local staging path against the current census.
+
+        The companion to :meth:`resource_id_for_deck`, and for the same
+        reason: a local caller — the CLI, or an application service given a
+        path by one — needs the opaque identity the broker's own checks are
+        written against, without a second census of its own. An arbitrary
+        string is never opened here; only a direct, inert basename of the
+        configured staging directory can name a resource this broker
+        discovered, and reading it still goes through
+        :meth:`proposal_context`.
+        """
+
+        candidate = Path(proposal)
+        name = candidate.name
+        if not name or _safe_name(name) != name:
+            raise AssistantContextError(
+                "An Assistant staging proposal is named by one inert filename."
+            )
+        expected = (self.config.staging_dir / name).absolute()
+        if candidate.absolute() != expected:
+            raise AssistantContextError(
+                "That staging proposal is not a direct entry of the configured "
+                "staging directory."
+            )
+        resource_id = _opaque_id("proposal", name)
+        resource = self._resources.get(resource_id)
+        if resource is None or resource.kind != "proposal":
+            raise AssistantContextError(
+                "That staging proposal is not one currently readable proposal; "
+                "request a fresh catalog."
+            )
+        return resource_id
 
     def source_path(self, resource_id: str) -> Path:
         """Resolve one exact current source journey to its preserved inbox file.
@@ -745,6 +807,27 @@ class AssistantContextBroker:
                 # make its siblings or the catalog disappear.
                 pass
             self._register("source_part", title, recipe_id, available=available)
+
+        for job_id in study_job.list_study_jobs(self.config):
+            title = f"Study job {job_id[:8]}"
+            available = False
+            try:
+                # The header only. Composing the whole status here would read
+                # every manifest, journal entry and published part in the
+                # project on every ordinary Assistant turn; the snapshot of
+                # the job the owner actually selected is where that work
+                # belongs, and it is the only place it is disclosed.
+                job = study_job.load_study_job(self.config, job_id)
+                title = (
+                    f"{_safe_name(job.header.parent_source_name)} → "
+                    f"{_safe_name(job.header.deck_path)}"
+                )
+                available = True
+            except (JankiError, OSError, UnicodeError, ValueError):
+                # A malformed job document refuses when it is selected; it
+                # does not make its siblings or the catalog disappear.
+                pass
+            self._register("study_job", title, job_id, available=available)
 
         for resource in self._discover_proposals():
             self._register(
@@ -1042,6 +1125,28 @@ class AssistantContextBroker:
         )
         record = source_parts.load_source_part_receipt(self.config, resource.key)
         return {"source_parts": record.to_dict()}, max(1, len(record.parts))
+
+    def _study_job_snapshot(self, resource: _Resource) -> tuple[dict[str, Any], int]:
+        """One study job: ids, hashes, states and counts, derived at read time.
+
+        Deliberately the same value ``janki study status`` prints, and
+        deliberately nothing else. No reply bytes, no candidate content and no
+        source bytes: a job's whole point is to coordinate work over the
+        owner's private material, and what a plan needs from it is which
+        artifacts exist, what they hash to and what the journal says became of
+        each child. A schema verdict's text, a proposal's cards and a staging
+        document's Japanese are all absent by construction, because nothing
+        here reads them.
+        """
+
+        self._guard_regular_file(
+            study_job.study_job_path(self.config, resource.key), "study job"
+        )
+        status = study_job.study_job_status(self.config, resource.key)
+        return (
+            {"study_job": status.to_dict()},
+            max(1, len(status.parts) + len(status.batches)),
+        )
 
     def _status_snapshot(self) -> tuple[dict[str, Any], int]:
         universe = self._current_universe()

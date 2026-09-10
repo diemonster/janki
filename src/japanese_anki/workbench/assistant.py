@@ -30,6 +30,7 @@ from japanese_anki.errors import JankiError
 __all__ = [
     "CAPABILITIES_MESSAGE",
     "MANAGE_OPERATIONS_MESSAGE",
+    "MANAGE_STUDY_JOBS_MESSAGE",
     "RESUME_KANJI_MESSAGE",
     "SHOW_DECKS_MESSAGE",
     "SOURCE_HELP_MESSAGE",
@@ -57,6 +58,9 @@ __all__ = [
     "SourceExtractionConfirmation",
     "SourceExtractionExecution",
     "SourceExtractionPlan",
+    "StudyJobActionChoice",
+    "StudyJobChoice",
+    "StudyJobStartChoice",
     "create_assistant_core",
 ]
 
@@ -68,6 +72,8 @@ _SELECT_DECK_ACTION = "janki.deck.select"
 _PREPARE_OPERATION_ACTION = "janki.operation.prepare"
 _RESUME_KANJI_ACTION = "janki.kanji.resume"
 _EXTRACTION_BATCH_ACTION = "janki.extraction_batch.act"
+_STUDY_JOB_ACTION = "janki.study_job.act"
+_STUDY_JOB_START_ACTION = "janki.study_job.start"
 _ALL_LIBRARY_DECK_ID = "janki:all-library"
 SHOW_DECKS_MESSAGE = "Choose a deck to focus on"
 CAPABILITIES_MESSAGE = "Show me what I can do with my Japanese library"
@@ -75,6 +81,7 @@ SOURCE_HELP_MESSAGE = "How do I add study material?"
 MANAGE_OPERATIONS_MESSAGE = "Manage model calls"
 RESUME_KANJI_MESSAGE = "Resume kanji cards"
 MANAGE_EXTRACTION_BATCHES_MESSAGE = "Manage extraction batches"
+MANAGE_STUDY_JOBS_MESSAGE = "Manage study jobs"
 _ASSISTANT_SCOPE = "janki-project"
 _ACTIVE_DECK_ID_KEY = "janki_active_deck_id"
 _ACTIVE_DECK_SCOPE_KEY = "janki_active_deck_scope"
@@ -539,6 +546,128 @@ class ExtractionBatchPreviewOffer:
 
 
 @dataclass(frozen=True, slots=True)
+class StudyJobActionChoice:
+    """One local study-job control this desk is offering right now.
+
+    ``operation_id`` is empty except for a capture inspection or a retry-free
+    batch reference, where it names the exact model call whose saved reply may
+    be read. ``target`` is empty except for a part control, where it names the
+    exact published part the owner's click includes or excludes.
+
+    Nothing here is paid: the reads change nothing, a part selection is a
+    reversible local preference, opening the region editor writes nothing at
+    all, and resuming runs only under authority the journal already records.
+    """
+
+    action: str
+    label: str
+    operation_id: str = ""
+    target: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class StudyJobStartChoice:
+    """One preserved source the owner may open a study job over right now.
+
+    The destination is the deck the thread is already focused on — §1 step 2's
+    "reusing a deck is a selection" — so this control carries the owner's two
+    existing choices and asks for nothing else. Clicking it *is* the authority
+    for the local job write; there is no second dialog.
+    """
+
+    source_name: str
+    label: str
+    summary: str
+
+
+@dataclass(frozen=True, slots=True)
+class StudyJobChoice:
+    """One study job as the local desk shows it.
+
+    ``summary`` is derived at read time from the journal, the manifests, the
+    corpus and the archive. The job document stores no progress, so this is
+    the only place those numbers come from.
+    """
+
+    job_id: str
+    label: str
+    summary: str
+    actions: tuple[StudyJobActionChoice, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _StudyJobBinding:
+    """Which rendered study-job controls this exact widget may act on."""
+
+    thread_id: str
+    widget_item_id: str
+    actions: frozenset[tuple[str, str, str, str]]
+    starts: frozenset[tuple[str, str]] = frozenset()
+
+
+def _validate_study_job_choices(value: Any) -> tuple[StudyJobChoice, ...]:
+    if not isinstance(value, tuple) or not all(
+        isinstance(choice, StudyJobChoice) for choice in value
+    ):
+        raise TypeError("The study job desk must return exact study job choices.")
+    for choice in value:
+        if not choice.job_id or not choice.label:
+            raise TypeError("Every study job choice needs an id and a label.")
+        for option in choice.actions:
+            if option.action not in _STUDY_JOB_ACTIONS or not option.label:
+                raise TypeError("Every study job control needs a known action.")
+            if (option.action == "inspect-capture") != bool(option.operation_id):
+                raise TypeError(
+                    "Only a capture inspection names a model call, and it always "
+                    "names one."
+                )
+            if (option.action in _STUDY_JOB_CHOICES) != bool(option.target):
+                raise TypeError(
+                    "Only a part control names a published part, and it always "
+                    "names one."
+                )
+    return value
+
+
+def _validate_study_job_starts(value: Any) -> tuple[StudyJobStartChoice, ...]:
+    if not isinstance(value, tuple) or not all(
+        isinstance(choice, StudyJobStartChoice) for choice in value
+    ):
+        raise TypeError("The study job desk must return exact start choices.")
+    for choice in value:
+        if not choice.source_name or not choice.label:
+            raise TypeError("Every start control needs a source name and a label.")
+    return value
+
+
+#: Every control the study-job desk may render: three reads, the owner's own
+#: part editor and part selections, and one resume. The owner decisions that
+#: carry a rendering fingerprint — review flags, coverage reasons, dispositions
+#: — are not here: their editors ship with the finish.
+_STUDY_JOB_ACTIONS = (
+    "status",
+    "preview",
+    "resume",
+    "inspect-capture",
+    "parts",
+    "include-part",
+    "exclude-part",
+)
+
+#: The reads. Deliberately available while a batch is running, because the
+#: whole point of this desk is to say what a live batch is doing. Opening the
+#: region editor is one of them: it renders pages for the owner to look at and
+#: writes nothing — publishing is a separate control inside that editor.
+_STUDY_JOB_READS = ("status", "preview", "inspect-capture", "parts")
+
+#: The owner's reversible local preferences. A CAS write into `choices` and
+#: nothing else: no paid call, no canonical byte, no review or coverage mark.
+#: They stay usable while a batch runs, and the control is not consumed by one
+#: click, because choosing a subset of parts means clicking several times.
+_STUDY_JOB_CHOICES = ("include-part", "exclude-part")
+
+
+@dataclass(frozen=True, slots=True)
 class _ExtractionBatchBinding:
     """Which rendered batch controls this exact widget may act on.
 
@@ -650,6 +779,60 @@ class RevisionCallbacks(Protocol):
         deck_scope: str,
     ) -> ExtractionBatchPreviewOffer | Awaitable[ExtractionBatchPreviewOffer]:
         """Render one combined look at what this batch has already saved."""
+
+    def list_study_job_choices(
+        self,
+    ) -> tuple[StudyJobChoice, ...] | Awaitable[tuple[StudyJobChoice, ...]]:
+        """Read every study job and the local controls each one allows."""
+
+    def list_study_job_starts(
+        self, *, deck_scope: str
+    ) -> tuple[StudyJobStartChoice, ...] | Awaitable[tuple[StudyJobStartChoice, ...]]:
+        """Read which preserved sources a job may be opened over right now."""
+
+    def open_study_job_over_deck(
+        self, *, source_name: str, deck_scope: str
+    ) -> str | Awaitable[str]:
+        """Open one job binding this source and the focused deck. Local write."""
+
+    def open_study_job_source_part_editor(
+        self, *, job_id: str
+    ) -> str | Awaitable[str]:
+        """Open the owner's region editor over this job's own parent source."""
+
+    def save_study_job_part_selection(
+        self, *, job_id: str, part_name: str, include: bool
+    ) -> str | Awaitable[str]:
+        """Save which published parts this job's next batch covers. Local write."""
+
+    def study_job_status_text(self, *, job_id: str) -> str | Awaitable[str]:
+        """Say where one job stands, derived from the stores that know."""
+
+    def render_study_job_preview(
+        self,
+        *,
+        job_id: str,
+        deck_scope: str,
+    ) -> ExtractionBatchPreviewOffer | Awaitable[ExtractionBatchPreviewOffer]:
+        """Draw this job's saved proposals as the destination deck's cards."""
+
+    def inspect_capture_proposals_text(
+        self, *, operation_id: str
+    ) -> str | Awaitable[str]:
+        """Report one captured reply's hashes, pointers and verdicts."""
+
+    def resume_study_job(
+        self,
+        *,
+        job_id: str,
+        progress: Callable[[str], None],
+    ) -> str | Awaitable[str]:
+        """Finish what this job's open intents already have authority for."""
+
+    def describe_blocking_batch(
+        self, *, operation_ids: tuple[str, ...]
+    ) -> str | Awaitable[str]:
+        """Say what a running confirmed batch is doing, or "" when it is not one."""
 
     def chat(
         self,
@@ -2100,6 +2283,7 @@ def create_assistant_core(
             self._operation_selectors: dict[str, _OperationSelectorBinding] = {}
             self._kanji_resumes: dict[str, _KanjiResumeBinding] = {}
             self._batch_selectors: dict[str, _ExtractionBatchBinding] = {}
+            self._study_job_selectors: dict[str, _StudyJobBinding] = {}
             self._plans: dict[str, _PlanBinding] = {}
             self._finishes: dict[str, _FinishBinding] = {}
             self._extractions: dict[str, _ExtractionBinding] = {}
@@ -2196,6 +2380,7 @@ def create_assistant_core(
                 self._operation_selectors,
                 self._kanji_resumes,
                 self._batch_selectors,
+                self._study_job_selectors,
                 self._plans,
                 self._finishes,
             ):
@@ -2637,6 +2822,176 @@ def create_assistant_core(
                     },
                     "children": rows,
                 }
+            )
+
+        def _study_job_widget(
+            self,
+            job_choices: tuple[StudyJobChoice, ...],
+            start_choices: tuple[StudyJobStartChoice, ...],
+            *,
+            capability: str,
+        ) -> Any:
+            rows: list[dict[str, Any]] = []
+            for start in start_choices:
+                rows.append(
+                    {
+                        "type": "ListViewItem",
+                        "gap": 2,
+                        "children": [
+                            {
+                                "type": "Box",
+                                "direction": "col",
+                                "gap": 1,
+                                "children": [
+                                    {
+                                        "type": "Text",
+                                        "value": start.summary,
+                                        "size": "sm",
+                                        "color": "secondary",
+                                    },
+                                    {
+                                        "type": "Button",
+                                        "label": start.label,
+                                        "style": "primary",
+                                        "variant": "solid",
+                                        "value": start.label,
+                                        "width": "100%",
+                                        "color": "primary",
+                                    },
+                                ],
+                            }
+                        ],
+                        "onClickAction": {
+                            "type": _STUDY_JOB_START_ACTION,
+                            "payload": {
+                                "capability": capability,
+                                "source_name": start.source_name,
+                            },
+                            "handler": "server",
+                            "loadingBehavior": "container",
+                            "streaming": True,
+                        },
+                    }
+                )
+            for choice in job_choices:
+                rows.append(
+                    {
+                        "type": "ListViewItem",
+                        "gap": 2,
+                        "children": [
+                            {
+                                "type": "Box",
+                                "direction": "col",
+                                "gap": 1,
+                                "children": [
+                                    {
+                                        "type": "Title",
+                                        "value": choice.label,
+                                        "size": "sm",
+                                    },
+                                    {
+                                        "type": "Text",
+                                        "value": choice.summary,
+                                        "size": "sm",
+                                        "color": "secondary",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                )
+                for option in choice.actions:
+                    rows.append(
+                        {
+                            "type": "ListViewItem",
+                            "gap": 2,
+                            "children": [
+                                {
+                                    "type": "Button",
+                                    "label": option.label,
+                                    "style": "primary",
+                                    "variant": "solid",
+                                    "value": option.label,
+                                    "width": "100%",
+                                    "color": "primary",
+                                }
+                            ],
+                            "onClickAction": {
+                                "type": _STUDY_JOB_ACTION,
+                                "payload": {
+                                    "capability": capability,
+                                    "job_id": choice.job_id,
+                                    "action": option.action,
+                                    "operation_id": option.operation_id,
+                                    "target": option.target,
+                                },
+                                "handler": "server",
+                                "loadingBehavior": "container",
+                                "streaming": True,
+                            },
+                        }
+                    )
+            return DynamicWidgetRoot.model_validate(
+                {
+                    "type": "ListView",
+                    "limit": "auto",
+                    "status": {"text": "Study jobs", "icon": "book-open"},
+                    "children": rows,
+                }
+            )
+
+        def _study_job_selector_event(
+            self,
+            thread: Any,
+            request_context: AssistantRequestContext,
+            job_choices: tuple[StudyJobChoice, ...],
+            start_choices: tuple[StudyJobStartChoice, ...] = (),
+            *,
+            deck_scope: str = "",
+        ) -> Any:
+            capability = secrets.token_urlsafe(32)
+            item_id = store.generate_item_id("message", thread, request_context)
+            self._study_job_selectors[capability] = _StudyJobBinding(
+                thread_id=thread.id,
+                widget_item_id=item_id,
+                actions=frozenset(
+                    (choice.job_id, option.action, option.operation_id, option.target)
+                    for choice in job_choices
+                    for option in choice.actions
+                ),
+                # The destination is bound into the control here, at render
+                # time, from the focus the owner had already chosen. A posted
+                # body cannot name a different deck for a rendered start.
+                starts=frozenset(
+                    (start.source_name, deck_scope) for start in start_choices
+                ),
+            )
+            return ThreadItemDoneEvent(
+                item=WidgetItem(
+                    id=item_id,
+                    thread_id=thread.id,
+                    created_at=datetime.now(),
+                    widget=self._study_job_widget(
+                        job_choices,
+                        start_choices,
+                        capability=capability,
+                    ),
+                    copy_text=None,
+                )
+            )
+
+        async def _list_study_job_choices(self) -> tuple[StudyJobChoice, ...]:
+            return _validate_study_job_choices(
+                await _call_callback(callbacks.list_study_job_choices)
+            )
+
+        async def _list_study_job_starts(
+            self, deck_scope: str
+        ) -> tuple[StudyJobStartChoice, ...]:
+            return _validate_study_job_starts(
+                await _call_callback(
+                    callbacks.list_study_job_starts, deck_scope=deck_scope
+                )
             )
 
         def _extraction_batch_widget(
@@ -3233,6 +3588,62 @@ def create_assistant_core(
                 )
                 return
 
+            if message == MANAGE_STUDY_JOBS_MESSAGE:
+                # Ahead of the journal and busy guards, for the same reason the
+                # batch desk is: a job's status, its saved cards and what a
+                # captured reply holds are exactly what an owner needs while a
+                # batch of theirs is running, and none of them spends anything.
+                try:
+                    current_selection = self._selection(thread)
+                except RevisionRefusal:
+                    current_selection = None
+                desk_scope = (
+                    current_selection.choice.scope
+                    if current_selection is not None
+                    else ""
+                )
+                try:
+                    job_choices = await self._list_study_job_choices()
+                    start_choices = await self._list_study_job_starts(desk_scope)
+                except (JankiError, RevisionRefusal, OSError, TypeError, ValueError) as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Study job status unavailable",
+                        message=str(error),
+                    )
+                    return
+                if not job_choices and not start_choices:
+                    yield self._message_event(
+                        thread,
+                        "No study job has been opened in this project."
+                        + (
+                            ""
+                            if desk_scope
+                            else " Focus the destination deck you want a job to "
+                            "write into, then ask for this desk again: opening a "
+                            "job binds one source and one deck."
+                        ),
+                    )
+                    return
+                yield self._message_event(
+                    thread,
+                    (
+                        "Here is every study job and where it stands. Janki "
+                        "derives this locally from its own journal, manifests "
+                        "and files, so checking, previewing, reading a saved "
+                        "reply, choosing parts or continuing makes no model "
+                        "call of its own."
+                    ),
+                )
+                yield self._study_job_selector_event(
+                    thread,
+                    request_context,
+                    job_choices,
+                    start_choices,
+                    deck_scope=desk_scope,
+                )
+                return
+
             local_help = self._local_help(message)
             if local_help is not None:
                 yield self._message_event(thread, local_help)
@@ -3274,6 +3685,28 @@ def create_assistant_core(
                 choice for choice in operation_choices if choice.blocks_spending
             )
             if blocking_operations:
+                # A live extraction batch blocking ordinary paid chat is not
+                # "an earlier call left an unsettled result" — it is work the
+                # owner confirmed, running now. That case gets its own reply,
+                # naming the job, the batch, how many children have settled,
+                # what is in flight and the local controls that stay available.
+                # Every other blocking operation keeps the branch below.
+                try:
+                    batch_block = await _call_callback(
+                        callbacks.describe_blocking_batch,
+                        operation_ids=tuple(
+                            choice.operation_id for choice in blocking_operations
+                        ),
+                    )
+                except (JankiError, RevisionRefusal, OSError, TypeError, ValueError):
+                    batch_block = ""
+                if isinstance(batch_block, str) and batch_block:
+                    yield NoticeEvent(
+                        level="info",
+                        title="A confirmed extraction batch is running",
+                        message=batch_block,
+                    )
+                    return
                 yield NoticeEvent(
                     level="warning",
                     title="Earlier model call needs attention",
@@ -3524,6 +3957,251 @@ def create_assistant_core(
         ) -> Any:
             if request_context.deck_scope != _ASSISTANT_SCOPE:
                 yield ErrorEvent(message="That assistant action was refused.", allow_retry=False)
+                return
+            if action.type == _STUDY_JOB_ACTION:
+                payload = action.payload
+                capability = (
+                    payload.get("capability") if isinstance(payload, dict) else None
+                )
+                job_id = payload.get("job_id") if isinstance(payload, dict) else None
+                job_action = payload.get("action") if isinstance(payload, dict) else None
+                operation_id = (
+                    payload.get("operation_id") if isinstance(payload, dict) else None
+                )
+                part_name = payload.get("target") if isinstance(payload, dict) else None
+                binding = (
+                    self._study_job_selectors.get(capability)
+                    if isinstance(capability, str)
+                    else None
+                )
+                if (
+                    not isinstance(payload, dict)
+                    or set(payload)
+                    != {"capability", "job_id", "action", "operation_id", "target"}
+                    or not isinstance(job_id, str)
+                    or not isinstance(operation_id, str)
+                    or not isinstance(part_name, str)
+                    or job_action not in _STUDY_JOB_ACTIONS
+                    or binding is None
+                    or binding.thread_id != thread.id
+                    or sender is None
+                    or sender.id != binding.widget_item_id
+                    or (job_id, job_action, operation_id, part_name)
+                    not in binding.actions
+                ):
+                    if isinstance(capability, str):
+                        self._study_job_selectors.pop(capability, None)
+                    yield ErrorEvent(
+                        message=(
+                            "This study job control is missing, stale, already "
+                            "used, tampered with, or belongs elsewhere."
+                        ),
+                        allow_retry=False,
+                    )
+                    return
+                try:
+                    current_selection = self._selection(thread)
+                except RevisionRefusal:
+                    current_selection = None
+                deck_scope = (
+                    current_selection.choice.scope
+                    if current_selection is not None
+                    else ""
+                )
+                if job_action in _STUDY_JOB_READS:
+                    # Reads survive a busy thread and stay usable more than
+                    # once: they reserve nothing, review nothing and accept
+                    # nothing, which is exactly why they are available while a
+                    # batch of this job's is running.
+                    try:
+                        if job_action == "status":
+                            told = str(
+                                await _call_callback(
+                                    callbacks.study_job_status_text,
+                                    job_id=job_id,
+                                )
+                            )
+                        elif job_action == "inspect-capture":
+                            told = str(
+                                await _call_callback(
+                                    callbacks.inspect_capture_proposals_text,
+                                    operation_id=operation_id,
+                                )
+                            )
+                        elif job_action == "parts":
+                            # The job the owner clicked decides which job a
+                            # publication out of this editor belongs to. The
+                            # editor itself is opened over that job's own
+                            # parent source; nothing here names a page, a
+                            # region or a recipe.
+                            told = str(
+                                await _call_callback(
+                                    callbacks.open_study_job_source_part_editor,
+                                    job_id=job_id,
+                                )
+                            )
+                        else:
+                            offer = _validate_batch_preview_offer(
+                                await _call_callback(
+                                    callbacks.render_study_job_preview,
+                                    job_id=job_id,
+                                    deck_scope=deck_scope,
+                                )
+                            )
+                            lines = [offer.message]
+                            if offer.preview_url is not None:
+                                lines.append(
+                                    f"Open the saved cards: {offer.preview_url}"
+                                )
+                            if offer.conflicts:
+                                lines.append(
+                                    "The sources disagree about these, which "
+                                    "janki does not settle for you:"
+                                )
+                                lines += [
+                                    f"- {conflict}" for conflict in offer.conflicts
+                                ]
+                            told = "\n\n".join(lines)
+                    except (
+                        JankiError,
+                        RevisionRefusal,
+                        OSError,
+                        TypeError,
+                        ValueError,
+                    ) as error:
+                        yield NoticeEvent(
+                            level="danger",
+                            title="Study job reading unavailable",
+                            message=str(error),
+                        )
+                        return
+                    yield self._message_event(thread, told)
+                    return
+                if job_action in _STUDY_JOB_CHOICES:
+                    # A reversible local preference. It stays available while a
+                    # batch runs, and the control is deliberately not consumed:
+                    # choosing which parts a job covers takes several clicks,
+                    # and each one is its own bound owner action.
+                    try:
+                        saved = str(
+                            await _call_callback(
+                                callbacks.save_study_job_part_selection,
+                                job_id=job_id,
+                                part_name=part_name,
+                                include=job_action == "include-part",
+                            )
+                        )
+                    except (
+                        JankiError,
+                        RevisionRefusal,
+                        OSError,
+                        TypeError,
+                        ValueError,
+                    ) as error:
+                        yield NoticeEvent(
+                            level="danger",
+                            title="Study job choice not saved",
+                            message=str(error),
+                        )
+                        return
+                    yield self._message_event(thread, saved)
+                    return
+                if thread.id in self._busy_threads:
+                    yield ErrorEvent(
+                        message="Wait for this thread's current operation to finish.",
+                        allow_retry=False,
+                    )
+                    return
+                self._study_job_selectors.pop(capability, None)
+                try:
+                    resumed = str(
+                        await _call_callback(
+                            callbacks.resume_study_job,
+                            job_id=job_id,
+                            progress=lambda _label: None,
+                        )
+                    )
+                except (
+                    JankiError,
+                    RevisionRefusal,
+                    OSError,
+                    TypeError,
+                    ValueError,
+                ) as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Study job resume unavailable",
+                        message=str(error),
+                    )
+                    return
+                yield self._message_event(thread, resumed)
+                return
+            if action.type == _STUDY_JOB_START_ACTION:
+                payload = action.payload
+                capability = (
+                    payload.get("capability") if isinstance(payload, dict) else None
+                )
+                source_name = (
+                    payload.get("source_name") if isinstance(payload, dict) else None
+                )
+                binding = (
+                    self._study_job_selectors.get(capability)
+                    if isinstance(capability, str)
+                    else None
+                )
+                # The deck comes out of the binding this control was rendered
+                # under, never out of the posted body: the owner's focus at
+                # render time is the destination they chose.
+                bound_scope = next(
+                    (
+                        scope
+                        for name, scope in (binding.starts if binding else ())
+                        if name == source_name
+                    ),
+                    None,
+                )
+                if (
+                    not isinstance(payload, dict)
+                    or set(payload) != {"capability", "source_name"}
+                    or not isinstance(source_name, str)
+                    or binding is None
+                    or binding.thread_id != thread.id
+                    or sender is None
+                    or sender.id != binding.widget_item_id
+                    or bound_scope is None
+                ):
+                    if isinstance(capability, str):
+                        self._study_job_selectors.pop(capability, None)
+                    yield ErrorEvent(
+                        message=(
+                            "This study job control is missing, stale, already "
+                            "used, tampered with, or belongs elsewhere."
+                        ),
+                        allow_retry=False,
+                    )
+                    return
+                try:
+                    opened = str(
+                        await _call_callback(
+                            callbacks.open_study_job_over_deck,
+                            source_name=source_name,
+                            deck_scope=bound_scope,
+                        )
+                    )
+                except (
+                    JankiError,
+                    RevisionRefusal,
+                    OSError,
+                    TypeError,
+                    ValueError,
+                ) as error:
+                    yield NoticeEvent(
+                        level="danger",
+                        title="Study job not opened",
+                        message=str(error),
+                    )
+                    return
+                yield self._message_event(thread, opened)
                 return
             if action.type == _EXTRACTION_BATCH_ACTION:
                 payload = action.payload

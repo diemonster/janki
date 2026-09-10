@@ -333,6 +333,12 @@ class ExtractionBatchPlan:
     destination_deck: Path | None = None
     #: The batch this one retries, when it is a retry.
     retry_of: str = ""
+    #: The study job this batch was created for, empty for an ordinary CLI or
+    #: Assistant batch. Serialized only when set, so a jobless batch's manifest
+    #: bytes, `manifest_sha256` and consent `fingerprint` are exactly what they
+    #: were before jobs existed — that shape is current and fully supported,
+    #: not a legacy one, and nothing is backfilled onto it.
+    job_id: str = ""
     #: The exact journal snapshots this confirmation would retire, as the
     #: journal itself holds them: they are both what a person is asked to throw
     #: away and the guard `forget` compares under its own lock.
@@ -391,6 +397,8 @@ class ExtractionBatchPlan:
             value["destination_deck"] = str(self.destination_deck)
         if self.retry_of:
             value["retry_of"] = self.retry_of
+        if self.job_id:
+            value["job_id"] = self.job_id
         if self.discards:
             value["discards"] = [
                 {
@@ -425,6 +433,12 @@ class ExtractionBatchPlan:
             scope_id=str(raw.get("scope_id", "")),
             destination_deck=None if deck is None else Path(str(deck)),
             retry_of=str(raw.get("retry_of", "")),
+            # Not optional to read back. `_require_authentic_reservation`
+            # recomputes `manifest_sha256` from what this returns and compares
+            # it with the hash the journal authorized, so a reader that
+            # dropped `job_id` would make every job batch refuse its own
+            # resume, recovery, retry and status.
+            job_id=str(raw.get("job_id", "")),
             discards=tuple(
                 operations.Operation.from_dict(
                     journal_path,
@@ -605,6 +619,7 @@ def plan_extraction_batch(
     concurrency_limit: int = 2,
     force: bool = False,
     lineage: Sequence[SourcePartLineage] = (),
+    job_id: str = "",
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
@@ -727,6 +742,7 @@ def plan_extraction_batch(
         model=plan.model,
         scope_id=plan.scope_id,
         destination_deck=deck_path,
+        job_id=job_id,
     )
 
 
@@ -864,29 +880,29 @@ def _execution_receipt_bytes(plan: ExtractionBatchPlan) -> bytes:
     this says *that* request was confirmed for execution, with these fresh
     operation ids and these exact retirements. Cleanup progress is the
     journal's own durable business and is deliberately not written here.
+
+    `job_id` is emitted only when the batch has one, exactly as the manifest
+    gates it, so every jobless receipt already on disk still compares equal in
+    `_confirmed_execution` and no interrupted batch loses its authority.
     """
-    return (
-        json.dumps(
+    payload: dict[str, Any] = {
+        "version": 1,
+        "batch_id": plan.batch_id,
+        "manifest_sha256": plan.manifest_sha256,
+        "fingerprint": plan.fingerprint,
+        "child_operation_ids": [child.operation_id for child in plan.children],
+        "discards": [
             {
-                "version": 1,
-                "batch_id": plan.batch_id,
-                "manifest_sha256": plan.manifest_sha256,
-                "fingerprint": plan.fingerprint,
-                "child_operation_ids": [
-                    child.operation_id for child in plan.children
-                ],
-                "discards": [
-                    {
-                        "operation_id": discard.operation_id,
-                        "operation": discard.to_dict(),
-                    }
-                    for discard in plan.discards
-                ],
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
-        + "\n"
+                "operation_id": discard.operation_id,
+                "operation": discard.to_dict(),
+            }
+            for discard in plan.discards
+        ],
+    }
+    if plan.job_id:
+        payload["job_id"] = plan.job_id
+    return (
+        json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n"
     ).encode("utf-8")
 
 
@@ -1815,6 +1831,7 @@ def plan_extraction_batch_retry(
     child_indices: Sequence[int],
     *,
     concurrency_limit: int | None = None,
+    job_id: str = "",
     provider_env: Mapping[str, str] | None = None,
     provider_runner: Callable[..., Any] = subprocess.run,
     provider_which: Callable[..., str | None] = shutil.which,
@@ -1835,9 +1852,20 @@ def plan_extraction_batch_retry(
     away. The old operation is never redispatched; the new call is a new
     authority with a new id.
 
+    A retry of a study job's batch belongs to that same job, so the new plan
+    inherits `job_id` from the manifest rather than being told it. A caller
+    that names one states which job it believes this batch is, and a
+    disagreement refuses rather than re-parenting somebody else's batch.
+
     Nothing is retired, reserved or written here.
     """
     plan = _load_batch_plan(config, batch_id)
+    if job_id and job_id != plan.job_id:
+        raise operations.OperationError(
+            f"Batch {batch_id} belongs to "
+            + (f"study job {plan.job_id}" if plan.job_id else "no study job")
+            + f", not {job_id}; janki will not retry it under a different job."
+        )
     wanted = tuple(int(index) for index in child_indices)
     if not wanted:
         raise operations.OperationError("Name at least one source to retry.")
@@ -1897,6 +1925,7 @@ def plan_extraction_batch_retry(
             if all(child.lineage is not None for child in selected)
             else ()
         ),
+        job_id=plan.job_id,
         provider_env=provider_env,
         provider_runner=provider_runner,
         provider_which=provider_which,

@@ -166,6 +166,8 @@ class _FakeRevisions:
     )
     operation_choices: tuple[OperationChoice, ...] = ()
     operation_prepared: list[tuple[str, str, bool, str]] = field(default_factory=list)
+    blocking_batch_asked: list[tuple[str, ...]] = field(default_factory=list)
+    blocking_batch_text: str = ""
     finish_progress: tuple[str, ...] = (
         "Preparing finish",
         "Applying reviewed revision",
@@ -181,6 +183,17 @@ class _FakeRevisions:
         if self.operation_release is not None and not self.operation_release.wait(3):
             raise AssertionError("the test never released operation status")
         return self.operation_choices
+
+    def describe_blocking_batch(self, *, operation_ids: tuple[str, ...]) -> str:
+        """No blocking operation in this fixture is a running batch child.
+
+        The real adapter answers "" for exactly this case, which is what keeps
+        the generic recovery branch below in place for every unrelated
+        unsettled call.
+        """
+
+        self.blocking_batch_asked.append(tuple(operation_ids))
+        return self.blocking_batch_text
 
     def prepare_operation_action(
         self,

@@ -16,6 +16,7 @@ from japanese_anki import (
     claude_client,
     cli_extract_batches,
     cli_source_parts,
+    cli_study,
     codex_client,
     enrich,
     extract,
@@ -4020,6 +4021,18 @@ def command_source_parts(args: argparse.Namespace) -> int:
     return cli_source_parts.run_source_parts_command(_load_config(args), args)
 
 
+def command_study(args: argparse.Namespace) -> int:
+    """Take one preserved source through to a deck as one study job.
+
+    The same application services the Assistant's own routes call, under the
+    same authority: the job document is a local record, one confirmed batch
+    still buys exactly the calls it enumerates, and a recovered reply is the
+    same paid answer reaching the destination it was confirmed for.
+    """
+
+    return cli_study.run_study_command(_load_config(args), args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="janki",
@@ -4281,6 +4294,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     cli_extract_batches.add_batch_parser(subparsers, _path, command_extract_batch)
     cli_source_parts.add_source_parts_parser(subparsers, _path, command_source_parts)
+    cli_study.add_study_parser(subparsers, _path, command_study)
     extract_parser.set_defaults(handler=command_extract)
 
     audio_parser = subparsers.add_parser(

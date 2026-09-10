@@ -96,17 +96,32 @@ def plan_batch(
     scope_id: str = "",
     destination_deck: Path | None = None,
     concurrency_limit: int = 2,
+    job_id: str = "",
 ) -> PreparedExtractionBatch:
     """Plan one batch over exactly these preserved sources. Nothing is sent."""
 
-    plan = core().plan_extraction_batch(
-        config,
-        list(sources),
-        mode=mode,
-        scope_id=scope_id,
-        destination_deck=destination_deck,
-        concurrency_limit=concurrency_limit,
+    return describe_batch(
+        core().plan_extraction_batch(
+            config,
+            list(sources),
+            mode=mode,
+            scope_id=scope_id,
+            destination_deck=destination_deck,
+            concurrency_limit=concurrency_limit,
+            job_id=job_id,
+        )
     )
+
+
+def describe_batch(plan: Any) -> PreparedExtractionBatch:
+    """Render one already-planned core batch as its owner confirmation.
+
+    Separate from :func:`plan_batch` because a study job plans its batch over
+    its own published parts through its own service, and re-planning here to
+    describe it would mint a second set of operation ids and compare a
+    confirmation against a plan that no longer exists.
+    """
+
     listed = _child_lines(plan)
     effects = (
         f"Send these {len(plan.children)} whole sources to {plan.model}, "
@@ -136,15 +151,29 @@ def plan_batch_retry(
     config: Any,
     batch_id: str,
     child_indices: Sequence[int],
+    job_id: str = "",
 ) -> PreparedExtractionBatch:
     """Plan a retry of exactly these sources, disclosing both halves of it.
 
     One confirmation carries both what will be sent and what recorded evidence
     the core will retire to make room for it. This surface never retires
     anything itself and never mints a retry fingerprint.
+
+    A retry inherits its job from the loaded manifest. ``job_id`` states which
+    job the caller believes this batch belongs to, and the core refuses a
+    disagreement; it never re-parents the retry.
     """
 
-    plan = core().plan_extraction_batch_retry(config, batch_id, list(child_indices))
+    return describe_batch_retry(
+        core().plan_extraction_batch_retry(
+            config, batch_id, list(child_indices), job_id=job_id
+        )
+    )
+
+
+def describe_batch_retry(plan: Any) -> PreparedExtractionBatch:
+    """Render one already-planned retry as its own fresh owner confirmation."""
+
     listed = _child_lines(plan)
     retired = tuple(
         f"Retire the earlier model call {discard.operation_id} for "
@@ -180,7 +209,9 @@ def plan_batch_retry(
     return PreparedExtractionBatch(
         plan=plan,
         fingerprint=plan.fingerprint,
-        target=f"batch {_short(batch_id)}",
+        # The batch being retried, which is what the owner is deciding about;
+        # the fresh batch's own id is inside the plan this is bound to.
+        target=f"batch {_short(plan.retry_of)}",
         effects=effects,
         disclosures=tuple(disclosures),
         confirm_label=(

@@ -159,7 +159,13 @@ def assistant_agent_schema() -> Any:
         )
         operation_id: NonBlank | None = Field(
             default=None,
-            description="Exact disclosed paid-operation id for manage_operation only.",
+            description=(
+                "Exact disclosed paid-operation id for manage_operation, for "
+                "inspecting or recovering one child of the named study job's "
+                "own batch, or — with retry_study_parts — any one call of the "
+                "batch whose children the owner asked to send again. Never for "
+                "any other action."
+            ),
         )
         accept_paid_output_loss: bool | None = Field(
             default=None,
@@ -207,8 +213,16 @@ def assistant_agent_schema() -> Any:
             ge=1,
             le=4,
             description=(
-                "How many sources extract_batch reads at once; null uses 2. "
-                "Never set for any other action."
+                "How many sources extract_batch or extract_study_parts reads "
+                "at once; null uses 2. Never set for any other action."
+            ),
+        )
+        retry_child_indices: list[int] = Field(
+            default_factory=list,
+            description=(
+                "retry_study_parts only: the exact 1-based child numbers the "
+                "owner asked to send again. Never inferred, never widened, and "
+                "never a successful or in-flight child."
             ),
         )
 
@@ -231,6 +245,19 @@ def assistant_agent_schema() -> Any:
             "extract_source",
             "extract_batch",
             "open_source_part_editor",
+            # Study jobs. Each of these reads, plans for one owner
+            # confirmation, or dispatches work the owner already authorized
+            # exactly. None of them mints or selects an owner decision:
+            # creating a job, publishing regions, editing a choice, choosing
+            # among competing captured proposals and every review, coverage or
+            # disposition decision are owner controls that carry no
+            # model-emittable field at all.
+            "study_job_status",
+            "inspect_capture_proposals",
+            "extract_study_parts",
+            "retry_study_parts",
+            "stage_capture_proposal",
+            "resume_study_job",
             "delete_content",
             "manage_operation",
             "inspect_resources",

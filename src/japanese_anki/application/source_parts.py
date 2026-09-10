@@ -81,7 +81,10 @@ __all__ = [
     "load_source_part_receipt",
     "new_recipe_id",
     "plan_source_parts",
+    "planned_receipt_sha256",
+    "published_receipt_sha256",
     "recipe_from_bytes",
+    "receipt_bytes",
     "receipt_path",
     "render_contact_sheet",
     "sources_unavailable",
@@ -1190,7 +1193,14 @@ def receipt_path(config: ProjectConfig, recipe_id: str) -> Path:
     return config.operations_file.parent / SOURCE_PARTS_DIR_NAME / f"{recipe_id}.json"
 
 
-def _receipt_bytes(plan: SourcePartsPlan, *, created_at: str) -> bytes:
+def receipt_bytes(plan: SourcePartsPlan, *, created_at: str) -> bytes:
+    """The exact durable receipt bytes this plan writes at this stamp.
+
+    Public because a caller that must bind the receipt's hash *before* the
+    receipt exists has no other way to know it: ``created_at`` is inside the
+    hashed JSON, so the hash is a function of the stamp as well as the plan.
+    """
+
     value = plan.to_dict()
     value["plan_fingerprint"] = plan.plan_fingerprint
     value["created_at"] = created_at
@@ -1199,44 +1209,102 @@ def _receipt_bytes(plan: SourcePartsPlan, *, created_at: str) -> bytes:
     ).encode("utf-8")
 
 
-def _write_receipt(config: ProjectConfig, plan: SourcePartsPlan) -> tuple[Path, str, bool]:
-    """Publish the expectation, or prove the one on disk is already it.
+def planned_receipt_sha256(plan: SourcePartsPlan, *, created_at: str) -> str:
+    """The hash a first publication of this plan at this stamp would land."""
 
-    Written **before** the first part, so an interrupted publication has an
-    exact expectation to resume against. Immutable: a receipt whose plan
-    fingerprint or part list differs from this one names different parts, and
-    different parts need a new recipe id.
+    return hashlib.sha256(receipt_bytes(plan, created_at=created_at)).hexdigest()
 
-    ``created_at`` is the only field a resumed run may differ in, so it is
-    compared out rather than byte-matched — every binding a publication is
-    checked against is inside ``plan_fingerprint``.
+
+def _proved_receipt(path: Path, payload: bytes) -> bytes:
+    """The receipt already at ``path``, proved to be this payload's own.
+
+    The immutability rule itself: a receipt whose plan fingerprint or part
+    list differs from this one names different parts, and different parts need
+    a new recipe id. ``created_at`` is the only field a resumed run may differ
+    in, so it is compared out rather than byte-matched — every binding a
+    publication is checked against is inside ``plan_fingerprint``.
+
+    Readable JSON is not yet a receipt: a hand edit or a truncation can leave
+    a list, a scalar or ``null`` at the top level, and comparing that one's
+    fields raises ``AttributeError``, which is not a ``JankiError``. Every
+    caller of this function is a refusal route written against one —
+    ``cli.main`` prints ``error:`` for a ``JankiError`` and lets anything else
+    out as a traceback — so the shape is proved here, exactly as
+    :func:`load_source_part_receipt` proves it for the reader.
+    """
+
+    try:
+        held = read_bytes_bound(path)
+    except (JankiError, OSError) as exc:
+        raise SourcePartsError(
+            f"Could not read the existing source-part receipt {path}: {exc}"
+        ) from exc
+    try:
+        existing = json.loads(held.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise SourcePartsError(
+            f"The source-part receipt {path} is not readable JSON: {exc}. "
+            "Nothing was published."
+        ) from exc
+    if not isinstance(existing, Mapping):
+        raise SourcePartsError(
+            f"The source-part receipt {path} is not a JSON object, so it "
+            "records no recipe this one can be proved against. Nothing was "
+            "published."
+        )
+    current = json.loads(payload.decode("utf-8"))
+    if {key: value for key, value in existing.items() if key != "created_at"} != {
+        key: value for key, value in current.items() if key != "created_at"
+    }:
+        raise SourcePartsError(
+            f"The source-part receipt {path} records a different recipe than "
+            "this one. A receipt is immutable: different parts need a new "
+            "recipe id and a new receipt, and nothing was published."
+        )
+    return held
+
+
+def published_receipt_sha256(
+    config: ProjectConfig, plan: SourcePartsPlan
+) -> str | None:
+    """The hash of the receipt already published for this exact plan.
+
+    ``None`` when this recipe id has no receipt yet. When one exists it is
+    proved to be *this* plan's by the same comparison the writer performs, so
+    a caller that must bind an authority before publishing binds it to a
+    receipt :func:`execute_source_parts` will accept rather than to whatever
+    happens to carry that recipe id. A plan the writer would refuse refuses
+    here too, with the same words and before anything is recorded.
     """
 
     path = receipt_path(config, plan.recipe_id)
-    payload = _receipt_bytes(plan, created_at=datetime.now(UTC).isoformat())
+    if not path.exists():
+        return None
+    return hashlib.sha256(
+        _proved_receipt(path, receipt_bytes(plan, created_at=""))
+    ).hexdigest()
+
+
+def _write_receipt(
+    config: ProjectConfig, plan: SourcePartsPlan, *, created_at: str = ""
+) -> tuple[Path, str, bool]:
+    """Publish the expectation, or prove the one on disk is already it.
+
+    Written **before** the first part, so an interrupted publication has an
+    exact expectation to resume against, and immutable — see
+    :func:`_proved_receipt`.
+
+    An empty ``created_at`` stamps the clock here; a caller that froze the
+    stamp at prepare time passes it so the hash it bound is the hash that
+    lands.
+    """
+
+    path = receipt_path(config, plan.recipe_id)
+    payload = receipt_bytes(
+        plan, created_at=created_at or datetime.now(UTC).isoformat()
+    )
     if path.exists():
-        try:
-            held = read_bytes_bound(path)
-        except (JankiError, OSError) as exc:
-            raise SourcePartsError(
-                f"Could not read the existing source-part receipt {path}: {exc}"
-            ) from exc
-        try:
-            existing = json.loads(held.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError) as exc:
-            raise SourcePartsError(
-                f"The source-part receipt {path} is not readable JSON: {exc}. "
-                "Nothing was published."
-            ) from exc
-        current = json.loads(payload.decode("utf-8"))
-        if {
-            key: value for key, value in existing.items() if key != "created_at"
-        } != {key: value for key, value in current.items() if key != "created_at"}:
-            raise SourcePartsError(
-                f"The source-part receipt {path} records a different recipe than "
-                "this one. A receipt is immutable: different parts need a new "
-                "recipe id and a new receipt, and nothing was published."
-            )
+        held = _proved_receipt(path, payload)
         return path, hashlib.sha256(held).hexdigest(), False
     prepare_bound_directory(config.operations_file.parent / SOURCE_PARTS_DIR_NAME)
     try:
@@ -1253,6 +1321,7 @@ def execute_source_parts(
     plan: SourcePartsPlan,
     *,
     publish_token: str,
+    created_at: str = "",
 ) -> SourcePartsReceipt:
     """Write the receipt, then put every absent part in the corpus.
 
@@ -1260,6 +1329,11 @@ def execute_source_parts(
     exact ``plan_fingerprint`` they previewed. A plan alone publishes nothing.
     Ordinary local work: no paid call, no provider disclosure, no edit of an
     original, and no new approval gate.
+
+    ``created_at`` is the stamp a caller froze before it bound this receipt's
+    hash — the same freeze ``coverage._approval_payload(approved_at=…)`` and
+    ``ledger.record_export(at=)`` already make. Empty is this module's own
+    clock, which is what every caller with nothing to bind passes.
     """
 
     if not isinstance(publish_token, str) or publish_token != plan.plan_fingerprint:
@@ -1279,7 +1353,7 @@ def execute_source_parts(
                 "hash this plan binds; nothing was published."
             )
 
-    path, receipt_sha256, _fresh = _write_receipt(config, plan)
+    path, receipt_sha256, _fresh = _write_receipt(config, plan, created_at=created_at)
     intakes = inputs.publish_derived_part(
         [(part.target_name, data) for part, data in zip(plan.parts, plan.payloads, strict=True)],
         scan_inbox=config.scan_inbox,

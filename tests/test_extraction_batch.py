@@ -1595,3 +1595,148 @@ def test_ordinary_recovery_writes_no_capture_recovery_block(
     assert resumed.children[0].state == "committed"
     _records, meta = staging.read_staging(plan.children[0].staging_path)
     assert "capture_recovery" not in meta
+
+
+# --- the optional study-job backlink ------------------------------------------
+#
+# Contracts §2.4 makes `job_id` optional and serializes it only when it is set,
+# so a batch nobody planned for a job keeps exactly the wire, manifest hash and
+# consent fingerprint it had before study jobs existed. That shape is current
+# and fully supported: there is no legacy reader and nothing is backfilled.
+
+
+JOB = "11111111-1111-4111-8111-111111111111"
+
+
+def test_a_jobless_batch_keeps_its_exact_pre_job_wire_and_fingerprints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The optional backlink adds nothing at all to a batch without one."""
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    sources = [_source(config, "one.pdf", b"one"), _source(config, "two.pdf", b"two")]
+    plan = _plan(config, sources, _runner())
+
+    wire = json.loads(plan.manifest_bytes)
+    assert set(wire) == {
+        "version",
+        "batch_id",
+        "concurrency_limit",
+        "provider",
+        "model",
+        "scope_id",
+        "children",
+    }
+    assert "job_id" not in wire
+    assert plan.job_id == ""
+    # The exact bytes, recomputed from the key set above rather than trusted.
+    assert plan.manifest_bytes == (
+        json.dumps(wire, ensure_ascii=False, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    assert plan.manifest_sha256 == __import__("hashlib").sha256(
+        plan.manifest_bytes
+    ).hexdigest()
+    receipt = json.loads(
+        extraction_batch._execution_receipt_bytes(plan).decode("utf-8")
+    )
+    assert set(receipt) == {
+        "version",
+        "batch_id",
+        "manifest_sha256",
+        "fingerprint",
+        "child_operation_ids",
+        "discards",
+    }
+    assert "job_id" not in receipt
+
+
+def test_a_job_batch_carries_its_job_id_through_wire_and_round_trip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Set, it rides in the manifest, the receipt and back out of `from_dict`."""
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    sources = [_source(config, "one.pdf", b"one"), _source(config, "two.pdf", b"two")]
+    jobless = _plan(config, sources, _runner())
+    owned = replace(jobless, job_id=JOB)
+
+    wire = json.loads(owned.manifest_bytes)
+    assert wire["job_id"] == JOB
+    # Different bytes, and so a different manifest hash and a different
+    # consent fingerprint. Correct: a batch bound to a job is a different
+    # thing to agree to than a bare one.
+    assert owned.manifest_sha256 != jobless.manifest_sha256
+    assert owned.fingerprint != jobless.fingerprint
+    assert {key: value for key, value in wire.items() if key != "job_id"} == json.loads(
+        jobless.manifest_bytes
+    )
+    # The round trip is what keeps `_require_authentic_reservation` able to
+    # recompute the hash the journal authorized.
+    assert ExtractionBatchPlan.from_dict(wire).job_id == JOB
+    assert ExtractionBatchPlan.from_dict(wire) == owned
+    receipt = json.loads(
+        extraction_batch._execution_receipt_bytes(owned).decode("utf-8")
+    )
+    assert receipt["job_id"] == JOB
+
+
+def test_planning_a_job_batch_binds_the_job_and_dispatch_still_resumes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole reserved lifecycle works with the backlink present."""
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    sources = [_source(config, "one.pdf", b"one")]
+    runner = _runner()
+    plan = _plan(config, sources, runner, job_id=JOB)
+
+    assert plan.job_id == JOB
+    _dispatch(config, plan, runner)
+
+    stored = json.loads(
+        extraction_batch.batch_manifest_path(config, plan.batch_id).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert stored["job_id"] == JOB
+    # Reading it back reproduces the authorized hash, so status and resume do
+    # not refuse a batch for carrying the backlink they asked for.
+    assert extraction_batch_status(config, plan.batch_id).children[0].state == (
+        "committed"
+    )
+
+
+def test_a_retry_inherits_its_job_and_refuses_a_different_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A retry belongs to the job its batch did; it is never re-parented."""
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    sources = [_source(config, "one.pdf", b"one")]
+    runner = FakeClaudeRunner(reply=b'{"type":"result","is_error":true}\n')
+    plan = _plan(config, sources, runner, job_id=JOB)
+    _dispatch(config, plan, runner)
+
+    retry = plan_extraction_batch_retry(
+        config,
+        plan.batch_id,
+        [1],
+        provider_env={},
+        provider_runner=_runner(),
+        provider_which=_which,
+    )
+    assert retry.job_id == JOB
+    assert json.loads(retry.manifest_bytes)["job_id"] == JOB
+    assert retry.batch_id != plan.batch_id
+
+    with pytest.raises(JankiError) as error:
+        plan_extraction_batch_retry(
+            config,
+            plan.batch_id,
+            [1],
+            job_id="22222222-2222-4222-8222-222222222222",
+            provider_env={},
+            provider_runner=_runner(),
+            provider_which=_which,
+        )
+    assert JOB in str(error.value)

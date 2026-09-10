@@ -19,7 +19,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import card_preview, kanji_notes, staging, status
+from japanese_anki import card_preview, kanji_notes, operations, staging, status
 from japanese_anki.application import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
@@ -44,6 +44,7 @@ from japanese_anki.application import (
     assistant_promotion,
     assistant_staging_actions,
     assistant_staging_review,
+    capture_recovery,
     card_revision,
     card_revision_finish,
     character_notes,
@@ -55,6 +56,7 @@ from japanese_anki.application import (
     revision_apply,
     revision_finish,
     source_parts,
+    study_job,
 )
 from japanese_anki.application.extraction import destination_deck_facts
 from japanese_anki.config import ProjectConfig
@@ -65,8 +67,12 @@ from japanese_anki.io import load_records, merge_records, read_bytes_bound
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.workbench import assistant_batch_surface
 from japanese_anki.workbench.assistant import (
+    MANAGE_EXTRACTION_BATCHES_MESSAGE,
+    MANAGE_OPERATIONS_MESSAGE,
+    MANAGE_STUDY_JOBS_MESSAGE,
     AssistantDeckChoice,
     ChatReply,
+    ExtractionBatchPreviewOffer,
     KanjiFinishActionChoice,
     KanjiFinishChoice,
     KanjiFinishResumption,
@@ -84,6 +90,9 @@ from japanese_anki.workbench.assistant import (
     SourceExtractionExecution,
     SourceExtractionPlan,
     StagedContentFinishReview,
+    StudyJobActionChoice,
+    StudyJobChoice,
+    StudyJobStartChoice,
 )
 from japanese_anki.workbench.assistant import RevisionPlan as AssistantRevisionPlan
 from japanese_anki.workbench.assistant_packages import (
@@ -110,6 +119,21 @@ __all__ = [
 #: Rendered source-part plans held for the editor's publish control. Each one
 #: carries its parts' exact PNG bytes, so the number is small on purpose.
 _MAX_REMEMBERED_SOURCE_PART_PLANS = 4
+
+#: The closed model intents a study job answers. Each one reads, plans for one
+#: owner confirmation, or dispatches work the owner already authorized exactly.
+#: Creating a job, publishing regions and editing a choice are owner controls
+#: and are deliberately absent.
+_STUDY_JOB_INTENTS = frozenset(
+    {
+        "study_job_status",
+        "inspect_capture_proposals",
+        "extract_study_parts",
+        "retry_study_parts",
+        "stage_capture_proposal",
+        "resume_study_job",
+    }
+)
 
 _RICH_DRILL_ONLY = "Deck changes currently support rich conjugation practice decks only."
 _DRILL_EXAMPLES_REQUIRED = (
@@ -260,6 +284,14 @@ class _PreparedAgentAction:
     instruction: str
     target: str
     plan: object
+    #: The study job this action belongs to, empty when it belongs to none.
+    #: Carried on the prepared plan rather than on the confirmation, because
+    #: the confirmation is the owner's answer to what was rendered and this is
+    #: part of what janki rendered it from.
+    job_id: str = ""
+    #: For a `create_study_job` action riding inside a deck creation: the
+    #: preserved source the job will bind once the deck actually exists.
+    job_parent_source: Path | None = None
 
 
 def _deck_label(deck_config: object, deck_path: Path) -> str:
@@ -527,12 +559,19 @@ class RevisionAssistantAdapter:
         self._source_part_editors = store
         return store
 
-    def open_source_part_editor(self, source_name: str) -> SourcePartEditorOffer:
+    def open_source_part_editor(
+        self, source_name: str, *, job_id: str = ""
+    ) -> SourcePartEditorOffer:
         """Render one source's real pages and open the owner's region editor.
 
         A read. It publishes nothing, mints no receipt, prepares no part
         speculatively and reaches no provider — the owner has not chosen
         anything yet.
+
+        ``job_id`` rides on the session so a publication triggered inside this
+        editor records its backlink in that job first. It comes from this
+        owner route alone; no model-emittable field and no posted request body
+        can name a job here.
         """
 
         store = self._source_part_editors
@@ -552,7 +591,9 @@ class RevisionAssistantAdapter:
         except (JankiError, OSError, TypeError, ValueError) as exc:
             raise RevisionRefusal(str(exc)) from exc
         try:
-            return store.open(sheet, recipe_id=source_parts.new_recipe_id())
+            return store.open(
+                sheet, recipe_id=source_parts.new_recipe_id(), job_id=job_id
+            )
         except SourcePartEditorError as exc:
             raise RevisionRefusal(str(exc)) from exc
 
@@ -602,6 +643,8 @@ class RevisionAssistantAdapter:
         self,
         source_name: str,
         plan_fingerprint: str,
+        *,
+        job_id: str = "",
     ) -> dict[str, Any]:
         """The editor's own Publish control, bound to the reviewed plan.
 
@@ -609,6 +652,12 @@ class RevisionAssistantAdapter:
         source preparation in ordinary local work, so there is no second
         dialog and no capability. What it may not do is publish anything but
         the exact plan that was rendered and shown.
+
+        When the editor was opened from a study job, that job records its
+        intent — the recipe id and the exact hash the receipt will land with —
+        before a byte is published, so an interruption leaves a backlink the
+        job can rediscover. The receipt itself stays job-independent: it binds
+        the parts, not the job, and any later job or CLI run may reuse it.
         """
 
         with self._plan_lock:
@@ -624,9 +673,14 @@ class RevisionAssistantAdapter:
                 "published."
             )
         fresh_config = ProjectConfig.load(self.config.root)
-        receipt = source_parts.execute_source_parts(
-            fresh_config, plan, publish_token=plan_fingerprint
-        )
+        if job_id:
+            receipt = study_job.publish_job_source_parts(
+                fresh_config, job_id, plan, publish_token=plan_fingerprint
+            )
+        else:
+            receipt = source_parts.execute_source_parts(
+                fresh_config, plan, publish_token=plan_fingerprint
+            )
         published = [path.name for path in receipt.published]
         reused = [path.name for path in receipt.reused]
         summary = f"Published {len(published)} part(s) into your corpus"
@@ -1727,10 +1781,24 @@ class RevisionAssistantAdapter:
                     "Deck creation needs exactly one deck name and explicit card "
                     "directions."
                 )
-            if intent.resource_ids or intent.record_ids:
+            if len(intent.resource_ids) > 1 or intent.record_ids:
                 raise RevisionRefusal(
-                    "Deck creation cannot reuse an existing resource or card identity."
+                    "Deck creation names at most one preserved source to study "
+                    "and cannot reuse an existing card identity."
                 )
+            # §1 step 3: when the destination is new, the study job's local
+            # write rides inside this same deck-creation confirmation, after it
+            # succeeds. The confirmation still asks exactly once, for the deck,
+            # and it names the source the job would bind. Nothing here opens a
+            # job on its own: a refused deck creation leaves none.
+            job_parent_source: Path | None = None
+            if intent.resource_ids:
+                try:
+                    job_parent_source = assistant_context.AssistantContextBroker(
+                        config
+                    ).source_path(intent.resource_ids[0])
+                except (JankiError, OSError, TypeError, ValueError) as exc:
+                    raise RevisionRefusal(str(exc)) from exc
             deck_name = options.get("deck_name")
             directions = options.get("card_directions")
             if (
@@ -1821,6 +1889,7 @@ class RevisionAssistantAdapter:
                 instruction=intent.instruction,
                 target=configured_file,
                 plan=plan,
+                job_parent_source=job_parent_source,
             )
             self._remember_agent_plan(plan.fingerprint, prepared)
             return ChatReply(
@@ -1832,6 +1901,16 @@ class RevisionAssistantAdapter:
                         f"Create the study deck {deck_name!r}",
                         "Enable card directions: " + ", ".join(directions),
                         scope_effect,
+                        *(
+                            (
+                                "Open a study job over "
+                                f"{job_parent_source.name}, binding this deck. "
+                                "A local record: it sends nothing and publishes "
+                                "nothing.",
+                            )
+                            if job_parent_source is not None
+                            else ()
+                        ),
                     ),
                     disclosures=(
                         "This local action makes no model or audio-provider call.",
@@ -1998,6 +2077,13 @@ class RevisionAssistantAdapter:
                     progress_label="Preparing pages",
                 ),
                 action_instruction=intent.instruction,
+            )
+        if intent.kind in _STUDY_JOB_INTENTS:
+            return self._consume_study_job_intent(
+                config,
+                intent,
+                answer=result.answer,
+                deck_scope=deck_scope,
             )
         if intent.kind == "review_staging":
             options = dict(intent.options)
@@ -4653,6 +4739,9 @@ class RevisionAssistantAdapter:
                 instruction=instruction,
                 target=batch.target,
                 plan=batch,
+                # Inherited from the manifest the core loaded, never chosen
+                # here: a retry belongs to whichever job its batch did.
+                job_id=batch.plan.job_id,
             ),
         )
         return ChatReply(
@@ -4669,6 +4758,821 @@ class RevisionAssistantAdapter:
                 progress_label="Preparing pages",
             ),
             action_instruction=instruction,
+        )
+
+    # -- study jobs ------------------------------------------------------
+
+    def _resolve_study_job(self, config: ProjectConfig, resource_id: str) -> str:
+        try:
+            return assistant_context.AssistantContextBroker(config).study_job_id(
+                resource_id
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+
+    #: How many published parts the desk offers a selection control for. A
+    #: recipe may name up to 64; past this the owner uses `janki study parts
+    #: JOB --select NAME …`, which writes through the same CAS service.
+    _MAX_PART_CONTROLS = 24
+
+    def _part_selection_actions(
+        self, config: ProjectConfig, job_id: str, status: Any
+    ) -> tuple[Any, ...]:
+        """One include/exclude control per published part, from saved state.
+
+        Which parts a job's batch covers is the owner's own reversible local
+        preference (`choices.part_selections`), and `job_part_sources` already
+        honours it. Nothing here is inferred: with no saved choice every
+        published part is covered, which is what the controls say.
+        """
+
+        try:
+            published = study_job.job_published_parts(config, job_id)
+        except (JankiError, OSError, TypeError, ValueError):
+            return ()
+        if not published:
+            return ()
+        saved = status.choices.get("part_selections")
+        selected = (
+            [name for name in published if name in set(saved)]
+            if isinstance(saved, list) and saved
+            else list(published)
+        )
+        chosen = set(selected)
+        return tuple(
+            StudyJobActionChoice(
+                action="exclude-part" if name in chosen else "include-part",
+                label=(
+                    f"Leave {name} out of this job's next batch"
+                    if name in chosen
+                    else f"Put {name} back in this job's next batch"
+                ),
+                target=name,
+            )
+            for name in published[: self._MAX_PART_CONTROLS]
+        )
+
+    def open_study_job_source_part_editor(self, *, job_id: str) -> str:
+        """Open the owner's region editor over this job's own parent source.
+
+        The owner route the editor's ``job_id`` exists for: the job whose
+        control was clicked is the job a publication out of this editor records
+        its intent in, and the browser cannot name another one. Opening it
+        publishes nothing, renders no part speculatively and reaches no
+        provider — every page and region is the owner's choice inside it, and
+        the receipt it eventually writes stays job-independent.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            job = study_job.load_study_job(fresh_config, job_id)
+            offer = self.open_source_part_editor(
+                job.header.parent_source_name, job_id=job.header.job_id
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        return (
+            f"### Choose the parts of {offer.source_name}\n\n"
+            f"[Open the region editor]({offer.url}) — {offer.page_count} page(s) "
+            "rendered for review.\n\n"
+            "You choose every page and region; janki renders exactly those "
+            "pixels and never decides that a rectangle is a table, a row or a "
+            f"word. Publishing from this editor records study job {job_id[:8]}'s "
+            "binding to the receipt before a byte is written, and the receipt "
+            "itself belongs to the parts rather than to this job. Opening it "
+            "changed nothing, made no model call and cost nothing."
+        )
+
+    def save_study_job_part_selection(
+        self, *, job_id: str, part_name: str, include: bool
+    ) -> str:
+        """Save which published parts this job's next batch covers.
+
+        A reversible local preference through the job's own CAS writer, bound
+        to the exact job and part the control was rendered from. It publishes
+        nothing, sends nothing, changes no deck definition and marks nothing
+        reviewed; the batch it affects is still planned and confirmed
+        separately.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            published = study_job.job_published_parts(fresh_config, job_id)
+            if part_name not in published:
+                raise RevisionRefusal(
+                    f"{part_name} is not one of the parts study job "
+                    f"{job_id[:8]} has published, so it cannot be selected."
+                )
+            job = study_job.load_study_job(fresh_config, job_id)
+            saved = job.choices.get("part_selections")
+            current = (
+                [name for name in published if name in set(saved)]
+                if isinstance(saved, list) and saved
+                else list(published)
+            )
+            wanted = set(current) | {part_name} if include else set(current) - {
+                part_name
+            }
+            if not wanted:
+                raise RevisionRefusal(
+                    "A batch covers at least one part. Put another part back "
+                    "before leaving this one out."
+                )
+            selection = [name for name in published if name in wanted]
+            study_job.record_choice(
+                fresh_config,
+                job_id,
+                {"part_selections": selection},
+                expected_revision=job.revision,
+            )
+        except RevisionRefusal:
+            raise
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        return (
+            f"Study job {job_id[:8]}'s next batch covers "
+            f"{len(selection)} of {len(published)} published part(s): "
+            + ", ".join(selection)
+            + ". That is a local preference over parts you already published — "
+            "nothing was sent, nothing was published and no deck changed."
+        )
+
+    def list_study_job_starts(self, *, deck_scope: str) -> tuple[Any, ...]:
+        """Which preserved sources a job may be opened over, into the focus deck.
+
+        Reusing a deck is a selection (§1 step 2), so the destination here is
+        the deck this conversation is already focused on and the control asks
+        for nothing else. A read: listing costs nothing and writes nothing.
+
+        Every catalogued source, deliberately uncapped. Published parts are
+        ordinary intake, so preparing one document adds a source per part —
+        and each sorts *before* the document it came from — which is exactly
+        how a cap here would hide the parent nobody has started a job over
+        yet. ``_MAX_PART_CONTROLS`` bounds the per-part *choice* controls of
+        one job, which is a different question with its own CLI equivalent.
+        """
+
+        if not isinstance(deck_scope, str) or not deck_scope.strip():
+            return ()
+        try:
+            target = self._chat_target_for_scope(deck_scope)
+        except RevisionRefusal:
+            return ()
+        fresh_config = ProjectConfig.load(self.config.root)
+        try:
+            broker = assistant_context.AssistantContextBroker(fresh_config)
+            catalog = self._catalog_by_id(broker)
+        except (JankiError, OSError, RevisionRefusal, TypeError, ValueError):
+            return ()
+        deck_name = self._display_path(fresh_config, target.path)
+        starts: list[StudyJobStartChoice] = []
+        for item in catalog.values():
+            # `available` is only ever set false by a resource that refuses on
+            # selection; a source that carries no flag is an ordinary one.
+            if item.get("kind") != "source" or item.get("available") is False:
+                continue
+            title = item.get("title")
+            if not isinstance(title, str) or not title:
+                continue
+            starts.append(
+                StudyJobStartChoice(
+                    source_name=title,
+                    label=f"Start a study job over {title}",
+                    summary=f"{title} → {deck_name}",
+                )
+            )
+        return tuple(starts)
+
+    def open_study_job_over_deck(self, *, source_name: str, deck_scope: str) -> str:
+        """Open one job binding this preserved source and the focused deck.
+
+        The owner's own Create/Open, and the whole authority for it: a job
+        document is a local record, so there is no second dialog and no
+        confirmation ladder. It creates no deck — an existing destination is a
+        selection — spends nothing and discloses nothing to a provider.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            target = self._chat_target_for_scope(deck_scope)
+            broker = assistant_context.AssistantContextBroker(fresh_config)
+            resource_id = next(
+                (
+                    identity
+                    for identity, item in self._catalog_by_id(broker).items()
+                    if item.get("kind") == "source" and item.get("title") == source_name
+                ),
+                None,
+            )
+            if resource_id is None:
+                raise RevisionRefusal(
+                    f"{source_name} is not a preserved source in this project "
+                    "any more; nothing was opened."
+                )
+            # Resolved through the same census and containment checks every
+            # other source route uses, rather than joined onto the inbox here.
+            source_path = broker.source_path(resource_id)
+            job = study_job.open_study_job(
+                fresh_config,
+                kind="source_extraction",
+                parent_source=source_path,
+                deck_path=target.path,
+            )
+        except RevisionRefusal:
+            raise
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        return (
+            f"Opened study job {job.header.job_id} over "
+            f"{job.header.parent_source_name}, writing into "
+            f"{job.header.deck_path}. That deck's own saved definition still "
+            "decides its scope and card set — a job never changes either. "
+            "Nothing was sent to a model, nothing was published and no deck "
+            "was created."
+        )
+
+    def list_study_job_choices(self) -> tuple[Any, ...]:
+        """Read-only durable job state for the local desk. Nothing is sent."""
+
+        fresh_config = ProjectConfig.load(self.config.root)
+        choices: list[StudyJobChoice] = []
+        for job_id in study_job.list_study_jobs(fresh_config):
+            try:
+                status = study_job.study_job_status(fresh_config, job_id)
+            except (JankiError, OSError, TypeError, ValueError) as exc:
+                # One unreadable job document does not hide the others; the
+                # desk says so and its siblings stay usable.
+                choices.append(
+                    StudyJobChoice(
+                        job_id=job_id,
+                        label=f"Study job {job_id[:8]}",
+                        summary=f"This job's document could not be read: {exc}",
+                        actions=(),
+                    )
+                )
+                continue
+            settled = sum(batch.committed_count for batch in status.batches)
+            children = sum(len(batch.children) for batch in status.batches)
+            actions = [
+                StudyJobActionChoice(action="status", label="Where this job stands"),
+                # The owner route §3.2 requires: the job this editor publishes
+                # into is the one whose row was clicked, and every page and
+                # region is chosen inside the editor by the owner.
+                StudyJobActionChoice(
+                    action="parts",
+                    label=f"Choose the parts of {status.parent_source_name}",
+                ),
+            ]
+            if settled:
+                actions.append(
+                    StudyJobActionChoice(
+                        action="preview", label="Look at the saved cards"
+                    )
+                )
+            actions.extend(
+                self._part_selection_actions(fresh_config, job_id, status)
+            )
+            for batch in status.batches:
+                for child in batch.children:
+                    if child.state == "result_captured":
+                        actions.append(
+                            StudyJobActionChoice(
+                                action="inspect-capture",
+                                label=(
+                                    f"Read the saved reply for {child.source_name}"
+                                ),
+                                operation_id=child.operation_id,
+                            )
+                        )
+            if status.open_intents:
+                actions.append(
+                    StudyJobActionChoice(
+                        action="resume", label="Continue what this job already bought"
+                    )
+                )
+            choices.append(
+                StudyJobChoice(
+                    job_id=job_id,
+                    label=(
+                        f"{status.parent_source_name} → {status.deck_path}"
+                    ),
+                    summary=(
+                        f"{sum(part.published_count for part in status.parts)} "
+                        f"part(s) published, {settled} of {children} source(s) "
+                        "settled"
+                    ),
+                    actions=tuple(actions),
+                )
+            )
+        return tuple(choices)
+
+    def render_study_job_preview(self, *, job_id: str, deck_scope: str) -> Any:
+        """One rendered look at what this job already saved. It accepts nothing."""
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            rendered = study_job.render_job_preview(fresh_config, job_id)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        covered = ", ".join(str(index) for index in rendered.child_indices) or "none"
+        message = (
+            f"These are the {rendered.preview.card_count} cards this job has "
+            f"saved from sources {covered}, drawn as Anki draws them. Looking at "
+            "them changes nothing and accepts nothing. Rendered content "
+            f"fingerprint: {rendered.rendering_fingerprint}."
+        )
+        if self._preview_store is None:
+            return ExtractionBatchPreviewOffer(
+                message=(
+                    f"{message} This workbench has no local preview address to "
+                    "serve them from, so there is nothing to open."
+                ),
+                preview_url=None,
+                conflicts=rendered.conflicts,
+            )
+        offer = self._preview_store.offer(
+            rendered.preview,
+            label=f"Cards saved by study job {job_id[:8]}",
+            focus_scope=deck_scope,
+            thread_id=None,
+        )
+        return ExtractionBatchPreviewOffer(
+            message=message,
+            preview_url=offer.url,
+            conflicts=rendered.conflicts,
+        )
+
+    def describe_blocking_batch(self, *, operation_ids: tuple[str, ...]) -> str:
+        """Say what a running confirmed batch is doing, or "" when it is not one.
+
+        The one case this replaces: a batch the owner confirmed is running, so
+        ordinary paid chat is blocked. That is not an earlier call that left an
+        unsettled result, and telling the owner it is sends them to a recovery
+        desk for work that is proceeding normally. Every other blocking
+        operation — an unknown outcome, a captured reply, a stranded dispatch —
+        still gets that branch, which is why this returns nothing for them.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            journal = operations.OperationJournal.load(fresh_config.operations_file)
+        except (JankiError, OSError, TypeError, ValueError):
+            return ""
+        batch_ids: list[str] = []
+        for operation_id in operation_ids:
+            held = journal.operations.get(operation_id)
+            if held is None or not held.batch_id:
+                # Not a batch child at all: the generic branch owns this.
+                return ""
+            if held.state not in ("authorized", "dispatching", "running"):
+                # Settled or waiting on a person. A decision is genuinely owed,
+                # so the recovery desk is the right answer.
+                return ""
+            if held.batch_id not in batch_ids:
+                batch_ids.append(held.batch_id)
+        if not batch_ids:
+            return ""
+        told = [
+            "Janki did not make a new model call: a batch you confirmed is "
+            "running, and one paid call at a time is the rule that keeps its "
+            "children accounted for."
+        ]
+        for batch_id in batch_ids:
+            try:
+                outcome = extraction_batch.extraction_batch_status(
+                    fresh_config, batch_id
+                )
+            except (JankiError, OSError, TypeError, ValueError):
+                continue
+            plan_job = self._batch_job_id(fresh_config, batch_id)
+            told.append(
+                (
+                    f"Study job {plan_job[:8]}: " if plan_job else ""
+                )
+                + f"batch {batch_id[:8]} — {outcome.committed_count} of "
+                f"{len(outcome.children)} source(s) settled, "
+                f"{outcome.pending_count} in flight or unsent."
+            )
+        told.append(
+            "These stay available right now and cost nothing: "
+            f"**{MANAGE_STUDY_JOBS_MESSAGE}** for each job's status, its saved "
+            f"cards and any captured reply, **{MANAGE_EXTRACTION_BATCHES_MESSAGE}** "
+            f"for the batch desk, and **{MANAGE_OPERATIONS_MESSAGE}** to settle a "
+            "call. Choosing a deck to focus on also still works."
+        )
+        return "\n\n".join(told)
+
+    @staticmethod
+    def _batch_job_id(config: ProjectConfig, batch_id: str) -> str:
+        """The job a batch's own manifest records, or "" when it records none."""
+
+        try:
+            raw = json.loads(
+                extraction_batch.batch_manifest_path(config, batch_id).read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (JankiError, OSError, UnicodeError, ValueError):
+            return ""
+        return str(raw.get("job_id", "")) if isinstance(raw, dict) else ""
+
+    def study_job_status_text(self, *, job_id: str) -> str:
+        """One local reading of where a job stands. Reads only, sends nothing."""
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            status = study_job.study_job_status(fresh_config, job_id)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        told = [
+            f"### Study job {status.job_id}",
+            (
+                f"{status.parent_source_name} → {status.deck_path}"
+                + ("" if status.deck_current else " (the deck definition changed "
+                   "since this job bound it; its saved scope is still what a "
+                   "batch uses)")
+            ),
+        ]
+        for part in status.parts:
+            told.append(
+                f"- Parts {part.recipe_id[:8]}: "
+                + (
+                    f"receipt missing or changed — {part.refusal}"
+                    if part.missing
+                    else f"{part.published_count} of {part.part_count} published"
+                )
+            )
+        for batch in status.batches:
+            if batch.missing:
+                told.append(
+                    f"- Batch {batch.batch_id[:8]}: reserved, but no matching "
+                    f"manifest — {batch.refusal}"
+                )
+                continue
+            told.append(
+                f"- Batch {batch.batch_id[:8]}: {batch.committed_count} of "
+                f"{len(batch.children)} settled, {batch.pending_count} in "
+                f"flight or unsent, {batch.unknown_count} of unknown outcome, "
+                f"{batch.failed_count} failed"
+                # The batch's own durable eligibility, read rather than
+                # inferred from those counts, so this reading and the resume
+                # control cannot say different things about the same batch.
+                + (
+                    "; continuing this job finishes it under the authority it "
+                    "already recorded"
+                    if batch.resume_available
+                    else (f"; {batch.resume_refusal}" if batch.resume_refusal else "")
+                )
+            )
+        if status.blocking_operation_ids:
+            told.append(
+                "This job has "
+                f"{len(status.blocking_operation_ids)} model call(s) still "
+                "blocking spending. Manage model calls settles them."
+            )
+        if status.open_intents:
+            told.append(
+                f"{len(status.open_intents)} recorded action(s) have no outcome "
+                "yet; resuming this job finds their exact artifacts by the ids "
+                "and hashes it reserved."
+            )
+        told.append(
+            "Janki read this locally: no model call, no cost and no change."
+        )
+        return "\n".join(told)
+
+    @staticmethod
+    def _batch_of_operation(config: ProjectConfig, operation_id: str) -> str:
+        """The batch that reserved this exact model call, by its own manifest.
+
+        Resolved rather than accepted: a batch id is not one of the opaque
+        resource identities a turn discloses, so the model names a call the
+        job's own status disclosed and janki reads the batch back out of the
+        manifest that reserved it. No newest-manifest guess and no tie-break —
+        :func:`extraction_batch.find_capture_child` refuses both.
+        """
+
+        try:
+            plan, _child = extraction_batch.find_capture_child(config, operation_id)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        return plan.batch_id
+
+    @staticmethod
+    def _require_job_child(
+        config: ProjectConfig, job_id: str, operation_id: str
+    ) -> None:
+        """Prove this model call is one of that job's own batch children.
+
+        The job is named by the broker's opaque identity; the operation id is
+        one this job's own snapshot disclosed. Resolving it back through the
+        manifest — and comparing the manifest's embedded ``job_id`` — is what
+        keeps a job from reading or recovering a stranger's paid reply.
+        """
+
+        try:
+            plan, _child = extraction_batch.find_capture_child(config, operation_id)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        if plan.job_id != job_id:
+            belongs = f"study job {plan.job_id}" if plan.job_id else "no study job"
+            raise RevisionRefusal(
+                f"Model call {operation_id} belongs to {belongs}, not {job_id}. "
+                "Nothing was read or staged."
+            )
+
+    def inspect_capture_proposals_text(self, *, operation_id: str) -> str:
+        """Say what a captured reply holds, in hashes, pointers and verdicts.
+
+        Deliberately no reply bytes, no candidate content and no source bytes:
+        an inspection is what lets a plan be made, and it must not become an
+        unmanifested disclosure of the answer somebody paid for. The owner's
+        own rendering of those proposals is a separate local action whose
+        bytes never enter model context at all.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            plan = capture_recovery.inspect_capture_proposals(
+                fresh_config, operation_id
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        told = [
+            f"### Captured reply for model call {plan.operation_id}",
+            f"State {plan.operation_state}; capture SHA-256 {plan.capture_sha256}.",
+            f"{plan.valid_group_count} valid proposal(s) across "
+            f"{plan.valid_location_count} location(s).",
+        ]
+        for group in plan.valid_groups:
+            pointers = ", ".join(
+                f"frame {location.frame_index} block {location.block_index} "
+                f"{location.json_pointer} ({location.envelope_shape})"
+                for location in group.locations
+            )
+            # The verdict as a bounded fact, never the validator's own text:
+            # a schema complaint can quote the reply's values, and those are
+            # the owner's private paid bytes.
+            told.append(f"- {group.proposal_sha256} (valid): {pointers}")
+        invalid = len(plan.groups) - len(plan.valid_groups)
+        if invalid:
+            told.append(
+                f"{invalid} further proposal(s) do not validate against the "
+                "response schema and cannot be staged."
+            )
+        if plan.authoritative_location is not None:
+            # A capture that settled normally holds the terminal's own answer,
+            # often twice — once as the assembled tool argument and once as
+            # `structured_output`. That is not competing answers, so no owner
+            # selection is required for it.
+            told.append(
+                "This reply settled normally, so its successful terminal answer "
+                "is authoritative and recovering it needs no choice between "
+                "proposals."
+            )
+        elif plan.valid_location_count > 1:
+            told.append(
+                "This reply holds more than one readable proposal and no "
+                "authoritative terminal, so which one is the answer is your "
+                "decision over its exact location — janki will not choose "
+                "between them and neither will a model."
+            )
+        told.append(
+            "Janki read the saved reply locally: no model call and no cost. "
+            "None of its card content, and none of the validator's own text, "
+            "is in this summary."
+        )
+        return "\n".join(told)
+
+    def prepare_study_job_batch(
+        self,
+        *,
+        job_id: str,
+        deck_scope: str,
+        concurrency_limit: int = 2,
+    ) -> assistant_batch_surface.PreparedExtractionBatch:
+        """Plan this job's batch over its own published parts. Nothing is sent."""
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            plan = study_job.plan_job_extraction_batch(
+                fresh_config,
+                job_id,
+                concurrency_limit=concurrency_limit,
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        prepared = assistant_batch_surface.describe_batch(plan)
+        with self._plan_lock:
+            while len(self._batch_plans) >= 64:
+                self._batch_plans.pop(next(iter(self._batch_plans)))
+            self._batch_plans[prepared.fingerprint] = prepared
+        return prepared
+
+    def prepare_study_job_retry(
+        self,
+        *,
+        job_id: str,
+        batch_id: str,
+        child_indices: tuple[int, ...],
+    ) -> assistant_batch_surface.PreparedExtractionBatch:
+        """Plan a fresh retry of exactly these children of this job's batch."""
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            plan = study_job.plan_job_batch_retry(
+                fresh_config, job_id, batch_id, child_indices
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        prepared = assistant_batch_surface.describe_batch_retry(plan)
+        with self._plan_lock:
+            self._batch_plans[prepared.fingerprint] = prepared
+        return prepared
+
+    def resume_study_job(self, *, job_id: str, progress: Any) -> str:
+        """Finish what this job's open intents already have authority for.
+
+        One paragraph per open action, whether or not it closed: an action that
+        continues says so and stays reachable, so the desk's control and this
+        answer describe the same job.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            progress("Preparing pages")
+            actions = study_job.resume_job_actions(fresh_config, job_id)
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        if not actions:
+            return (
+                "Nothing in this job is waiting to be finished: every action it "
+                "recorded already has an outcome. Nothing was sent."
+            )
+        told: list[str] = []
+        for action in actions:
+            if action.batch is not None:
+                told.append(
+                    assistant_batch_surface.batch_summary(action.batch)
+                    + f"\n{action.detail}"
+                )
+            else:
+                told.append(f"{action.subject}: {action.detail}")
+        return "\n\n".join(told)
+
+    def stage_capture_proposal(self, *, operation_id: str) -> str:
+        """Land one unambiguously valid captured answer in its own destination.
+
+        No new gate, because there is no new decision: this is the same paid
+        call's own answer reaching the staging destination its confirmation
+        already named. The service itself refuses when the capture holds more
+        than one valid proposal, and no model-emittable field can narrow that
+        choice.
+        """
+
+        try:
+            fresh_config = ProjectConfig.load(self.config.root)
+            outcome = capture_recovery.stage_capture_proposal(
+                fresh_config, operation_id
+            )
+        except (JankiError, OSError, TypeError, ValueError) as exc:
+            raise RevisionRefusal(str(exc)) from exc
+        return (
+            f"Recovered the saved reply for model call {operation_id} into "
+            f"{self._display_path(fresh_config, outcome.target)}: "
+            f"{outcome.records} proposal(s). No call was made and nothing was "
+            "billed; they are unapproved staging for your review."
+        )
+
+    def _consume_study_job_intent(
+        self,
+        config: ProjectConfig,
+        intent: Any,
+        *,
+        answer: str,
+        deck_scope: str,
+    ) -> ChatReply:
+        """Route one closed study-job intent to the service that owns it."""
+
+        options = dict(intent.options)
+        concurrency = options.pop("concurrency_limit", None)
+        retry_indices = options.pop("retry_child_indices", None) or []
+        operation_id = options.pop("operation_id", None)
+        if options or intent.record_ids:
+            raise RevisionRefusal(
+                "A study job action carries no card targets and no choice "
+                "beyond how many sources to read at once, which model call to "
+                "read, and which children to send again."
+            )
+        # Every one of these names its job by the broker's own opaque identity.
+        # Nothing here accepts a path, and — for the capture actions and a
+        # retry — the model supplies one disclosed model call and nothing else:
+        # no part of §5.3's location tuple is a field it could carry.
+        if len(intent.resource_ids) != 1:
+            raise RevisionRefusal("A study job action names exactly one study job.")
+        if intent.kind in {"inspect_capture_proposals", "stage_capture_proposal"}:
+            if not isinstance(operation_id, str) or not operation_id.strip():
+                raise RevisionRefusal(
+                    "Reading or recovering a saved reply names the exact model "
+                    "call this job's own status disclosed."
+                )
+            if retry_indices or concurrency is not None:
+                raise RevisionRefusal(
+                    "A captured-reply action carries the model call and nothing "
+                    "else. Choosing between competing proposals is yours, over "
+                    "their exact locations."
+                )
+            job_id = self._resolve_study_job(config, intent.resource_ids[0])
+            self._require_job_child(config, job_id, operation_id)
+            told = (
+                self.inspect_capture_proposals_text(operation_id=operation_id)
+                if intent.kind == "inspect_capture_proposals"
+                else self.stage_capture_proposal(operation_id=operation_id)
+            )
+            return ChatReply(text=f"{answer}\n\n{told}")
+        if operation_id is not None and intent.kind != "retry_study_parts":
+            raise RevisionRefusal(
+                "Only reading or recovering a saved reply, or naming which "
+                "batch to send part of again, names a model call."
+            )
+        if intent.kind == "study_job_status":
+            job_id = self._resolve_study_job(config, intent.resource_ids[0])
+            return ChatReply(
+                text=f"{answer}\n\n{self.study_job_status_text(job_id=job_id)}"
+            )
+        if intent.kind == "resume_study_job":
+            job_id = self._resolve_study_job(config, intent.resource_ids[0])
+            return ChatReply(
+                text=(
+                    f"{answer}\n\n"
+                    + self.resume_study_job(job_id=job_id, progress=lambda _label: None)
+                )
+            )
+        if intent.kind == "extract_study_parts":
+            if retry_indices:
+                raise RevisionRefusal(
+                    "A first batch sends every selected part; naming children to "
+                    "send again is a retry."
+                )
+            if not isinstance(concurrency, int | None) or isinstance(concurrency, bool):
+                raise RevisionRefusal(
+                    "How many sources to read at once is a whole number from 1 to 4."
+                )
+            job_id = self._resolve_study_job(config, intent.resource_ids[0])
+            batch = self.prepare_study_job_batch(
+                job_id=job_id,
+                deck_scope=deck_scope,
+                concurrency_limit=2 if concurrency is None else concurrency,
+            )
+            confirm_label = batch.confirm_label
+        else:
+            # The batch is named by one of its own reserved model calls, which
+            # is what this job's snapshot disclosed and what `manage_operation`
+            # already takes. A bare batch id is not a disclosed resource — the
+            # turn's allowlist refuses it before this method is reached — and
+            # inventing a resource kind for it would widen what a model may
+            # name rather than fix what it may not.
+            if not isinstance(operation_id, str) or not operation_id.strip():
+                raise RevisionRefusal(
+                    "Sending part of a batch again names the study job and one "
+                    "of that batch's own model calls, exactly as this job's "
+                    "status disclosed them."
+                )
+            wanted = tuple(retry_indices)
+            if not wanted or len(set(wanted)) != len(wanted):
+                raise RevisionRefusal(
+                    "A retry names each source to send again exactly once."
+                )
+            job_id = self._resolve_study_job(config, intent.resource_ids[0])
+            # The same proof the capture actions take: the manifest that
+            # reserved this call has to embed this job.
+            self._require_job_child(config, job_id, operation_id)
+            batch = self.prepare_study_job_retry(
+                job_id=job_id,
+                batch_id=self._batch_of_operation(config, operation_id),
+                child_indices=wanted,
+            )
+            confirm_label = batch.confirm_label
+        prepared = _PreparedAgentAction(
+            kind=intent.kind,
+            focus_scope=deck_scope,
+            instruction=intent.instruction,
+            target=batch.target,
+            plan=batch,
+            job_id=job_id,
+        )
+        self._remember_agent_plan(batch.fingerprint, prepared)
+        return ChatReply(
+            text=answer,
+            action=AssistantRevisionPlan(
+                request_fingerprint=batch.fingerprint,
+                target=batch.target,
+                effects=batch.effects,
+                disclosures=batch.disclosures,
+                confirm_label=confirm_label,
+                progress_label="Preparing pages",
+            ),
+            action_instruction=intent.instruction,
         )
 
     def _batch_review_offer(self, batch_id: str, deck_scope: str) -> str:
@@ -5399,10 +6303,51 @@ class RevisionAssistantAdapter:
             except (JankiError, OSError, TypeError, ValueError) as exc:
                 raise RevisionRefusal(str(exc)) from exc
             path = self._display_path(fresh_config, execution.result.path)
+            if expected.job_parent_source is None:
+                return RevisionExecution(
+                    message=(
+                        f"Created {plan.request.name!r} at {path}. It is ready to "
+                        "receive explicitly assigned cards."
+                    ),
+                    finish=None,
+                    complete=True,
+                )
+            # The study job's local write rides inside this same owner action,
+            # after the deck actually exists. There is no second dialog and no
+            # new confirmation ladder: the protected decision was the deck, and
+            # a deck creation that refused leaves no job behind at all. The
+            # deck's hash comes from the bytes `create_study_deck` itself
+            # wrote, never from a re-read that a concurrent edit could change
+            # underneath it.
+            try:
+                job = study_job.open_study_job(
+                    fresh_config,
+                    kind="source_extraction",
+                    parent_source=expected.job_parent_source,
+                    deck_path=execution.result.path,
+                    deck_sha256=hashlib.sha256(
+                        execution.result.yaml_bytes
+                    ).hexdigest(),
+                )
+            except (JankiError, OSError, TypeError, ValueError) as exc:
+                raise RevisionRefusal(
+                    f"Created {plan.request.name!r} at {path}, but the study job "
+                    f"over {expected.job_parent_source.name} could not be "
+                    f"opened: {exc}. The deck is real; open the job against it "
+                    "rather than creating another deck. Run `janki study "
+                    f"new --source {expected.job_parent_source.name} --deck "
+                    f"{plan.service_plan.stem}`, or restart the workbench — it "
+                    "reads the decks it can focus on once, when it starts, so "
+                    "this one is not on its list yet — and then focus that "
+                    "deck and say “Manage study jobs”, which offers to start "
+                    f"a job over {expected.job_parent_source.name}."
+                ) from exc
             return RevisionExecution(
                 message=(
-                    f"Created {plan.request.name!r} at {path}. It is ready to "
-                    "receive explicitly assigned cards."
+                    f"Created {plan.request.name!r} at {path} and opened study "
+                    f"job {job.header.job_id} over "
+                    f"{job.header.parent_source_name}. Nothing has been sent to "
+                    "a model and nothing was published yet."
                 ),
                 finish=None,
                 complete=True,
@@ -5450,7 +6395,11 @@ class RevisionAssistantAdapter:
                 finish=None,
                 complete=True,
             )
-        if expected.kind == "extract_batch":
+        if expected.kind in {
+            "extract_batch",
+            "extract_study_parts",
+            "retry_study_parts",
+        }:
             batch = expected.plan
             with self._plan_lock:
                 held = (
@@ -5465,6 +6414,10 @@ class RevisionAssistantAdapter:
                 # Recomputed from the manifest the core still holds: a member,
                 # concurrency or discard edit since rendering changes this.
                 or held.plan.fingerprint != batch.fingerprint
+                # And the backlink is part of what was rendered: a plan that
+                # names a different job than the action prepared is not the
+                # plan this confirmation was taken over.
+                or held.plan.job_id != expected.job_id
             ):
                 raise RevisionRefusal(
                     "This batch action no longer matches the rendered plan. "
@@ -5472,17 +6425,32 @@ class RevisionAssistantAdapter:
                 )
             try:
                 fresh_config = ProjectConfig.load(self.config.root)
-                outcome = extraction_batch.dispatch_extraction_batch(
-                    fresh_config,
-                    held.plan,
-                    # Several calls are in flight, so "reading the source"
-                    # cannot say which. Every event names its numbered child.
-                    progress=lambda event: progress(
+                # Several calls are in flight, so "reading the source" cannot
+                # say which. Every event names its numbered child.
+                def report(event: Any) -> None:
+                    progress(
                         assistant_batch_surface.progress_label(
                             event, len(held.plan.children)
                         )
-                    ),
-                )
+                    )
+
+                if expected.job_id:
+                    # The job's intent is fsynced before any reservation, so an
+                    # interruption leaves reserved ids it can find the manifest
+                    # by. The owner's confirmation above is still the whole
+                    # authority for the calls themselves.
+                    outcome = study_job.dispatch_job_batch(
+                        fresh_config,
+                        expected.job_id,
+                        held.plan,
+                        progress=report,
+                    )
+                else:
+                    outcome = extraction_batch.dispatch_extraction_batch(
+                        fresh_config,
+                        held.plan,
+                        progress=report,
+                    )
             except (JankiError, OSError, TypeError, ValueError) as exc:
                 raise RevisionRefusal(str(exc)) from exc
             told = [assistant_batch_surface.batch_summary(outcome)]

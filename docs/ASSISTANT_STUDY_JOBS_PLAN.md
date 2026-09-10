@@ -5,24 +5,29 @@ at `55682fb`. The original planning document changed no production code,
 prompts, tests or data. The owner has now authorized implementing the plan;
 that authorization covers code, tests and documents only.
 
-**Where the work stands.** **S0 (§10) is complete.** It is implemented as tests
-and one new fixture only — `tests/test_anki_builder_contract.py`,
-`tests/test_conjugation.py`, `tests/test_operations.py`,
-`tests/fixtures/conjugation_golden.json` — with no production code change; its
-replacement tests are proven against their named mutants, it has passed an
-independent code review, and its `make gates` run on the integrated primary
-checkout reported 5285 passed, Ruff clean and the sample deck build successful
-in 422.91s (`/tmp/janki-study-s0-v2-main-gates.log`).
-**S1, S2 and S3 are under implementation** in separate worktrees (§10.3,
-wave 1); none of the three is integrated. **S4–S7 remain pending and
-unimplemented.**
+**Where the work stands.** **S0–S3 are complete and integrated on `main`.**
+Each landed its own mutation-proven tests, passed an independent code review,
+and had `make gates` run on the integrated primary checkout:
+
+| milestone | commit | integrated `make gates` |
+|---|---|---|
+| S0 — baseline fixture corrections (tests and one fixture only, no production change) | `a173976` | 5285 passed, Ruff clean, sample build, 422.91s |
+| S1 — media capabilities | `cf2eb3c` | 5313 passed, Ruff clean, sample build, 405.69s |
+| S2 — capture recovery | `3bcd222` | 5365 passed, Ruff clean, sample build, 454.96s |
+| S3 — source preparation (amendments A/B at `c71cbbb`, behaviour at `45c8bd3`) | `c71cbbb` + `45c8bd3` | 5410 passed, Ruff clean, sample build, 451.04s |
+
+**S4 is under implementation** against the integrated `45c8bd3` base (§10.3,
+wave 2). **S5–S7 remain pending and unimplemented.** S7's synthetic inputs and
+fake-provider fixtures may be prepared in parallel with S4, but preparing them
+is not S7 acceptance: the vertical slice passes only where §10's S7 row says it
+does.
 
 `78da954` already landed one narrow repair next to S1's area, and it is not S1.
 It classifies the exact deck document it was handed before collecting
 vocabulary **audio census** owners, so a `kind: kanji` character store is
 skipped by that exact-revision guard (`exporters/anki.py`) instead of being
 resolved as a word list; it changes no status behaviour and adds no capability
-registry. S1's `application/deck_capabilities.py` does not exist yet.
+registry.
 
 Authorizing implementation is not consent to disclose
 private source or card bytes to a paid model. Paid work is bought exactly as
@@ -191,7 +196,7 @@ the joins required before dependent behavior can land.
 | S1 | Media capabilities (§8) | S0 | new `application/deck_capabilities.py`; `application/audio.py`; `application/deck_package.py`; tests | A targeted vocabulary audio run no longer parses the character store; declared versions, inline overrides and drill owners are all protected; unknown kind refuses before any census, packaging or prune. Deletes the unconditional vocabulary parse of a `kanji` deck's `source:`. |
 | S2 | Capture recovery, operation-scoped (§5) | S0 | new `application/capture_recovery.py`; `application/extraction.py`, `staging.py`; `prompts/extract-table.md`, `-auto.md`, `-prose.md`; `prompts/README.md`; `cli_extract_batches.py`, `cli.py`; tests | Keyed by `operation_id` only: no job store and no `janki study` parser exists yet, and S4's `janki study recover` later calls this same still-supported service rather than replacing it. Fixture captures of every enumerated envelope shape stage offline; non-lossless shapes refuse with exact pointers; a valid successful terminal always wins; `capture_recovery` is a recognized staging metadata key and survives the archive. |
 | S3 | Source preparation (§3) + amendments A, B | S0 | new `application/source_parts.py`; `inputs.py`; `pyproject.toml`; workbench region-editor widget; `ai_schema.py`, `application/assistant_context.py`, `workbench/assistant_adapter.py`; `cli.py` (`janki source-parts`); `tests/fixtures/synthetic_table.pdf`; tests | The typed region editor needs its broker seam **now**: the closed source-editor intents (`open_source_part_editor`, recipe-token-bound `plan_source_parts`/publish) and the `source_part` `ResourceKind`, discovery and snapshot land here; S4 adds the job kind and job actions. `pyproject.toml` adds the optional `sources` extra **and `japanese-anki[sources]` to `[dev]`**, because `scripts/bootstrap.sh` installs `.[dev]` and a skip would report green for code nobody ran — the render and publication tests run for real, **no skips**. A synthetic PDF yields reviewed parts under a bound receipt published into `config.scan_inbox`; an interrupted publication resumes; rendering is confined to the worker process. Deletes `prompts/assistant-agent.md:150,153-154` and the `docs/DESIGN.md:337-338` parenthetical. |
-| S4 | Study job, job actions, CLI, busy replies, deck-creation integration (§1, §2, §9) + amendment E | S1–S3 | new `application/study_job.py`; `ai_schema.py`; `application/assistant_context.py`; `application/assistant_assignment.py`; `application/extraction_batch.py`; `workbench/assistant.py`, `assistant_adapter.py`, `assistant_batch_surface.py`; `cli.py`; tests | Adds the `study_job` kind, the job intents/actions of §9.1 and the optional `job_id` of §2.4 — a jobless manifest's bytes and fingerprints are unchanged. The job uses the consistent choice/intent/outcome writers and reserves the layout and owner-decision namespaces; S5 adds `append_layout` with its datatype, and S6 adds the decision controls. A job resumes after process death with no new approval; a new destination deck is created through the existing exact confirmation before batch planning, and the local job write rides inside it; local status, preview and capture inspection answer while a batch runs; a lost backlink is rediscovered by reserved id and hash. Deletes the generic "Earlier model call needs attention" branch for the batch-blocked case only. |
+| S4 | Study job, job actions, CLI, busy replies, deck-creation integration (§1, §2, §9) + amendment E | S1–S3 | new `application/study_job.py`, new `cli_study.py`; `ai_schema.py`; `application/assistant_context.py`; `application/assistant_assignment.py`; `application/extraction_batch.py`; `application/source_parts.py`; `workbench/assistant.py`, `assistant_adapter.py`, `assistant_batch_surface.py`, `source_part_editor.py`; `cli.py`; tests | Adds the `study_job` kind, the job intents/actions of §9.1 and the optional `job_id` of §2.4 — a jobless manifest's bytes and fingerprints are unchanged. The job uses the consistent choice/intent/outcome writers and reserves the layout and owner-decision namespaces; S5 adds `append_layout` with its datatype, and S6 adds the decision controls. A job resumes after process death with no new approval; a new destination deck is created through the existing exact confirmation before batch planning, and the local job write rides inside it; local status, preview and capture inspection answer while a batch runs; a lost backlink is rediscovered by reserved id and hash. Deletes the generic "Earlier model call needs attention" branch for the batch-blocked case only. |
 | S5 | Layout, `source_forms`, cross-part curation (§4, §6) + amendments C, D | S4 | `extract.py`, `models.py`, `io.py`, `staging.py`, `exporters/anki.py`, `card_preview.py`, `application/extraction.py`, `application/extraction_batch.py`, `application/card_change_staging.py`, `application/promotion.py`, `application/study_job.py`, new `application/study_curation.py`; `application/assistant_promotion.py`, `application/card_revision_finish.py`, `workbench/assistant_adapter.py`; `cli.py`, `cli_extract_batches.py`, `workbench/dispatch.py`, `workbench/render.py`, `workbench/server.py`; `ai_schema.py`, `application/assistant_context.py`; new `prompts/extract-table-layout.md`, `prompts/README.md`, `docs/CARD_DESIGN.md`; tests | Owns the whole layout/capture-propagation/curation capability set and its broker additions, and its amendments land before any of it is enabled. `application/extraction.py` carries the layout into the saved request manifest and reads it **back from that manifest** for recovery; `cli_extract_batches.py`, `plan_extraction_batch`, retries and the one whole-input `plan_extraction` call transport aligned per-child `layouts`, retaining the cross-input staging-collision check; dispatch expectations freeze the layout, and `plan_corpus_extraction`/`revalidate_extraction_request` reproduce it on initial dispatch and resume; the exact prompt-provenance validator requires `table_layout` only for the new mode, and `coverage_block` treats both table modes identically; every `extract.MODES` consumer is updated explicitly rather than silently widened — a `table-layout` mode with no bound layout refuses at the CLI, at `workbench/dispatch.py` and on the server's offered-mode route. `append_layout` atomically appends an immutable layout revision and updates its part binding; `staging.py` gains the prepare/apply pair with explicit field/cell **delete**; the pending-curation barrier lands in **both** `promotion.decide_promotion` (plan) and `promotion.execute_promotion` (execution) under the shared coordination lock taken **before** the sorted file locks. Acceptance: the response-schema fingerprint is byte-for-byte unchanged while the request fingerprint changes; `source_forms` round-trips through serializer, merge, exporter and preview; blank versus absent holds; ordinary unlabelled extraction stays fully supported; no historical record is mutated by loading it. Deletions: none. |
 | S6 | Projected review/promotion, prepared-writer finish, publication (§7) + amendment F | S5 | new `application/study_finish.py`; `card_preview.py`, `docs/CARD_DESIGN.md`; `application/promotion.py`, `application/coverage.py`, `staging.py`, `workbench/review.py`, `application/assistant_staging_review.py`, `application/assistant_staging_actions.py`, `application/assistant_promotion.py`, `application/enrichment.py`, `enrich.py`, `io.py`, `application/deck_package.py`, `application/character_notes.py`, `kanji.py`, `jpdb_kanji.py`; `workbench/assistant_packages.py`, `workbench/assistant_adapter.py`, `workbench/assistant.py`; `ai_schema.py`, `application/assistant_context.py`, `cli.py`; tests | Appends the finish actions, their broker schema and CLI, plus owner-only review/coverage/disposition editors and `janki study review`, `coverage`, `disposition` here; they save local choices and apply them only under the finish authority. S4 does not claim to implement these controls. Adds the source-review projection with the injected canonical chain and aggregate prepared pattern-store snapshot through `decide_promotion`/`check_pattern_review`, writer-prepared review/coverage/promotion/enrichment payloads (`coverage._approval_payload(approved_at=…)` frozen at prepare time), the `enrich.py` fact/record-snapshot decision helper, an explicit prepared `kanji_store` argument through the application projection, and frozen keyed `DictionaryFactBook`, and `deck_package` prepare/publish/recover. The package planner gains the two-store `reference_sha256` projection and `assert_projection_realized`; strict `_assert_same` remains for the resulting concrete plan. Prepared promotion/enrichment thread every frozen ledger date, and `staging.render_coverage_approval` factors the existing coverage writer into the coalesced prepare path. Free word-card reference preparation uses the prepared-facts seam in `application/character_notes.py` specified in §7.9 and binds the canonical `kanji.save_store` / `jpdb_kanji.save_readings` payloads in the authority — **no `kanji_notes` entry, no character note and no kanji card is created**. `source_forms` is preserved untouched through projection, promotion, enrichment and the archive. Acceptance: sentence audio defaults on, every expected example is linked canonically, each exported sound reference resolves to its packaged bytes, and final HTML audio plays (pending/opt-out states remain explicit); a crash at each phase boundary resumes from the durable intent rather than a lost return value; §9.6 completion holds; the package downloads in-thread. Deletes the hard-wired `kanji_finish.inspect_kanji_finish` call in `assistant_packages._resolve`. |
 | S7 | Vertical-slice acceptance | S6 | tests and docs only | The whole §1 journey runs **offline end to end** over the synthetic fixture with fake providers, and the CLI is proven equivalent over the same services, including review → literal owner coverage → disposition → finish for an unmeasured table, with no paid coverage call. A live run over a real private PDF with real paid calls is **optional**, needs the owner's exact source and call consent at the time it is made, and is not required to finish this work. |
@@ -208,8 +213,10 @@ the joins required before dependent behavior can land.
 `application/enrichment.py`, `kanji.py`,
 `jpdb_kanji.py`, `application/deck_package.py`,
 `application/assistant_context.py`, `application/assistant_assignment.py`,
+`application/source_parts.py`,
 `workbench/assistant.py`, `workbench/assistant_adapter.py`,
 `workbench/assistant_batch_surface.py`, `workbench/assistant_packages.py`,
+`workbench/source_part_editor.py`,
 `workbench/dispatch.py`, `workbench/render.py`, `workbench/server.py`,
 `cli.py`, `cli_extract_batches.py`, `pyproject.toml`,
 `prompts/extract-table.md`, `prompts/extract-auto.md`,
@@ -217,8 +224,19 @@ the joins required before dependent behavior can land.
 `docs/DESIGN.md`, `docs/CARD_DESIGN.md`, `docs/WORKBENCH_PLAN.md` (one pointer
 line in §W7), `AGENTS.md`, `README.md`, `docs/IMPORTING.md`.
 
+S4 owns two additions to the **Modified** list above, both signature-only
+seams its own callers need and neither a policy change: `source_parts.py`
+gains a `created_at` freeze so a new publication's receipt hash exists before
+the receipt is written (contracts §2.1's pre-effect `ActionIntent`, §7.1's
+existing rule that a writer's prepare freezes every date-bearing value), and
+`workbench/source_part_editor.py` carries the opening job through the editor
+session so a job-opened publish has a backlink. Neither receives a new
+capability: source-part receipts stay job-independent (§2.2), and `job_id`
+reaches the editor store from the adapter's own owner route, never from a
+posted request body.
+
 **New:** `application/deck_capabilities.py`, `application/source_parts.py`,
-`application/capture_recovery.py`, `application/study_job.py`,
+`application/capture_recovery.py`, `application/study_job.py`, `cli_study.py`,
 `application/study_curation.py`, `application/study_finish.py`,
 `prompts/extract-table-layout.md`, a workbench region/layout/curation editor
 widget, `tests/fixtures/synthetic_table.pdf`,

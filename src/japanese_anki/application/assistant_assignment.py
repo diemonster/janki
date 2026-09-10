@@ -45,6 +45,7 @@ __all__ = [
     "AssistantAssignmentPlan",
     "execute_assignment",
     "plan_assignment",
+    "plan_assignment_for_paths",
 ]
 
 
@@ -93,14 +94,26 @@ class AssistantAssignmentPlan:
                     "Assistant assignment targets must stay in their repository"
                 ) from exc
         for label, value in (
-            ("proposal resource id", self.proposal_resource_id),
-            ("destination resource id", self.destination_resource_id),
             ("instruction", self.instruction),
             ("source name", self.source_name),
             ("destination name", self.destination_name),
         ):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"Assistant assignment {label} must be nonblank")
+        # Both resource ids or neither. A plan keyed by two local paths carries
+        # neither, which is how `execute_assignment` knows to re-prepare it the
+        # same way it was planned; one of each would be a plan that cannot be
+        # re-prepared by either key.
+        if not isinstance(self.proposal_resource_id, str) or not isinstance(
+            self.destination_resource_id, str
+        ):
+            raise ValueError("Assistant assignment resource ids must be text")
+        if bool(self.proposal_resource_id.strip()) != bool(
+            self.destination_resource_id.strip()
+        ):
+            raise ValueError(
+                "Assistant assignment names both ends by resource id or neither"
+            )
         if not self.selected_record_ids or len(self.selected_record_ids) != len(
             set(self.selected_record_ids)
         ):
@@ -214,6 +227,21 @@ def _selected_ids(value: Sequence[str]) -> tuple[str, ...]:
     return selected
 
 
+def _require_assignable_proposal(target: ProposalContext) -> ProposalContext:
+    """The one proposal-kind rule, applied wherever a proposal is resolved.
+
+    Shared by both entry points on purpose: a path-keyed CLI assignment that
+    skipped it would stage a deck-revision proposal through the source
+    assignment writer.
+    """
+
+    if target.proposal_kind != "source_extraction":
+        raise AssistantAssignmentError(
+            "Assistant assignment accepts source-extraction proposals only."
+        )
+    return target
+
+
 def _resolve_proposal(config: ProjectConfig, resource_id: str) -> ProposalContext:
     if not isinstance(resource_id, str) or not resource_id.strip():
         raise AssistantAssignmentError(
@@ -225,11 +253,30 @@ def _resolve_proposal(config: ProjectConfig, resource_id: str) -> ProposalContex
         raise AssistantAssignmentError(
             f"Could not resolve Assistant proposal {resource_id!r}: {exc}"
         ) from exc
-    if target.proposal_kind != "source_extraction":
-        raise AssistantAssignmentError(
-            "Assistant assignment accepts source-extraction proposals only."
+    return _require_assignable_proposal(target)
+
+
+def _resolve_proposal_path(
+    config: ProjectConfig, proposal_path: Path
+) -> ProposalContext:
+    """Resolve one local staging path through the broker's own census.
+
+    Not a second reader: the path is turned back into the opaque identity the
+    broker discovered and read through exactly the containment, no-follow,
+    regular-file and proposal-kind checks the Assistant route uses, so a path
+    outside the staging census cannot be assigned from.
+    """
+
+    try:
+        broker = AssistantContextBroker(config)
+        target = broker.proposal_context(
+            broker.resource_id_for_proposal(proposal_path)
         )
-    return target
+    except AssistantContextError as exc:
+        raise AssistantAssignmentError(
+            f"Could not resolve the staging proposal {proposal_path.name!r}: {exc}"
+        ) from exc
+    return _require_assignable_proposal(target)
 
 
 def _resolve_destination(config: ProjectConfig, resource_id: str) -> Path:
@@ -265,6 +312,28 @@ def _resolve_destination(config: ProjectConfig, resource_id: str) -> Path:
             "decks before assigning cards."
         )
     return destination
+
+
+def _resolve_destination_path(
+    config: ProjectConfig, destination_path: Path
+) -> Path:
+    """The same destination rules, reached from a local deck path.
+
+    The path becomes the broker's opaque deck identity first, so the exact
+    configured-census, readability and stem-ambiguity refusals above are the
+    ones a CLI assignment meets too.
+    """
+
+    try:
+        resource_id = AssistantContextBroker(config).resource_id_for_deck(
+            destination_path
+        )
+    except (AssistantContextError, JankiError, OSError, ValueError) as exc:
+        raise AssistantAssignmentError(
+            f"Could not resolve the destination deck "
+            f"{destination_path.name!r}: {exc}"
+        ) from exc
+    return _resolve_destination(config, resource_id)
 
 
 def _captured_proposal(
@@ -401,21 +470,28 @@ def _locked_assignment_dependencies(
         yield
 
 
-def _prepare(
+def _prepare_resolved(
     config: ProjectConfig,
     *,
+    target: ProposalContext,
+    destination: Path,
     proposal_resource_id: str,
     destination_resource_id: str,
     record_ids: Sequence[str],
     instruction: str,
 ) -> AssistantAssignmentPlan:
+    """Plan the assignment once both ends are already resolved and checked.
+
+    The two public entry points differ only in how they resolve those ends —
+    opaque Assistant identities or local paths — so everything a confirmation
+    is compared against is computed here, once.
+    """
+
     if not isinstance(instruction, str) or not instruction.strip():
         raise AssistantAssignmentError(
             "Assistant assignment needs the owner's nonblank instruction."
         )
     selected = _selected_ids(record_ids)
-    target = _resolve_proposal(config, proposal_resource_id)
-    destination = _resolve_destination(config, destination_resource_id)
     snapshot, records, metadata = _captured_proposal(target)
 
     by_id: dict[str, list[tuple[int, VocabularyRecord]]] = {}
@@ -556,6 +632,35 @@ def _prepare(
     )
 
 
+def plan_assignment_for_paths(
+    config: ProjectConfig,
+    *,
+    proposal_path: Path,
+    destination_path: Path,
+    record_ids: Sequence[str],
+    instruction: str,
+) -> AssistantAssignmentPlan:
+    """The same plan, keyed by two already-validated local paths.
+
+    What the CLI and a study job call. Both paths are resolved through the
+    broker's own census before anything is read, and the plan they produce
+    carries no resource ids — so :func:`execute_assignment` re-prepares it by
+    the same key it was planned with.
+    """
+
+    target = _resolve_proposal_path(config, Path(proposal_path))
+    destination = _resolve_destination_path(config, Path(destination_path))
+    return _prepare_resolved(
+        config,
+        target=target,
+        destination=destination,
+        proposal_resource_id="",
+        destination_resource_id="",
+        record_ids=record_ids,
+        instruction=instruction,
+    )
+
+
 def plan_assignment(
     config: ProjectConfig,
     *,
@@ -566,12 +671,43 @@ def plan_assignment(
 ) -> AssistantAssignmentPlan:
     """Plan one exact multi-card staging assignment without writing."""
 
-    return _prepare(
+    return _prepare_resolved(
         config,
+        target=_resolve_proposal(config, proposal_resource_id),
+        destination=_resolve_destination(config, destination_resource_id),
         proposal_resource_id=proposal_resource_id,
         destination_resource_id=destination_resource_id,
         record_ids=record_ids,
         instruction=instruction,
+    )
+
+
+def _reprepare(
+    config: ProjectConfig, expected: AssistantAssignmentPlan
+) -> AssistantAssignmentPlan:
+    """Plan again by exactly the key the confirmed plan was planned with.
+
+    A path-keyed plan re-resolved by resource id — or the reverse — would be a
+    different resolution wearing the same fingerprint, which is the one thing
+    the comparison below cannot catch.
+    """
+
+    # A plan carries both resource ids or neither — its own invariant — so
+    # this is the whole choice.
+    if expected.proposal_resource_id:
+        return plan_assignment(
+            config,
+            proposal_resource_id=expected.proposal_resource_id,
+            destination_resource_id=expected.destination_resource_id,
+            record_ids=expected.selected_record_ids,
+            instruction=expected.instruction,
+        )
+    return plan_assignment_for_paths(
+        config,
+        proposal_path=expected.proposal_path,
+        destination_path=expected.destination_path,
+        record_ids=expected.selected_record_ids,
+        instruction=expected.instruction,
     )
 
 
@@ -587,13 +723,7 @@ def execute_assignment(
         )
     try:
         with _locked_assignment_dependencies(config, expected.proposal_path):
-            fresh = _prepare(
-                config,
-                proposal_resource_id=expected.proposal_resource_id,
-                destination_resource_id=expected.destination_resource_id,
-                record_ids=expected.selected_record_ids,
-                instruction=expected.instruction,
-            )
+            fresh = _reprepare(config, expected)
             if (
                 fresh.fingerprint != expected.fingerprint
                 or fresh.projection_wire != expected.projection_wire
