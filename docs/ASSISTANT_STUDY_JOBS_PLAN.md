@@ -5,7 +5,7 @@ at `55682fb`. The original planning document changed no production code,
 prompts, tests or data. The owner has now authorized implementing the plan;
 that authorization covers code, tests and documents only.
 
-**Where the work stands.** **S0–S4 are complete and integrated on `main`.**
+**Where the work stands.** **S0–S5 are complete and integrated on `main`.**
 Each landed its own mutation-proven tests, passed an independent code review,
 and had `make gates` run on the integrated primary checkout:
 
@@ -16,14 +16,20 @@ and had `make gates` run on the integrated primary checkout:
 | S2 — capture recovery | `3bcd222` | 5365 passed, Ruff clean, sample build, 454.96s |
 | S3 — source preparation (amendments A/B at `c71cbbb`, behaviour at `45c8bd3`) | `c71cbbb` + `45c8bd3` | 5410 passed, Ruff clean, sample build, 451.04s |
 | S4 — study job, job actions, CLI, busy replies, deck-creation integration (authority at `43990b1`, behaviour at `2a3338e`) | `43990b1` + `2a3338e` | 5504 passed, 774 pre-existing warnings, Ruff clean, sample build, 464.21s |
+| S5 — layout, `source_forms`, cross-part curation (amendments C/D at `f05a3e8`, behaviour at `0e53007`) | `f05a3e8` + `0e53007` | 5642 passed, 800 warnings, Ruff clean, sample build, 562.97s |
 
-**S5 is under implementation** against the integrated `2a3338e` base, with its
-C/D amendments already committed at `f05a3e8` (§10.3, wave 3). **S6–S7 remain
-pending and unimplemented.** S7's synthetic inputs and fake-provider fixtures
-may be prepared in parallel, but preparing them is not S7 acceptance: the
-vertical slice passes only where §10's S7 row says it does. Test modules
-prepared ahead of a milestone are candidates for its owner to adopt and prove,
-not acceptance for it.
+**S6 and S7 remain pending and unimplemented**, and so does DESIGN amendment F
+(§11), which precedes S6's behaviour (§10.3, wave 4): no
+`application/study_finish.py` and no `janki study review`/`coverage`/
+`disposition`/`finish` control exists yet.
+[ASSISTANT_STUDY_JOBS_HANDOFF.md](ASSISTANT_STUDY_JOBS_HANDOFF.md) is the
+self-contained handoff for resuming at S6 and then S7; it records the committed
+S5 APIs those milestones build on, the limits of S5's evidence, and which
+reference artifacts are conveniences rather than acceptance. S7's synthetic
+inputs and fake-provider fixtures may be prepared in parallel, but preparing
+them is not S7 acceptance: the vertical slice passes only where §10's S7 row
+says it does. Test modules prepared ahead of a milestone are candidates for its
+owner to adopt and prove, not acceptance for it.
 
 `78da954` already landed one narrow repair next to S1's area, and it is not S1.
 It classifies the exact deck document it was handed before collecting
