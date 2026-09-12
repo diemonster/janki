@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import hmac
 import os
 import stat
 import threading
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -52,12 +53,30 @@ from japanese_anki.models import (
 
 __all__ = [
     "PanelRequestError",
+    "PartialReviewBatchError",
     "PartialReviewError",
+    "PreparedReview",
+    "PreparedReviewBatch",
+    "PreparedReviewPart",
+    "ReviewBatchOutcome",
+    "ReviewBatchRequest",
     "ReviewOutcome",
     "IndeterminateWriteError",
     "ReviewPanel",
+    "apply_prepared_review",
+    "apply_prepared_review_batch",
+    "apply_prepared_review_batch_under_locks",
+    "apply_prepared_review_under_locks",
     "bound_replace",
     "bound_replace_under_lock",
+    "prepare_review_batch",
+    "recover_prepared_review",
+    "recover_prepared_review_batch",
+    "recover_prepared_review_batch_under_locks",
+    "recover_prepared_review_under_locks",
+    "review_batch_path_locks",
+    "review_path_locks",
+    "review_target_paths",
     "ReviewPanelError",
     "StaleReviewError",
     "parse_review_form",
@@ -68,6 +87,9 @@ _FORM_SINGLETONS = frozenset(
     {"csrf", "staging_snapshot", "patterns_snapshot", "action", "patterns"}
 )
 _FORM_FIELDS = _FORM_SINGLETONS | {"record"}
+
+#: The part name a single-panel review carries inside the aggregate writer.
+_ONE_PANEL = ""
 
 
 class ReviewPanelError(JankiError):
@@ -108,16 +130,21 @@ def _fingerprint(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def _bound_replace_unlocked(
-    path: Path, text: str, snapshot: bytes, *, label: str
+def _bound_replace_digest(
+    path: Path, text: str, expected_sha256: str, *, label: str
 ) -> None:
-    """CAS one rendered snapshot after the caller settles the path lock."""
+    """CAS one captured revision after the caller settles the path lock.
+
+    The bound side is named by its digest rather than its bytes so a durable
+    prepared review can replay this exact write without carrying a second copy
+    of every file it replaces.
+    """
     intended = text.encode("utf-8")
     try:
         atomic_write_text_bound(
             path,
             text,
-            expected_revision=_fingerprint(snapshot),
+            expected_revision=expected_sha256,
         )
     except Exception as exc:
         try:
@@ -133,7 +160,7 @@ def _bound_replace_unlocked(
             or "refusing to replace non-regular" in message
         ):
             raise StaleReviewError(f"The {label} changed at the final review write") from exc
-        if live == snapshot:
+        if live is not None and _fingerprint(live) == expected_sha256:
             raise ReviewPanelError(
                 f"Could not save the {label}; its captured bytes remain unchanged: {exc}"
             ) from exc
@@ -142,6 +169,13 @@ def _bound_replace_unlocked(
             "restart the panel and inspect the recorded decisions",
             intended_bytes_are_live=live == intended,
         ) from exc
+
+
+def _bound_replace_unlocked(
+    path: Path, text: str, snapshot: bytes, *, label: str
+) -> None:
+    """CAS one rendered snapshot after the caller settles the path lock."""
+    _bound_replace_digest(path, text, _fingerprint(snapshot), label=label)
 
 
 def bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None:
@@ -194,11 +228,25 @@ def _capture_regular_bytes(
     path: Path, description: str, *, absent_ok: bool = False
 ) -> bytes:
     """Capture bytes after recovering any interrupted guarded publication."""
+    captured, _absent = _capture_regular_state(path, description, absent_ok=absent_ok)
+    return captured
+
+
+def _capture_regular_state(
+    path: Path, description: str, *, absent_ok: bool = False
+) -> tuple[bytes, bool]:
+    """The captured bytes, and whether the file was absent when they were taken.
+
+    An absent pattern store captures as ``{}`` so the panel can open at all,
+    but a *durable* preparation has to keep the two apart: ``{}`` is also a
+    store somebody can really write, and a recovery that read the one as the
+    other would compare-and-swap against bytes that were never there.
+    """
     try:
-        return read_bytes_bound(path)
+        return read_bytes_bound(path), False
     except FileNotFoundError:
         if absent_ok:
-            return b"{}"
+            return b"{}", True
         raise ReviewPanelError(
             f"{description} must remain a direct regular non-symlink file during capture: {path}"
         ) from None
@@ -220,16 +268,662 @@ def _active_staging_path(path: Path, staging_dir: Path) -> Path:
     return candidate
 
 
+def review_target_paths(
+    staging_path: Path, *, staging_dir: Path, patterns_path: Path
+) -> tuple[Path, Path]:
+    """The two exact paths a review writes, proved to be the right shapes.
+
+    Factored out of :meth:`ReviewPanel.open` so a durable prepared review can
+    be re-bound to a *live* configuration before it writes anything. The
+    staging file must be a direct regular non-symlink member of the configured
+    active directory; the pattern store must be the configured file, absent or
+    a direct regular non-symlink. Both names are lexical: resolving them first
+    would accept an alias for the file whose bytes the owner actually reviewed.
+    """
+    active = _active_staging_path(staging_path, staging_dir)
+    pattern_path = _absolute(patterns_path)
+    _require_regular_non_symlink(pattern_path, "The pattern store", absent_ok=True)
+    return active, pattern_path
+
+
 @contextlib.contextmanager
-def _sorted_path_locks(paths: Iterable[Path]):
+def _sorted_path_locks(paths: Sequence[Path]):
     """Lock distinct real targets in one process-wide deterministic order."""
-    real = {Path(os.path.realpath(path)) for path in paths}
-    if len(real) != 2:
+    targets = [Path(os.path.realpath(path)) for path in paths]
+    if len(set(targets)) != len(targets):
         raise ReviewPanelError("The staging file and pattern store must be distinct")
     with ExitStack() as stack:
-        for path in sorted(real, key=os.fspath):
+        for path in sorted(set(targets), key=os.fspath):
             stack.enter_context(exclusive_path_lock(path))
         yield
+
+
+def review_path_locks(prepared: PreparedReview):
+    """The two review locks, in the one deterministic order every caller takes.
+
+    Exported because a coordinator that already owns these paths applies its
+    prepared review through the ``_under_locks`` entrypoints; `exclusive_path_lock`
+    is deliberately non-reentrant, so a second acquisition here would deadlock.
+    """
+    return _sorted_path_locks((Path(prepared.staging.path), Path(prepared.patterns.path)))
+
+
+def review_batch_path_locks(batch: PreparedReviewBatch):
+    """Every path an aggregate review writes, in that same one order."""
+    return _sorted_path_locks(
+        [Path(part.staging.path) for part in batch.parts] + [Path(batch.patterns.path)]
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedReview:
+    """Everything one confirmed staging review would write, computed first.
+
+    Two paths, one payload each. Review and coverage target the **same**
+    staging path, so their pure renderings are composed in memory into one
+    final after-text rather than published one after the other: an
+    intermediate review-only document is a state no owner approved and no
+    recovery can classify.
+    """
+
+    components: tuple[staging.PreparedComponent, ...]
+    record_ids: tuple[str, ...] = ()
+    review_patterns: bool = False
+    #: record id -> the exact ``example_authority`` wire value this review
+    #: binds. The projection applies the same flags; a coordinator compares
+    #: the two rather than trusting that they agree.
+    expected_authority: Mapping[str, str] = field(default_factory=dict)
+    #: The frozen ISO date of the composed coverage approval, or None when
+    #: this review records no coverage decision.
+    coverage_approved_at: str | None = None
+
+    def __post_init__(self) -> None:
+        roles = [component.role for component in self.components]
+        if roles != ["staging", "patterns"]:
+            raise ReviewPanelError(
+                "A prepared review binds exactly one staging and one pattern "
+                f"component, in that order, not {roles}"
+            )
+
+    @property
+    def staging(self) -> staging.PreparedComponent:
+        return self.components[0]
+
+    @property
+    def patterns(self) -> staging.PreparedComponent:
+        return self.components[1]
+
+    @property
+    def outcome(self) -> ReviewOutcome:
+        """What a complete apply of this intent reports."""
+        return ReviewOutcome(self.record_ids, self.review_patterns)
+
+    def as_batch(
+        self, *, part_name: str = _ONE_PANEL, source: str = ""
+    ) -> PreparedReviewBatch:
+        """This one panel's review as the aggregate the writer applies.
+
+        The pattern component is already this review's single final payload,
+        because a one-panel review has exactly one part contributing to it.
+        """
+        return PreparedReviewBatch(
+            parts=(
+                PreparedReviewPart(
+                    part_name=part_name,
+                    source=source,
+                    staging=self.staging,
+                    record_ids=self.record_ids,
+                    review_patterns=self.review_patterns,
+                    expected_authority=self.expected_authority,
+                    coverage_approved_at=self.coverage_approved_at,
+                ),
+            ),
+            patterns=self.patterns,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "components": [component.to_dict() for component in self.components],
+            "record_ids": list(self.record_ids),
+            "review_patterns": self.review_patterns,
+            "expected_authority": dict(self.expected_authority),
+            "coverage_approved_at": self.coverage_approved_at,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> PreparedReview:
+        try:
+            approved_at = raw["coverage_approved_at"]
+            return cls(
+                components=tuple(
+                    staging.PreparedComponent.from_dict(item)
+                    for item in raw["components"]
+                ),
+                record_ids=tuple(str(item) for item in raw["record_ids"]),
+                review_patterns=bool(raw["review_patterns"]),
+                expected_authority={
+                    str(key): str(value)
+                    for key, value in dict(raw["expected_authority"]).items()
+                },
+                coverage_approved_at=(
+                    None if approved_at is None else str(approved_at)
+                ),
+            )
+        except (KeyError, TypeError, ValueError, staging.StagingError) as exc:
+            raise ReviewPanelError(
+                f"A recorded review intent is unreadable: {exc}"
+            ) from exc
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewBatchRequest:
+    """One part's owner choices, as an aggregate preparation receives them."""
+
+    part_name: str
+    staging_path: Path
+    record_ids: tuple[str, ...] = ()
+    review_patterns: bool = False
+    coverage_approval: Mapping[str, Any] | None = None
+    #: The staging bytes this choice was taken over, when the caller has them.
+    expected_revision: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedReviewPart:
+    """One part's staging half of an aggregate review.
+
+    The pattern store is **not** here. §7.6 gives it one final after-payload
+    for the whole batch, because every part writes the same file: two parts
+    each preparing their own before/after pair for it bind two different
+    after-digests over one path, and whichever lands second finds the store at
+    neither of its own — so the second part's review can never be applied or
+    recovered, and its staging half never lands either.
+    """
+
+    part_name: str
+    source: str
+    staging: staging.PreparedComponent
+    record_ids: tuple[str, ...] = ()
+    review_patterns: bool = False
+    expected_authority: Mapping[str, str] = field(default_factory=dict)
+    coverage_approved_at: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.staging.role != "staging":
+            raise ReviewPanelError(
+                f"A prepared review part binds a staging component, not "
+                f"{self.staging.role!r}"
+            )
+
+    @property
+    def outcome_when_complete(self) -> ReviewOutcome:
+        """What this part reports once the whole batch has been applied."""
+        return ReviewOutcome(self.record_ids, self.review_patterns)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "part_name": self.part_name,
+            "source": self.source,
+            "staging": self.staging.to_dict(),
+            "record_ids": list(self.record_ids),
+            "review_patterns": self.review_patterns,
+            "expected_authority": dict(self.expected_authority),
+            "coverage_approved_at": self.coverage_approved_at,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> PreparedReviewPart:
+        try:
+            approved_at = raw["coverage_approved_at"]
+            return cls(
+                part_name=str(raw["part_name"]),
+                source=str(raw["source"]),
+                staging=staging.PreparedComponent.from_dict(raw["staging"]),
+                record_ids=tuple(str(item) for item in raw["record_ids"]),
+                review_patterns=bool(raw["review_patterns"]),
+                expected_authority={
+                    str(key): str(value)
+                    for key, value in dict(raw["expected_authority"]).items()
+                },
+                coverage_approved_at=(
+                    None if approved_at is None else str(approved_at)
+                ),
+            )
+        except (KeyError, TypeError, ValueError, staging.StagingError) as exc:
+            raise ReviewPanelError(
+                f"A recorded review intent is unreadable: {exc}"
+            ) from exc
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewBatchOutcome:
+    """What one aggregate review saved, per part."""
+
+    parts: Mapping[str, ReviewOutcome] = field(default_factory=dict)
+
+
+class PartialReviewBatchError(ReviewPanelError):
+    """At least one part's exact monotonic approval landed before a failure."""
+
+    def __init__(self, message: str, outcome: ReviewBatchOutcome) -> None:
+        super().__init__(message)
+        self.outcome = outcome
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedReviewBatch:
+    """Every part's staging payload over **one** final pattern-store payload.
+
+    One before/after pair per distinct path, which is what §7.6 asks apply and
+    recovery to precheck. The single-part case is the ordinary panel submit,
+    and it goes through the same writer rather than a second copy of it.
+    """
+
+    parts: tuple[PreparedReviewPart, ...]
+    patterns: staging.PreparedComponent
+
+    def __post_init__(self) -> None:
+        if not self.parts:
+            raise ReviewPanelError("A prepared review batch binds at least one part")
+        if self.patterns.role != "patterns":
+            raise ReviewPanelError(
+                f"A prepared review batch binds a pattern component, not "
+                f"{self.patterns.role!r}"
+            )
+        names = [part.part_name for part in self.parts]
+        if len(set(names)) != len(names):
+            raise ReviewPanelError("Each part in one review batch has its own name")
+        paths = [Path(part.staging.path).absolute() for part in self.parts]
+        if len(set(paths)) != len(paths):
+            raise ReviewPanelError("Each part in one review batch has its own file")
+        if Path(self.patterns.path).absolute() in set(paths):
+            raise ReviewPanelError(
+                "The staging file and pattern store must be distinct"
+            )
+
+    @property
+    def components(self) -> tuple[staging.PreparedComponent, ...]:
+        """Every distinct path this batch binds, in the order it writes them."""
+        return (*(part.staging for part in self.parts), self.patterns)
+
+    def part(self, part_name: str) -> PreparedReviewPart | None:
+        for item in self.parts:
+            if item.part_name == part_name:
+                return item
+        return None
+
+    @property
+    def outcome(self) -> ReviewBatchOutcome:
+        """What a complete apply of this intent reports."""
+        return ReviewBatchOutcome(
+            {part.part_name: part.outcome_when_complete for part in self.parts}
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "parts": [part.to_dict() for part in self.parts],
+            "patterns": self.patterns.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> PreparedReviewBatch:
+        try:
+            return cls(
+                parts=tuple(
+                    PreparedReviewPart.from_dict(item) for item in raw["parts"]
+                ),
+                patterns=staging.PreparedComponent.from_dict(raw["patterns"]),
+            )
+        except (KeyError, TypeError, ValueError, staging.StagingError) as exc:
+            raise ReviewPanelError(
+                f"A recorded review intent is unreadable: {exc}"
+            ) from exc
+
+
+def _review_component(
+    role: str, path: Path, *, before: str | None, after_text: str | None
+) -> staging.PreparedComponent:
+    """One review component, with absence preserved as its own before-state."""
+    return staging.PreparedComponent(
+        role=role,
+        path=str(path),
+        expected_before=before,
+        expected_after=(
+            before
+            if after_text is None
+            else _fingerprint(after_text.encode("utf-8"))
+        ),
+        after_text=after_text,
+    )
+
+
+def _live_component_bytes(path: Path, description: str) -> bytes | None:
+    """The bytes at one bound path, or ``None`` when the path is absent."""
+    try:
+        return read_bytes_bound(path)
+    except FileNotFoundError:
+        return None
+    except (JankiError, OSError) as exc:
+        raise ReviewPanelError(
+            f"{description} must remain a direct regular non-symlink file during capture: {path}"
+        ) from exc
+
+
+def _component_state(
+    component: staging.PreparedComponent, *, description: str, label: str
+) -> str:
+    """``"pending"``, ``"complete"``, or a refusal naming both bound digests."""
+    live = _live_component_bytes(Path(component.path), description)
+    observed = None if live is None else _fingerprint(live)
+    if observed == component.expected_before:
+        return "pending" if component.writes else "complete"
+    if observed == component.expected_after:
+        return "complete"
+    raise StaleReviewError(
+        f"The {label} changed after this review page was rendered "
+        f"(expected {component.expected_before} before or "
+        f"{component.expected_after} after, found {observed})"
+    )
+
+
+def _apply_prepared_review_batch_under_locks(
+    batch: PreparedReviewBatch, *, resume: bool
+) -> ReviewBatchOutcome:
+    """Write one aggregate review's whole component vector, prechecked first.
+
+    Every bound path — each part's staging file and the one pattern store — is
+    measured before **any** byte is written, so a stale later target cannot be
+    discovered after an earlier one has already landed. ``resume`` allows a
+    component already at its after-state, which is how a crash between two of
+    the writes finishes from the intent alone; an ordinary submit requires all
+    of them to be exactly where it read them.
+
+    The parts are written in the order the batch carries them — §7.2's
+    ascending published part name — and the single pattern payload last, so a
+    second interruption leaves the same recoverable shape.
+    """
+    states: dict[str, str] = {}
+    for part in batch.parts:
+        label = _part_label(batch, part)
+        state = _component_state(
+            part.staging, description="The active staging file", label=label
+        )
+        if state == "complete" and part.staging.writes and not resume:
+            raise StaleReviewError(
+                f"The {label} changed after this review page was rendered"
+            )
+        states[part.part_name] = state
+    patterns_state = _component_state(
+        batch.patterns, description="The pattern store", label="pattern store"
+    )
+    if patterns_state == "complete" and batch.patterns.writes and not resume:
+        raise StaleReviewError(
+            "The pattern store changed after this review page was rendered"
+        )
+
+    saved: dict[str, ReviewOutcome] = {}
+    for part in batch.parts:
+        if not part.staging.writes:
+            saved[part.part_name] = ReviewOutcome()
+            continue
+        if states[part.part_name] == "pending":
+            try:
+                _bound_replace_digest(
+                    Path(part.staging.path),
+                    part.staging.after_text or "",
+                    part.staging.expected_before or "",
+                    label=_part_label(batch, part),
+                )
+            except IndeterminateWriteError as exc:
+                saved[part.part_name] = ReviewOutcome(
+                    part.record_ids if exc.intended_bytes_are_live else (),
+                    False,
+                )
+                raise PartialReviewBatchError(
+                    str(exc), ReviewBatchOutcome(saved)
+                ) from exc
+        saved[part.part_name] = ReviewOutcome(part.record_ids, False)
+
+    # There is a deliberately tiny process-crash window between two requested
+    # atomic replaces. A WAL would be disproportionate for independent,
+    # idempotent, monotonic review marks. Once the first exact approval lands
+    # it is never rolled back: doing so could erase a concurrent human edit
+    # made before a later failure. A prepared review closes that window a
+    # second way — the persisted intent replays the missing write exactly.
+    if batch.patterns.writes and patterns_state == "pending":
+        try:
+            _bound_replace_digest(
+                Path(batch.patterns.path),
+                batch.patterns.after_text or "",
+                batch.patterns.expected_before or "",
+                label="pattern store",
+            )
+        except IndeterminateWriteError as exc:
+            raise PartialReviewBatchError(
+                str(exc),
+                _with_pattern_marks(batch, saved, reviewed=exc.intended_bytes_are_live),
+            ) from exc
+        except (StaleReviewError, ReviewPanelError) as exc:
+            if any(outcome.accepted_record_ids for outcome in saved.values()):
+                raise PartialReviewBatchError(
+                    f"The card approval was saved, but the pattern review was not: {exc}",
+                    ReviewBatchOutcome(saved),
+                ) from exc
+            raise
+    # One report for both shapes, so `PreparedReviewBatch.outcome` — what a
+    # complete apply of this intent says — is the value a complete apply
+    # actually returns. A batch whose selected marks were already `true` writes
+    # nothing and still reports those parts reviewed; a batch where nobody
+    # selected one reports every part `False`, exactly as before.
+    return _with_pattern_marks(batch, saved, reviewed=True)
+
+
+def _part_label(batch: PreparedReviewBatch, part: PreparedReviewPart) -> str:
+    """How one part's staging file is named in a refusal.
+
+    An ordinary one-panel submit says "staging file", because naming the part
+    would be noise about the only file in the request.
+    """
+    if len(batch.parts) == 1:
+        return "staging file"
+    return f"staging file for {part.part_name}"
+
+
+def _with_pattern_marks(
+    batch: PreparedReviewBatch,
+    saved: Mapping[str, ReviewOutcome],
+    *,
+    reviewed: bool,
+) -> ReviewBatchOutcome:
+    """The saved outcomes, with the shared pattern mark reported per part.
+
+    One store write, and only the parts whose owner selected the mark report
+    it: a part that chose nothing never claims a pattern review because some
+    other part's choice wrote the file. ``reviewed`` says whether this pass's
+    store payload is live, which is why a completed apply passes ``True`` even
+    when there was nothing to write — a part that selected an entry already
+    marked `true` has its review recorded either way.
+    """
+    return ReviewBatchOutcome(
+        {
+            part.part_name: ReviewOutcome(
+                saved[part.part_name].accepted_record_ids,
+                reviewed and part.review_patterns,
+            )
+            for part in batch.parts
+        }
+    )
+
+
+def prepare_review_batch(
+    requests: Sequence[ReviewBatchRequest],
+    *,
+    staging_dir: Path,
+    patterns_path: Path,
+    collection_name: str = "",
+) -> PreparedReviewBatch:
+    """Freeze every part's review over **one** captured pattern store.
+
+    §7.2 and §7.6. The parts are ordered by published part name, every panel is
+    opened while all of the paths are locked — so every part sees the same
+    store bytes — and the selected marks are composed one after another over
+    that one capture. The result is a single final pattern payload every part
+    shares, rather than several independently prepared writes to one path that
+    bind different after-digests and refuse each other.
+
+    Publishes nothing: a batch that is never applied leaves no trace.
+    """
+    if not requests:
+        raise ReviewPanelError("An aggregate review prepares at least one part")
+    ordered = sorted(requests, key=lambda request: request.part_name)
+    names = [request.part_name for request in ordered]
+    if len(set(names)) != len(names):
+        raise ReviewPanelError("Each part in one review batch has its own name")
+    resolved = [
+        review_target_paths(
+            request.staging_path, staging_dir=staging_dir, patterns_path=patterns_path
+        )
+        for request in ordered
+    ]
+    pattern_path = resolved[0][1]
+    staging_paths = [active for active, _pattern in resolved]
+    if len(set(staging_paths)) != len(staging_paths):
+        raise ReviewPanelError("Each part in one review batch has its own file")
+
+    with _sorted_path_locks([*staging_paths, pattern_path]):
+        panels = [
+            ReviewPanel.open_under_lock(
+                active,
+                staging_dir=staging_dir,
+                patterns_path=pattern_path,
+                collection_name=collection_name,
+            )
+            for active in staging_paths
+        ]
+        for request, panel in zip(ordered, panels, strict=True):
+            if request.expected_revision is not None and not hmac.compare_digest(
+                panel.staging_fingerprint, request.expected_revision
+            ):
+                raise StaleReviewError(
+                    f"[staging-review-stale] {panel.staging_path.name} changed "
+                    "before its review could be prepared; nothing was reviewed."
+                )
+        first = panels[0]
+        for panel in panels[1:]:
+            # Read under one set of locks at one moment, so two different
+            # captures of the same path would mean the store moved under them.
+            if (
+                panel.patterns_bytes != first.patterns_bytes
+                or panel.patterns_absent != first.patterns_absent
+            ):
+                raise StaleReviewError(
+                    "The pattern store changed while this review was prepared"
+                )
+        parts = tuple(
+            panel.prepare_part(
+                part_name=request.part_name,
+                record_ids=request.record_ids,
+                review_patterns=request.review_patterns,
+                coverage_approval=request.coverage_approval,
+                retain_marked_patterns=True,
+            )
+            for request, panel in zip(ordered, panels, strict=True)
+        )
+        captured = first._captured_pattern_text()
+        composed = captured
+        # §7.2 exactly: once per selected source entry **whose mark is false**.
+        # An already-true entry is left alone — the owner's choice is retained
+        # in the part, and it contributes no write — and a second part naming
+        # an entry an earlier one already marked has nothing left to change
+        # either.
+        marked: set[str] = set()
+        for part, panel in zip(parts, panels, strict=True):
+            if part.review_patterns and not panel.pattern_marked:
+                if panel.source in marked:
+                    continue
+                composed = panel.render_reviewed_pattern_store(composed)
+                marked.add(panel.source)
+        return PreparedReviewBatch(
+            parts=parts,
+            patterns=_review_component(
+                "patterns",
+                pattern_path,
+                before=None if first.patterns_absent else first.patterns_fingerprint,
+                after_text=None if composed == captured else composed,
+            ),
+        )
+
+
+def apply_prepared_review_batch_under_locks(
+    batch: PreparedReviewBatch,
+) -> ReviewBatchOutcome:
+    """Apply one aggregate review while the caller holds every review lock."""
+    return _apply_prepared_review_batch_under_locks(batch, resume=False)
+
+
+def apply_prepared_review_batch(batch: PreparedReviewBatch) -> ReviewBatchOutcome:
+    """Take every review lock in order, then apply one aggregate review."""
+    with review_batch_path_locks(batch):
+        return _apply_prepared_review_batch_under_locks(batch, resume=False)
+
+
+def recover_prepared_review_batch_under_locks(
+    batch: PreparedReviewBatch,
+) -> ReviewBatchOutcome:
+    """Finish one partially applied aggregate review, locks already held."""
+    return _apply_prepared_review_batch_under_locks(batch, resume=True)
+
+
+def recover_prepared_review_batch(batch: PreparedReviewBatch) -> ReviewBatchOutcome:
+    """Finish one partially applied aggregate review from its intent alone."""
+    with review_batch_path_locks(batch):
+        return _apply_prepared_review_batch_under_locks(batch, resume=True)
+
+
+def _apply_prepared_review_under_locks(
+    prepared: PreparedReview, *, resume: bool
+) -> ReviewOutcome:
+    """One prepared review through the aggregate writer that owns these paths.
+
+    A single panel is a batch of one. There is one low-level writer, so the
+    ordinary submit and a study job's whole reviewed phase precheck, write and
+    recover by the same rules — and the one-panel outcomes and refusals are
+    exactly what they always were.
+    """
+    batch = prepared.as_batch()
+    try:
+        outcome = _apply_prepared_review_batch_under_locks(batch, resume=resume)
+    except PartialReviewBatchError as exc:
+        raise PartialReviewError(str(exc), exc.outcome.parts[_ONE_PANEL]) from exc
+    return outcome.parts[_ONE_PANEL]
+
+
+def apply_prepared_review_under_locks(prepared: PreparedReview) -> ReviewOutcome:
+    """Apply one prepared review while the caller holds both review locks."""
+    return _apply_prepared_review_under_locks(prepared, resume=False)
+
+
+def apply_prepared_review(prepared: PreparedReview) -> ReviewOutcome:
+    """Take both review locks in order, then apply one prepared review."""
+    with review_path_locks(prepared):
+        return _apply_prepared_review_under_locks(prepared, resume=False)
+
+
+def recover_prepared_review_under_locks(prepared: PreparedReview) -> ReviewOutcome:
+    """Finish one partially applied review from its intent, locks already held."""
+    return _apply_prepared_review_under_locks(prepared, resume=True)
+
+
+def recover_prepared_review(prepared: PreparedReview) -> ReviewOutcome:
+    """Finish one partially applied review from its persisted intent alone.
+
+    From the intent, and from nothing else: a returned value that was never
+    persisted is not evidence, and neither is a writer's state label. Each
+    bound path is re-measured against its own before/after pair, the missing
+    writes are finished, and a path at neither digest refuses and names both.
+    """
+    with review_path_locks(prepared):
+        return _apply_prepared_review_under_locks(prepared, resume=True)
 
 
 def _staged_lineage(
@@ -393,6 +1087,9 @@ class ReviewPanel:
     #: `enrich --ai` review written before those files carried a marker: what
     #: they name as their source is the collection itself.
     collection_name: str = ""
+    #: Whether ``patterns_bytes`` is the synthetic ``{}`` of a project that
+    #: has no pattern store rather than a store that really holds one.
+    patterns_absent: bool = False
     _submission_lock: threading.RLock = field(
         default_factory=threading.RLock,
         repr=False,
@@ -407,10 +1104,8 @@ class ReviewPanel:
         patterns_path: Path,
         collection_name: str = "",
     ) -> ReviewPanel:
-        active_path = _active_staging_path(staging_path, staging_dir)
-        pattern_path = _absolute(patterns_path)
-        _require_regular_non_symlink(
-            pattern_path, "The pattern store", absent_ok=True
+        active_path, pattern_path = review_target_paths(
+            staging_path, staging_dir=staging_dir, patterns_path=patterns_path
         )
         with _sorted_path_locks((active_path, pattern_path)):
             return cls.open_under_lock(
@@ -433,16 +1128,14 @@ class ReviewPanel:
 
         # Recheck after acquiring the locks: a cooperating writer may have
         # replaced either file while this process was waiting.
-        active_path = _active_staging_path(staging_path, staging_dir)
-        pattern_path = _absolute(patterns_path)
-        _require_regular_non_symlink(
-            pattern_path, "The pattern store", absent_ok=True
+        active_path, pattern_path = review_target_paths(
+            staging_path, staging_dir=staging_dir, patterns_path=patterns_path
         )
         staging_bytes = _capture_regular_bytes(active_path, "The active staging file")
         # An absent store captures as an empty document rather than refusing:
         # there is nothing to compare-and-swap against, and pattern review is
         # unavailable for such a project anyway.
-        patterns_bytes = _capture_regular_bytes(
+        patterns_bytes, patterns_absent = _capture_regular_state(
             pattern_path,
             "The pattern store",
             absent_ok=True,
@@ -489,6 +1182,7 @@ class ReviewPanel:
             staging_bytes=staging_bytes,
             patterns_bytes=patterns_bytes,
             collection_name=collection_name,
+            patterns_absent=patterns_absent,
         )
 
     @property
@@ -550,14 +1244,30 @@ class ReviewPanel:
 
     @property
     def pattern_reviewable(self) -> bool:
-        return (
-            self.pattern_warning is None
-            and self.pattern_set is not None
-            and not self.pattern_set.reviewed
-        )
+        return self.pattern_selectable and not self.pattern_marked
+
+    @property
+    def pattern_selectable(self) -> bool:
+        """Whether this panel's store entry is one a review may name at all.
+
+        Lineage only. Whether the mark is already `true` is a separate
+        question, because §7.2 answers it differently for one panel and for an
+        aggregate: the page renders a settled entry display-only, while a batch
+        retains the owner's choice and simply has nothing to write for it.
+        """
+        return self.pattern_warning is None and self.pattern_set is not None
+
+    @property
+    def pattern_marked(self) -> bool:
+        """Whether the captured store already records this source as reviewed."""
+        return self.pattern_set is not None and self.pattern_set.reviewed
 
     def _validate_actions(
-        self, record_ids: Sequence[str], review_patterns: bool
+        self,
+        record_ids: Sequence[str],
+        review_patterns: bool,
+        *,
+        retain_marked_patterns: bool = False,
     ) -> tuple[str, ...]:
         selected = tuple(record_ids)
         if len(selected) != len(set(selected)):
@@ -577,17 +1287,24 @@ class ReviewPanel:
                 "This source did not come from an extraction, so its sentences "
                 "have no proposal to approve"
             )
-        if review_patterns and not self.pattern_reviewable:
-            if self.pattern_warning is not None or self.pattern_set is None:
+        if review_patterns:
+            if not self.pattern_selectable:
                 raise PanelRequestError(
                     "Pattern review is unavailable because the current store lineage "
                     "does not exactly match this staging run"
                 )
-            raise PanelRequestError("The pattern set is already reviewed and display-only")
+            if self.pattern_marked and not retain_marked_patterns:
+                raise PanelRequestError(
+                    "The pattern set is already reviewed and display-only"
+                )
         return selected
 
     def validate_actions(
-        self, record_ids: Sequence[str], review_patterns: bool
+        self,
+        record_ids: Sequence[str],
+        review_patterns: bool,
+        *,
+        retain_marked_patterns: bool = False,
     ) -> tuple[str, ...]:
         """Validate one exact review selection without writing it.
 
@@ -597,137 +1314,270 @@ class ReviewPanel:
         must be able to prove that the exact selected rows and pattern action
         are currently offerable without manufacturing approval merely by
         planning them.
+
+        ``retain_marked_patterns`` is §7.2's aggregate rule and nothing wider:
+        a selected mark that is already `true` is *retained* rather than
+        refused, and contributes no write. Only :meth:`prepare_part`'s batch
+        caller passes it; the ordinary page keeps its display-only refusal.
         """
 
-        return self._validate_actions(record_ids, review_patterns)
+        return self._validate_actions(
+            record_ids,
+            review_patterns,
+            retain_marked_patterns=retain_marked_patterns,
+        )
 
-    def submit(self, *, record_ids: Sequence[str], review_patterns: bool) -> ReviewOutcome:
-        selected = self.validate_actions(record_ids, review_patterns)
-        if not selected and not review_patterns:
-            return ReviewOutcome()
-        with self._submission_lock, _sorted_path_locks((self.staging_path, self.patterns_path)):
-            try:
-                _active_staging_path(self.staging_path, self.staging_dir)
-                # Absent stays acceptable here, exactly as at open. Strict, a
-                # card approval on a project with no pattern store was refused
-                # with "a review target path changed" — nothing had changed,
-                # the store never existed, and the approval writes only the
-                # staging file.
-                _require_regular_non_symlink(
-                    self.patterns_path, "The pattern store", absent_ok=True
-                )
-            except ReviewPanelError as exc:
-                raise StaleReviewError(
-                    "A review target path changed after this page was rendered"
-                ) from exc
-            live_staging = read_bytes_bound(self.staging_path)
-            live_patterns = _capture_regular_bytes(
-                self.patterns_path,
-                "The pattern store",
-                absent_ok=True,
+    def _reviewed_records(self, selected: Sequence[str]) -> list[VocabularyRecord]:
+        """The captured rows with exact example fingerprints on the selected ones.
+
+        Uses only the exact objects and bytes rendered in the browser. The
+        advisory locks coordinate janki writers; the expected-revision bound
+        replaces are what stop a non-cooperating editor at the final seam.
+        """
+        by_id = {record.id: index for index, record in enumerate(self.records)}
+        updated = list(self.records)
+        for record_id in selected:
+            record = updated[by_id[record_id]]
+            updated[by_id[record_id]] = set_example_flags(
+                record,
+                EXAMPLE_AUTHORITY_KEY,
+                (example.japanese for example in record.examples if example.japanese),
             )
-            if live_staging != self.staging_bytes:
-                raise StaleReviewError(
-                    "The staging file changed after this review page was rendered"
-                )
-            if live_patterns != self.patterns_bytes:
-                raise StaleReviewError(
-                    "The pattern store changed after this review page was rendered"
-                )
-            # Every transformation below uses only the exact objects and bytes
-            # rendered in the browser. The advisory locks coordinate janki
-            # writers; the expected-revision bound replaces below are what stop
-            # a non-cooperating editor at the final seam.
-            by_id = {record.id: index for index, record in enumerate(self.records)}
-            updated = list(self.records)
-            for record_id in selected:
-                record = updated[by_id[record_id]]
-                updated[by_id[record_id]] = set_example_flags(
-                    record,
-                    EXAMPLE_AUTHORITY_KEY,
-                    (example.japanese for example in record.examples if example.japanese),
-                )
+        return updated
 
+    def _reviewed_store(self) -> dict[str, patterns.PatternSet]:
+        assert self.pattern_set is not None  # proved by _validate_actions
+        updated_store = dict(self.store)
+        updated_store[self.source] = replace(self.pattern_set, reviewed=True)
+        return updated_store
+
+    def render_reviewed_pattern_store(self, captured_text: str) -> str:
+        """This part's owner-selected mark applied to a captured store text.
+
+        Takes the text rather than reading `self.patterns_bytes`, because §7.2
+        composes **all** the selected marks over one captured store: part two
+        renders over part one's result, so the batch's single final payload
+        carries every part's mark and one part's choice cannot erase another's.
+        `patterns.render_reviewed_update` refuses an already-true mark, and it
+        keeps that refusal: it is the raw renderer, and §7.2's "apply it once
+        per selected entry **whose mark is false**" is the caller's rule. The
+        batch composition below applies it only where the mark changes.
+        """
+        try:
+            return patterns.render_reviewed_update(
+                captured_text,
+                self.source,
+                source=str(self.patterns_path),
+            )
+        except (UnicodeError, patterns.PatternError) as exc:
+            raise ReviewPanelError(
+                f"Could not render the exact pattern review: {exc}"
+            ) from exc
+
+    def prepare_part(
+        self,
+        *,
+        part_name: str = "",
+        record_ids: Sequence[str],
+        review_patterns: bool,
+        coverage_approval: Mapping[str, Any] | None = None,
+        retain_marked_patterns: bool = False,
+    ) -> PreparedReviewPart:
+        """This part's staging half of a review, computed without writing.
+
+        The staging payload is whole: the review marks and the owner's exact
+        coverage payload composed over the same captured bytes, in that order.
+        The pattern store is left to the batch, which owns its one final
+        payload — including whether this part's selected mark has anything to
+        contribute to it, which is what ``retain_marked_patterns`` allows.
+        """
+        selected = self.validate_actions(
+            record_ids, review_patterns, retain_marked_patterns=retain_marked_patterns
+        )
+        reviewed = self._reviewed_records(selected)
+        staging_text: str | None = None
+        if selected or coverage_approval is not None:
             try:
-                staging_text = (
-                    staging.render_example_authority_updates(
-                        self.staging_bytes.decode("utf-8", errors="strict"),
-                        updated,
+                text = self.staging_bytes.decode("utf-8", errors="strict")
+                if selected:
+                    # First, and over the exact captured browser bytes: the
+                    # surgical renderer's whole promise is that it edits the
+                    # snapshot the owner saw, one authority line per reviewed
+                    # row, leaving every other byte alone.
+                    text = staging.render_example_authority_updates(
+                        text,
+                        reviewed,
                         source=str(self.staging_path),
                     )
-                    if selected
-                    else None
-                )
+                if coverage_approval is not None:
+                    # Then the coverage approval, whose whole-document
+                    # round-trip is the writer `record_coverage_approval`
+                    # already proves preserves comments and unknown keys. The
+                    # two do not commute byte-wise, so the order is part of
+                    # the contract rather than a detail.
+                    text = staging.render_coverage_approval(
+                        text,
+                        coverage_approval,
+                        source=str(self.staging_path),
+                    )
+                staging_text = text
             except (UnicodeError, staging.StagingError) as exc:
                 raise ReviewPanelError(
                     f"Could not render the exact staging approval: {exc}"
                 ) from exc
-            updated_store = dict(self.store)
-            patterns_text: str | None = None
-            if review_patterns:
-                assert self.pattern_set is not None  # proved by _validate_actions
-                updated_store[self.source] = replace(self.pattern_set, reviewed=True)
-                try:
-                    patterns_text = patterns.render_reviewed_update(
-                        self.patterns_bytes.decode("utf-8", errors="strict"),
-                        self.source,
-                        source=str(self.patterns_path),
-                    )
-                except (UnicodeError, patterns.PatternError) as exc:
-                    raise ReviewPanelError(
-                        f"Could not render the exact pattern review: {exc}"
-                    ) from exc
+        by_id = {record.id: record for record in reviewed}
+        approved_at = (
+            coverage_approval.get("approved_at")
+            if coverage_approval is not None
+            else None
+        )
+        return PreparedReviewPart(
+            part_name=part_name,
+            source=self.source,
+            staging=_review_component(
+                "staging",
+                self.staging_path,
+                before=self.staging_fingerprint,
+                after_text=staging_text,
+            ),
+            record_ids=selected,
+            review_patterns=review_patterns,
+            expected_authority={
+                record_id: str(
+                    by_id[record_id].source.raw_fields[EXAMPLE_AUTHORITY_KEY]
+                )
+                for record_id in selected
+            },
+            coverage_approved_at=None if approved_at is None else str(approved_at),
+        )
 
-            saved = ReviewOutcome()
-            if staging_text is not None:
-                try:
-                    bound_replace_under_lock(
-                        self.staging_path,
-                        staging_text,
-                        self.staging_bytes,
-                        label="staging file",
-                    )
-                except IndeterminateWriteError as exc:
-                    outcome = ReviewOutcome(
-                        selected if exc.intended_bytes_are_live else (),
-                        False,
-                    )
-                    raise PartialReviewError(str(exc), outcome) from exc
-                saved = ReviewOutcome(selected, False)
+    def prepare(
+        self,
+        *,
+        record_ids: Sequence[str],
+        review_patterns: bool,
+        coverage_approval: Mapping[str, Any] | None = None,
+    ) -> PreparedReview:
+        """The exact bytes this review would write, computed without writing.
 
-            # There is a deliberately tiny process-crash window between two
-            # requested atomic replaces. A WAL would be disproportionate for
-            # independent, idempotent, monotonic review marks. Once the first
-            # exact approval lands it is never rolled back: doing so could
-            # erase a concurrent human edit made before a later failure.
-            if patterns_text is not None:
-                try:
-                    bound_replace_under_lock(
-                        self.patterns_path,
-                        patterns_text,
-                        self.patterns_bytes,
-                        label="pattern store",
-                    )
-                except IndeterminateWriteError as exc:
-                    outcome = ReviewOutcome(
-                        saved.accepted_record_ids,
-                        exc.intended_bytes_are_live,
-                    )
-                    raise PartialReviewError(str(exc), outcome) from exc
-                except (StaleReviewError, ReviewPanelError) as exc:
-                    if saved.accepted_record_ids:
-                        raise PartialReviewError(
-                            f"The card approval was saved, but the pattern review was not: {exc}",
-                            saved,
-                        ) from exc
-                    raise
-                saved = ReviewOutcome(saved.accepted_record_ids, True)
+        Side-effect-free on every published target: it reads nothing beyond the
+        snapshot the panel already captured and publishes nothing another reader
+        treats as content.
 
-            if staging_text is not None:
-                self.records = updated
-                self.staging_bytes = staging_text.encode("utf-8")
-            if patterns_text is not None:
-                self.store = updated_store
-                self.pattern_set = updated_store[self.source]
-                self.patterns_bytes = patterns_text.encode("utf-8")
+        Selecting nothing is a legitimate preparation, unlike submitting
+        nothing. A study job folds every part it owns, including one whose rows
+        were reviewed and whose coverage was accepted on an earlier pass; that
+        part still has to be *bound*, so both components come back at the same
+        before and after digest — an external edit to either still refuses the
+        apply — and applying writes nothing. The alternative was fabricating an
+        owner decision nobody made.
+
+        ``coverage_approval`` is the owner's exact payload with its frozen
+        approval date, when the same click also records one. It is **composed
+        into the same staging after-text** rather than written separately: the
+        two pure renderers run over the same captured bytes, so no
+        review-only intermediate document is ever published and one
+        compare-and-swap covers both decisions. Supplying a payload grants no
+        coverage authority — the caller brings one it already holds.
+        """
+        part = self.prepare_part(
+            record_ids=record_ids,
+            review_patterns=review_patterns,
+            coverage_approval=coverage_approval,
+        )
+        patterns_text: str | None = None
+        if review_patterns:
+            patterns_text = self.render_reviewed_pattern_store(
+                self._captured_pattern_text()
+            )
+        return PreparedReview(
+            components=(
+                part.staging,
+                _review_component(
+                    "patterns",
+                    self.patterns_path,
+                    before=None if self.patterns_absent else self.patterns_fingerprint,
+                    after_text=patterns_text,
+                ),
+            ),
+            record_ids=part.record_ids,
+            review_patterns=part.review_patterns,
+            expected_authority=part.expected_authority,
+            coverage_approved_at=part.coverage_approved_at,
+        )
+
+    def _captured_pattern_text(self) -> str:
+        """The captured store bytes as text, or a refusal naming the store."""
+        try:
+            return self.patterns_bytes.decode("utf-8", errors="strict")
+        except UnicodeError as exc:
+            raise ReviewPanelError(
+                f"Could not render the exact pattern review: {exc}"
+            ) from exc
+
+    def _recheck_targets(self) -> None:
+        """Prove both review paths are still the shapes this panel captured."""
+        try:
+            _active_staging_path(self.staging_path, self.staging_dir)
+            # Absent stays acceptable here, exactly as at open. Strict, a
+            # card approval on a project with no pattern store was refused
+            # with "a review target path changed" — nothing had changed,
+            # the store never existed, and the approval writes only the
+            # staging file.
+            _require_regular_non_symlink(
+                self.patterns_path, "The pattern store", absent_ok=True
+            )
+        except ReviewPanelError as exc:
+            raise StaleReviewError(
+                "A review target path changed after this page was rendered"
+            ) from exc
+
+    def submit(self, *, record_ids: Sequence[str], review_patterns: bool) -> ReviewOutcome:
+        """Write one review, taking the shared curation guard outermost.
+
+        §6.5 and contracts §7.5: the staging mutation coordination guard comes
+        before any other lock on **every** entry that writes staged bytes, and
+        this is the ordinary one — the workbench review page and the Assistant's
+        confirmed review both land here. A caller already inside the guard uses
+        :meth:`submit_under_guard`; `io.exclusive_path_lock` is not re-entrant,
+        so taking it twice from one thread deadlocks rather than nesting.
+        """
+        # Imported at call time, not at module scope: the curation service
+        # reads the study job store, which reaches the application aggregate,
+        # and this module sits below it in the import graph. Promotion's
+        # `_pending_curation` takes the same route for the same reason.
+        from japanese_anki.application import study_curation
+
+        selected = self.validate_actions(record_ids, review_patterns)
+        if not selected and not review_patterns:
+            # Nothing staged changes, so there is nothing for the guard to
+            # coordinate. Checked before it is taken, so a no-op review never
+            # waits behind a curation.
+            return ReviewOutcome()
+        with study_curation.staging_curation_guard(self.staging_dir):
+            return self.submit_under_guard(
+                record_ids=selected, review_patterns=review_patterns
+            )
+
+    def submit_under_guard(
+        self, *, record_ids: Sequence[str], review_patterns: bool
+    ) -> ReviewOutcome:
+        """Write one review while the caller already holds the shared guard."""
+        selected = self.validate_actions(record_ids, review_patterns)
+        if not selected and not review_patterns:
+            return ReviewOutcome()
+        with self._submission_lock, _sorted_path_locks((self.staging_path, self.patterns_path)):
+            self._recheck_targets()
+            prepared = self.prepare(
+                record_ids=selected,
+                review_patterns=review_patterns,
+            )
+            saved = apply_prepared_review_under_locks(prepared)
+            if prepared.staging.after_text is not None:
+                self.records = self._reviewed_records(selected)
+                self.staging_bytes = prepared.staging.after_text.encode("utf-8")
+            if prepared.patterns.after_text is not None:
+                self.store = self._reviewed_store()
+                self.pattern_set = self.store[self.source]
+                self.patterns_bytes = prepared.patterns.after_text.encode("utf-8")
             return saved

@@ -660,7 +660,14 @@ class Ledger:
                 f"Could not read ledger {self.path}: {exc.strerror or exc}"
             ) from exc
 
-    def _serialized(self) -> str:
+    def serialized_text(self) -> str:
+        """The exact bytes :meth:`save` would write, without writing them.
+
+        Public because a prepared study-finish intent has to bind this
+        component's ``expected_after`` before its first mutation: a digest of
+        a payload that is recomputed at apply time is not a digest of anything
+        durable. Pure — it reads no file and touches no clock.
+        """
         payload = {
             **self.extra,
             "version": LEDGER_VERSION,
@@ -675,7 +682,7 @@ class Ledger:
 
     def _save_locked(self) -> None:
         """Save while the caller owns this ledger path's exclusive lock."""
-        text = self._serialized()
+        text = self.serialized_text()
         if self.guarded and self._text_on_disk() != self.baseline:
             raise LedgerError(
                 f"Ledger {self.path} changed on disk since it was read; "
@@ -687,6 +694,21 @@ class Ledger:
         except DataError as exc:
             raise LedgerError(str(exc)) from exc
         self.baseline = text
+
+    def save_under_lock(self) -> None:
+        """:meth:`save` for a caller that already owns this ledger's path lock.
+
+        Public for the same reason :meth:`serialized_text` is: §7.5 requires
+        one promotion transaction to hold canonical *and* ledger from before
+        its vector is measured until after its last write, and
+        `io.exclusive_path_lock` is not re-entrant, so the writer inside that
+        span cannot take this path's lock a second time. Every failure is still
+        a :class:`LedgerError`.
+        """
+        try:
+            self._save_locked()
+        except DataError as exc:
+            raise LedgerError(str(exc)) from exc
 
     def save(self) -> None:
         """Write the whole file atomically, in a stable order.

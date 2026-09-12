@@ -26,8 +26,47 @@ and had `make gates` run on the integrated primary checkout:
 [S6 interface record](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md). The serializer
 passed `make gates` (5651 tests, 800 warnings, Ruff clean, sample build) and
 nine production mutation checks.
-**Next is S6-P (review and promotion), then S6-E, S6-B, the finish coordinator
-and surfaces, and S7**, sequentially as recorded in the interface document.
+
+**S6-P (review and promotion) is complete in this revision, reviewed and
+gated.** Its actual signatures, wires and ownership
+exceptions are recorded in
+[S6 interface record §2.5–§2.8 and §4](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md).
+It exposes no finish control, CLI flag or Assistant action, per §10.3. Its
+evidence includes focused pytest runs, production mutation checks and three
+independent code-review rounds. Round 2 is clean in its reviewed scope, and
+the integration lead verified its conclusions against the source and probes.
+
+**Review round 1's findings are fixed.** An independent
+review found three defects — the missing aggregate pattern-store payload for a
+multi-part review, a resumed `nothing_lands` part with archive retries raising
+out of its own result invariant, and an already-archived row disclosed as
+`excluded` — and root found two more with runtime probes: recovery released the
+deck lock before the canonical replay it authorized, and it never re-asked the
+deck-input binding the ordinary writer refuses on. All five are fixed in the
+working tree with failing-first tests and a 16/16 production-mutation sweep.
+
+**Two of those fixes were incomplete, and root's probes reproduced both.**
+`recover_promotion_intent` finished *every* intent from its frozen payloads,
+including one at which nothing had been written — so §7.7's unstarted
+re-decision was skipped on that entry and a pattern-only intent whose store
+entry had stopped being reviewed archived it anyway. And the aggregate review
+still called the single-panel validation unchanged, so a batch containing one
+already-reviewed selected part refused whole instead of retaining that mark and
+preparing the parts that still needed one, which is what §7.2 asks for. Both
+are fixed with failing-first tests and a 9/9 mutation sweep.
+**Integrated validation passed.** The first `make gates` run reported
+2 failed, 5741 passed and 800 warnings; it stopped before the sample build.
+Both failures intercepted functions superseded by this refactor. The tests now
+use the shared id-census helper and locked canonical writer, preserving their
+original concurrency assertions. Both affected modules pass (120 tests), and
+two production mutations still trigger the precise assertions they protect;
+production bytes were restored exactly. Narrow review round 3 is clean, and
+the integration lead verified its conclusions. Final `make gates` passed
+**5743 tests**, with 800 warnings, Ruff clean and the sample deck built
+(523.58s). All 374 frozen source/test/document hashes still matched after the
+run. This revision closes S6-P; **S6-E is next**.
+**S6-E, S6-B, the finish coordinator and surfaces, and S7 are not started**,
+and follow sequentially as recorded in the interface document.
 These remaining capabilities are unimplemented: no
 `application/study_finish.py` and no `janki study review`/`coverage`/
 `disposition`/`finish` control exists yet.

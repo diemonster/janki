@@ -865,7 +865,7 @@ def test_the_shared_result_names_a_partial_ledger_commit(
     )
     monkeypatch.setattr(
         cli.ledger.Ledger,
-        "save",
+        "_save_locked",
         lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
     )
 
@@ -2646,7 +2646,7 @@ def test_record_promotion_holds_the_done_lock_through_canonical_writes(
 
     writer = Thread(target=complete_zero_row_archive)
     writer.start()
-    real_save_records = promotion_application.save_records_json
+    real_save_records = promotion_application.save_records_json_locked
     acquired_before_save: list[bool] = []
 
     def observe_canonical_save(*args: Any, **kwargs: Any) -> None:
@@ -2656,7 +2656,7 @@ def test_record_promotion_holds_the_done_lock_through_canonical_writes(
         real_save_records(*args, **kwargs)
 
     monkeypatch.setattr(
-        promotion_application, "save_records_json", observe_canonical_save
+        promotion_application, "save_records_json_locked", observe_canonical_save
     )
 
     assert cli.main(
@@ -4192,7 +4192,7 @@ def test_failed_staged_ai_ledger_save_keeps_the_live_review(
     )
     monkeypatch.setattr(
         cli.ledger.Ledger,
-        "save",
+        "_save_locked",
         lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
     )
 
@@ -4228,7 +4228,7 @@ def test_rerunning_a_failed_staged_ai_ledger_save_recovers_attribution(
         [proposal],
         meta,
     )
-    real_save = cli.ledger.Ledger.save
+    real_save = cli.ledger.Ledger._save_locked
     calls = 0
 
     def fail_once(book: cli.ledger.Ledger) -> None:
@@ -4238,7 +4238,7 @@ def test_rerunning_a_failed_staged_ai_ledger_save_recovers_attribution(
             raise cli.ledger.LedgerError("disk full")
         real_save(book)
 
-    monkeypatch.setattr(cli.ledger.Ledger, "save", fail_once)
+    monkeypatch.setattr(cli.ledger.Ledger, "_save_locked", fail_once)
 
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
     assert cli.main(command) == 1
@@ -4278,7 +4278,7 @@ def test_failed_staged_ai_retry_refuses_a_third_field_value(
     )
     monkeypatch.setattr(
         cli.ledger.Ledger,
-        "save",
+        "_save_locked",
         lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
     )
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]

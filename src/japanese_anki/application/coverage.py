@@ -41,9 +41,11 @@ __all__ = [
     "CoveragePreview",
     "CoverageRunError",
     "CoverageRunResult",
+    "OwnerCoverageApproval",
     "approve_coverage_as_owner",
     "plan_coverage",
     "plan_model_coverage",
+    "prepare_owner_coverage_approval",
     "project_coverage",
     "run_model_coverage",
 ]
@@ -384,13 +386,37 @@ def _approval_payload(
     *,
     authority: Literal["repository-owner", "model"],
     reason: str,
+    approved_at: str | None = None,
 ) -> dict[str, Any]:
+    """The exact approval record one decision would write.
+
+    ``approved_at`` defaults to today, which is what an owner or model approval
+    taken now means. A prepared study finish supplies the date its own
+    preparation froze instead: the payload is part of a durable intent whose
+    ``expected_after`` digest has to be the same on the day of a crash and the
+    day after it, and a payload that reads the clock at apply time is a
+    different file every midnight.
+    """
     block = decision.block
     if block is None:
         raise CoverageApplicationError("This staging file has no coverage to approve.")
     cleaned = reason.strip()
     if not cleaned:
         raise CoverageApplicationError("A coverage decision needs a non-empty reason.")
+    if approved_at is None:
+        frozen = date.today().isoformat()
+    else:
+        try:
+            if (
+                not isinstance(approved_at, str)
+                or date.fromisoformat(approved_at).isoformat() != approved_at
+            ):
+                raise ValueError
+        except (TypeError, ValueError) as exc:
+            raise CoverageApplicationError(
+                "A frozen coverage approval date must use YYYY-MM-DD."
+            ) from exc
+        frozen = approved_at
     payload: dict[str, Any] = {
         "authority": authority,
         "source_fingerprint": block["source_fingerprint"],
@@ -399,7 +425,7 @@ def _approval_payload(
         "coverage_block_fingerprint": staging.coverage_block_fingerprint(block),
         **staging.coverage_acceptance_requirements(block),
         "reason": cleaned,
-        "approved_at": date.today().isoformat(),
+        "approved_at": frozen,
     }
     if authority == "model":
         payload.update(
@@ -416,13 +442,55 @@ def _approval_payload(
     return payload
 
 
-def approve_coverage_as_owner(
+@dataclass(frozen=True, slots=True)
+class OwnerCoverageApproval:
+    """One owner coverage decision, frozen before anything is written.
+
+    The payload carries its own ``approved_at``, so the same bytes land on the
+    day the owner decided and on the day a resume finishes the write. It is
+    not authority by itself: the caller brings the owner's exact decision, and
+    this only fixes what recording it would say.
+    """
+
+    staging_path: Path
+    staging_revision: str
+    payload: Mapping[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "staging_path": str(self.staging_path),
+            "staging_revision": self.staging_revision,
+            "payload": dict(self.payload),
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> OwnerCoverageApproval:
+        try:
+            return cls(
+                staging_path=Path(str(raw["staging_path"])),
+                staging_revision=str(raw["staging_revision"]),
+                payload=dict(raw["payload"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CoverageApplicationError(
+                f"A recorded coverage approval is unreadable: {exc}"
+            ) from exc
+
+
+def prepare_owner_coverage_approval(
     config: ProjectConfig,
     decision: CoverageDecision,
     *,
     reason: str,
-) -> Path:
-    """Record one explicit, scoped repository-owner decision."""
+    approved_at: str | None = None,
+) -> OwnerCoverageApproval:
+    """Build one owner approval payload without writing it.
+
+    Side-effect-free: it re-plans, validates the exact intended record through
+    the ordinary promotion gate, and returns the bytes a write would record.
+    A study finish composes that payload into its prepared staging after-text
+    instead of publishing it on its own.
+    """
     fresh = _fresh_decision(config, decision)
     if fresh.state != "ready" or fresh.replace_existing:
         raise CoverageApplicationError(
@@ -432,11 +500,27 @@ def approve_coverage_as_owner(
         fresh,
         authority="repository-owner",
         reason=reason,
+        approved_at=approved_at,
     )
+    return OwnerCoverageApproval(
+        staging_path=fresh.staging_path,
+        staging_revision=fresh.staging_revision,
+        payload=payload,
+    )
+
+
+def approve_coverage_as_owner(
+    config: ProjectConfig,
+    decision: CoverageDecision,
+    *,
+    reason: str,
+) -> Path:
+    """Record one explicit, scoped repository-owner decision."""
+    prepared = prepare_owner_coverage_approval(config, decision, reason=reason)
     return staging.record_coverage_approval(
-        fresh.staging_path,
-        payload,
-        expected_revision=fresh.staging_revision,
+        prepared.staging_path,
+        prepared.payload,
+        expected_revision=prepared.staging_revision,
     )
 
 

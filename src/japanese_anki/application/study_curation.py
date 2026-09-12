@@ -82,6 +82,7 @@ __all__ = [
     "plan_curation",
     "read_curation_groups",
     "resume_curation",
+    "staging_curation_guard",
     "unresolved_curation_predecessors",
 ]
 
@@ -111,6 +112,22 @@ _ACTIONS: tuple[str, ...] = ("replace", "remove")
 
 
 @contextlib.contextmanager
+def staging_curation_guard(staging_dir: Path) -> Iterator[None]:
+    """The one coordination lock, for a caller that holds paths not a config.
+
+    `workbench.review.ReviewPanel` is opened from three explicit paths rather
+    than a `ProjectConfig` — deliberately, so an approval binds the exact files
+    it read — and it is nonetheless an entry that writes staged bytes. It takes
+    the guard through here. Same lock file, same exclusion, one convention:
+    :func:`curation_guard` is this with the staging directory read off the
+    configuration.
+    """
+
+    with exclusive_path_lock(Path(staging_dir) / CURATION_LOCK_NAME):
+        yield
+
+
+@contextlib.contextmanager
 def curation_guard(config: ProjectConfig) -> Iterator[None]:
     """The staging mutation coordination lock, taken before any other lock.
 
@@ -121,7 +138,7 @@ def curation_guard(config: ProjectConfig) -> Iterator[None]:
     take this again under a lock its caller already holds.
     """
 
-    with exclusive_path_lock(Path(config.staging_dir) / CURATION_LOCK_NAME):
+    with staging_curation_guard(config.staging_dir):
         yield
 
 

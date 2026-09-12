@@ -20,9 +20,46 @@ package planner; `make gates` passed 5651 tests, Ruff and the sample build,
 and nine production mutations were caught. The opening interface checks and
 shared contracts are recorded in
 [`ASSISTANT_STUDY_JOBS_S6_INTERFACES.md`](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md).
-Continue with **S6-P**, then S6-E, S6-B, coordinator/surfaces and S7,
-sequentially in the primary checkout as the owner chose. S6's finish actions
-remain unimplemented.
+
+**S6-P is complete in this revision, reviewed and gated.** What it actually
+implements — signatures, wires, the shared seams
+and their ownership exceptions — is
+[S6 interface record §2.5–§2.8 and §4](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md);
+read that before touching `promotion.py`, `workbench/review.py`, `staging.py`
+or `application/coverage.py`. Independent review round 2 is clean in its
+reviewed scope; the integration lead verified the conclusions against source
+and runtime probes. Focused tests and production mutation checks also pass.
+
+**Independent review round 1 and root's own probes found five defects, and the
+round-1 fixes are in the working tree**: the aggregate pattern-store payload a
+multi-part review needs (§7.2/§7.6), a resumed `nothing_lands` part with
+archive retries, `excluded` disclosure on an `archive_retry` part, the deck
+lock held through recovery's canonical replay in §7.5's order, and the
+deck-input binding recovery now re-asks at the writer's own seam. Each has a
+failing-first test and a caught production mutation.
+
+**A second correction round closed two gaps those fixes left**, both reproduced
+by root's runtime probes. `recover_promotion_intent[_under_guard]` now makes
+§7.7's unstarted/started distinction that `apply_prepared_source_promotion`
+already made — an all-pending part is decided again with the recorded
+disposition, the frozen day and an explicitly supplied replay `witness`, while
+a part whose own writes began is still finished from its payloads first and
+never re-decided. And `prepare_review_batch` now follows §7.2 literally:
+a selected mark that is already `true` is retained and contributes no write
+instead of refusing the whole batch, while the one-panel page keeps its
+display-only refusal. Both have failing-first tests and caught production
+mutations. The first `make gates` run reported 2 failed,
+5741 passed and 800 warnings, stopping before the sample build. Both failures
+were obsolete test interception points; the tests now use the shared id-census
+helper and locked canonical writer. Their 120-test module run passes, and two
+production mutations still fail at the original concurrency assertions, with
+exact source restoration. Narrow review round 3 is clean and root-verified;
+final `make gates` passed **5743 tests**, with 800 warnings, Ruff clean and
+the sample deck built (523.58s). The frozen implementation still matched its
+reviewed hashes after that run. **Start S6-E from this revision**, then S6-B,
+coordinator/surfaces and S7, sequentially in the primary checkout as the owner
+chose. S6's finish actions remain
+unimplemented, and S6-P exposes no CLI flag or Assistant action.
 
 ---
 

@@ -623,6 +623,68 @@ def test_in_place_staging_mutations_preserve_a_final_seam_edit(
     assert path.read_bytes() == human
 
 
+def _coverage_wire(path: Path) -> str:
+    """One staging file whose coverage block sits among unowned keys."""
+    write_staging(
+        path,
+        [_record()],
+        {"source_file": "export.csv", "coverage": {"source_units": []}},
+    )
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        "coverage:\n",
+        "# a reviewer's note above the coverage block\nreviewer_only: keep me\ncoverage:\n",
+        1,
+    )
+    path.write_text(text, encoding="utf-8")
+    return text
+
+
+def test_render_coverage_approval_renders_exactly_what_the_bound_writer_writes(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    captured = _coverage_wire(path)
+    approval = {"authority": "human", "reason": "reviewed"}
+
+    rendered = staging_module.render_coverage_approval(captured, approval)
+
+    # Pure: rendering publishes nothing.
+    assert path.read_text(encoding="utf-8") == captured
+    staging_module.record_coverage_approval(path, approval)
+    assert path.read_text(encoding="utf-8") == rendered
+    _records, meta = read_staging(path)
+    assert meta["coverage"]["approval"] == approval
+    assert meta["reviewer_only"] == "keep me"
+    assert "# a reviewer's note above the coverage block\n" in rendered
+
+
+def test_render_coverage_approval_keeps_the_writer_refusals(tmp_path: Path) -> None:
+    write_staging(tmp_path / "blockless.yaml", [_record()], {"source_file": "export.csv"})
+    blockless = (tmp_path / "blockless.yaml").read_text(encoding="utf-8")
+    with pytest.raises(StagingError, match="no coverage block to approve"):
+        staging_module.render_coverage_approval(
+            blockless, {"authority": "human", "reason": "reviewed"}
+        )
+
+    path = tmp_path / "candidates.yaml"
+    captured = _coverage_wire(path)
+    once = staging_module.render_coverage_approval(
+        captured, {"authority": "human", "reason": "first"}
+    )
+    with pytest.raises(StagingError, match="already carries a coverage approval"):
+        staging_module.render_coverage_approval(
+            once, {"authority": "human", "reason": "second"}
+        )
+    replaced = staging_module.render_coverage_approval(
+        once,
+        {"authority": "human", "reason": "second"},
+        replace_existing=True,
+    )
+    _records, meta = read_staging_text(replaced, source=str(path))
+    assert meta["coverage"]["approval"]["reason"] == "second"
+
+
 def test_coverage_approval_uses_one_exact_expected_snapshot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

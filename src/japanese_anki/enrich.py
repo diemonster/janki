@@ -34,7 +34,7 @@ import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dc_fields
-from typing import Any
+from typing import Any, Protocol
 
 from japanese_anki import ai_schema as ai_schema_module
 from japanese_anki import claude_client, codex_client, jpdb, pitch, prompts, qc
@@ -61,6 +61,7 @@ from japanese_anki.staging import NON_READING_HOLDS, annotate, annotations
 __all__ = [
     "DICTIONARY_MAY_NOT_SETTLE",
     "ENRICHABLE_FIELDS",
+    "DictionaryLookup",
     "DictionaryReadings",
     "EnrichError",
     "EnrichResult",
@@ -242,6 +243,44 @@ def needs_reading(record: VocabularyRecord) -> bool:
     return not record.reading or contains_kanji(record.reading)
 
 
+class DictionaryLookup(Protocol):
+    """The only two jpdb methods reachable on the promote and enrich path.
+
+    `jpdb.JpdbClient` exposes five; `_parse` calls `parse`, `_readings_for`
+    calls `lookup_vocabulary`, and nothing else on this route touches the
+    client. Naming that pair as the annotation is what lets a study finish
+    hand these callers a recorded fact book instead of a live connection —
+    every fact the owner reviewed answers from what was fetched once, before
+    the preview, so no later dictionary refresh can change or refuse what was
+    approved.
+
+    The defaults are the real module constants rather than ``...`` on purpose:
+    a replay client can only key a request on its *effective* arguments if the
+    defaults are written down. ``fields`` stays positional-or-keyword because
+    `_readings_for` passes it positionally. Nothing isinstance-checks this, so
+    it is not ``@runtime_checkable``; `JpdbClient` satisfies it structurally
+    with no change at all.
+    """
+
+    def parse(
+        self,
+        text: str,
+        *,
+        token_fields: Sequence[str] = jpdb.DEFAULT_TOKEN_FIELDS,
+        vocabulary_fields: Sequence[str] = jpdb.DEFAULT_VOCABULARY_FIELDS,
+        forced_furigana: Sequence[Sequence[Any]] | None = None,
+        encoding: str = jpdb.DEFAULT_ENCODING,
+    ) -> jpdb.ParseResult: ...
+
+    def lookup_vocabulary(
+        self,
+        pairs: Iterable[Any],
+        fields: Sequence[str] = jpdb.DEFAULT_LOOKUP_FIELDS,
+        *,
+        batch_size: int = jpdb.DEFAULT_BATCH_SIZE,
+    ) -> list[dict[str, Any]]: ...
+
+
 def _resolved(result: jpdb.ParseResult) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     """The parsed tokens that resolved to a dictionary entry, paired with it."""
     pairs = []
@@ -272,14 +311,14 @@ def _dictionary_entry(
 
 
 def _parse(
-    client: jpdb.JpdbClient, expression: str, reading: str = ""
+    client: DictionaryLookup, expression: str, reading: str = ""
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     """``/parse`` one expression, optionally forcing ``reading``."""
     forced = jpdb.forced_furigana_span(expression, reading) if reading else None
     return _dictionary_entry(client.parse(expression, forced_furigana=forced), expression)
 
 
-def _readings_for(client: jpdb.JpdbClient, entry: Mapping[str, Any]) -> set[str]:
+def _readings_for(client: DictionaryLookup, entry: Mapping[str, Any]) -> set[str]:
     """Every reading jpdb lists for this word, across all of its senses.
 
     ``alt_sids`` are the entry's other senses; each carries its own reading,
@@ -348,7 +387,7 @@ def _supports_suru_suffix(
 
 
 def dictionary_readings(
-    client: jpdb.JpdbClient, expression: str, reading: str = ""
+    client: DictionaryLookup, expression: str, reading: str = ""
 ) -> DictionaryReadings | None:
     """Every reading jpdb lists for ``expression``, or ``None`` if it cannot say.
 

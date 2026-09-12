@@ -759,7 +759,7 @@ def test_execution_refuses_deck_rules_changed_after_the_decision(
 
     real_lock = promotion_application.exclusive_path_lock
     real_require = promotion_application.require_exact_deck_ownership
-    real_save = promotion_application.save_records_json
+    real_save = promotion_application.save_records_json_locked
     deck_lock_held = False
 
     @contextmanager
@@ -789,7 +789,9 @@ def test_execution_refuses_deck_rules_changed_after_the_decision(
         "require_exact_deck_ownership",
         tracking_require,
     )
-    monkeypatch.setattr(promotion_application, "save_records_json", tracking_save)
+    monkeypatch.setattr(
+        promotion_application, "save_records_json_locked", tracking_save
+    )
 
     result = execute_promotion(config, decision)
 

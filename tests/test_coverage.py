@@ -813,6 +813,44 @@ def test_an_accepted_file_is_then_promoted(
 # --- shared application service ------------------------------------------------
 
 
+def test_approval_payload_freezes_a_supplied_date_and_otherwise_reads_the_clock(
+    tmp_path: Path,
+) -> None:
+    """A prepared finish replays its own frozen date; ordinary callers do not."""
+    from datetime import date
+
+    from japanese_anki.application.coverage import _approval_payload, plan_coverage
+    from japanese_anki.config import ProjectConfig
+
+    root, staged = project_with_source(tmp_path)
+    config = ProjectConfig.load(root)
+    decision = plan_coverage(config, staged)
+
+    today = _approval_payload(
+        decision, authority="repository-owner", reason="Counted every row."
+    )
+    assert today["approved_at"] == date.today().isoformat()
+
+    frozen = _approval_payload(
+        decision,
+        authority="repository-owner",
+        reason="Counted every row.",
+        approved_at="2026-09-11",
+    )
+    assert frozen["approved_at"] == "2026-09-11"
+    assert frozen == {**today, "approved_at": "2026-09-11"}
+
+    for bad in ("2026-9-11", "yesterday", "", "2026-02-30"):
+        with pytest.raises(JankiError, match="approval date|YYYY-MM-DD"):
+            _approval_payload(
+                decision,
+                authority="repository-owner",
+                reason="Counted every row.",
+                approved_at=bad,
+            )
+
+
+
 def test_owner_coverage_approval_is_bound_to_the_rendered_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

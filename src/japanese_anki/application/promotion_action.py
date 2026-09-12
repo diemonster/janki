@@ -27,8 +27,8 @@ from japanese_anki.application.promotion import (
     project_promotion,
 )
 from japanese_anki.config import ProjectConfig
+from japanese_anki.enrich import DictionaryLookup
 from japanese_anki.errors import JankiError
-from japanese_anki.jpdb import JpdbClient
 
 __all__ = [
     "PromotionActionError",
@@ -177,7 +177,7 @@ def resolve_promotion_for_execution(
     config: ProjectConfig,
     offline: PromotionDecision,
     *,
-    client_factory: Callable[[], JpdbClient],
+    client_factory: Callable[[], DictionaryLookup],
     expected_preview_fingerprint: str | None = None,
 ) -> PromotionDecision:
     """Refresh an offline preview and consult jpdb only when it can matter.
@@ -185,6 +185,11 @@ def resolve_promotion_for_execution(
     ``offline`` may carry explicit-skip authority from the CLI.  The workbench
     never creates that state: its preview is incomplete until this function
     obtains the dictionary witness at click time.
+
+    The factory returns §7.3's `DictionaryLookup`, the two methods this path
+    actually reaches. `jpdb.JpdbClient` satisfies it structurally and every
+    existing caller still supplies exactly that; a study finish replays its
+    frozen fact book through the same seam instead of asking jpdb twice.
     """
     if offline.reading_check == "explicit_skip":
         # This is CLI authority, supplied on the command being executed now.

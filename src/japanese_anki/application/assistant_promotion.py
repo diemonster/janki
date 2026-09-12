@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Any, Literal
 
-from japanese_anki import jpdb
+from japanese_anki import enrich, jpdb
 from japanese_anki.application import promotion as promotion_application
 from japanese_anki.application import promotion_action, study_curation
 from japanese_anki.application.assignment import DeckOwnershipEvaluation
@@ -512,7 +512,7 @@ def execute_promotion_action(
     config: ProjectConfig,
     expected: AssistantPromotionPlan,
     *,
-    client_factory: Callable[[], jpdb.JpdbClient] | None = None,
+    client_factory: Callable[[], enrich.DictionaryLookup] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> AssistantPromotionExecution:
     """Re-plan one confirmed proposal, compare it, then use the sole writer.
@@ -539,7 +539,7 @@ def execute_promotion_action_under_guard(
     config: ProjectConfig,
     expected: AssistantPromotionPlan,
     *,
-    client_factory: Callable[[], jpdb.JpdbClient] | None = None,
+    client_factory: Callable[[], enrich.DictionaryLookup] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> AssistantPromotionExecution:
     """The same execution when the caller already holds the coordination guard.

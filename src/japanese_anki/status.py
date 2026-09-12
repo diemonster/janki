@@ -340,7 +340,21 @@ def surviving_ids(
     GUID may already be in Anki. Treating it as absent is how a curated note
     gets a second copy under a new id, or loses its ledger entry.
     """
-    ids = {record.id for record in records}
+    return surviving_ids_from(config, (record.id for record in records))
+
+
+def surviving_ids_from(
+    config: ProjectConfig, record_ids: Iterable[str]
+) -> tuple[set[str], list[str]]:
+    """:func:`surviving_ids` over ids a caller already holds.
+
+    The owning definition of the pair, because the records themselves
+    contribute nothing but their ids. A promotion intent binds the ids the
+    collection had **before** its own landing and re-asks this exact question
+    at recovery, where re-reading the collection would answer it with the
+    landing already included.
+    """
+    ids = set(record_ids)
     unreadable: list[str] = []
     for deck_path in deck_files(config):
         try:

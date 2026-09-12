@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -730,6 +731,466 @@ def test_submit_rejects_actions_the_rendered_page_did_not_offer(tmp_path: Path) 
 
     with pytest.raises(PanelRequestError, match="not reviewable"):
         panel.submit(record_ids=[existing.id], review_patterns=False)
+
+
+# --- the prepared review writer ----------------------------------------------
+
+
+def _owner_approval(files: PanelFiles) -> dict[str, object]:
+    """An exact owner coverage payload with a frozen approval date."""
+    _records, meta = staging.read_staging(files.staging_path)
+    block = dict(meta["coverage"])
+    return {
+        "authority": "repository-owner",
+        "source_fingerprint": block["source_fingerprint"],
+        "coverage_block_fingerprint": staging.coverage_block_fingerprint(block),
+        **staging.coverage_acceptance_requirements(block),
+        "reason": "I counted every row on the page.",
+        "approved_at": "2026-09-11",
+    }
+
+
+def test_prepare_publishes_nothing_and_writes_review_and_coverage_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    before_staging = files.staging_path.read_bytes()
+    before_patterns = files.patterns_path.read_bytes()
+    approval = _owner_approval(files)
+
+    prepared = panel.prepare(
+        record_ids=[files.records[0].id],
+        review_patterns=True,
+        coverage_approval=approval,
+    )
+
+    # Preparation is side-effect-free on every published target.
+    assert files.staging_path.read_bytes() == before_staging
+    assert files.patterns_path.read_bytes() == before_patterns
+    assert prepared.coverage_approved_at == "2026-09-11"
+    assert prepared.staging.expected_before == panel.staging_fingerprint
+    assert prepared.patterns.expected_before == panel.patterns_fingerprint
+    assert prepared.expected_authority[files.records[0].id]
+    # Serializable, and the wire binds its own prepared bytes.
+    assert panel_module.PreparedReview.from_dict(prepared.to_dict()) == prepared
+
+    # One staging write, carrying *both* decisions: the review-only document is
+    # never a state any reader sees.
+    review_only = staging.render_example_authority_updates(
+        before_staging.decode("utf-8"),
+        [
+            set_example_flags(
+                files.records[0],
+                EXAMPLE_AUTHORITY_KEY,
+                (
+                    example.japanese
+                    for example in files.records[0].examples
+                    if example.japanese
+                ),
+            ),
+            files.records[1],
+        ],
+        source=str(files.staging_path),
+    )
+    assert prepared.staging.after_text != review_only
+
+    published: list[str] = []
+    real_write = panel_module.atomic_write_text_bound
+
+    def observe(path: Path, text: str, **kwargs: object) -> None:
+        if Path(path) == files.staging_path:
+            published.append(text)
+        real_write(path, text, **kwargs)
+
+    monkeypatch.setattr(panel_module, "atomic_write_text_bound", observe)
+    outcome = panel_module.apply_prepared_review(prepared)
+
+    landed, landed_meta = staging.read_staging(files.staging_path)
+    assert all(example_accepted(landed[0], example) for example in landed[0].examples)
+    assert EXAMPLE_AUTHORITY_KEY not in landed[1].source.raw_fields
+    assert landed_meta["coverage"]["approval"] == approval
+    assert patterns.load_store(files.patterns_path)[files.pattern_set.source].reviewed
+    assert outcome.accepted_record_ids == (files.records[0].id,)
+    assert outcome.pattern_reviewed
+    assert published == [prepared.staging.after_text]
+
+
+def test_prepared_review_resumes_the_pattern_write_from_its_intent_alone(
+    tmp_path: Path,
+) -> None:
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    prepared = panel.prepare(
+        record_ids=[files.records[0].id],
+        review_patterns=True,
+        coverage_approval=_owner_approval(files),
+    )
+
+    # The crash mutant: the staging write landed and the pattern mark did not.
+    atomic_write_text_bound(
+        files.staging_path,
+        prepared.staging.after_text or "",
+        expected_revision=prepared.staging.expected_before or "",
+    )
+    assert not patterns.load_store(files.patterns_path)[
+        files.pattern_set.source
+    ].reviewed
+
+    # A fresh apply refuses — the staging component is no longer where it read it.
+    with pytest.raises(StaleReviewError, match="staging file changed"):
+        panel_module.apply_prepared_review(prepared)
+
+    # Recovery finishes only the missing write and reports the complete outcome.
+    resumed = panel_module.recover_prepared_review(
+        panel_module.PreparedReview.from_dict(prepared.to_dict())
+    )
+
+    assert resumed.accepted_record_ids == (files.records[0].id,)
+    assert resumed.pattern_reviewed
+    assert patterns.load_store(files.patterns_path)[files.pattern_set.source].reviewed
+    landed = files.staging_path.read_text(encoding="utf-8")
+    assert landed == prepared.staging.after_text
+
+    # And it is idempotent: a second resume writes nothing new.
+    again = panel_module.recover_prepared_review(prepared)
+    assert again == resumed
+    assert files.staging_path.read_text(encoding="utf-8") == landed
+
+
+def test_prepared_review_refuses_a_stale_later_target_before_the_earlier_write(
+    tmp_path: Path,
+) -> None:
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    prepared = panel.prepare(
+        record_ids=[files.records[0].id],
+        review_patterns=True,
+    )
+    before_staging = files.staging_path.read_bytes()
+    files.patterns_path.write_bytes(files.patterns_path.read_bytes() + b" \n")
+    stale_patterns = files.patterns_path.read_bytes()
+
+    with pytest.raises(StaleReviewError, match="pattern store changed"):
+        panel_module.apply_prepared_review(prepared)
+
+    assert files.staging_path.read_bytes() == before_staging
+    assert files.patterns_path.read_bytes() == stale_patterns
+
+    with pytest.raises(StaleReviewError, match="pattern store changed"):
+        panel_module.recover_prepared_review(prepared)
+
+    assert files.staging_path.read_bytes() == before_staging
+
+
+def test_prepared_review_tells_a_missing_pattern_store_from_a_present_empty_one(
+    tmp_path: Path,
+) -> None:
+    files = _panel_files(tmp_path)
+    files.patterns_path.unlink()
+    panel = _open(files)
+    assert panel.patterns_absent
+    prepared = panel.prepare(record_ids=[files.records[0].id], review_patterns=False)
+    assert prepared.patterns.expected_before is None
+    assert prepared.patterns.after_text is None
+    assert not prepared.patterns.writes
+
+    # A synthetic capture is not a file. Writing the very bytes the absent
+    # store captured as is a change, and the review refuses rather than
+    # treating the two as the same state.
+    files.patterns_path.write_bytes(b"{}")
+    with pytest.raises(StaleReviewError, match="pattern store changed"):
+        panel_module.apply_prepared_review(prepared)
+
+    files.patterns_path.unlink()
+    outcome = panel_module.apply_prepared_review(prepared)
+    assert outcome.accepted_record_ids == (files.records[0].id,)
+    assert not files.patterns_path.exists()
+
+
+def test_prepared_review_refuses_a_component_at_neither_bound_digest(
+    tmp_path: Path,
+) -> None:
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    prepared = panel.prepare(record_ids=[files.records[0].id], review_patterns=True)
+    files.staging_path.write_bytes(files.staging_path.read_bytes() + b"# third state\n")
+
+    with pytest.raises(StaleReviewError) as caught:
+        panel_module.recover_prepared_review(prepared)
+
+    message = str(caught.value)
+    assert (prepared.staging.expected_before or "") in message
+    assert (prepared.staging.expected_after or "") in message
+    assert not patterns.load_store(files.patterns_path)[
+        files.pattern_set.source
+    ].reviewed
+
+
+def test_prepare_binds_a_resolved_part_that_decides_nothing(tmp_path: Path) -> None:
+    """A part the owner already settled still has to be bindable.
+
+    A study finish folds every part of a job, including one whose rows were
+    reviewed on an earlier pass and whose coverage was accepted then. Refusing
+    to prepare it would leave the coordinator two bad choices: fabricate an
+    owner decision nobody made, or leave the part unbound while its promotion
+    runs. Both components are therefore *bound and unwritten* — an external
+    edit to either still refuses the apply — and applying writes nothing.
+    """
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    before_staging = files.staging_path.read_bytes()
+    before_patterns = files.patterns_path.read_bytes()
+
+    prepared = panel.prepare(record_ids=[], review_patterns=False)
+
+    assert prepared.record_ids == ()
+    assert prepared.review_patterns is False
+    assert prepared.coverage_approved_at is None
+    for component in prepared.components:
+        assert component.after_text is None
+        assert not component.writes
+        assert component.expected_before == component.expected_after
+    assert prepared.staging.expected_before == panel.staging_fingerprint
+    assert prepared.patterns.expected_before == panel.patterns_fingerprint
+    assert panel_module.PreparedReview.from_dict(prepared.to_dict()) == prepared
+
+    outcome = panel_module.apply_prepared_review(prepared)
+
+    assert outcome == panel_module.ReviewOutcome()
+    assert files.staging_path.read_bytes() == before_staging
+    assert files.patterns_path.read_bytes() == before_patterns
+
+    # Bound, not ignored: an unrelated edit to a bound input still refuses.
+    files.staging_path.write_bytes(before_staging + b"# later edit\n")
+    with pytest.raises(StaleReviewError, match="staging file changed"):
+        panel_module.apply_prepared_review(prepared)
+
+
+def test_one_panel_still_refuses_an_already_reviewed_pattern_selection(
+    tmp_path: Path,
+) -> None:
+    """The page renders that checkbox display-only, and the request obeys it.
+
+    §7.2's "leave already-true marks unchanged" is about an aggregate review of
+    several parts, where refusing the settled one would lose the parts that
+    still need their mark. One panel has no such part: a request to mark an
+    entry this page shows as already reviewed is a request the page did not
+    offer, and it is refused before either write, exactly as it always was.
+    """
+    files = _panel_files(tmp_path, reviewed=True)
+    panel = _open(files)
+    before_staging = files.staging_path.read_bytes()
+    before_patterns = files.patterns_path.read_bytes()
+
+    assert panel.pattern_reviewable is False
+    refused = "already reviewed and display-only"
+    with pytest.raises(PanelRequestError, match=refused):
+        panel.validate_actions([], True)
+    with pytest.raises(PanelRequestError, match=refused):
+        panel.prepare(record_ids=[], review_patterns=True)
+    with pytest.raises(PanelRequestError, match=refused):
+        panel.submit(record_ids=[], review_patterns=True)
+
+    assert files.staging_path.read_bytes() == before_staging
+    assert files.patterns_path.read_bytes() == before_patterns
+
+
+# --- the shared curation guard on the ordinary review path --------------------
+#
+# §6.5 and contracts §7.5: the staging mutation coordination guard is outermost
+# through **every** staged effect, not only the ones a study finish reaches.
+# `ReviewPanel.submit` is the ordinary writer behind `janki`'s workbench review
+# and the Assistant's confirmed review, and both write staged bytes.
+#
+# Written as the four-entrypoint order case in `test_study_curation_lock_order`
+# is: each awaits a positive event only the correct order can produce, and a
+# timeout is never read as evidence.
+
+_GUARD_BOUND = 15.0
+
+
+class _WatchedGuard:
+    """The production guard, plus two events about one thread's progress.
+
+    ``reached`` is published before the real acquisition and ``held`` after it,
+    so between them the submit is provably inside the guard and provably past
+    nothing that follows it. `curation_guard` delegates here, so watching this
+    watches every entry to the one lock.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from japanese_anki.application import study_curation
+
+        self._real = study_curation.staging_curation_guard
+        self.reached = threading.Event()
+        self.held = threading.Event()
+        self.entries: list[str] = []
+        monkeypatch.setattr(study_curation, "staging_curation_guard", self._guard)
+
+    @contextmanager
+    def _guard(self, staging_dir: Path):
+        self.entries.append("reached")
+        self.reached.set()
+        with self._real(staging_dir):
+            self.entries.append("held")
+            self.held.set()
+            yield
+
+    @contextmanager
+    def held_elsewhere(self, staging_dir: Path):
+        with self._real(staging_dir):
+            yield
+
+
+def test_ordinary_submit_waits_for_the_guard_with_its_own_paths_still_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guard is outermost: a blocked submit holds neither review lock.
+
+    Mutant: move `curation_guard` inside `_sorted_path_locks` in
+    `ReviewPanel.submit` (or drop it). The submit then already holds the
+    staging path lock while it waits, the probe cannot take that lock, and
+    this case fails. Blocking alone does not separate the two orders.
+    """
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    guard = _WatchedGuard(monkeypatch)
+
+    outcome: list[object] = []
+    done = threading.Event()
+
+    def run() -> None:
+        try:
+            outcome.append(
+                panel.submit(record_ids=[files.records[0].id], review_patterns=False)
+            )
+        except BaseException as exc:  # reported from the main thread
+            outcome.append(exc)
+        finally:
+            done.set()
+
+    submitter = threading.Thread(target=run, name="review-submit")
+    probe_held = threading.Event()
+    probe_release = threading.Event()
+
+    def take_staging_lock() -> None:
+        with data_io.exclusive_path_lock(files.staging_path):
+            probe_held.set()
+            probe_release.wait(_GUARD_BOUND)
+
+    probe = threading.Thread(target=take_staging_lock, name="staging-probe")
+    try:
+        with guard.held_elsewhere(files.staging_dir):
+            submitter.start()
+            assert guard.reached.wait(_GUARD_BOUND), (
+                "the ordinary review submit never took the coordination guard, "
+                "so a curation and a review can write staged bytes at once"
+            )
+            assert not guard.held.is_set(), "the guard is exclusive"
+
+            probe.start()
+            assert probe_held.wait(_GUARD_BOUND), (
+                "the submit already holds the staging path lock while it waits "
+                "for the coordination guard: its lock order is inverted"
+            )
+            assert not done.is_set(), "the submit completed without the guard"
+            probe_release.set()
+            probe.join(_GUARD_BOUND)
+            assert not done.is_set()
+
+        assert done.wait(_GUARD_BOUND), "the submit never returned"
+    finally:
+        probe_release.set()
+        if probe.ident is not None:
+            probe.join(_GUARD_BOUND)
+        if submitter.ident is not None:
+            submitter.join(_GUARD_BOUND)
+
+    assert guard.entries == ["reached", "held"]
+    assert outcome == [panel_module.ReviewOutcome((files.records[0].id,), False)]
+
+
+def test_ordinary_submit_already_holds_the_guard_when_it_waits_for_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same order from the inner lock's side."""
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    guard = _WatchedGuard(monkeypatch)
+
+    outcome: list[object] = []
+    done = threading.Event()
+
+    def run() -> None:
+        try:
+            outcome.append(
+                panel.submit(record_ids=[files.records[0].id], review_patterns=False)
+            )
+        except BaseException as exc:
+            outcome.append(exc)
+        finally:
+            done.set()
+
+    submitter = threading.Thread(target=run, name="review-submit")
+    try:
+        with data_io.exclusive_path_lock(files.staging_path):
+            submitter.start()
+            assert guard.held.wait(_GUARD_BOUND), (
+                "the ordinary review submit never held the coordination guard "
+                "while it waited for its staging lock: its order is inverted"
+            )
+            assert not done.is_set(), "the submit completed without its own lock"
+
+        assert done.wait(_GUARD_BOUND), "the submit never returned"
+    finally:
+        submitter.join(_GUARD_BOUND)
+
+    assert guard.entries == ["reached", "held"]
+    assert outcome == [panel_module.ReviewOutcome((files.records[0].id,), False)]
+
+
+def test_submit_under_guard_does_not_take_the_nonreentrant_guard_again(
+    tmp_path: Path,
+) -> None:
+    """A coordinator already inside the guard uses the unguarded entry.
+
+    `exclusive_path_lock` is not re-entrant, so a second acquisition from the
+    same thread deadlocks. The bounded thread below is the whole proof: it
+    returns.
+    """
+    from japanese_anki.application import study_curation
+
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+
+    outcome: list[object] = []
+    done = threading.Event()
+
+    def run() -> None:
+        try:
+            with study_curation.staging_curation_guard(files.staging_dir):
+                outcome.append(
+                    panel.submit_under_guard(
+                        record_ids=[files.records[0].id], review_patterns=False
+                    )
+                )
+        except BaseException as exc:
+            outcome.append(exc)
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=run, name="guarded-submit")
+    worker.start()
+    try:
+        assert done.wait(_GUARD_BOUND), (
+            "a submit inside the coordination guard took it a second time and "
+            "deadlocked on the non-reentrant lock"
+        )
+    finally:
+        worker.join(_GUARD_BOUND)
+
+    assert outcome == [panel_module.ReviewOutcome((files.records[0].id,), False)]
 
 
 def test_an_enrichment_review_written_before_the_marker_is_still_a_model_pass(

@@ -2395,11 +2395,13 @@ def test_the_swap_token_and_records_come_from_one_bound_read(
 
     # Isolate the collection snapshot itself: deck census reads the same source
     # path for a different question, which would otherwise consume transient B
-    # and accidentally restore the A/B/A harness before execution.
+    # and accidentally restore the A/B/A harness before execution. The id census
+    # is stubbed at its owning helper, so the decision and the execution seam
+    # that re-asks it answer alike and only the bound read is under test.
     monkeypatch.setattr(
         promotion_module.status_module,
-        "surviving_ids",
-        lambda _config, existing: ({record.id for record in existing}, []),
+        "surviving_ids_from",
+        lambda _config, record_ids: (set(record_ids), []),
     )
     monkeypatch.setattr(
         promotion_module,

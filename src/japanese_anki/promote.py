@@ -34,7 +34,7 @@ from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 from typing import Any
 
-from japanese_anki import enrich, extract, jpdb
+from japanese_anki import enrich, extract
 from japanese_anki import pitch as pitch_module
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, record_scope_id, stable_record_id
@@ -535,7 +535,7 @@ def _hold(record: VocabularyRecord, reason: str) -> VocabularyRecord:
 def check_readings(
     records: Sequence[VocabularyRecord],
     *,
-    client: jpdb.JpdbClient | None = None,
+    client: enrich.DictionaryLookup | None = None,
     skip_reading_check: bool = False,
     already_stored: Container[str] = frozenset(),
     remint_blocked: bool = False,
@@ -730,7 +730,7 @@ def _structural_hold(record: VocabularyRecord) -> str | None:
 
 
 def _dictionary_verdict(
-    client: jpdb.JpdbClient, record: VocabularyRecord
+    client: enrich.DictionaryLookup, record: VocabularyRecord
 ) -> tuple[str, str]:
     """``("pass" | "held", warning)`` for one record's reading."""
     # Bind the reviewed reading during tokenization. An unforced kana parse can

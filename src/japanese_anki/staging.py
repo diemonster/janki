@@ -1667,6 +1667,45 @@ def annotations(record: VocabularyRecord) -> dict[str, str]:
     return {key: raw_fields[key] for key in ANNOTATION_KEYS if key in raw_fields}
 
 
+def render_staging_document(
+    records: Iterable[VocabularyRecord],
+    meta: Mapping[str, Any] | None = None,
+    *,
+    source: str,
+) -> str:
+    """The exact text :func:`write_staging` would write, without writing it.
+
+    Pure, because a prepared promotion has to bind the done archive's complete
+    after-payload and its digest **before** the first mutation. A digest of
+    bytes recomputed at apply time proves nothing about what a crash left
+    behind.
+    """
+    review_run_id(meta or {})
+    payload: dict[str, Any] = {}
+    for key, value in (meta or {}).items():
+        name = str(key)
+        if name == _RECORDS_KEY:
+            raise StagingError(
+                f"Staging metadata cannot use the reserved key '{_RECORDS_KEY}'"
+            )
+        if name not in META_KEYS:
+            print(
+                f"warning: staging metadata key '{name}' in {source} is not one of "
+                f"{', '.join(META_KEYS)}; it will be written and read back, but no "
+                "janki command looks at it",
+                file=sys.stderr,
+            )
+        payload[name] = value
+    payload[_RECORDS_KEY] = [record.to_dict() for record in records]
+    return yaml.safe_dump(
+        payload,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+        width=STAGING_YAML_WIDTH,
+    )
+
+
 def _write_staging_unlocked(
     path: Path,
     records: Iterable[VocabularyRecord],
@@ -1698,30 +1737,7 @@ def _write_staging_unlocked(
             "A staging write cannot expect both exact content and absence"
         )
 
-    payload: dict[str, Any] = {}
-    for key, value in (meta or {}).items():
-        name = str(key)
-        if name == _RECORDS_KEY:
-            raise StagingError(
-                f"Staging metadata cannot use the reserved key '{_RECORDS_KEY}'"
-            )
-        if name not in META_KEYS:
-            print(
-                f"warning: staging metadata key '{name}' in {path} is not one of "
-                f"{', '.join(META_KEYS)}; it will be written and read back, but no "
-                "janki command looks at it",
-                file=sys.stderr,
-            )
-        payload[name] = value
-    payload[_RECORDS_KEY] = [record.to_dict() for record in records]
-
-    text = yaml.safe_dump(
-        payload,
-        allow_unicode=True,
-        sort_keys=False,
-        default_flow_style=False,
-        width=STAGING_YAML_WIDTH,
-    )
+    text = render_staging_document(records, meta, source=str(path))
     # Even a first write is a compare-and-swap against absence. A staging
     # target can appear after the preflight above, and the ordinary atomic
     # writer follows symlinks; neither may turn a paid answer into an
@@ -2239,6 +2255,118 @@ class FieldOperation:
     value: Any = None
 
 
+#: What one prepared component may be for. A closed list, because an intent
+#: that could name any role could be re-pointed at a file its phase never
+#: planned to touch.
+PREPARED_COMPONENT_ROLES: tuple[str, ...] = (
+    "staging",
+    "patterns",
+    "canonical",
+    "ledger",
+    "archive",
+    "live_staging",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedComponent:
+    """One path a prepared phase binds, and both sides of its write.
+
+    ``None`` always means **absent**, on either side, so the four states an
+    intent has to keep apart stay apart:
+
+    * *write* — both digests present and different, ``after_text`` carries the
+      complete payload;
+    * *creation* — ``expected_before is None``, ``after_text`` present;
+    * *deletion* — ``expected_after is None`` with a before digest, and no
+      payload;
+    * *no change* — the two digests are equal (including both ``None``, which
+      is a bound file that is absent and stays absent, such as the pattern
+      store of a project that never extracted anything). A present empty
+      document is **not** that state, and an external edit to a bound
+      unwritten input still refuses the apply.
+
+    The payload is the complete text rather than a delta or a digest: a digest
+    cannot be replayed after a crash, and a resume that had to recompute the
+    bytes from a store that has since moved is not a resume.
+    """
+
+    role: str
+    path: str
+    expected_before: str | None
+    expected_after: str | None
+    after_text: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.role not in PREPARED_COMPONENT_ROLES:
+            raise StagingError(
+                f"A prepared component role is one of "
+                f"{', '.join(PREPARED_COMPONENT_ROLES)}, not {self.role!r}"
+            )
+        if not self.path:
+            raise StagingError("A prepared component names one path")
+        for label, digest in (
+            ("expected_before", self.expected_before),
+            ("expected_after", self.expected_after),
+        ):
+            if digest is not None and (
+                len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+            ):
+                raise StagingError(
+                    f"A prepared component's {label} is lowercase SHA-256 text or "
+                    "absent"
+                )
+        if self.after_text is not None:
+            rendered = hashlib.sha256(self.after_text.encode("utf-8")).hexdigest()
+            if rendered != self.expected_after:
+                raise StagingError(
+                    f"A prepared {self.role} component does not bind its own "
+                    "prepared bytes"
+                )
+        elif self.expected_after is not None and self.expected_after != self.expected_before:
+            raise StagingError(
+                f"A prepared {self.role} component changes {self.path} but carries "
+                "no payload to write"
+            )
+
+    @property
+    def writes(self) -> bool:
+        """Whether applying this component changes the file it names."""
+        return self.expected_after != self.expected_before
+
+    @property
+    def removes(self) -> bool:
+        return self.expected_after is None and self.expected_before is not None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "role": self.role,
+            "path": self.path,
+            "expected_before": self.expected_before,
+            "expected_after": self.expected_after,
+            "after_text": self.after_text,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> PreparedComponent:
+        try:
+            before = raw["expected_before"]
+            after = raw["expected_after"]
+            text = raw["after_text"]
+            return cls(
+                role=str(raw["role"]),
+                path=str(raw["path"]),
+                expected_before=None if before is None else str(before),
+                expected_after=None if after is None else str(after),
+                after_text=None if text is None else str(text),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise StagingError(
+                f"A recorded prepared component is unreadable: {exc}"
+            ) from exc
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedStagingUpdate:
     """The exact text one bound update would write, and the bytes it replaces.
@@ -2456,14 +2584,14 @@ def coverage_already_resolved(meta: Mapping[str, Any]) -> bool:
     return True
 
 
-def _record_coverage_approval_unlocked(
-    path: Path,
+def render_coverage_approval(
+    captured_text: str,
     approval: Mapping[str, Any],
     *,
     replace_existing: bool = False,
-    expected_revision: str | None = None,
-) -> Path:
-    """Write a coverage approval into a staging file, changing nothing else.
+    source: str = "<captured staging file>",
+) -> str:
+    """The text one coverage approval would write, without writing it.
 
     Through the same round-trip :func:`rewrite_staging` uses, and for the same
     reason: a staging file under review holds work that exists nowhere else,
@@ -2476,28 +2604,51 @@ def _record_coverage_approval_unlocked(
     quietly replacing it would let a second run overwrite a person's recorded
     reasoning with a model's — so replacing it is something a caller has to
     ask for in as many words.
+
+    Pure, because a prepared finish composes this with the review renderer into
+    **one** after-payload for the same path. The writer below reads its own
+    bytes and compare-and-swaps them; a renderer that did that could not be
+    composed with another edit to the same file.
     """
-    path = Path(path)
-    document, _captured_text, revision = _load_document_snapshot(path)
-    if expected_revision is not None and revision != expected_revision:
-        raise StagingError(
-            f"[coverage-review-stale] {path} changed before its coverage approval could be recorded"
-        )
+    document = _load_document_text(captured_text, source=source)
     block = document.get(_COVERAGE_KEY)
     if not isinstance(block, MutableMapping):
-        raise StagingError(f"{path} carries no coverage block to approve.")
+        raise StagingError(f"{source} carries no coverage block to approve.")
     if "approval" in block and not replace_existing:
         raise StagingError(
-            f"{path} already carries a coverage approval. Remove it first if you "
+            f"{source} already carries a coverage approval. Remove it first if you "
             "mean to replace the recorded decision."
         )
     block["approval"] = _plain(approval)
 
     buffer = io.StringIO()
     _parser().dump(document, buffer)
+    return buffer.getvalue()
+
+
+def _record_coverage_approval_unlocked(
+    path: Path,
+    approval: Mapping[str, Any],
+    *,
+    replace_existing: bool = False,
+    expected_revision: str | None = None,
+) -> Path:
+    """Write one coverage approval through the pure renderer above."""
+    path = Path(path)
+    _document, captured_text, revision = _load_document_snapshot(path)
+    if expected_revision is not None and revision != expected_revision:
+        raise StagingError(
+            f"[coverage-review-stale] {path} changed before its coverage approval could be recorded"
+        )
+    text = render_coverage_approval(
+        captured_text,
+        approval,
+        replace_existing=replace_existing,
+        source=str(path),
+    )
     atomic_write_text_bound(
         path,
-        buffer.getvalue(),
+        text,
         expected_revision=revision,
     )
     return path
@@ -2705,6 +2856,60 @@ def prune_staging_under_lock(path: Path, keep: Sequence[bool]) -> int:
     return _prune_staging_unlocked(path, keep)
 
 
+def render_staging_finish(
+    captured_text: str,
+    keep: Sequence[bool],
+    held: Sequence[VocabularyRecord],
+    *,
+    source: str,
+) -> tuple[str | None, int]:
+    """The held remainder promotion would leave, and how many rows depart.
+
+    ``None`` when the prepared document is byte-identical to the captured one
+    — every row stays and no hold reason changed, which is what a second
+    promotion of an all-held review really is. The distinction is not
+    cosmetic: a prepared component whose ``after_text`` is ``None`` carries no
+    payload into the durable job document, so re-running a file nobody can
+    promote does not embed a whole staging document per part per attempt.
+
+    Pure, because §7.7 requires promotion's live-staging component to carry its
+    complete after-payload before the first mutation, and
+    :func:`finish_staging_under_lock` is a read-modify-write that cannot be
+    replayed after a crash.
+    """
+    document = _load_document_text(captured_text, source=source)
+    original, _meta = read_staging_text(captured_text, source=source)
+    raw_records = document[_RECORDS_KEY] or []
+    if not (len(raw_records) == len(original) == len(keep)):
+        raise StagingError(
+            f"{source} holds {len(raw_records)} row(s) but {len(keep)} flag(s) were "
+            "given; finishing promotion needs one flag per row, in file order."
+        )
+    kept = [
+        (raw, before)
+        for raw, before, wanted in zip(raw_records, original, keep, strict=True)
+        if wanted
+    ]
+    if len(kept) != len(held):
+        raise StagingError(
+            f"{source} keeps {len(kept)} row(s) but promotion supplied {len(held)} held row(s)."
+        )
+    removed = len(raw_records) - len(kept)
+    raw_records[:] = [raw for raw, _before in kept]
+    document[_RECORDS_KEY] = raw_records
+    for (raw, before), after in zip(kept, held, strict=True):
+        if not isinstance(raw, MutableMapping):
+            raise StagingError(
+                f"Record in {source} must be a mapping, got {type(raw).__name__}"
+            )
+        _apply_changes(raw, before.to_dict(), after.to_dict())
+
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    text = buffer.getvalue()
+    return (None if text == captured_text else text), removed
+
+
 def finish_staging_under_lock(
     path: Path,
     keep: Sequence[bool],
@@ -2721,42 +2926,17 @@ def finish_staging_under_lock(
     replace only that same revision instead.
     """
     path = Path(path)
-    document, captured_text, revision = _load_document_snapshot(path)
+    _document, captured_text, revision = _load_document_snapshot(path)
     if revision != expected_revision:
         raise StagingError(
             f"[staging-review-stale] {path} changed before its reviewed rows could be retired"
         )
-    original, _meta = read_staging_text(captured_text, source=str(path))
-    raw_records = document[_RECORDS_KEY] or []
-    if not (len(raw_records) == len(original) == len(keep)):
-        raise StagingError(
-            f"{path} holds {len(raw_records)} row(s) but {len(keep)} flag(s) were "
-            "given; finishing promotion needs one flag per row, in file order."
-        )
-    kept = [
-        (raw, before)
-        for raw, before, wanted in zip(raw_records, original, keep, strict=True)
-        if wanted
-    ]
-    if len(kept) != len(held):
-        raise StagingError(
-            f"{path} keeps {len(kept)} row(s) but promotion supplied {len(held)} held row(s)."
-        )
-    removed = len(raw_records) - len(kept)
-    raw_records[:] = [raw for raw, _before in kept]
-    document[_RECORDS_KEY] = raw_records
-    for (raw, before), after in zip(kept, held, strict=True):
-        if not isinstance(raw, MutableMapping):
-            raise StagingError(
-                f"Record in {path} must be a mapping, got {type(raw).__name__}"
-            )
-        _apply_changes(raw, before.to_dict(), after.to_dict())
-
-    buffer = io.StringIO()
-    _parser().dump(document, buffer)
+    text, removed = render_staging_finish(
+        captured_text, keep, held, source=str(path)
+    )
     atomic_write_text_bound(
         path,
-        buffer.getvalue(),
+        captured_text if text is None else text,
         expected_revision=revision,
     )
     return removed
