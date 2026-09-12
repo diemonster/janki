@@ -14,6 +14,16 @@ Assistant/CLI/completion); plan §10.1–§10.3 gives the file inventory, the te
 rules and the parallel schedule. Read `AGENTS.md` first — its rules are not
 restated here except where S6 touches them.
 
+**S6 opening status (2026-09-12).** Amendment F landed at `d512904`.
+`io.records_json_text` now exists and is shared by the canonical saver and
+package planner; `make gates` passed 5651 tests, Ruff and the sample build,
+and nine production mutations were caught. The opening interface checks and
+shared contracts are recorded in
+[`ASSISTANT_STUDY_JOBS_S6_INTERFACES.md`](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md).
+Continue with **S6-P**, then S6-E, S6-B, coordinator/surfaces and S7,
+sequentially in the primary checkout as the owner chose. S6's finish actions
+remain unimplemented.
+
 ---
 
 ## 1. What is authorized, and what is not
@@ -437,17 +447,6 @@ not let a test import one before it is written:
 
 - `application/study_finish.py` — the whole coordinator, its authority and
   per-phase intent shapes.
-- `io.records_json_text(records)`. **Not present at `0e53007`**:
-  `io.save_records_json_locked` (`io.py:4125-4152`) still inlines
-  `json.dumps(payload, ensure_ascii=False, indent=2)`. Extract it **with
-  `allow_nan=False`** and have `save_records_json_locked` call it — a literal
-  extraction would drop the package planner's non-finite refusal
-  (`deck_package.py:700` already passes `allow_nan=False`, and
-  `_plan_vocabulary_revision_unlocked` refuses unless
-  `revision.text == _canonical_records_text(records)`, so the synthetic text
-  must come from the same function). Output is byte-identical for every record
-  that can round-trip. This is artifact structure — janki's own logic, no owner
-  decision. `io.py` is the integration lead's file; agree the patch order.
 - `coverage._approval_payload(..., approved_at: str | None = None)` — today it
   reads `date.today()` inline (`coverage.py:402`); the freeze parameter is the
   seam.
@@ -464,7 +463,11 @@ not let a test import one before it is written:
 
 ---
 
-## 6. First actions, before any S6 code
+## 6. S6 opening checks
+
+The interface record linked above records the §6.1 checks and §6.2 contracts.
+The checklist below describes the refresh against the S5 base; its serializer
+gap has since been closed. Amendment F is also applied (§6.3).
 
 ### 6.1 Refresh the interface mapping against final S5
 
@@ -477,7 +480,7 @@ lists 12 concrete checks** to re-run against the real committed S5 symbols:
 gate order; 3. `execute_promotion`'s entry; 4. lock order and the concrete
 staging-mutation lock holder; 5. `staging.py`'s prepare/apply surface;
 6. `source_forms` transport through serializer → merge → exporter → preview;
-7. `io.records_json_text` (see §5 — it does not exist); 8. job CAS signatures
+7. `io.records_json_text` (absent at S5, now implemented); 8. job CAS signatures
 and the whitelisted `choices` keys; 9. `extract.MODES` and
 `staging._validate_prompt_provenance`; 10. `assistant_context.ResourceKind`'s
 `"study_job"`; 11. `deck_package.py`'s reference-input sites; 12.
@@ -520,8 +523,9 @@ receipt/resume design sentence unchanged.
 
 ## 7. S6 structure and ownership
 
-Three writer packages in isolated worktrees, plus you as integration lead
-(plan §10.3). **No two workers edit one file.** Paths are under
+Three writer packages, executed sequentially in the primary checkout per the
+owner's 2026-09-10 choice recorded in the interface document. Their ownership
+boundaries from plan §10.3 remain unchanged. Paths are under
 `src/japanese_anki/`.
 
 **S6-P — review and promotion:** `staging.py`, `workbench/review.py`,
@@ -651,11 +655,13 @@ artifacts as fixtures or count their previous playback as this proof.
 ## 10. Operating rules
 
 - **Every development, planning or review model launch goes through that
-  checkout's `scripts/claude-subscription.py`**, Claude Opus 5 pinned, **xhigh**
-  for implementation and **max** for planning/review. A subscription refusal
+  checkout's `scripts/claude-subscription.py`**. Current `AGENTS.md` pins
+  Claude Opus 5 at **xhigh** for implementation and Claude Fable 5.1 at **max**
+  for planning/review. A subscription refusal
   stops the launch: there is no API fallback and no other provider.
-- At most **3 external model workers** alongside root. Each lane gets its own
-  branch, worktree and `.venv`. Root owns the single final integrated
+- S6 implementation is sequential in the primary checkout. The general ceiling
+  remains **3 external model workers** alongside root; it is not a request to
+  parallelize these packages. Root owns the single final integrated
   `make gates` per milestone; workers run focused tests plus named mutation
   proofs and stop. Do not re-run a green set to reformat a count. Use
   checkout-root commands: a shared editable venv otherwise tests the primary

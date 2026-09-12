@@ -4122,6 +4122,23 @@ def save_records_json(
         save_records_json_locked(target, records, expected=expected)
 
 
+def records_json_text(records: Sequence[VocabularyRecord]) -> str:
+    """Serialize saved and prospective package collections identically.
+
+    Sort by ``id`` and encode with ``ensure_ascii=False``, ``indent=2`` and
+    ``allow_nan=False``, followed by one newline. The canonical saver and
+    ``deck_package._canonical_records_text`` share these exact bytes.
+
+    Errors from ``to_dict`` and the JSON encoder propagate unwrapped, as the
+    saver's existing contract requires. Non-finite floats raise ``ValueError``;
+    unencodable values raise ``TypeError``. The package planner wraps these
+    failures in its own ``DeckPackageError``.
+    """
+
+    payload = [record.to_dict() for record in sorted(records, key=lambda item: item.id)]
+    return json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+
+
 def save_records_json_locked(
     path: Path,
     records: list[VocabularyRecord],
@@ -4139,8 +4156,7 @@ def save_records_json_locked(
         raise DataError(
             f"Records revision for {expected.path} cannot guard a write to {target}."
         )
-    payload = [record.to_dict() for record in sorted(records, key=lambda item: item.id)]
-    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    text = records_json_text(records)
     if expected is not None:
         current = records_revision(target).text
         if current != expected.text:

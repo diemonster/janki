@@ -21,7 +21,14 @@ and had `make gates` run on the integrated primary checkout:
 **DESIGN amendment F (§11) is applied**, landing before S6's behaviour as
 §10.3 wave 4 requires; `docs/DESIGN.md` is at sha256
 `a0ed40f4345feed68399e5b3e350ac61d1fda4990f28ef9d1c09ed6585d0ceae`.
-**S6 and S7 remain pending and unimplemented**: no
+**S6 opening work has landed:** amendment F at `d512904`, the shared
+`io.records_json_text` serializer, and the
+[S6 interface record](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md). The serializer
+passed `make gates` (5651 tests, 800 warnings, Ruff clean, sample build) and
+nine production mutation checks.
+**Next is S6-P (review and promotion), then S6-E, S6-B, the finish coordinator
+and surfaces, and S7**, sequentially as recorded in the interface document.
+These remaining capabilities are unimplemented: no
 `application/study_finish.py` and no `janki study review`/`coverage`/
 `disposition`/`finish` control exists yet.
 [ASSISTANT_STUDY_JOBS_HANDOFF.md](ASSISTANT_STUDY_JOBS_HANDOFF.md) is the

@@ -42,6 +42,7 @@ from japanese_anki.io import (
     load_structured,
     read_bytes_bound,
     read_bytes_bound_snapshot,
+    records_json_text,
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.validation import has_errors, refusal_text, validate_records
@@ -692,12 +693,15 @@ def plan_deck_package(
 
 
 def _canonical_records_text(records: Sequence[VocabularyRecord]) -> str:
+    """The prospective collection's exact canonical bytes.
+
+    Delegates to :func:`io.records_json_text` so a projected package plans over
+    the same bytes a save would write; the refusal is re-raised in this
+    module's own error so a caller still learns which planning step refused.
+    """
+
     try:
-        values = [
-            record.to_dict()
-            for record in sorted(records, key=lambda item: item.id)
-        ]
-        return json.dumps(values, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+        return records_json_text(records)
     except (AttributeError, TypeError, ValueError) as exc:
         raise DeckPackageError(
             f"Prospective package records cannot be serialized exactly: {exc}"
