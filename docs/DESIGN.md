@@ -545,9 +545,26 @@ decks, and Assistant-selected AI enrichment whose persisted focus resolves to
 one vocabulary deck. Each binds the exact visible selection before recording a
 resumable review/promotion/audio/build receipt. Source-extraction proposals
 still expose their applicable review, assignment, coverage, promotion, audio,
-and build operations as separate typed protected actions. Extending the same
-receipt-backed **Apply and finish** contract to that flow remains W7 work; the
-paragraph above states the design, not every flow's present UI.
+and build operations as separate typed protected actions. That receipt-backed
+**Apply and finish** contract also covers a source-study job: one authority
+binds a set of reviewed source proposals, the owner's review and coverage
+decisions taken over the rendered cards, their promotions, the reference facts
+already visible in that review, selected word audio and sentence audio
+included by default for every accepted example slot unless the owner
+explicitly opts out, the build and the package. Each phase's prepared payload
+is durable before its first effect, so an interruption resumes from that
+intent rather than a lost return value. It aggregates existing single-receipt
+scopes without replacing them and without discarding any source occurrence,
+and its completion is proven from artifacts — every accounted paid attempt,
+each part's exact disposition, and the bound whole-deck package inventory —
+rather than from a batch surface's completeness label.
+
+Default inclusion grants no spending authority: the same finish confirmation
+enumerates exact requests and discloses provider/model, API billing and
+separate word/sentence counts. Completion proves canonical sentence links,
+current media, sound references and bytes inside the package, and playable
+audio in the final HTML preview. An explicit opt-out is recorded and
+displayed.
 
 An attachment added through Janki is local immutable intake only. Its bytes are
 saved through the same intake service under `data/inbox/`; uploading does not

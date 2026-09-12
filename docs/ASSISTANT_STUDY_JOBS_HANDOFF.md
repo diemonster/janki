@@ -82,7 +82,8 @@ Integrity of that final tree: full-patch sha256
 source bindings, frozen review snapshot `/tmp/janki-study-s5-v3-code-review`
 with hashes `/tmp/janki-study-s5-v3-review-hashes.json` (both local only).
 
-**Not implemented, by anyone, at this commit:**
+**Not implemented, by anyone, at that S5 base commit** (`0e53007`) — S6 and S7
+are still open; the amendment-F entry records what has changed since:
 
 - **S6** — no `application/study_finish.py` exists; no `janki study review`,
   `coverage`, `disposition` or `finish` control exists; `_DEFERRED_CHOICE_KEYS`
@@ -91,9 +92,11 @@ with hashes `/tmp/janki-study-s5-v3-review-hashes.json` (both local only).
 - **S7** — no scenario module exists. The prepared fixture bank, helper probes
   and any pre-authored test candidates are **preparation, not acceptance**: a
   green prep or probe run proves nothing about the journey.
-- **DESIGN amendment F** — prepared but **not applied**. `docs/DESIGN.md` is at
-  sha256 `6975958572e6c0147df8037a459e11d556757aca4923dbd6e29f2518aa1186c4`,
-  which is the pre-F byte state. See §6.3 for how to land it.
+- **DESIGN amendment F** — **applied.** At `0e53007` it was prepared and
+  unapplied; this document revision lands F with its corrected handoff.
+  `docs/DESIGN.md` is at sha256
+  `a0ed40f4345feed68399e5b3e350ac61d1fda4990f28ef9d1c09ed6585d0ceae` — the
+  post-F byte state. See §6.3.
 
 **Repository state check at S5 close.** Native read-only `janki operations`
 reported 19 retained entries, all committed; nothing was forgotten or changed.
@@ -494,23 +497,24 @@ symbols from new agreed contract symbols, and claim no signature that does not
 yet exist. Plan §10.3 makes this ordinary engineering coordination — it does not
 ask the owner to approve interfaces.
 
-### 6.3 Verify and apply DESIGN amendment F before the behaviour it authorizes
+### 6.3 DESIGN amendment F — applied, and it precedes the behaviour it authorizes
 
-Plan §10.3 wave 4: F precedes the affected behaviour. F is **prepared and
-literally verified but not applied**. The patch is
-`/tmp/janki-study-s6-design.patch`
-(sha256 `d45648c96dde224b687599e8b4138dcb03122f1fdbf0114e1ce1e2cfe035dc9c`),
-taking `docs/DESIGN.md` from
-`6975958572e6c0147df8037a459e11d556757aca4923dbd6e29f2518aa1186c4` to
-`a0ed40f4345feed68399e5b3e350ac61d1fda4990f28ef9d1c09ed6585d0ceae`, with
-`/tmp/janki-study-s6-design-verification.json` and
+Plan §10.3 wave 4: F precedes the affected behaviour. **F is applied**, so
+there is nothing left to apply here. `docs/DESIGN.md` is at sha256
+`a0ed40f4345feed68399e5b3e350ac61d1fda4990f28ef9d1c09ed6585d0ceae`, the post-F
+byte state. F and this corrected handoff land together, before the S6 behaviour.
+
+Historical verification, for auditing what landed rather than for applying
+anything: the prepared patch was `/tmp/janki-study-s6-design.patch` (sha256
+`d45648c96dde224b687599e8b4138dcb03122f1fdbf0114e1ce1e2cfe035dc9c`), taking
+`docs/DESIGN.md` from the pre-F state
+`6975958572e6c0147df8037a459e11d556757aca4923dbd6e29f2518aa1186c4` to the hash
+above, with `/tmp/janki-study-s6-design-verification.json` and
 `/tmp/janki-study-s6-design-handoff.md`. That handoff's §2 records the one
-judgment call: F replaces the **W7-gap sentence** ("Extending the same
-receipt-backed **Apply and finish** contract to that flow remains W7 work…"),
-not the preceding paragraph's receipt/resume design sentence. Re-verify the
-starting DESIGN bytes, commit F on its own, then land the behaviour. If the
-patch file is unavailable, apply amendment F from plan §11 by hand to the same
-sentence and verify the result the same way.
+judgment call, and the applied text follows it: F replaces the **W7-gap
+sentence** ("Extending the same receipt-backed **Apply and finish** contract to
+that flow remains W7 work…") and leaves the preceding paragraph's
+receipt/resume design sentence unchanged.
 
 ---
 

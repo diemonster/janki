@@ -18,8 +18,10 @@ and had `make gates` run on the integrated primary checkout:
 | S4 — study job, job actions, CLI, busy replies, deck-creation integration (authority at `43990b1`, behaviour at `2a3338e`) | `43990b1` + `2a3338e` | 5504 passed, 774 pre-existing warnings, Ruff clean, sample build, 464.21s |
 | S5 — layout, `source_forms`, cross-part curation (amendments C/D at `f05a3e8`, behaviour at `0e53007`) | `f05a3e8` + `0e53007` | 5642 passed, 800 warnings, Ruff clean, sample build, 562.97s |
 
-**S6 and S7 remain pending and unimplemented**, and so does DESIGN amendment F
-(§11), which precedes S6's behaviour (§10.3, wave 4): no
+**DESIGN amendment F (§11) is applied**, landing before S6's behaviour as
+§10.3 wave 4 requires; `docs/DESIGN.md` is at sha256
+`a0ed40f4345feed68399e5b3e350ac61d1fda4990f28ef9d1c09ed6585d0ceae`.
+**S6 and S7 remain pending and unimplemented**: no
 `application/study_finish.py` and no `janki study review`/`coverage`/
 `disposition`/`finish` control exists yet.
 [ASSISTANT_STUDY_JOBS_HANDOFF.md](ASSISTANT_STUDY_JOBS_HANDOFF.md) is the
