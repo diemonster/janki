@@ -32,27 +32,54 @@ import os
 import re
 import tempfile
 import zipfile
-from collections.abc import Callable, MutableMapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 
 __all__ = [
+    "AUDIO_STATES",
+    "AudioState",
     "CardPreview",
     "CardPreviewError",
     "PreviewCard",
     "ProposedText",
     "preview_unavailable",
     "render_card_preview",
+    "render_packaged_card_preview",
     "write_card_preview",
 ]
 
 
 class CardPreviewError(JankiError):
     """A preview could not be rendered, or was asked for something unsafe."""
+
+
+AudioState = Literal["packaged", "pending", "omitted"]
+
+#: Why a card's clip is not in this page. Three different facts, and a preview
+#: that collapsed them would be lying about one of them:
+#:
+#: * ``packaged`` — these cards come from a built archive that was supposed to
+#:   carry the clip, so its absence is a fault to go and look at.
+#: * ``pending`` — the clip is planned and has not been generated yet. This is
+#:   what a preview drawn *before* generation says, and it is never a promise
+#:   that the bytes exist.
+#: * ``omitted`` — the owner opted sentence audio out of this job, so the clip
+#:   was deliberately not generated. Existing clips still play.
+#:
+#: No state ever makes a control for bytes that are not here: "playable" is a
+#: consequence of the media being in the archive, not a label a caller chooses.
+AUDIO_STATES: tuple[AudioState, ...] = ("packaged", "pending", "omitted")
+
+_MISSING_AUDIO_LABEL: dict[AudioState, str] = {
+    "packaged": "Audio not packaged",
+    "pending": "Audio pending generation",
+    "omitted": "Sentence audio omitted by owner",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +139,15 @@ class CardPreview:
     html: bytes
     sha256: str
     content_security_policy: str
+    #: Asset name -> sha256 of every non-card input this document inlined: the
+    #: notetype stylesheet the cards were drawn with and the viewer's own two
+    #: files. A receipt that binds a preview binds what drew it, and the page
+    #: hash alone cannot say which of those changed.
+    render_assets: Mapping[str, str] = field(default_factory=dict)
+    #: The exact ``.apkg`` these cards were read out of, for a preview of an
+    #: already-built package. ``""`` when the preview built its own throwaway
+    #: archive from a deck.
+    package_sha256: str = ""
 
     @property
     def existing_note_count(self) -> int:
@@ -357,10 +393,10 @@ def _mirrored_project(
             _rebind_deck_source(mirror_deck, mirrored, deck_path, source_value)
 
     changes: dict[str, Path] = {}
-    for field in _OVERLAYABLE_CONFIG_FILES:
-        target = Path(os.path.abspath(os.fspath(getattr(config, field))))
+    for config_field in _OVERLAYABLE_CONFIG_FILES:
+        target = Path(os.path.abspath(os.fspath(getattr(config, config_field))))
         if target in overlay:
-            changes[field] = place(target)
+            changes[config_field] = place(target)
 
     media_dir = Path(os.path.abspath(os.fspath(config.media_dir)))
     if media_dir.is_relative_to(root) and media_dir.is_dir():
@@ -648,7 +684,16 @@ def _package_media(package: Path, wanted: frozenset[str]) -> dict[str, bytes]:
                 raise CardPreviewError(
                     f"Refused a package media name with a path in it: {name!r}"
                 )
-            info = archive.getinfo(member)
+            try:
+                info = archive.getinfo(member)
+            except KeyError as exc:
+                # Every other malformed thing this reader can meet is a refusal
+                # naming what was wrong; this one was a bare KeyError out of the
+                # renderer, which names nothing anyone can act on.
+                raise CardPreviewError(
+                    f"The media index of {package} names {member!r}, which the "
+                    "archive does not contain."
+                ) from exc
             if info.file_size > MAX_MEDIA_FILE_BYTES:
                 raise CardPreviewError(
                     f"{name} is {info.file_size} bytes, over the "
@@ -679,17 +724,36 @@ def _missing_media(kind: str, name: str) -> str:
     )
 
 
-def _audio_control(name: str, media: dict[str, bytes]) -> str:
+def _missing_audio(state: AudioState, name: str) -> str:
+    """Say which of the three reasons this clip is not here, and name it.
+
+    The reason is in the text a reader sees and in ``data-audio-state`` beside
+    it, so a receipt or a test can tell "not generated yet" from "the owner
+    left it out" from "the archive should have had it" without parsing prose.
+    """
+    return (
+        f'<span class="preview-media-missing" data-audio-state="{state}">'
+        f"{html.escape(_MISSING_AUDIO_LABEL[state])}: {html.escape(name)}</span>"
+    )
+
+
+def _audio_control(
+    name: str, media: dict[str, bytes], audio_state: AudioState = "packaged"
+) -> str:
     """A working clip is a control; only a missing one has to name itself.
 
     Generated audio is identity-addressed, so its filename is a hash — and a
     hash printed beside a play button is implementation detail on the face of a
     study card. A clip janki could not package is the opposite case: the name
     is the only way to go and find it.
+
+    ``audio_state`` decides only what a *missing* clip is called. Bytes in the
+    archive are the single reason a control is drawn, so no caller can label a
+    clip playable before it exists.
     """
     payload = media.get(name)
     if payload is None or not payload:
-        return _missing_media("Audio", name)
+        return _missing_audio(audio_state, name)
     return (
         '<span class="preview-audio">'
         f'<audio controls preload="none" src="{html.escape(_data_uri(name, payload), quote=True)}">'
@@ -698,7 +762,12 @@ def _audio_control(name: str, media: dict[str, bytes]) -> str:
     )
 
 
-def _inline_av_tags(text: str, av_tags: Sequence[Any], media: dict[str, bytes]) -> str:
+def _inline_av_tags(
+    text: str,
+    av_tags: Sequence[Any],
+    media: dict[str, bytes],
+    audio_state: AudioState = "packaged",
+) -> str:
     """Put a real, non-autoplaying control where the ``[sound:]`` tag was.
 
     Anki hands the tags back separately from the text and leaves an
@@ -710,14 +779,14 @@ def _inline_av_tags(text: str, av_tags: Sequence[Any], media: dict[str, bytes]) 
     def substitute(match: re.Match[str]) -> str:
         index = int(match.group(2))
         if index >= len(av_tags):
-            return _missing_media("Audio", match.group(0))
+            return _missing_audio(audio_state, match.group(0))
         tag = av_tags[index]
         filename = getattr(tag, "filename", "")
         if not filename:
             # A text-to-speech tag asks the reviewer to synthesise speech. There
             # is no file, and a preview does not generate one.
             return _missing_media("Spoken audio", str(tag))
-        return _audio_control(str(filename), media)
+        return _audio_control(str(filename), media, audio_state)
 
     return _PLAY_TAG.sub(substitute, text)
 
@@ -795,6 +864,9 @@ def _drawn_cards(
     scratch: Path,
     plan: _DeckPlan,
     choose: Callable[[tuple[_CardRef, ...]], tuple[_CardRef, ...]],
+    audio_state: AudioState = "packaged",
+    *,
+    verify_templates: Callable[[tuple[str, ...]], None] | None = None,
 ) -> tuple[list[_Drawn], str]:
     """Import the package, enumerate every card, then draw only the chosen ones.
 
@@ -803,6 +875,13 @@ def _drawn_cards(
     only after that is anything rendered or any media opened. Selecting two
     cards out of a large deck therefore costs two renders and their own clips,
     and a display cap describes the page rather than the deck behind it.
+
+    ``verify_templates`` is handed the notetype's own template names, in the
+    archive's order, before anything is drawn. Only the packaged renderer passes
+    one: there the direction keys come from the caller while the ordinals come
+    from the archive, so the two have to be compared. A deck preview derives its
+    directions from the same call its build used, which makes that alignment
+    structural rather than something to check.
 
     Drawing is the same code path the desktop reviewer uses, which is the only
     thing that resolves ``{{furigana:}}``, a ``{{#Field}}`` section,
@@ -819,11 +898,24 @@ def _drawn_cards(
         )
         catalogue: list[_CardRef] = []
         css = ""
+        templates: tuple[str, ...] = ()
         for card_id in collection.find_cards(""):
             card = collection.get_card(card_id)
             note = card.note()
             notetype = card.note_type()
             css = css or str(notetype.get("css") or "")
+            # The notetype's whole template list, in its own ordinal order —
+            # which is what the deck was built from. Not the set of ordinals the
+            # cards happen to cover: a template whose required fields a note
+            # leaves empty writes no card for that note, and a deck where that
+            # is true of every note is an ordinary deck, not a mislabelled one.
+            templates = templates or tuple(
+                str(item.get("name", ""))
+                for item in sorted(
+                    notetype.get("tmpls") or (),
+                    key=lambda item: int(item.get("ord") or 0),
+                )
+            )
             if plan.identity_by_guid:
                 record_id = plan.identity_by_guid.get(note.guid, "")
                 if not record_id:
@@ -863,6 +955,8 @@ def _drawn_cards(
         # the order the exporter wrote and the order the deck file implies.
         catalogue.sort(key=lambda item: (item.note_id, item.ordinal))
 
+        if verify_templates is not None:
+            verify_templates(templates)
         chosen = choose(tuple(catalogue))
 
         rendered: list[tuple[_CardRef, Any]] = []
@@ -885,11 +979,18 @@ def _drawn_cards(
             template=ref.template,
             direction=ref.direction,
             question_html=_inline_images(
-                _inline_av_tags(output.question_text, output.question_av_tags, media),
+                _inline_av_tags(
+                    output.question_text,
+                    output.question_av_tags,
+                    media,
+                    audio_state,
+                ),
                 media,
             ),
             answer_html=_inline_images(
-                _inline_av_tags(output.answer_text, output.answer_av_tags, media),
+                _inline_av_tags(
+                    output.answer_text, output.answer_av_tags, media, audio_state
+                ),
                 media,
             ),
         )
@@ -1083,11 +1184,23 @@ def _document(
     deck_note_count: int,
     deck_card_count: int,
     card_css: str,
-) -> tuple[bytes, str]:
-    """One self-contained page, and the exact policy it is paired with."""
+    notices: tuple[str, ...] = (),
+) -> tuple[bytes, str, dict[str, str]]:
+    """One self-contained page, the policy it is paired with, and what drew it.
+
+    The third value is every non-card input this document inlined, by sha256:
+    the notetype stylesheet and the viewer's two files. A receipt that binds a
+    preview needs those separately from the page digest, because the page digest
+    changes when the *cards* change too.
+    """
     viewer_css = _viewer_asset(config, "viewer.css")
     viewer_js = _viewer_asset(config, "viewer.js")
     policy = _policy(viewer_js)
+    assets = {
+        "notetype.css": hashlib.sha256(card_css.encode("utf-8")).hexdigest(),
+        "viewer.css": hashlib.sha256(viewer_css.encode("utf-8")).hexdigest(),
+        "viewer.js": hashlib.sha256(viewer_js.encode("utf-8")).hexdigest(),
+    }
     title = f"{deck_name} — card preview"
     options = "".join(
         f'<option value="{index}">'
@@ -1099,6 +1212,16 @@ def _document(
     )
     subtitle_html = (
         f'<p class="preview-subtitle">{html.escape(subtitle)}</p>' if subtitle else ""
+    )
+    notices_html = (
+        '<ul class="preview-notices">'
+        + "".join(
+            f'<li class="preview-notice">{html.escape(notice)}</li>'
+            for notice in notices
+        )
+        + "</ul>"
+        if notices
+        else ""
     )
     document = f"""<!doctype html>
 <html lang="en">
@@ -1116,6 +1239,7 @@ def _document(
 {subtitle_html}
 {_counts_html(kind, directions, note_count, len(cards), new_note_count,
               deck_note_count, deck_card_count)}
+{notices_html}
 </header>
 <nav class="preview-nav" aria-label="Card navigation">
 <button type="button" id="preview-prev">Previous</button>
@@ -1144,10 +1268,28 @@ stylesheet. Viewing a preview approves nothing.</p>
             f"{MAX_PREVIEW_BYTES}-byte limit. Preview a narrower scope rather "
             "than shipping a page with cards left out."
         )
-    return payload, policy
+    return payload, policy, assets
 
 
-# --- the public renderer ------------------------------------------------------
+# --- the public renderers -----------------------------------------------------
+
+
+def _checked_audio_state(value: Any) -> AudioState:
+    if value not in AUDIO_STATES:
+        raise CardPreviewError(
+            f"A preview audio state is one of {', '.join(AUDIO_STATES)}, not "
+            f"{value!r}."
+        )
+    return value
+
+
+def _checked_notices(value: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(value, str | bytes | bytearray) or not isinstance(value, Sequence):
+        raise CardPreviewError("Preview notices must be a sequence of lines, not text.")
+    for notice in value:
+        if not isinstance(notice, str) or not notice.strip():
+            raise CardPreviewError("A preview notice must be nonblank text.")
+    return tuple(value)
 
 
 def render_card_preview(
@@ -1158,6 +1300,8 @@ def render_card_preview(
     new_record_ids: Sequence[str] = (),
     scope_record_ids: Sequence[str] | None = None,
     subtitle: str = "",
+    notices: Sequence[str] = (),
+    audio_state: AudioState = "packaged",
 ) -> CardPreview:
     """Render one deck's real cards into a self-contained interactive preview.
 
@@ -1171,6 +1315,11 @@ def render_card_preview(
     set. ``new_record_ids`` names genuine additions, which is what separates
     ``new_note_count`` from ``existing_note_count``; both stay distinct from
     the whole deck's ``deck_note_count``.
+
+    ``audio_state`` names what a clip's *absence* means for this preview, which
+    is exactly the case a proposal drawn before generation is in: ``"pending"``
+    for a planned clip that has not been made yet. It never makes a control for
+    bytes that are not there.
     """
     unavailable = preview_unavailable()
     if unavailable is not None:
@@ -1179,6 +1328,8 @@ def render_card_preview(
         raise CardPreviewError(
             f"A preview subtitle must be text, got {type(subtitle).__name__}."
         )
+    state = _checked_audio_state(audio_state)
+    disclosures = _checked_notices(notices)
 
     target = Path(os.path.abspath(os.fspath(deck_path)))
     overlay = _validated_overlay(config, proposed)
@@ -1223,7 +1374,7 @@ def render_card_preview(
 
         package = scratch / "preview.apkg"
         plan = _build_package(build_config, build_deck_path, package)
-        drawn, card_css = _drawn_cards(package, scratch, plan, choose)
+        drawn, card_css = _drawn_cards(package, scratch, plan, choose, state)
 
     new_ids: frozenset[str] = selection["new_ids"]
     selected: tuple[str, ...] = selection["selected"]
@@ -1244,7 +1395,7 @@ def render_card_preview(
     )
     new_note_count = sum(1 for record_id in selected if record_id in new_ids)
 
-    payload, policy = _document(
+    payload, policy, assets = _document(
         config,
         deck_name=plan.deck_name,
         kind=plan.kind,
@@ -1256,6 +1407,7 @@ def render_card_preview(
         deck_note_count=deck_note_count,
         deck_card_count=deck_card_count,
         card_css=card_css,
+        notices=disclosures,
     )
     return CardPreview(
         deck_name=plan.deck_name,
@@ -1270,6 +1422,252 @@ def render_card_preview(
         html=payload,
         sha256=hashlib.sha256(payload).hexdigest(),
         content_security_policy=policy,
+        render_assets=assets,
+    )
+
+
+#: The two deck kinds whose notes carry their own identity in their first field,
+#: which is the only thing that lets an already-built archive be read back
+#: without the deck file that produced it. A pattern or conjugation note's
+#: identity lives in its GUID and is minted from the deck's own configuration, so
+#: naming one of those here would mean guessing at identities from an archive.
+_PACKAGED_PREVIEW_KINDS = ("vocabulary", "kanji")
+
+
+def _packaged_template_names(kind: str) -> dict[str, str]:
+    """The owning exporter's own direction -> Anki template name table.
+
+    Read out of the exporter that writes the notetype rather than restated here.
+    The two tables disagree on both spelling and order — a word deck builds
+    ``Recognition, Production, Reading`` and a character deck ``Kanji
+    Recognition, Kanji Reading, Kanji Production`` — so a copy kept beside this
+    seam would be a claim about the builder that drifts the day a card type
+    moves, and it is exactly that kind of drift this check exists to catch.
+    """
+    if kind == "kanji":
+        from japanese_anki.exporters.kanji_cards import KANJI_CARD_FILES as card_files
+    else:
+        from japanese_anki.exporters.anki import CARD_FILES as card_files
+    return {key: value[2] for key, value in card_files.items()}
+
+
+def render_packaged_card_preview(
+    config: ProjectConfig,
+    package_path: Path,
+    *,
+    package_sha256: str,
+    deck_name: str,
+    deck_kind: str = "vocabulary",
+    directions: Sequence[str],
+    new_record_ids: Sequence[str] = (),
+    scope_record_ids: Sequence[str] | None = None,
+    subtitle: str = "",
+    notices: Sequence[str] = (),
+    audio_state: AudioState = "packaged",
+) -> CardPreview:
+    """Draw the cards an **already-built** ``.apkg`` contains, and build nothing.
+
+    This is the seam a finished job's final preview needs: the package has
+    already been proven, so re-running an exporter here would draw a *different*
+    artifact from the one that was delivered, and any provider call or
+    publication would be work nobody authorized at preview time. Nothing is
+    built, fetched, generated or published — the archive is imported into a
+    scratch collection and ``card.render_output()`` draws it, which is the same
+    single rendering path :func:`render_card_preview` uses and the same one the
+    desktop reviewer uses.
+
+    ``package_sha256`` is the caller's proven digest and is re-checked against
+    these exact bytes, so a preview can never be drawn from an archive that
+    moved after it was proven. The audio a card plays therefore comes out of the
+    proven package rather than off disk: "playable" means those bytes are in
+    *that* artifact.
+    """
+    unavailable = preview_unavailable()
+    if unavailable is not None:
+        raise CardPreviewError(unavailable)
+    if deck_kind not in _PACKAGED_PREVIEW_KINDS:
+        raise CardPreviewError(
+            f"janki can draw a built {', '.join(_PACKAGED_PREVIEW_KINDS)} package; "
+            f"a {deck_kind!r} note's identity is minted from its deck rather than "
+            "stored in the archive, so there is nothing here to name its cards by."
+        )
+    if not isinstance(subtitle, str):
+        raise CardPreviewError(
+            f"A preview subtitle must be text, got {type(subtitle).__name__}."
+        )
+    if not isinstance(deck_name, str) or not deck_name.strip():
+        raise CardPreviewError("A previewed package needs its deck's name.")
+    if isinstance(directions, str | bytes | bytearray) or not isinstance(
+        directions, Sequence
+    ):
+        raise CardPreviewError("Preview directions must be a sequence of keys.")
+    ordered = tuple(str(item) for item in directions)
+    if not ordered or len(set(ordered)) != len(ordered):
+        raise CardPreviewError(
+            "A previewed package's directions are its deck's distinct card types."
+        )
+    # Every one of these keys becomes a `data-direction`, a `PreviewCard`
+    # direction and a line in the header, so each has to be a card type the deck
+    # kind's builder actually has a template for. A blank one renders
+    # `data-direction=""` and reads as "directions: , reading".
+    template_names = _packaged_template_names(deck_kind)
+    unknown = tuple(key for key in ordered if key not in template_names)
+    if unknown:
+        raise CardPreviewError(
+            f"{unknown[0]!r} is not a card type a {deck_kind} deck builds. Its "
+            f"card types are: {', '.join(template_names)}. Nothing was previewed."
+        )
+    expected = tuple(template_names[key] for key in ordered)
+    state = _checked_audio_state(audio_state)
+    disclosures = _checked_notices(notices)
+
+    package = Path(os.path.abspath(os.fspath(package_path)))
+    try:
+        payload = package.read_bytes()
+    except OSError as exc:
+        raise CardPreviewError(
+            f"Could not read the package to preview at {package}: {exc}"
+        ) from exc
+    found = hashlib.sha256(payload).hexdigest()
+    if found != package_sha256:
+        raise CardPreviewError(
+            f"The package at {package} hashes to {found}, not the proven "
+            f"{package_sha256}. Nothing was previewed."
+        )
+
+    plan = _DeckPlan(
+        kind=deck_kind,
+        deck_name=deck_name,
+        directions=ordered,
+        identity_by_guid={},
+    )
+    selection: dict[str, Any] = {}
+
+    def verify(archived: tuple[str, ...]) -> None:
+        """The supplied directions, against the templates the archive was built from.
+
+        ``directions`` is applied positionally to the archive's card ordinals,
+        so it is what every ``data-direction`` and the header's direction line
+        assert — and it comes from the caller while the ordinals come from the
+        package. The notetype's template list is the archive's own account of
+        what its deck builds, in the order the exporter wrote it, so comparing
+        the two is what makes those labels claims about the archive.
+
+        Deliberately not a comparison against the ordinals the cards cover: a
+        configured template writes no card for a note whose required fields are
+        empty, and a deck can legitimately deliver fewer cards than its
+        directions offer, with gaps. That is an ordinary deck, and refusing it
+        would trade a labelling bug for a refusal of a supported build.
+        """
+        if len(archived) != len(expected):
+            raise CardPreviewError(
+                f"The package at {package} was built from {len(archived)} card "
+                f"template{'' if len(archived) == 1 else 's'} "
+                f"({', '.join(archived) or 'none'}), not the {len(expected)} "
+                f"this preview was told the deck builds ({', '.join(ordered)}). "
+                "Nothing was previewed."
+            )
+        for index, (wanted, name) in enumerate(zip(expected, archived, strict=True)):
+            if wanted != name:
+                raise CardPreviewError(
+                    f"The package at {package} draws card {index} with its "
+                    f"{name!r} template, not the {wanted!r} template "
+                    f"{ordered[index]!r} builds. Nothing was previewed."
+                )
+
+    def choose(catalogue: tuple[_CardRef, ...]) -> tuple[_CardRef, ...]:
+        if not catalogue:
+            raise CardPreviewError(
+                f"The package at {package} holds no card, so there is nothing to "
+                "preview."
+            )
+        grouped: dict[str, list[_CardRef]] = {}
+        for ref in catalogue:
+            grouped.setdefault(ref.record_id, []).append(ref)
+        new_ids = _new_ids(grouped, new_record_ids)
+        selected = _selected_ids(grouped, scope_record_ids)
+        chosen = tuple(ref for record_id in selected for ref in grouped[record_id])
+        if len(chosen) > MAX_PREVIEW_CARDS:
+            raise CardPreviewError(
+                f"{package} would show {len(chosen)} cards, over the "
+                f"{MAX_PREVIEW_CARDS}-card preview limit. Preview an exact scope "
+                "rather than a page with cards left out."
+            )
+        selection.update(
+            new_ids=new_ids,
+            selected=selected,
+            deck_note_count=len(grouped),
+            deck_card_count=len(catalogue),
+        )
+        return chosen
+
+    with tempfile.TemporaryDirectory(prefix="janki-packaged-preview-") as temporary:
+        scratch = Path(temporary)
+        # The exact bytes that were just proven, not the path they were read
+        # from. The import below and the media read after it would otherwise
+        # open that path again, and an ordinary rebuild over one's own artifact
+        # between the two would produce a page whose `package_sha256` names
+        # bytes its cards, stylesheet and clips never came from. Its own
+        # directory so a package named `preview.anki2` cannot land on the
+        # scratch collection.
+        source = scratch / "package"
+        source.mkdir()
+        proven = source / package.name
+        try:
+            proven.write_bytes(payload)
+        except OSError as exc:
+            raise CardPreviewError(
+                f"Could not stage the proven bytes of {package} to preview "
+                f"them: {exc}"
+            ) from exc
+        drawn, card_css = _drawn_cards(
+            proven, scratch, plan, choose, state, verify_templates=verify
+        )
+
+    new_ids: frozenset[str] = selection["new_ids"]
+    selected: tuple[str, ...] = selection["selected"]
+    cards = tuple(
+        PreviewCard(
+            record_id=item.record_id,
+            label=item.label,
+            template=item.template,
+            direction=item.direction,
+            question_html=item.question_html,
+            answer_html=item.answer_html,
+            is_new=item.record_id in new_ids,
+        )
+        for item in drawn
+    )
+    new_note_count = sum(1 for record_id in selected if record_id in new_ids)
+    document, policy, assets = _document(
+        config,
+        deck_name=deck_name,
+        kind=deck_kind,
+        subtitle=subtitle,
+        directions=ordered,
+        cards=cards,
+        note_count=len(selected),
+        new_note_count=new_note_count,
+        deck_note_count=selection["deck_note_count"],
+        deck_card_count=selection["deck_card_count"],
+        card_css=card_css,
+        notices=disclosures,
+    )
+    return CardPreview(
+        deck_name=deck_name,
+        deck_kind=deck_kind,
+        directions=ordered,
+        note_count=len(selected),
+        card_count=len(cards),
+        new_note_count=new_note_count,
+        deck_note_count=selection["deck_note_count"],
+        deck_card_count=selection["deck_card_count"],
+        cards=cards,
+        html=document,
+        sha256=hashlib.sha256(document).hexdigest(),
+        content_security_policy=policy,
+        render_assets=assets,
+        package_sha256=package_sha256,
     )
 
 

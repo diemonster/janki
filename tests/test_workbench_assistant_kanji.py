@@ -661,7 +661,7 @@ def test_the_store_only_serves_bytes_a_complete_receipt_still_proves(
     plan = adapter._agent_plans[reply.action.request_fingerprint].plan
     result = kanji_finish.execute_kanji_finish(config, plan)
 
-    offer = store.offer(result.receipt_id)
+    offer = store.offer(kind="kanji_finish", receipt_id=result.receipt_id)
 
     assert offer.filename == "genki-ii-kanji.apkg"
     assert offer.byte_count == len(b"one exact anki package")
@@ -699,7 +699,7 @@ def test_an_unfinished_receipt_offers_no_download(
     with pytest.raises(
         assistant_packages.AssistantPackageError, match="state applied"
     ):
-        store.offer(plan.fingerprint)
+        store.offer(kind="kanji_finish", receipt_id=plan.fingerprint)
 
 
 def test_the_isolated_origin_serves_the_finished_package_once_bound(
@@ -733,7 +733,9 @@ def test_the_isolated_origin_serves_the_finished_package_once_bound(
         assert RESUME_KANJI_MESSAGE in script
 
         result = kanji_finish.execute_kanji_finish(config, plan)
-        offer = adapter._offer_package(result.receipt_id)
+        offer = adapter._offer_package(
+            kind="kanji_finish", receipt_id=result.receipt_id
+        )
         assert offer is not None
         connection = http.client.HTTPConnection(
             "127.0.0.1",

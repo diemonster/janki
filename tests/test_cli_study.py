@@ -763,6 +763,62 @@ def test_study_preview_writes_the_cards_and_prints_their_fingerprint(
     assert b"Show Answer" in output.read_bytes()
 
 
+@pytest.mark.skipif(
+    card_preview.preview_unavailable() is not None,
+    reason=str(card_preview.preview_unavailable()),
+)
+def test_study_preview_says_which_parts_are_missing_without_hashing_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One part settled, one not: the person is told, the page is not changed.
+
+    Looking at a job before it is finished is legitimate, so the settled subset
+    is drawn and the part that is missing is *said*. It is said in this
+    command's own output rather than written into the document, because the
+    document's sha256 is the fingerprint the owner's saved decisions are bound
+    to and which parts are still in flight is not a fact about a drawn card.
+    """
+
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    _source(config, "verbs.pdf", b"verbs")
+    _deck(config)
+    _run(config, "study", "new", "--source", "verbs.pdf", "--deck", "lesson")
+    job_id = _one_job(config)
+    _published_parts(config, job_id, ("verbs-p1.pdf", "verbs-p2.pdf"))
+    monkeypatch.setattr(extraction_batch, "plan_extraction_batch", _planner(config))
+    monkeypatch.setattr(
+        study_job.extraction_batch, "dispatch_extraction_batch", _dispatcher()
+    )
+    real_prepare = extraction_batch.prepare_extraction_transport
+
+    def refuse_second(call_plan: Any, target: Any, **kwargs: Any) -> Any:
+        if target.name == "verbs-p2.pdf":
+            raise JankiError("temporary login refusal")
+        return real_prepare(call_plan, target, **kwargs)
+
+    monkeypatch.setattr(
+        extraction_batch, "prepare_extraction_transport", refuse_second
+    )
+    assert _run(config, "study", "extract", job_id, "--yes", "--concurrency", "1") == 0
+    capsys.readouterr()
+
+    output = tmp_path / "pending-preview.html"
+    assert _run(config, "study", "preview", job_id, "--output", str(output)) == 0
+
+    printed = capsys.readouterr().out
+    assert "verbs-p2.pdf" in printed
+    assert "has not settled yet" in printed
+    page = output.read_bytes()
+    assert b"verbs-p2.pdf" not in page
+    fingerprint = next(
+        line.split(": ", 1)[1].strip()
+        for line in printed.splitlines()
+        if line.startswith("Rendered content fingerprint:")
+    )
+    assert hashlib.sha256(page).hexdigest() == fingerprint
+
+
 # --- the owner writes the layout, and settles what the parts disagree about ----
 
 

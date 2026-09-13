@@ -28,7 +28,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -1420,3 +1422,582 @@ def test_a_proposed_overlay_keeps_media_a_deck_names_beside_its_parent(
     assert f"base64,{clip}" in proposed, "and the same clip is still playable"
     assert "Audio not packaged" not in proposed
     assert _tree(tmp_path) == before
+
+
+# --- the exact-package seam a finished job's final preview needs ---------------
+#
+# `render_card_preview` builds a throwaway archive from a deck. A *finished* job
+# has already built and proven its package, so its final preview has to draw
+# that exact artifact instead: rebuilding would show cards nobody was given, and
+# a preview-only retry must cost no build, no provider call and no publication.
+
+
+def _built_package(config: ProjectConfig, deck: Path, output: Path) -> tuple[Path, str]:
+    """One real `.apkg`, built by the owning exporter, plus its digest."""
+    from japanese_anki.exporters.anki import build_deck
+
+    build_deck(deck, config, output_path=output)
+    return output, hashlib.sha256(output.read_bytes()).hexdigest()
+
+
+def _rewrite(path: Path, text: str) -> None:
+    """Edit a file `_project` copied in, whatever mode the copy inherited.
+
+    `shutil.copytree` carries the checkout's permissions across, and a checkout
+    may hold its templates read-only. An owner restyling their own project is
+    not doing anything unusual, so the fixture should not depend on that.
+    """
+    path.chmod(0o644)
+    path.write_text(text, encoding="utf-8")
+
+
+def _refuse_every_builder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every exporter entrypoint a preview could reach, wired to explode.
+
+    The claim "this drew the package and built nothing" is only worth making if
+    building would have been noticed.
+    """
+    from japanese_anki.exporters import anki as anki_exporter
+    from japanese_anki.exporters import kanji_cards, pattern_cards
+
+    def explode(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("a packaged preview must not build anything")
+
+    for module, name in (
+        (anki_exporter, "build_deck"),
+        (kanji_cards, "build_kanji_deck"),
+        (pattern_cards, "build_pattern_deck"),
+        (pattern_cards, "build_conjugation_deck"),
+        (card_preview, "_build_package"),
+    ):
+        monkeypatch.setattr(module, name, explode)
+
+
+def test_a_packaged_preview_draws_the_proven_archive_and_builds_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The delivered artifact is what a finished job's preview shows.
+
+    The counts, the identities and the notetype stylesheet all come out of the
+    archive; `render_assets` names what drew the page separately from the page's
+    own digest, because a receipt that binds a preview has to say which
+    stylesheet and which viewer produced it.
+    """
+    config = _project(tmp_path)
+    (tmp_path / "media" / "janki-word.mp3").write_bytes(b"ID3fake")
+    _words(
+        tmp_path,
+        [
+            VocabularyRecord(
+                id="word:話す:はなす", expression="話す", reading="はなす",
+                meanings=["to speak"], audio="janki-word.mp3", tags=["lesson"],
+            ),
+            VocabularyRecord(
+                id="word:見る:みる", expression="見る", reading="みる",
+                meanings=["to see"], tags=["lesson"],
+            ),
+        ],
+    )
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+    _refuse_every_builder(monkeypatch)
+
+    preview = card_preview.render_packaged_card_preview(
+        config,
+        package,
+        package_sha256=digest,
+        deck_name="Lesson",
+        directions=("recognition", "production", "reading"),
+        new_record_ids=["word:見る:みる"],
+        subtitle="The cards this study job delivered",
+    )
+
+    assert preview.package_sha256 == digest
+    assert preview.deck_note_count == 2
+    assert preview.deck_card_count == 6
+    assert preview.note_count == 2
+    assert preview.card_count == 6
+    assert preview.new_note_count == 1
+    assert [card.record_id for card in preview.cards].count("word:話す:はなす") == 3
+    assert set(preview.render_assets) == {"notetype.css", "viewer.css", "viewer.js"}
+    assert all(len(value) == 64 for value in preview.render_assets.values())
+    body = preview.html.decode("utf-8")
+    # Drawn from the archive's own media, so the clip plays and the page is
+    # self-contained: a data: URI, never a path back into the repository.
+    assert "data:audio/mpeg;base64," in body
+    assert str(tmp_path) not in body
+    assert preview.content_security_policy.startswith("default-src 'none';")
+
+
+def test_a_packaged_preview_refuses_bytes_that_are_not_the_proven_package(
+    tmp_path: Path,
+) -> None:
+    """A package that moved after it was proven is not previewed at all."""
+    config = _project(tmp_path)
+    _words(tmp_path, [HANASU])
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+    package.write_bytes(package.read_bytes() + b"tampered")
+
+    with pytest.raises(CardPreviewError, match="not the proven"):
+        card_preview.render_packaged_card_preview(
+            config,
+            package,
+            package_sha256=digest,
+            deck_name="Lesson",
+            directions=("recognition",),
+        )
+
+
+def test_the_three_audio_states_say_three_different_things(tmp_path: Path) -> None:
+    """Pending, omitted and not-packaged are separate facts about one clip.
+
+    The record references a clip whose bytes were never generated, so the
+    archive carries no media for it. What changes between the three pages is
+    only *why* it is absent — and none of them draws a control.
+    """
+    config = _project(tmp_path)
+    _words(
+        tmp_path,
+        [
+            VocabularyRecord(
+                id="word:話す:はなす", expression="話す", reading="はなす",
+                meanings=["to speak"], audio="[sound:janki-planned.mp3]",
+                tags=["lesson"],
+            )
+        ],
+    )
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+
+    pages = {
+        state: card_preview.render_packaged_card_preview(
+            config,
+            package,
+            package_sha256=digest,
+            deck_name="Lesson",
+            directions=("recognition", "production", "reading"),
+            audio_state=state,
+        ).html.decode("utf-8")
+        for state in card_preview.AUDIO_STATES
+    }
+
+    assert "Audio not packaged: janki-planned.mp3" in pages["packaged"]
+    assert "Audio pending generation: janki-planned.mp3" in pages["pending"]
+    assert (
+        "Sentence audio omitted by owner: janki-planned.mp3" in pages["omitted"]
+    )
+    for state, body in pages.items():
+        assert f'data-audio-state="{state}"' in body
+        assert "<audio controls" not in body, (
+            f"the {state} page drew a control for bytes that do not exist"
+        )
+    # Three different pages, so a receipt's preview digest cannot be reused
+    # across a state change.
+    assert len({body for body in pages.values()}) == 3
+
+
+def test_a_packaged_clip_stays_playable_under_every_audio_state(
+    tmp_path: Path,
+) -> None:
+    """"Playable" follows the bytes, never the label a caller passed in."""
+    config = _project(tmp_path)
+    (tmp_path / "media" / "janki-word.mp3").write_bytes(b"ID3fake")
+    _words(
+        tmp_path,
+        [
+            VocabularyRecord(
+                id="word:話す:はなす", expression="話す", reading="はなす",
+                meanings=["to speak"], audio="janki-word.mp3", tags=["lesson"],
+            )
+        ],
+    )
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+
+    for state in card_preview.AUDIO_STATES:
+        body = card_preview.render_packaged_card_preview(
+            config,
+            package,
+            package_sha256=digest,
+            deck_name="Lesson",
+            directions=("recognition", "production", "reading"),
+            audio_state=state,
+        ).html.decode("utf-8")
+        assert "<audio controls" in body
+        # The class is in the inlined stylesheet either way; what must not be
+        # here is an element drawn with it.
+        assert 'class="preview-media-missing"' not in body
+
+
+def test_a_packaged_preview_states_the_owners_notices_and_refuses_a_blank_one(
+    tmp_path: Path,
+) -> None:
+    """An owner's audio opt-out is a sentence on the page, not a silent gap."""
+    config = _project(tmp_path)
+    _words(tmp_path, [HANASU])
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+    notice = "Sentence audio was omitted by owner for this job."
+
+    preview = card_preview.render_packaged_card_preview(
+        config,
+        package,
+        package_sha256=digest,
+        deck_name="Lesson",
+        directions=("recognition", "production", "reading"),
+        notices=[notice],
+    )
+
+    assert notice in preview.html.decode("utf-8")
+    with pytest.raises(CardPreviewError, match="nonblank text"):
+        card_preview.render_packaged_card_preview(
+            config,
+            package,
+            package_sha256=digest,
+            deck_name="Lesson",
+            directions=("recognition", "production", "reading"),
+            notices=["  "],
+        )
+
+
+def test_a_packaged_preview_refuses_a_kind_whose_identities_are_not_in_the_archive(
+    tmp_path: Path,
+) -> None:
+    """A drill or rule note's identity is minted from its deck, not stored.
+
+    Guessing at those identities from an archive is exactly the thing the
+    GUID-keyed `_DeckPlan.identity_by_guid` exists to avoid, so the two kinds
+    that keep their id in a field are the two this seam accepts.
+    """
+    config = _project(tmp_path)
+    _words(tmp_path, [HANASU])
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+
+    with pytest.raises(CardPreviewError, match="minted from its deck"):
+        card_preview.render_packaged_card_preview(
+            config,
+            package,
+            package_sha256=digest,
+            deck_name="Lesson",
+            deck_kind="conjugation",
+            directions=("rule",),
+        )
+
+
+def test_a_packaged_preview_refuses_directions_the_archive_was_not_built_from(
+    tmp_path: Path,
+) -> None:
+    """The direction every card is labelled with is checked against the archive.
+
+    `directions` is applied positionally to the archive's own card ordinals and
+    ends up in every `data-direction`, in `PreviewCard.direction` and in the
+    header's "directions:" line. The package carries the truth — its notetype's
+    template list, in the order the owning exporter wrote it — so a list that
+    states another deck kind's card order, one the deck was not built from, or a
+    key no exporter knows is refused before anything is drawn, rather than
+    rendered as a page whose keys contradict its own template badges.
+    """
+    config = _project(tmp_path)
+    _words(tmp_path, [HANASU])
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+
+    cases = {
+        # The character deck's order, whose second template is Reading. Applied
+        # to a word package it labels the Production card "reading".
+        ("recognition", "reading", "production"): "'Production'.+'Reading'",
+        # Fewer, and more, than the archive's three templates.
+        ("recognition", "production"): "3 card templates.+not the 2",
+        ("recognition", "production", "reading", "kanji"): "'kanji' is not a card",
+        # Keys no exporter has a template name for at all.
+        ("recognition", "", "reading"): "'' is not a card",
+        ("recognition", "backwards", "reading"): "'backwards' is not a card",
+    }
+    for directions, expected in cases.items():
+        with pytest.raises(CardPreviewError, match=expected) as refusal:
+            card_preview.render_packaged_card_preview(
+                config,
+                package,
+                package_sha256=digest,
+                deck_name="Lesson",
+                directions=directions,
+            )
+        assert "Nothing was previewed" in str(refusal.value), (
+            f"{directions} was refused without saying the page was not drawn"
+        )
+
+
+def test_a_packaged_preview_draws_a_configured_template_that_built_no_card(
+    tmp_path: Path,
+) -> None:
+    """A suppressed card is an ordinary deck, not a mislabelled `directions`.
+
+    genanki writes a card only for a template whose required fields a note
+    actually fills, so prompting production on `{{Furigana}}` gives a deck of
+    kana-only words no production card *at all*: the configuration enables three
+    card types, the notetype carries three templates, and ordinal 1 is empty
+    across the whole archive. The deck still builds three card types and its
+    third template is still Reading, so every direction key has to stay on the
+    ordinal the exporter gave it.
+
+    Checking `directions` against the card ordinals a package happens to contain
+    would refuse this deck and call a delivered archive malformed; checking it
+    against the notetype's template list draws it.
+    """
+    config = _project(tmp_path)
+    _rewrite(
+        tmp_path / "templates" / "japanese-study" / "production-front.html",
+        '<div class="prompt">{{Furigana}}</div>\n',
+    )
+    _words(
+        tmp_path,
+        [
+            VocabularyRecord(
+                id="word:ねこ:ねこ", expression="ねこ", reading="ねこ",
+                meanings=["cat"], part_of_speech="noun", tags=["lesson"],
+            ),
+            VocabularyRecord(
+                id="word:いぬ:いぬ", expression="いぬ", reading="いぬ",
+                meanings=["dog"], part_of_speech="noun", tags=["lesson"],
+            ),
+        ],
+    )
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+
+    preview = card_preview.render_packaged_card_preview(
+        config,
+        package,
+        package_sha256=digest,
+        deck_name="Lesson",
+        directions=("recognition", "production", "reading"),
+    )
+
+    assert preview.directions == ("recognition", "production", "reading")
+    assert preview.card_count == 4, "two notes, three directions, no production card"
+    assert preview.deck_card_count == 4 and preview.deck_note_count == 2
+    # Ordinal 1 is missing everywhere, so each note's *second* card is the third
+    # template. A direction key packed into the emitted ordinals would call it
+    # production.
+    assert {
+        (card.record_id, card.direction, card.template) for card in preview.cards
+    } == {
+        ("word:ねこ:ねこ", "recognition", "Recognition"),
+        ("word:ねこ:ねこ", "reading", "Reading"),
+        ("word:いぬ:いぬ", "recognition", "Recognition"),
+        ("word:いぬ:いぬ", "reading", "Reading"),
+    }
+    assert "production" in preview.directions, (
+        "the deck's configuration is what the header states, and it enables three"
+    )
+
+
+def _media_index_pointing_elsewhere(package: Path, target: Path) -> tuple[Path, str]:
+    """The same archive with its media index naming a member it does not hold.
+
+    A malformed index is exactly the input the packaged seam widened the door
+    to: the deck path reads an archive janki wrote a moment earlier, and this
+    one reads whatever file a caller names.
+    """
+    with zipfile.ZipFile(package) as source:
+        index = json.loads(source.read("media").decode("utf-8"))
+        entries = [(item, source.read(item.filename)) for item in source.infolist()]
+    assert len(index) == 1, "the fixture packages exactly one clip"
+    reindexed = json.dumps({"404": str(next(iter(index.values())))})
+    with zipfile.ZipFile(target, "w") as rebuilt:
+        for info, data in entries:
+            rebuilt.writestr(
+                info, reindexed.encode("utf-8") if info.filename == "media" else data
+            )
+    return target, hashlib.sha256(target.read_bytes()).hexdigest()
+
+
+def test_a_media_index_naming_a_member_the_archive_lacks_refuses_by_name(
+    tmp_path: Path,
+) -> None:
+    """The archive reader's last malformed case was a bare `KeyError`.
+
+    `_package_media` is this module's only archive reader, and everything else
+    it can meet — an unreadable index, an index that is not a mapping, a path in
+    a member name, a path in a filename, a file over either cap — is a
+    `CardPreviewError` naming what was wrong. An index entry whose zip member is
+    absent raised `KeyError: '404'` out of the renderer instead, which names
+    nothing a reader can act on.
+
+    Diagnostic only, and exercised on the reader directly for that reason: Anki's
+    own importer refuses this same archive several steps earlier
+    (`InvalidInput: 404 missing from archive`), so no page was ever drawn from
+    one. What changes is what the renderer says when its own reader meets a
+    malformed index, not what any preview shows.
+    """
+    config = _project(tmp_path)
+    (tmp_path / "media" / "janki-word.mp3").write_bytes(b"ID3fake")
+    _words(
+        tmp_path,
+        [
+            VocabularyRecord(
+                id="word:話す:はなす", expression="話す", reading="はなす",
+                meanings=["to speak"], audio="janki-word.mp3", tags=["lesson"],
+            )
+        ],
+    )
+    deck = _word_deck(tmp_path)
+    package, _digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+    broken, _broken_digest = _media_index_pointing_elsewhere(
+        package, tmp_path / "dist" / "reindexed.apkg"
+    )
+
+    with pytest.raises(CardPreviewError, match="'404', which the archive does not"):
+        card_preview._package_media(broken, frozenset({"janki-word.mp3"}))
+
+    # The same reader, unchanged, on the archive the exporter actually wrote.
+    assert card_preview._package_media(package, frozenset({"janki-word.mp3"})) == {
+        "janki-word.mp3": b"ID3fake"
+    }
+
+
+def test_a_package_replaced_after_its_digest_check_cannot_change_the_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The proven bytes are what is drawn, not the path they were proven at.
+
+    The digest check reads the file; the import and the media read reopened the
+    same *path* afterwards, so an ordinary rebuild over that path between the
+    two — a supported thing to do with one's own artifact — produced a page
+    carrying a `package_sha256` those cards, that stylesheet and that clip never
+    came from. `_drawn_cards` is wrapped rather than replaced here: the wrapper
+    performs the replacement in exactly that window and then calls the real one,
+    which is the only way to stand in it.
+    """
+    config = _project(tmp_path)
+    style = tmp_path / "templates" / "japanese-study" / "style.css"
+    proven_css = style.read_text(encoding="utf-8")
+    (tmp_path / "media" / "janki-word.mp3").write_bytes(b"ID3proven")
+    speak = VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす",
+        meanings=["to speak"], audio="janki-word.mp3", tags=["lesson"],
+    )
+    _words(tmp_path, [speak])
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+    proven_bytes = package.read_bytes()
+
+    # The same identity rebuilt from a restyled project, a changed gloss and a
+    # regenerated clip: three exact artifacts that differ from the proven ones.
+    _rewrite(style, proven_css + "\n.card { outline: 1px solid restyled; }\n")
+    (tmp_path / "media" / "janki-word.mp3").write_bytes(b"ID3replaced")
+    _words(tmp_path, [replace(speak, meanings=["to holler"])])
+    replacement, _ = _built_package(config, deck, tmp_path / "dist" / "replacement.apkg")
+
+    drawn = card_preview._drawn_cards
+
+    def replace_then_draw(*args: Any, **kwargs: Any) -> Any:
+        package.write_bytes(replacement.read_bytes())
+        return drawn(*args, **kwargs)
+
+    monkeypatch.setattr(card_preview, "_drawn_cards", replace_then_draw)
+
+    preview = card_preview.render_packaged_card_preview(
+        config,
+        package,
+        package_sha256=digest,
+        deck_name="Lesson",
+        directions=("recognition", "production", "reading"),
+    )
+    body = preview.html.decode("utf-8")
+
+    assert package.read_bytes() != proven_bytes, "the replacement really happened"
+    assert preview.package_sha256 == digest
+    assert "to speak" in body and "to holler" not in body
+    assert f"base64,{base64.b64encode(b'ID3proven').decode('ascii')}" in body
+    assert base64.b64encode(b"ID3replaced").decode("ascii") not in body
+    assert "restyled" not in body
+    assert preview.render_assets["notetype.css"] == hashlib.sha256(
+        proven_css.encode("utf-8")
+    ).hexdigest()
+
+
+def test_a_packaged_preview_keeps_the_archived_stylesheet_when_the_project_restyles(
+    tmp_path: Path,
+) -> None:
+    """A saved package's appearance comes out of the package.
+
+    Both exporters embed `style.css` at build time, so editing it afterwards
+    cannot restyle a card the archive already holds — and `render_assets`
+    separates that frozen stylesheet from the viewer's own, which is janki's
+    current tool and legitimately tracks the file on disk. A receipt needs to
+    tell those two apart, which is why they are hashed separately.
+    """
+    config = _project(tmp_path)
+    style = tmp_path / "templates" / "japanese-study" / "style.css"
+    archived_css = style.read_text(encoding="utf-8")
+    _words(tmp_path, [HANASU])
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+
+    _rewrite(
+        style,
+        archived_css + "\n.card { outline: 3px solid restyled-after-the-build; }\n",
+    )
+    viewer = tmp_path / "templates" / "card-preview" / "viewer.css"
+    viewer_css = viewer.read_text(encoding="utf-8") + "\n.preview-body { zoom: 1; }\n"
+    _rewrite(viewer, viewer_css)
+
+    preview = card_preview.render_packaged_card_preview(
+        config,
+        package,
+        package_sha256=digest,
+        deck_name="Lesson",
+        directions=("recognition", "production", "reading"),
+    )
+    body = preview.html.decode("utf-8")
+    card_style = body.split("<style>", 1)[1].split("</style>", 1)[0]
+
+    assert card_style == archived_css, "the cards wear the stylesheet they were built with"
+    assert "restyled-after-the-build" not in body
+    assert preview.render_assets["notetype.css"] == hashlib.sha256(
+        archived_css.encode("utf-8")
+    ).hexdigest()
+    # The viewer shell is the tool, not the deck: its digest names the file
+    # this run actually inlined.
+    assert ".preview-body { zoom: 1; }" in body
+    assert preview.render_assets["viewer.css"] == hashlib.sha256(
+        viewer_css.encode("utf-8")
+    ).hexdigest()
+
+
+def test_a_packaged_preview_scoped_to_exact_ids_keeps_the_whole_deck_totals(
+    tmp_path: Path,
+) -> None:
+    """The shape a finished job's scoped review has: a few cards, whole totals.
+
+    `scope_record_ids` narrows what is drawn while `deck_note_count` and
+    `deck_card_count` keep describing the archive, and a record the scope leaves
+    out is not on the page at all — the two counters answer different questions
+    and a receipt quotes both.
+    """
+    config = _project(tmp_path)
+    _words(tmp_path, [HANASU, MIRU, KAU])
+    deck = _word_deck(tmp_path)
+    package, digest = _built_package(config, deck, tmp_path / "dist" / "lesson.apkg")
+
+    preview = card_preview.render_packaged_card_preview(
+        config,
+        package,
+        package_sha256=digest,
+        deck_name="Lesson",
+        directions=("recognition", "production", "reading"),
+        scope_record_ids=["word:見る:みる"],
+    )
+    body = preview.html.decode("utf-8")
+
+    assert preview.note_count == 1 and preview.card_count == 3
+    assert preview.deck_note_count == 3 and preview.deck_card_count == 9
+    assert {card.record_id for card in preview.cards} == {"word:見る:みる"}
+    assert "見る" in body
+    for absent in ("話す", "買う", "to speak", "to buy"):
+        assert absent not in body, f"{absent} is outside the scope that was asked for"
+    assert "whole deck 3 notes · 9 cards" in body
+    assert "showing 1 note · 3 cards" in body

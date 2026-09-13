@@ -98,6 +98,13 @@ dev = [
   # Playwright Chromium is available. The module also collection-skips in a
   # non-dev checkout without this driver; bootstrap installs `[dev]`, so that
   # fallback does not hide a failed declared dependency install there.
+  #
+  # `tests/test_card_preview_audio_browser.py` is the one check that does *not*
+  # skip: "the delivered package's sentence audio plays" has no non-browser
+  # spelling, so skipping it would report the one thing only a browser can prove
+  # as proven. There this driver and an installed Chrome/Chromium are hard
+  # requirements whose absence fails by name. It still never downloads a browser,
+  # and it leaves the workbench journey's skip above exactly as described.
   "playwright>=1.55,<2",
   "japanese-anki[ai]",
   "japanese-anki[assistant]",

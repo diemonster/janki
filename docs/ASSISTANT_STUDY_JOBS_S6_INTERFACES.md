@@ -100,9 +100,94 @@ proof is the next-day resume mutants of §7.13.
 
 ### 2.4 Study-job schema — lead, with the surfaces
 
-`_WRITABLE_INTENT_KINDS` gains `"finish"`; all five `_DEFERRED_CHOICE_KEYS`
-move into `_WRITABLE_CHOICE_KEYS` **together with the editors that write
-them**, never ahead of them. `CHOICE_KEYS` is derived and needs no edit.
+`"finish"` becomes writable and all five `_DEFERRED_CHOICE_KEYS` move into
+`_WRITABLE_CHOICE_KEYS` **together with the editors that write them**, never
+ahead of them. `CHOICE_KEYS` is derived and needs no edit.
+
+**As landed**, with the shapes the owner controls of §9.1/§9.3 must write:
+
+- There is no second intent-kind list. `INTENT_KINDS` is the one closed check in
+  `append_intent`; every kind in it has an owning service, so the separate
+  "is there a writer for this kind yet" guard was **deleted** rather than kept as
+  an unreachable safety net.
+- Each per-part decision has a **closed field set** beyond the four bindings and
+  the local `saved_at` note (`_PART_DECISION_FIELDS`): `review_flags` records
+  `record_ids`; `review_patterns` records `value`; `coverage_reasons` records
+  `reason`; `dispositions` records `action`, `record_ids` and `reason`. A payload
+  naming anything else refuses by name and writes nothing — a misspelled
+  `record_id` is a refusal, never a dropped field.
+- A **present** `record_ids` is validated as supplied. Only its absence, or an
+  explicit `[]`, carries §7.7's documented whole-part meaning; `False`, `0`, `""`,
+  `{}` and `null` refuse instead of widening one held row's disposition to the
+  page.
+- The pattern-set mark has exactly **one** home: the standalone
+  `review_patterns[part].value`. `review_flags` carries no nested copy, and
+  `study_finish` reads/revalidates that standalone entry through `_bound_choice`
+  with its own `_CHOICE_CONTROLS` row (§9.3's `janki study review --patterns`),
+  then passes the single value to §7.2's pattern-store mark, §7.6's promotion
+  check and the recorded authority. One editor may still save the review
+  selection and the pattern choice in one compare-and-swap; storage holds one
+  copy of each decision.
+- **Withdrawal is part of this local operation, not a new one.** `record_choice`
+  accepts `{key: {part: None}}` for the four per-part keys: the same control, the
+  same compare-and-swap, and the exact `job_id` plus `expected_revision` binding
+  the stored choice being taken back. Only the named parts are dropped; every
+  other part, key, pending intent and saved date is preserved exactly. An empty
+  map, a blank reason and an omitted part stay refusals or no-ops — none of them
+  is an implicit withdrawal — and withdrawing a decision the job does not hold at
+  that revision refuses. It is what makes §7.7's "clear it and plan again"
+  refusals recoverable without hand-editing `data/study_jobs/<id>.json`.
+
+The owner controls themselves are still owed (§9.1/§9.3: `janki study
+review|coverage|disposition` and the editors). **Nothing above ships a control**:
+the withdrawal is an application-service operation those surfaces must expose
+when they land, exactly as the saves they will make do.
+
+### 2.4b `application/study_choices.py` — the shared owner-decision service
+
+The one service behind both of those still-owed surfaces, so neither can hold a
+second opinion about what was decided or what it was decided over. It owns no
+derivation: parts come from `study_job.job_effective_frontier`, the page from
+`study_job.render_job_preview`, a part's current bytes/rows/pattern control from
+`workbench.review.ReviewPanel`, and every write is one `study_job.record_choice`
+compare-and-swap against §2.4's closed validators.
+
+`read_job_decisions(config, job_id) -> JobDecisions` returns the exact job
+`revision`, the owning `StudyJobPreview` (the real interactive page and its
+`rendering_fingerprint`), one `PartDecisions` per **complete** effective part
+(`part`, `ref`, `staging_path`, `staging_sha256`, structural `record_ids`,
+`reviewable_record_ids`, `pattern_selectable`, `pattern_warning`, and each held
+`SavedChoice` with an explicit `stale`), the remaining effective attempts as
+`pending`, and the effective `include_example_audio` with `audio_choice_saved`
+beside it. Two effective attempts at one part name refuse rather than resolving
+to the newer; a stale saved choice is **disclosed** here and refuses at the
+finish.
+
+`reviewable_record_ids` is `ReviewPanel.reviewable_record_ids` — the rows whose
+sentences still await approval — as a subset of `record_ids` in the same
+document order; `pattern_warning` is `ReviewPanel.pattern_warning` word for
+word, so a surface can say *why* a part has no pattern control. Neither is
+re-derived here: `pattern_selectable` stays the panel's lineage-plus-presence
+answer and is independent of whether the set is already marked, which is why an
+already-marked part still takes the owner's explicit `patterns` bool.
+
+`save_review`, `save_coverage_reason` and `save_disposition` each take the
+displayed `expected_revision` and `rendering_fingerprint`, resolve the current
+part and its current staging sha256, and compare the **supplied** fingerprint
+with a fresh rendering — a difference refuses and the fresh value is never
+substituted. `save_review` requires `record_ids` explicitly (`[]` is the stated
+"none"), accepts only ids in `reviewable_record_ids` — a row the part holds but
+does not offer for review refuses at the save, with nothing written, instead of
+being stored for the finish to refuse the whole job over — requires `patterns`
+exactly when `pattern_selectable`, and writes `review_flags` plus the standalone
+`review_patterns` in one CAS. `save_disposition` keeps every current row as a
+valid target, reviewable or not.
+`withdraw_choice(config, job_id, part, key, *, expected_revision)` is §2.4's
+per-part `None` convention over `PART_CHOICE_KEYS`, CAS-only and with no
+rendering requirement. `save_audio_preference` binds `job_id` and the CAS
+revision only; it renders nothing, reads no staging document and defaults to
+included. None of them writes a staging review mark, a coverage approval, a
+canonical byte or a paid request.
 
 ### 2.5 `enrich.DictionaryLookup` — lead ownership, landed inside S6-P
 
@@ -208,6 +293,47 @@ directory read off the configuration, so there is **one** lock and one
 convention. It exists because `workbench.review.ReviewPanel` is deliberately
 opened from three explicit paths — an approval binds the exact files it read —
 and is nonetheless an entry that writes staged bytes (§4 below).
+
+### 2.9 Study-finish aggregate scope — lead, boundary 6 in progress
+
+```python
+@dataclass(frozen=True, slots=True)
+class StudyFinishSelection:
+    part_name: str
+    receipt_id: str
+    archive_path: str          # repository-relative, the part's own archive
+    record_ids: tuple[str, ...]  # what THIS job took from that receipt
+
+def resolve_study_finish_scope(
+    config: ProjectConfig, selections: Sequence[StudyFinishSelection]
+) -> StudyFinishScope                       # .members .selections .projection .fingerprint
+```
+
+`FinishScope`, `resolve_finish_scope` and `list_finish_receipts` are unchanged
+and remain the owning archive reader; `members` are their values verbatim, one
+per distinct receipt. What is new is per-part, per-receipt **selection**: §9.6.2
+asks for the exact source-bound receipts, plural, whose selected `promoted_ids`
+account for exactly a part's accepted ids. A receipt may hold more than the job
+took — an archive retry selects the rows its live review still carries — and
+those unselected ids never enter the projection, the aggregate fingerprint
+(payload version 2) or any later enrichment/audio/package/preview selection.
+The durable `promotion_receipt.parts[k]` therefore carries `receipts: [{
+receipt_id, selected_ids }]` beside its existing `receipt_id`/`landed_ids`, one
+entry per part occurrence, and `_assert_complete` re-derives and re-proves all
+of it: receipt in that part's own archive, every selected id really promoted by
+it, per-part and overall unions equal to the accepted ids, duplicate identities
+agreeing on their owner deck. The receipt's **top-level** `receipt_ids` is the
+deduped union of those bound selections in fold order, so it can name a prior
+batch this job never wrote; it discloses which receipts the job's scope rests
+on, and the per-part `receipts` list — not that union — is what completion
+re-derives. Nothing in `src/` reads it.
+
+Two count scopes stay two numbers here as well (§7.12). The final preview is
+rendered with the authority's accepted ids as `scope_record_ids`, so its
+`note_count`/`card_count` are the **job's selection** while
+`deck_note_count`/`deck_card_count` stay the whole delivered deck;
+`StudyFinishResult.card_count` remains the package receipt's whole-deck
+expansion, and `study_job._resume_finish` says so in the text it reports.
 
 ---
 

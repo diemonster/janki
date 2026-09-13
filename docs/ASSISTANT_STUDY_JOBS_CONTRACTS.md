@@ -1539,7 +1539,9 @@ audio was omitted. Never mark a generated clip playable before its media exists.
 ### 7.12 Aggregate scope and counts
 
 `StudyFinishScope` in `application/study_finish.py` holds `members: tuple[FinishScope,
-...]`, each from the **unchanged** `resolve_finish_scope:411`, plus a deduped
+...]`, each from the **unchanged** `resolve_finish_scope:411`; `selections:
+tuple[StudyFinishSelection, ...]`, one entry per part/receipt occurrence carrying the
+exact ids that part took from that receipt; plus a deduped
 `(record_id, owner_stem, deck_path)` projection and its own fingerprint. `FinishScope`,
 `resolve_finish_scope`, `execute_finish_build` and every consumer are untouched; no
 replacement pathway is created. Every part/receipt association is retained; two archives

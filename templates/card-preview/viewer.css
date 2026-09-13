@@ -81,6 +81,20 @@ body.preview-body {
   font-weight: 600;
 }
 
+/* Statements about the batch as a whole — an owner's audio opt-out, say. Not
+   counts, so they are sentences rather than pills. */
+.preview-notices {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-notice {
+  margin: 0.2rem 0 0;
+  color: var(--preview-muted);
+  font-size: 0.82rem;
+}
+
 .preview-nav {
   position: sticky;
   top: 0;
@@ -201,6 +215,18 @@ body.preview-body {
   border-radius: 8px;
   color: var(--preview-muted);
   font-size: 0.78rem;
+}
+
+/* "Not generated yet" and "the owner left it out" are different facts from
+   "the archive should have carried this", so they do not look the same. None of
+   them is a control: a clip is only playable when its bytes are here. */
+.preview-media-missing[data-audio-state="pending"] {
+  border-style: dotted;
+}
+
+.preview-media-missing[data-audio-state="omitted"] {
+  border-style: solid;
+  font-style: italic;
 }
 
 .preview-note {

@@ -553,14 +553,23 @@ class RevisionAssistantAdapter:
         self._package_store = store
         return store
 
-    def _offer_package(self, receipt_id: str) -> AssistantPackageOffer | None:
-        """Offer the finished deck inline, or say nothing when it cannot be."""
+    def _offer_package(
+        self,
+        *,
+        kind: str,
+        receipt_id: str,
+    ) -> AssistantPackageOffer | None:
+        """Offer the finished deck inline, or say nothing when it cannot be.
+
+        The kind is the caller's own knowledge of which finish service owns
+        this receipt; the store's closed registry refuses any other.
+        """
 
         store = self._package_store
         if store is None:
             return None
         try:
-            return store.offer(receipt_id)
+            return store.offer(kind=kind, receipt_id=receipt_id)
         except AssistantPackageError:
             return None
 
@@ -1077,7 +1086,9 @@ class RevisionAssistantAdapter:
             f"{output}. Finish receipt: {receipt.receipt_id}. Package SHA-256: "
             f"{receipt.package_sha256}."
         )
-        offer = self._offer_package(receipt.receipt_id)
+        offer = self._offer_package(
+            kind="kanji_finish", receipt_id=receipt.receipt_id
+        )
         if offer is not None:
             message = (
                 f"{message}\n\n[Download {offer.filename}]({offer.url}) — "
@@ -5557,18 +5568,35 @@ class RevisionAssistantAdapter:
         return tuple(choices)
 
     def render_study_job_preview(self, *, job_id: str, deck_scope: str) -> Any:
-        """One rendered look at what this job already saved. It accepts nothing."""
+        """One rendered look at what this job already saved. It accepts nothing.
+
+        The parts are named, not numbered. A job's effective frontier spans
+        several batches, so its children's indices legitimately repeat — "from
+        sources 1, 1" is what that sentence used to say, which tells the owner
+        nothing about which of their pages is on the page in front of them.
+
+        What the page does *not* hold is said here too, and only here: the
+        renderer keeps it off the document so the rendered content fingerprint
+        stays a fact about the drawn cards. So a part still in flight, or a
+        batch this job recorded whose own artifact nobody could match, is on
+        this message or nowhere.
+        """
 
         try:
             fresh_config = ProjectConfig.load(self.config.root)
             rendered = study_job.render_job_preview(fresh_config, job_id)
         except (JankiError, OSError, TypeError, ValueError) as exc:
             raise RevisionRefusal(str(exc)) from exc
-        covered = ", ".join(str(index) for index in rendered.child_indices) or "none"
+        covered = ", ".join(ref.source_name for ref in rendered.children) or "none"
+        waiting = (
+            " Not on this page: " + "; ".join(rendered.disclosure) + "."
+            if rendered.disclosure
+            else ""
+        )
         message = (
             f"These are the {rendered.preview.card_count} cards this job has "
-            f"saved from sources {covered}, drawn as Anki draws them. Looking at "
-            "them changes nothing and accepts nothing. Rendered content "
+            f"saved from {covered}, drawn as Anki draws them.{waiting} Looking "
+            "at them changes nothing and accepts nothing. Rendered content "
             f"fingerprint: {rendered.rendering_fingerprint}."
         )
         if self._preview_store is None:
@@ -7474,7 +7502,7 @@ class RevisionAssistantAdapter:
             f"{plan.deck_name}. It now holds {result.note_count} note(s) and "
             f"{result.card_count} card(s)."
         )
-        offer = self._offer_package(result.receipt_id)
+        offer = self._offer_package(kind="kanji_finish", receipt_id=result.receipt_id)
         if offer is None:
             output = self._display_path(config, result.output_path)
             return f"{message} The package is at {output}."

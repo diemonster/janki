@@ -75,7 +75,9 @@ __all__ = [
     "execute_deck_package",
     "execute_deck_package_locked",
     "plan_deck_package",
+    "plan_from_wire",
     "plan_vocabulary_deck_package_revision",
+    "plan_wire",
     "prepare_deck_package",
     "publish_prepared_deck_package",
     "recover_prepared_deck_package",
@@ -2053,8 +2055,8 @@ class DeckPackagePreparation:
         return {
             "schema": self.schema,
             "preparation_id": self.preparation_id,
-            "projection": _plan_wire(config, self.projection),
-            "plan": _plan_wire(config, self.plan),
+            "projection": plan_wire(config, self.projection),
+            "plan": plan_wire(config, self.plan),
             "audio_completion": self.audio_completion.to_wire(),
             "staged_path": _relative(config, self.staged_path),
             "staged_sha256": self.staged_sha256,
@@ -2110,8 +2112,8 @@ class DeckPackagePreparation:
         preparation = cls(
             schema=PREPARED_PACKAGE_SCHEMA,
             preparation_id=_wire_identifier(raw.get("preparation_id")),
-            projection=_plan_from_wire(config, raw["projection"]),
-            plan=_plan_from_wire(config, raw["plan"]),
+            projection=plan_from_wire(config, raw["projection"]),
+            plan=plan_from_wire(config, raw["plan"]),
             audio_completion=proof,
             staged_path=_wire_path(config, raw.get("staged_path"), "staged artifact"),
             staged_sha256=_wire_digest(raw.get("staged_sha256"), "staged artifact"),
@@ -2237,7 +2239,20 @@ def _input_from_wire(config: ProjectConfig, raw: object) -> DeckPackageInput:
         raise DeckPackageError(f"A prepared package input is malformed: {exc}") from exc
 
 
-def _plan_wire(config: ProjectConfig, plan: DeckPackagePlan) -> dict[str, Any]:
+def plan_wire(config: ProjectConfig, plan: DeckPackagePlan) -> dict[str, Any]:
+    """One bound vocabulary projection as durable JSON, losing nothing.
+
+    Public because a coordinator that binds a package projection *before* the
+    effects that realize it has to store the whole projection, not a digest and
+    a list of inputs it reconstructs later: re-deriving a plan is planning
+    again, and a second plan is a second authority. Every field
+    :func:`assert_projection_realized` compares is here — the deck, source,
+    template and media inputs with their projected hashes, the output revision
+    **and** its inode identity, the configuration fingerprint and the plan's own
+    fingerprint — so :func:`plan_from_wire` restores the exact value
+    :func:`prepare_deck_package` will compare the realized plan against.
+    """
+
     if plan.conjugation_plan is not None:
         raise DeckPackageError(
             "A prepared package covers vocabulary decks, which carry no "
@@ -2269,7 +2284,16 @@ def _plan_wire(config: ProjectConfig, plan: DeckPackagePlan) -> dict[str, Any]:
     }
 
 
-def _plan_from_wire(config: ProjectConfig, raw: Mapping[str, Any]) -> DeckPackagePlan:
+def plan_from_wire(config: ProjectConfig, raw: Mapping[str, Any]) -> DeckPackagePlan:
+    """Restore one bound vocabulary projection, or refuse the wire.
+
+    Pure: no path is read and no hash is recomputed from disk. The restored plan
+    has to reproduce its own recorded ``plan_fingerprint``, so a wire somebody
+    edited cannot become an authority, and the repository root is this
+    project's — a projection from another checkout is refused by name rather
+    than rebased.
+    """
+
     for key in ("source_inputs", "template_inputs", "media_inputs"):
         if not isinstance(raw.get(key), list):
             raise DeckPackageError(f"A prepared package plan {key} is malformed.")

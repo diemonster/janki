@@ -522,8 +522,10 @@ def test_a_character_that_is_not_one_kanji_refuses_before_any_lookup(
         prepare_reference_facts(config, ["はな"])
     with pytest.raises(CharacterNotesError):
         prepare_reference_facts(config, "話")
-    with pytest.raises(CharacterNotesError):
-        prepare_reference_facts(config, [])
+    # An *empty* selection is deliberately not in this list any more: a kana-only
+    # accepted collection legitimately names no character, and
+    # `test_no_requested_character_is_an_ordinary_no_op_preparation` is what that
+    # case is now. Every target that *is* named still has to be one kanji.
 
     assert sources.looked_up == [] and sources.fetched == []
 
@@ -755,3 +757,72 @@ def test_the_character_note_batch_preserves_bound_kanji_entries_during_replaceme
     saved = kanji.load_store(config.kanji_file).entries
     assert sorted(saved) == ["泳", "話"]
     assert "走" not in saved
+
+
+# --- a job whose accepted cards bring no kanji at all -------------------------
+
+
+def test_no_requested_character_is_an_ordinary_no_op_preparation(
+    tmp_path: Path, sources: Sources
+) -> None:
+    """A kana-only selection asks for nothing and proposes nothing.
+
+    `kanji.kanji_in` already answers "no characters" for あげる or もらう, so a
+    caller folding it over a whole accepted collection legitimately arrives here
+    with an empty list. That is a settled selection, not a malformed request: it
+    issues no provider call, proposes no change to either store, and still binds
+    both stores' before-state so the apply's compare-and-swap has something to
+    measure.
+    """
+    config = project(tmp_path)
+    seed_stores(config, ("話",))
+    before = bound_bytes(config)
+
+    preparation = prepare_reference_facts(config, [])
+
+    assert preparation.characters == ()
+    assert preparation.looked_up == ()
+    assert preparation.fetched_readings == ()
+    assert preparation.missing == ()
+    assert sources.looked_up == [] and sources.fetched == []
+    for label in (KANJI_STORE, READING_FACTS):
+        file = proposed(preparation, label)
+        assert file.after_text is None
+        assert file.changed is False
+        assert file.before_sha256 == hashlib.sha256(
+            file.path.read_bytes()
+        ).hexdigest()
+    assert bound_bytes(config) == before
+
+    # The wire round-trip and both writers behave exactly as they do for a
+    # nonempty preparation: one fingerprint, one CAS, nothing written.
+    restored = ReferenceFactsPreparation.from_dict(
+        json.loads(json.dumps(preparation.to_dict(), ensure_ascii=False))
+    )
+    assert restored == preparation
+    assert restored.fingerprint == preparation.fingerprint
+
+    applied = apply_prepared_reference_facts(config, preparation)
+    assert applied.changed == ()
+    assert applied.missing == ()
+    assert bound_bytes(config) == before
+    recovered = recover_prepared_reference_facts(config, preparation)
+    assert recovered.changed == ()
+    assert bound_bytes(config) == before
+    assert saved_characters(config, KANJI_STORE) == ["話"]
+    assert saved_characters(config, READING_FACTS) == ["話"]
+
+
+def test_an_empty_selection_still_refuses_a_string_and_a_non_kanji_target(
+    tmp_path: Path, sources: Sources
+) -> None:
+    """Permitting "no characters" does not loosen what a character has to be."""
+    config = project(tmp_path)
+
+    with pytest.raises(CharacterNotesError, match="not one string"):
+        prepare_reference_facts(config, "話す")
+    with pytest.raises(CharacterNotesError, match="Not a single kanji"):
+        prepare_reference_facts(config, ["はな"])
+    with pytest.raises(CharacterNotesError, match="Not a single kanji"):
+        prepare_reference_facts(config, ["話", "す"])
+    assert sources.looked_up == [] and sources.fetched == []

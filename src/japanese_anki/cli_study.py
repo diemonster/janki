@@ -738,7 +738,13 @@ def _command_status(config: Any, args: argparse.Namespace) -> int:
 
 
 def _command_preview(config: Any, args: argparse.Namespace) -> int:
-    """Draw this job's saved proposals as the deck's real cards."""
+    """Draw this job's saved proposals as the deck's real cards.
+
+    What the page holds is the settled subset; what it does not hold is
+    printed here rather than written into the document, because that
+    document's own sha256 is the fingerprint above and a part still in flight
+    changes no card on it. Said here or nowhere — so it is said.
+    """
 
     core = _core()
     rendered = core.render_job_preview(config, args.job)
@@ -749,6 +755,10 @@ def _command_preview(config: Any, args: argparse.Namespace) -> int:
     print(f"Rendered content fingerprint: {rendered.rendering_fingerprint}")
     for conflict in rendered.conflicts:
         print(f"  {conflict}")
+    if rendered.disclosure:
+        print(f"{len(rendered.disclosure)} source(s) are not on this page:")
+        for missing in rendered.disclosure:
+            print(f"  {missing}")
     print("Looking at these accepts nothing and adds nothing to a deck.")
     return 0
 

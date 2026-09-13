@@ -21,6 +21,7 @@ import test_application_audio_completion_proof as proof_fixtures
 from japanese_anki import jpdb_kanji, kanji, kanji_notes, ledger
 from japanese_anki.application import audio as audio_application
 from japanese_anki.application import deck_build, deck_package
+from japanese_anki.application.deck_package import plan_from_wire, plan_wire
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import FIELD_NAMES, BuildResult
@@ -2557,3 +2558,59 @@ def test_a_packaged_note_with_dropped_tags_refuses(
         deck_package.prepare_deck_package(
             finished.config, finished.projection, audio_completion=finished.proof
         )
+
+
+def test_the_public_plan_wire_restores_the_whole_bound_projection(
+    tmp_path: Path,
+) -> None:
+    """`plan_wire` / `plan_from_wire`, the pair a coordinator stores a projection with.
+
+    A finish binds its package projection **before** the effects that realize it,
+    so it has to persist the whole plan rather than a digest and a list of inputs
+    it would reconstruct later: re-deriving a projection is planning a second
+    time, and the second plan is a second authority. The restored value is the one
+    `prepare_deck_package` compares the realized plan against, so everything that
+    comparison reads has to survive the round trip — including a media input whose
+    bytes do not exist yet and therefore has no hash at all.
+
+    Mutation: skip the plan-fingerprint recomputation in `plan_from_wire`.
+    """
+
+    finished, preparation = _prepared(tmp_path)
+    config = finished.config
+    projection = preparation.projection
+
+    wire = json.loads(json.dumps(plan_wire(config, projection), ensure_ascii=False))
+    restored = plan_from_wire(config, wire)
+
+    assert restored == projection
+    assert restored.fingerprint == projection.fingerprint == wire["plan_fingerprint"]
+    assert restored.output_revision == projection.output_revision
+    assert restored.output_identity == projection.output_identity
+    assert [item.sha256 for item in restored.media_inputs] == [
+        item.sha256 for item in projection.media_inputs
+    ]
+    assert [item.path for item in restored.all_inputs] == [
+        item.path for item in projection.all_inputs
+    ]
+    assert restored.configuration_fingerprint == projection.configuration_fingerprint
+    # Paths come back as this repository's own absolute paths, never as the
+    # strings on the wire.
+    assert all(item.path.is_absolute() for item in restored.all_inputs)
+
+    tampered = json.loads(json.dumps(plan_wire(config, projection), ensure_ascii=False))
+    tampered["note_count"] = projection.note_count + 1
+    with pytest.raises(deck_package.DeckPackageError, match="own fingerprint"):
+        plan_from_wire(config, tampered)
+
+    foreign = json.loads(json.dumps(plan_wire(config, projection), ensure_ascii=False))
+    foreign["repository_root"] = "elsewhere"
+    with pytest.raises(deck_package.DeckPackageError, match="another repository"):
+        plan_from_wire(config, foreign)
+
+    wrong_kind = json.loads(
+        json.dumps(plan_wire(config, projection), ensure_ascii=False)
+    )
+    wrong_kind["kind"] = "kanji"
+    with pytest.raises(deck_package.DeckPackageError, match="vocabulary package"):
+        plan_from_wire(config, wrong_kind)

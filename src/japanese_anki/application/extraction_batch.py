@@ -2005,6 +2005,135 @@ def extraction_batch_status(
     return _outcome(config, _load_batch_plan(config, batch_id))
 
 
+@dataclass(frozen=True, slots=True)
+class BatchExecutionRecord:
+    """What one batch's own durable records say it was confirmed to do.
+
+    A service that composes several batches — a study job spanning an original
+    and its retries — needs three facts this module already owns and nobody
+    else may re-derive: whether an execution was *confirmed* rather than merely
+    requested, which exact journal entries that confirmation retires, and what
+    became of each child. Reading them anywhere else would mean a second parser
+    for the manifest or a second definition of what a confirmed receipt is.
+
+    Everything here comes from :func:`_load_batch_plan` (which proves the
+    manifest against the journal's own reservation), :func:`_confirmed_execution`
+    and :func:`_outcome`. Nothing is validated again here, nothing is written,
+    and no authority is granted by holding one of these.
+    """
+
+    batch_id: str
+    job_id: str
+    #: The batch this one was planned as a retry of, empty when it is not one.
+    retry_of: str
+    manifest_sha256: str
+    #: Whether a confirmed-execution receipt exists **and** describes exactly
+    #: this manifest. A manifest alone is a request nobody agreed to send.
+    confirmed: bool
+    #: Whether the journal holds a reservation for this batch. A confirmed
+    #: batch that is not reserved is the reachable state between the receipt
+    #: and the reservation, not a batch that never ran.
+    reserved: bool
+    children: tuple[ExtractionBatchChild, ...]
+    #: The exact journal snapshots this confirmation retires, as the receipt
+    #: holds them: an attempt's own last recorded state and cost survive here
+    #: after the journal row itself is gone.
+    discards: tuple[operations.Operation, ...]
+    outcome: ExtractionBatchOutcome
+
+    def child(self, index: int) -> ExtractionBatchChild:
+        for candidate in self.children:
+            if candidate.index == index:
+                return candidate
+        raise operations.OperationError(
+            f"Batch {self.batch_id} has no child {index}; it has "
+            f"{len(self.children)} of them."
+        )
+
+    def child_outcome(self, index: int) -> ExtractionBatchChildOutcome:
+        for candidate in self.outcome.children:
+            if candidate.index == index:
+                return candidate
+        raise operations.OperationError(
+            f"Batch {self.batch_id} has no child {index}; it has "
+            f"{len(self.outcome.children)} of them."
+        )
+
+
+def read_batch_execution_record(
+    config: ProjectConfig, batch_id: str
+) -> BatchExecutionRecord:
+    """Read one batch's confirmed execution and its children. Reads only.
+
+    The narrow seam a caller that spans batches reads through, so that
+    "confirmed", "reserved", "retires this exact entry" and "this child's own
+    staging document" all keep exactly one definition — this module's.
+    """
+    plan = _load_batch_plan(config, batch_id)
+    journal = operations.OperationJournal.load(config.operations_file)
+    return BatchExecutionRecord(
+        batch_id=plan.batch_id,
+        job_id=plan.job_id,
+        retry_of=plan.retry_of,
+        manifest_sha256=plan.manifest_sha256,
+        confirmed=_confirmed_execution(config, plan),
+        reserved=plan.batch_id in journal.batches,
+        children=plan.children,
+        discards=plan.discards,
+        outcome=_outcome(config, plan),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class BatchReservation:
+    """What the journal itself says one batch reserved. Reads only.
+
+    The authority, not the receipt: this is read when the manifest *cannot*
+    be, which is exactly when the difference matters. A caller holding one of
+    these knows the batch ran and knows which calls it covered, so it can say
+    so by name instead of reporting a batch that reserved work as one that
+    never happened.
+    """
+
+    batch_id: str
+    manifest_sha256: str
+    child_operation_ids: tuple[str, ...]
+    #: The source each reserved call was authorized against, in the journal's
+    #: own words, for the rows it still holds. A retired member's row is gone,
+    #: so this is the context that is *available*, never a reconstruction.
+    source_files: tuple[str, ...]
+
+
+def read_batch_reservation(
+    config: ProjectConfig, batch_id: str
+) -> BatchReservation | None:
+    """The journal's reservation for this batch, or nothing. Reads only.
+
+    The narrow seam for a caller that has to tell "this batch ran and its own
+    artifact cannot be read" from "this batch never ran". Everything here is
+    the journal's own loader and its own records — no manifest is parsed, no
+    receipt is interpreted and nothing is written — so "reserved" keeps the
+    one definition :func:`read_batch_execution_record` already uses.
+    """
+    journal = operations.OperationJournal.load(config.operations_file)
+    batch = journal.batches.get(batch_id)
+    if batch is None:
+        return None
+    members = tuple(batch.child_operation_ids)
+    return BatchReservation(
+        batch_id=batch_id,
+        manifest_sha256=batch.manifest_sha256,
+        child_operation_ids=members,
+        source_files=tuple(
+            dict.fromkeys(
+                held.source_file
+                for held in (journal.operations.get(name) for name in members)
+                if held is not None and held.source_file
+            )
+        ),
+    )
+
+
 def list_extraction_batches(
     config: ProjectConfig,
 ) -> tuple[ExtractionBatchOutcome, ...]:
@@ -2137,11 +2266,27 @@ def _deck_include_overlay(
 
 @dataclass(frozen=True, slots=True)
 class _Proposal:
-    """One staged record, and which child proposed it."""
+    """One staged record, and which child proposed it.
+
+    ``origin`` is what tells two batches' equal child indices apart when one
+    page draws several batches: a study job's effective frontier legitimately
+    holds source 1 of one batch beside source 1 of the retry that replaced its
+    sibling. It is empty for a single batch, whose sentences are exactly the
+    ones they have always been.
+    """
 
     index: int
     source_name: str
     record: VocabularyRecord
+    origin: str = ""
+
+    @property
+    def named(self) -> str:
+        return f"source {self.index} ({self.source_name}){self.origin}"
+
+    @property
+    def held_by(self) -> str:
+        return f"{self.source_name}{self.origin}"
 
 
 def _conflict_sentences(group: Sequence[_Proposal]) -> str:
@@ -2163,24 +2308,22 @@ def _conflict_sentences(group: Sequence[_Proposal]) -> str:
             if left == right:
                 continue
             differences.append(
-                f"{field} ({first.source_name}: "
+                f"{field} ({first.held_by}: "
                 f"{json.dumps(left, ensure_ascii=False)}; "
-                f"{other.source_name}: {json.dumps(right, ensure_ascii=False)})"
+                f"{other.held_by}: {json.dumps(right, ensure_ascii=False)})"
             )
-    named = ", ".join(
-        f"source {item.index} ({item.source_name})" for item in group
-    )
+    named = ", ".join(item.named for item in group)
     if not differences:
         return (
             f"{first.record.id} was proposed by {named} with identical fields. "
-            f"The card shown is source {first.index}'s proposal, standing for "
-            "both; neither has been accepted."
+            f"The card shown is source {first.index}{first.origin}'s proposal, "
+            "standing for both; neither has been accepted."
         )
     return (
         f"{first.record.id} was proposed by {named}, differing on "
         + "; ".join(differences)
-        + f". The card shown is source {first.index}'s proposal as a "
-        "representative; nothing has been merged or accepted."
+        + f". The card shown is source {first.index}{first.origin}'s proposal "
+        "as a representative; nothing has been merged or accepted."
     )
 
 
@@ -2362,70 +2505,94 @@ def _require_own_staging(
         )
 
 
-def render_extraction_batch_preview(
-    config: ProjectConfig,
-    batch_id: str,
-    *,
-    deck_path: Path | None = None,
-) -> ExtractionBatchPreview:
-    """Draw a whole batch's saved proposals as real cards, and write nothing.
+@dataclass(frozen=True, slots=True)
+class ChildProposalRef:
+    """One batch's own child, named by the batch that reserved it.
 
-    Every child's staging document is read exactly as that child wrote it —
-    there is no combined staging file, no merged metadata and no second
-    provenance. The projection replaces the selected identities in an
-    in-memory copy of the collection, so what renders is the *proposed*
-    content rather than whatever the collection already says about those
-    words; every unrelated canonical record is preserved untouched.
-
-    With a destination deck, the identities and ownership tags come from the
-    assignment service, because a standalone deck holds its own scoped copies
-    and those rules are its own. With no destination, the proposals are drawn
-    in a scratch deck that exists only for this render: reviewing saved work
-    must not force a filing decision first, and nothing here assigns anything.
-
-    Two children proposing one identity is reported in `conflicts` and shown
-    as one labelled representative card. Nothing is merged, and no proposal is
-    marked accepted.
+    A study job's effective frontier spans several batches, and two of them
+    legitimately hold a source 1. The batch id is carried beside the index so
+    a plural render can never mistake one for the other, and ``origin`` is the
+    short phrase the conflict sentences use to say which is which.
     """
-    plan = _load_batch_plan(config, batch_id)
-    states = _child_states(config, plan)
 
+    batch_id: str
+    index: int
+    origin: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ChildProposalPreview:
+    """Several children's own saved proposals, drawn as one page of cards."""
+
+    preview: card_preview.CardPreview
+    conflicts: tuple[str, ...]
+
+
+def _read_child_proposals(
+    config: ProjectConfig,
+    children: Sequence[tuple[ExtractionBatchChild, str]],
+) -> dict[str, list[_Proposal]]:
+    """Each named child's own staging document, proved to be that child's.
+
+    One document per child, read exactly as that child wrote it: there is no
+    combined staging file, no merged metadata and no second provenance
+    anywhere in here. A child whose document is missing or unreadable refuses
+    against the source that owns it — the journal says that child committed
+    proposals, and a page that quietly left them out would be truthfully a
+    subset while presenting itself as the whole.
+    """
     grouped: dict[str, list[_Proposal]] = {}
-    drawn: list[int] = []
-    for child in plan.children:
-        # Only what the journal says this batch actually produced. A staging
-        # file at a child's path may be an older review a forced re-read has
-        # not replaced yet, and a child that never sent has proposed nothing —
-        # drawing either as this batch's work would be a lie a reviewer acts
-        # on. `bookkeeping_complete` is deliberately not required: a committed
-        # answer whose pattern write failed still saved its cards.
-        if states[child.index] != "committed":
-            continue
+    for child, origin in children:
         path = child.staging_path
-        if not path.exists():
-            continue
         try:
             text = read_bytes_bound(path).decode("utf-8")
             records, meta = staging.read_staging_text(text, source=str(path))
         except (JankiError, OSError, UnicodeError, ValueError) as exc:
             raise staging.StagingError(
                 f"Could not read the proposals for source {child.index} "
-                f"({child.source.name}): {exc}"
+                f"({child.source.name}){origin}: {exc}"
             ) from exc
         _require_own_staging(child, meta)
-        drawn.append(child.index)
         for record in records:
             grouped.setdefault(record.id, []).append(
                 _Proposal(
                     index=child.index,
                     source_name=child.source.name,
                     record=record,
+                    origin=origin,
                 )
             )
-    if not drawn:
-        raise staging.StagingError(
-            f"Batch {batch_id} has no saved proposals to draw yet."
-        )
+    return grouped
+
+
+def _render_child_proposals(
+    config: ProjectConfig,
+    children: Sequence[tuple[ExtractionBatchChild, str]],
+    *,
+    deck_path: Path | None,
+    scratch_slug: str,
+    scratch_title: str,
+) -> ChildProposalPreview:
+    """Draw exactly these children's saved proposals, and write nothing.
+
+    The shared body of every proposal review. The projection replaces the
+    selected identities in an in-memory copy of the collection, so what
+    renders is the *proposed* content rather than whatever the collection
+    already says about those words; every unrelated canonical record is
+    preserved untouched.
+
+    Two children proposing one identity is reported in the conflicts and shown
+    as one labelled representative card. Nothing is merged, and no proposal is
+    marked accepted.
+
+    Deliberately no caller-supplied note on the page. What this draws is a
+    function of these children's saved proposals and the deck's own templates,
+    and the document's sha256 is a *content* fingerprint other services bind
+    owner decisions to; a sentence about work that is still elsewhere would
+    move it without a card changing. Saying what is missing is the calling
+    surface's job, beside the page rather than inside it.
+    """
+    grouped = _read_child_proposals(config, children)
 
     # First occurrence wins the card, and says so. Choosing between two
     # proposed readings is not a decision this module is allowed to make.
@@ -2439,9 +2606,9 @@ def render_extraction_batch_preview(
     projection = project_proposals(
         config,
         representatives,
-        deck_path=deck_path if deck_path is not None else plan.destination_deck,
-        scratch_slug=f"batch-{batch_id}",
-        scratch_title=f"Batch {batch_id[:8]} proposals",
+        deck_path=deck_path,
+        scratch_slug=scratch_slug,
+        scratch_title=scratch_title,
     )
 
     subtitle = "Proposed — nothing is promoted yet"
@@ -2461,8 +2628,101 @@ def render_extraction_batch_preview(
         scope_record_ids=projection.scope_record_ids,
         subtitle=subtitle,
     )
+    return ChildProposalPreview(preview=preview, conflicts=conflicts)
+
+
+def render_child_proposals(
+    config: ProjectConfig,
+    refs: Sequence[ChildProposalRef],
+    *,
+    deck_path: Path | None,
+    scratch_slug: str,
+    scratch_title: str,
+) -> ChildProposalPreview:
+    """Draw named children of several batches as one page. Reads only.
+
+    The plural entry a caller with children from more than one batch uses —
+    a study job's effective frontier is the one that has them. Each child is
+    resolved through this module's own manifest reader and drawn from its own
+    staging document; nothing here decides which children belong on the page,
+    which is the calling service's question about its own history — and so is
+    saying which of its children are *not* here, which stays off this document.
+    """
+    plans: dict[str, ExtractionBatchPlan] = {}
+    children: list[tuple[ExtractionBatchChild, str]] = []
+    for ref in refs:
+        plan = plans.get(ref.batch_id)
+        if plan is None:
+            plan = _load_batch_plan(config, ref.batch_id)
+            plans[ref.batch_id] = plan
+        children.append((plan.child(ref.index), ref.origin))
+    return _render_child_proposals(
+        config,
+        children,
+        deck_path=deck_path,
+        scratch_slug=scratch_slug,
+        scratch_title=scratch_title,
+    )
+
+
+def render_extraction_batch_preview(
+    config: ProjectConfig,
+    batch_id: str,
+    *,
+    deck_path: Path | None = None,
+) -> ExtractionBatchPreview:
+    """Draw a whole batch's saved proposals as real cards, and write nothing.
+
+    Every child's staging document is read exactly as that child wrote it —
+    there is no combined staging file, no merged metadata and no second
+    provenance. The projection replaces the selected identities in an
+    in-memory copy of the collection, so what renders is the *proposed*
+    content rather than whatever the collection already says about those
+    words; every unrelated canonical record is preserved untouched.
+
+    A child the journal says committed, whose document is missing or
+    unreadable, refuses against the source that owns it. Leaving it out would
+    draw a page that is truthfully a subset and presents itself as the batch.
+
+    With a destination deck, the identities and ownership tags come from the
+    assignment service, because a standalone deck holds its own scoped copies
+    and those rules are its own. With no destination, the proposals are drawn
+    in a scratch deck that exists only for this render: reviewing saved work
+    must not force a filing decision first, and nothing here assigns anything.
+
+    Two children proposing one identity is reported in `conflicts` and shown
+    as one labelled representative card. Nothing is merged, and no proposal is
+    marked accepted.
+
+    Which children belong on the page is this batch's own question and stays
+    here; drawing them is :func:`_render_child_proposals`, shared with the
+    plural entry so one batch and a study job's several batches can never be
+    rendered by two projections that disagree.
+    """
+    plan = _load_batch_plan(config, batch_id)
+    states = _child_states(config, plan)
+
+    # Only what the journal says this batch actually produced. A staging file
+    # at a child's path may be an older review a forced re-read has not
+    # replaced yet, and a child that never sent has proposed nothing — drawing
+    # either as this batch's work would be a lie a reviewer acts on.
+    # `bookkeeping_complete` is deliberately not required: a committed answer
+    # whose pattern write failed still saved its cards.
+    drawn = [child for child in plan.children if states[child.index] == "committed"]
+    if not drawn:
+        raise staging.StagingError(
+            f"Batch {batch_id} has no saved proposals to draw yet."
+        )
+
+    rendered = _render_child_proposals(
+        config,
+        [(child, "") for child in drawn],
+        deck_path=deck_path if deck_path is not None else plan.destination_deck,
+        scratch_slug=f"batch-{batch_id}",
+        scratch_title=f"Batch {batch_id[:8]} proposals",
+    )
     return ExtractionBatchPreview(
-        preview=preview,
-        conflicts=conflicts,
-        child_indices=tuple(drawn),
+        preview=rendered.preview,
+        conflicts=rendered.conflicts,
+        child_indices=tuple(child.index for child in drawn),
     )

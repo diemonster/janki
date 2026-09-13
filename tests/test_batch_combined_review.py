@@ -420,3 +420,37 @@ def test_only_journal_proven_successes_are_drawn(
     assert {card.record_id for card in review.preview.cards} == {
         record.id for record in _staged(second.children[0].staging_path)
     }
+
+
+def test_a_committed_child_whose_document_vanished_refuses_by_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A settled child that cannot be drawn must not silently disappear.
+
+    Skipping it renders a page that is truthfully a subset and says it is the
+    batch, which is exactly the mistake a reviewer would act on. The journal
+    says this child committed proposals; if the document holding them is gone,
+    that is a fact to report against the source that owns it.
+    """
+    _no_api(monkeypatch)
+    config = _project(tmp_path)
+    deck = _deck(config)
+    plan = _committed_batch(config, names=("one.pdf", "two.pdf"), destination_deck=deck)
+    before = _digest_tree(config)
+
+    plan.children[1].staging_path.unlink()
+
+    with pytest.raises(JankiError) as caught:
+        render_extraction_batch_preview(config, plan.batch_id)
+
+    assert "two.pdf" in str(caught.value)
+    # The surviving sibling is not drawn behind the refusal, and nothing moved:
+    # every file still there holds exactly the bytes it held before, and the
+    # only one gone is the document this test removed. Comparing the key sets
+    # alone would hold by construction and prove only that no file appeared.
+    gone = str(plan.children[1].staging_path.relative_to(config.root))
+    after = _digest_tree(config)
+    assert set(before) - set(after) == {gone}
+    assert after == {
+        path: digest for path, digest in before.items() if path != gone
+    }

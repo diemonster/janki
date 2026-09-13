@@ -45,8 +45,8 @@ import hashlib
 import json
 import os
 import uuid
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -64,6 +64,7 @@ from japanese_anki.io import (
 
 __all__ = [
     "CHOICE_KEYS",
+    "DISPOSITION_ACTIONS",
     "INTENT_KINDS",
     "JOB_KINDS",
     "NAMESPACES",
@@ -71,6 +72,9 @@ __all__ = [
     "ActionIntent",
     "ActionReference",
     "IntentOutcome",
+    "JobChildAttempt",
+    "JobChildRef",
+    "JobFrontier",
     "JobResumeAction",
     "StudyJob",
     "StudyJobBatchStatus",
@@ -88,6 +92,7 @@ __all__ = [
     "job_part_layouts",
     "dispatch_job_batch",
     "job_destination_deck",
+    "job_effective_frontier",
     "job_part_sources",
     "job_published_parts",
     "list_study_jobs",
@@ -124,40 +129,66 @@ NAMESPACES = ("header", "choices", "layouts", "intents", "outcomes")
 #: What a job is. One kind today; a second one is a deliberate addition here.
 JOB_KINDS = ("source_extraction",)
 
-#: Every intent kind the datatype carries. Which of them may be *written* is a
-#: separate question, answered by ``_WRITABLE_INTENT_KINDS``: an intent that
-#: reserves a service's ids is only meaningful once that service exists.
+#: Every intent kind this store writes, and the closed list a kind outside it
+#: refuses against. Each one's owning service ships: ``curation`` arrived with
+#: ``application/study_curation.py`` and ``finish`` with
+#: ``application/study_finish.py``. There is no second "writable" list — an
+#: intent that reserves ids for a service that cannot honour them is what this
+#: closed list already refuses.
 INTENT_KINDS = ("source_parts", "extract_batch", "retry", "curation", "finish")
-
-#: The kinds whose owning service ships today. ``finish`` belongs to the
-#: study-finish authority; appending one before its writer exists would reserve
-#: ids nothing can honour. ``curation`` joined this list with
-#: ``application/study_curation.py``.
-_WRITABLE_INTENT_KINDS = ("source_parts", "extract_batch", "retry", "curation")
 
 #: How an intent ends. Nothing else closes one, and nothing reopens it.
 OUTCOME_STATES = ("applied", "refused", "abandoned")
 
-#: The owner's local preferences this store writes today.
-_WRITABLE_CHOICE_KEYS = ("directions", "part_selections", "part_layout_bindings")
+#: The owner's local preferences this store writes. Each has its own explicit
+#: validator below — none of them is merely allowlisted, because the five that
+#: joined with the finish carry the owner's *decisions* rather than a
+#: preference, and a decision that arrives in the wrong shape is a decision
+#: nobody can prove was made.
+_WRITABLE_CHOICE_KEYS = (
+    "directions",
+    "part_selections",
+    "part_layout_bindings",
+    "include_example_audio",
+    "review_flags",
+    "review_patterns",
+    "coverage_reasons",
+    "dispositions",
+)
 
-#: Reserved names whose owner control does not exist yet. Refusing them by
-#: name is the point: it keeps the same decision from arriving later under a
-#: different, unvalidated key, and it is not a placeholder writer — the
-#: editors that record these decisions ship with the finish, bound to the
-#: rendering they were taken over.
-_DEFERRED_CHOICE_KEYS = {
-    "include_example_audio": (
-        "the sentence-audio control inside the review editor"
-    ),
-    "review_flags": "the review editor",
-    "review_patterns": "the review editor",
-    "coverage_reasons": "the coverage editor",
-    "dispositions": "the disposition editor",
+#: Every choice key this schema knows.
+CHOICE_KEYS = tuple(sorted(_WRITABLE_CHOICE_KEYS))
+
+#: The four bindings a review, coverage or disposition decision carries: the
+#: job, the part, that part's current staging bytes and the fingerprint of the
+#: rendering the owner decided over. Deliberately **not** the job document's own
+#: CAS revision, so saving one owner choice never stales another's.
+_DECISION_BINDINGS = ("job_id", "part", "staging_sha256", "rendering_fingerprint")
+
+#: What each per-part decision records **beyond** the four bindings and the local
+#: ``saved_at`` note. Closed on purpose: a field outside its key's set refuses by
+#: name rather than being dropped. A dropped field changes what the decision
+#: means — ``record_id`` for ``record_ids`` would have read as "no rows
+#: selected", which §7.7 takes as the whole part — and janki does not repair one
+#: decision into a wider one.
+_PART_DECISION_FIELDS = {
+    "review_flags": ("record_ids",),
+    "review_patterns": ("value",),
+    "coverage_reasons": ("reason",),
+    "dispositions": ("action", "record_ids", "reason"),
 }
 
-#: Every choice key this schema knows, writable or reserved.
-CHOICE_KEYS = tuple(sorted((*_WRITABLE_CHOICE_KEYS, *_DEFERRED_CHOICE_KEYS)))
+#: Each per-part decision as the owner's refusals name it: the plural for a whole
+#: map, the singular for one part's entry.
+_PART_DECISION_NAMES = {
+    "review_flags": ("review flags", "review selection"),
+    "review_patterns": ("pattern review choices", "pattern review choice"),
+    "coverage_reasons": ("coverage reasons", "coverage reason"),
+    "dispositions": ("dispositions", "disposition"),
+}
+
+#: Exactly what a zero-landed or held-row disposition may say.
+DISPOSITION_ACTIONS = ("exclude", "defer")
 
 _CARD_DIRECTIONS = ("recognition", "production", "reading")
 
@@ -646,6 +677,313 @@ def _layout_key(layout_id: str, revision: Any) -> str:
     return f"{layout_id}@{revision}"
 
 
+def _saved_part_map(job: StudyJob, key: str) -> dict[str, Any]:
+    """The per-part decisions this job already holds under ``key``.
+
+    Saving one part's choice preserves every other part's exactly as it was
+    saved, including the rendering it was bound to: §9.1's rule that another
+    owner save never stales an earlier independent one.
+    """
+
+    held = job.choices.get(key)
+    if not isinstance(held, Mapping):
+        return {}
+    return {str(part): value for part, value in held.items()}
+
+
+def _checked_audio_preference(value: Any, job_id: str) -> dict[str, Any]:
+    """The job-wide sentence-audio choice, and nothing else.
+
+    §9.1 makes this preference bind ``job_id`` and the job document's CAS
+    revision **only** — the compare-and-swap the write already performs. It
+    deliberately carries no part, staging hash or rendering fingerprint, so a
+    re-rendered staging file cannot stale it, and it carries no written reason,
+    because none is asked for. The shape is what enforces that: a payload
+    naming any of those refuses rather than being quietly stored.
+    """
+
+    if not isinstance(value, Mapping):
+        raise StudyJobError(
+            "The sentence-audio choice is an object carrying one Boolean "
+            "`value`. Omitting the choice entirely includes sentence audio."
+        )
+    stray = sorted(set(value) - {"value", "job_id", "saved_at"})
+    if stray:
+        raise StudyJobError(
+            "The sentence-audio choice is job-wide, so it records no "
+            + ", ".join(stray)
+            + ". It binds this job and the revision it was saved against, and "
+            "nothing else."
+        )
+    if not isinstance(value.get("value"), bool):
+        raise StudyJobError(
+            "The sentence-audio choice is exactly true or false. A missing "
+            "choice means sentence audio is included; it is never an implicit "
+            "false."
+        )
+    if "job_id" in value and str(value["job_id"]) != job_id:
+        raise StudyJobError(
+            "The sentence-audio choice names another study job; nothing was "
+            "written."
+        )
+    return {
+        "value": bool(value["value"]),
+        "job_id": job_id,
+        "saved_at": str(value.get("saved_at") or datetime.now(UTC).isoformat()),
+    }
+
+
+def _checked_bindings(
+    entry: Mapping[str, Any], part: str, job_id: str, *, label: str
+) -> dict[str, Any]:
+    """The four provenance values every owner decision on a part carries."""
+
+    bound: dict[str, Any] = {}
+    for key in _DECISION_BINDINGS:
+        value = entry.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise StudyJobError(
+                f"A saved {label} for {part} records the exact {key} it was "
+                "taken over; this one records nothing readable. Nothing was "
+                "written."
+            )
+        bound[key] = value
+    if bound["job_id"] != job_id:
+        raise StudyJobError(
+            f"A saved {label} for {part} names study job {bound['job_id']}, not "
+            f"{job_id}. Nothing was written."
+        )
+    if bound["part"] != part:
+        raise StudyJobError(
+            f"A saved {label} keyed by {part} names part {bound['part']}. "
+            "Nothing was written."
+        )
+    return bound
+
+
+def _owner_literal(entry: Mapping[str, Any], part: str, *, label: str) -> str:
+    """The owner's own words, refused when blank exactly as coverage does."""
+
+    reason = entry.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise StudyJobError(
+            f"A {label} for {part} is the reason you typed. janki never derives "
+            "one, and a blank reason is refused. Nothing was written."
+        )
+    return reason
+
+
+def _checked_part_map(value: Any, *, label: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping) or not value:
+        raise StudyJobError(
+            f"A study job's {label} are an object keyed by published part name."
+        )
+    for part, entry in value.items():
+        if not isinstance(part, str) or not part.strip():
+            raise StudyJobError(
+                f"A study job's {label} are keyed by a nonblank part name."
+            )
+        if entry is not None and not isinstance(entry, Mapping):
+            raise StudyJobError(
+                f"The {label} entry for {part} is neither an object nor the "
+                "explicit null that withdraws it."
+            )
+    return value
+
+
+def _part_decisions(
+    value: Any, *, key: str
+) -> tuple[dict[str, Mapping[str, Any]], tuple[str, ...]]:
+    """One payload's saves and its explicit per-part withdrawals.
+
+    ``None`` is the owner withdrawing that part's decision: the same control and
+    the same compare-and-swap that recorded it, which is what makes a saved
+    decision the finish refuses recoverable without hand-editing the document.
+    The empty-map refusal in :func:`_checked_part_map` stays, so an empty payload
+    is never read as "withdraw everything" and an omitted part is never read as a
+    withdrawal — neither is a decision the owner stated.
+    """
+
+    plural, _singular = _PART_DECISION_NAMES[key]
+    raw = _checked_part_map(value, label=plural)
+    saves: dict[str, Mapping[str, Any]] = {}
+    withdrawn: list[str] = []
+    for part, entry in raw.items():
+        if entry is None:
+            withdrawn.append(str(part))
+        else:
+            saves[str(part)] = entry
+    return saves, tuple(withdrawn)
+
+
+def _merged_part_choice(
+    job: StudyJob,
+    key: str,
+    value: Any,
+    checker: Callable[[Mapping[str, Any], str], dict[str, Any]],
+) -> dict[str, Any]:
+    """This key's stored map after one payload's saves and withdrawals.
+
+    Every part the payload does not name keeps exactly the entry it was saved
+    with — its bindings, the rendering it was decided over and its saved date —
+    which is §9.1's rule that one owner save never stales another. A withdrawal
+    drops only the part it names, and only when this job really holds that
+    decision at this revision: withdrawing something that is not there is a stale
+    editor rather than a decision, so it refuses instead of spending a revision
+    on a no-op.
+    """
+
+    _plural, singular = _PART_DECISION_NAMES[key]
+    saves, withdrawn = _part_decisions(value, key=key)
+    held = _saved_part_map(job, key)
+    for part in withdrawn:
+        if part not in held:
+            raise StudyJobError(
+                f"This job records no {singular} for {part} at revision "
+                f"{job.revision}, so there is nothing to withdraw. Nothing was "
+                "written."
+            )
+        del held[part]
+    return {**held, **(checker(saves, job.header.job_id) if saves else {})}
+
+
+def _closed_part_entry(entry: Mapping[str, Any], part: str, key: str) -> None:
+    """Refuse a per-part decision naming a field its schema does not define."""
+
+    _plural, singular = _PART_DECISION_NAMES[key]
+    allowed = {*_DECISION_BINDINGS, "saved_at", *_PART_DECISION_FIELDS[key]}
+    stray = sorted(set(entry) - allowed)
+    if stray:
+        raise StudyJobError(
+            f"The {singular} for {part} names " + ", ".join(stray) + ", which a "
+            f"{singular} does not record: it records "
+            + ", ".join(sorted(allowed))
+            + ". A misspelled field would otherwise be dropped and change what "
+            "the decision means, so nothing was written."
+        )
+
+
+def _checked_record_ids(value: Any, part: str, *, label: str) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+        or len(set(value)) != len(value)
+    ):
+        raise StudyJobError(
+            f"The {label} for {part} names distinct nonblank record ids. "
+            "Nothing was written."
+        )
+    return [str(item) for item in value]
+
+
+def _checked_review_flags(value: Mapping[str, Any], job_id: str) -> dict[str, Any]:
+    """Which rows the owner flagged for review, and nothing else.
+
+    "No rows flagged" is a decision the owner states rather than one janki
+    infers from an omitted argument, so an empty list is accepted and stored
+    while a missing key refuses.
+
+    The pattern-set mark is deliberately **not** here. It is its own standalone
+    ``review_patterns`` choice, which is the single fact the finish reads, so a
+    review selection holds no second copy for the two to disagree over.
+    """
+
+    checked: dict[str, Any] = {}
+    for part, entry in value.items():
+        bound = _checked_bindings(entry, part, job_id, label="review selection")
+        _closed_part_entry(entry, part, "review_flags")
+        if "record_ids" not in entry:
+            raise StudyJobError(
+                f"The review selection for {part} states which rows it flags, "
+                "even when that is none of them. Nothing was written."
+            )
+        checked[part] = {
+            **bound,
+            "record_ids": _checked_record_ids(
+                entry["record_ids"], part, label="review selection"
+            ),
+            "saved_at": str(entry.get("saved_at") or datetime.now(UTC).isoformat()),
+        }
+    return checked
+
+
+def _checked_review_patterns(value: Mapping[str, Any], job_id: str) -> dict[str, Any]:
+    """The per-part pattern-set mark: the one place that decision is stored.
+
+    Its own reversible choice, and the only home for the mark — ``study_finish``
+    reads exactly this entry, revalidates its four bindings and passes that one
+    value to §7.2's pattern-store write and §7.6's promotion. ``False`` is the
+    owner saying "not this part's patterns" and is stored as stated.
+    """
+
+    checked: dict[str, Any] = {}
+    for part, entry in value.items():
+        bound = _checked_bindings(entry, part, job_id, label="pattern review choice")
+        _closed_part_entry(entry, part, "review_patterns")
+        if not isinstance(entry.get("value"), bool):
+            raise StudyJobError(
+                f"The pattern review choice for {part} is exactly true or false; "
+                "it is never inferred. Nothing was written."
+            )
+        checked[part] = {
+            **bound,
+            "value": bool(entry["value"]),
+            "saved_at": str(entry.get("saved_at") or datetime.now(UTC).isoformat()),
+        }
+    return checked
+
+
+def _checked_coverage_reasons(value: Mapping[str, Any], job_id: str) -> dict[str, Any]:
+    """One part's coverage reason, in the owner's own literal words."""
+
+    checked: dict[str, Any] = {}
+    for part, entry in value.items():
+        bound = _checked_bindings(entry, part, job_id, label="coverage reason")
+        _closed_part_entry(entry, part, "coverage_reasons")
+        checked[part] = {
+            **bound,
+            "reason": _owner_literal(entry, part, label="coverage reason"),
+            "saved_at": str(entry.get("saved_at") or datetime.now(UTC).isoformat()),
+        }
+    return checked
+
+
+def _checked_dispositions(value: Mapping[str, Any], job_id: str) -> dict[str, Any]:
+    """A zero-landed part's, or a held row's, exclusion or deferral.
+
+    ``record_ids`` selects held rows. **Absence** is the documented whole-part
+    spelling, and an explicit ``[]`` says the same thing; a *present* value is
+    validated as supplied, because widening an unreadable one to the whole part
+    would silently turn one held row's exclusion into the page's. The reason is
+    the owner's literal text — nothing derives it from model output, and a blank
+    one refuses exactly as ``coverage._approval_payload`` does.
+    """
+
+    checked: dict[str, Any] = {}
+    for part, entry in value.items():
+        bound = _checked_bindings(entry, part, job_id, label="disposition")
+        _closed_part_entry(entry, part, "dispositions")
+        action = entry.get("action")
+        if action not in DISPOSITION_ACTIONS:
+            raise StudyJobError(
+                f"The disposition for {part} is exactly one of "
+                f"{' or '.join(DISPOSITION_ACTIONS)}, not {action!r}. Nothing "
+                "was written."
+            )
+        checked[part] = {
+            **bound,
+            "action": str(action),
+            "record_ids": (
+                _checked_record_ids(entry["record_ids"], part, label="disposition")
+                if "record_ids" in entry
+                else []
+            ),
+            "reason": _owner_literal(entry, part, label="disposition reason"),
+            "saved_at": str(entry.get("saved_at") or datetime.now(UTC).isoformat()),
+        }
+    return checked
+
+
 def record_choice(
     config: ProjectConfig,
     job_id: str,
@@ -653,13 +991,22 @@ def record_choice(
     *,
     expected_revision: str,
 ) -> StudyJob:
-    """Save the owner's local preferences, and nothing else.
+    """Save — or explicitly withdraw — the owner's local preferences, and nothing else.
 
     Whitelisted ``choices`` keys only. A payload naming ``header``,
     ``layouts``, ``intents`` or ``outcomes`` refuses by name, because that is
     what stops a reversible local edit rewriting a layout revision a
     dispatched child bound or clearing a pending intent. Nothing here is paid
     consent, canonical content, or a review, coverage or promotion decision.
+
+    A per-part decision is withdrawn by naming that part with ``None``
+    (``{"coverage_reasons": {"p1.png": None}}``): the same control and the same
+    compare-and-swap, binding this exact job id and expected revision to the
+    stored choice being taken back. Only the named parts are dropped; every other
+    part, key and pending intent keeps exactly what it held. An empty map, a
+    blank reason and an omitted part all stay refusals or no-ops rather than
+    becoming implicit withdrawals, and a withdrawal of a decision this job does
+    not hold refuses instead of writing nothing under a revision.
     """
 
     if not isinstance(choice, Mapping) or not choice:
@@ -672,12 +1019,6 @@ def record_choice(
             "namespace. Nothing was written."
         )
     for key in choice:
-        if key in _DEFERRED_CHOICE_KEYS:
-            raise StudyJobError(
-                f"The study job choice {key!r} is reserved for "
-                f"{_DEFERRED_CHOICE_KEYS[key]}, which does not exist yet. "
-                "janki will not record that decision through another control."
-            )
         if key not in _WRITABLE_CHOICE_KEYS:
             raise StudyJobError(
                 f"{key!r} is not a study job choice. This job records "
@@ -686,13 +1027,37 @@ def record_choice(
 
     job = _at_revision(config, job_id, expected_revision)
     updated = dict(job.choices)
+    # One explicit validator per key, with no final catch-all: a key whose
+    # checker is missing has to fail loudly here rather than being written as
+    # whatever arrived. These five carry the owner's decisions, and a decision
+    # stored in an unvalidated shape is a decision nobody can prove was made.
     for key, value in choice.items():
         if key == "directions":
             updated[key] = _checked_directions(value)
         elif key == "part_selections":
             updated[key] = _checked_part_selections(value)
-        else:
+        elif key == "part_layout_bindings":
             updated[key] = _checked_layout_bindings(value, job.layouts)
+        elif key == "include_example_audio":
+            updated[key] = _checked_audio_preference(value, job_id)
+        elif key == "review_flags":
+            updated[key] = _merged_part_choice(
+                job, key, value, _checked_review_flags
+            )
+        elif key == "review_patterns":
+            updated[key] = _merged_part_choice(
+                job, key, value, _checked_review_patterns
+            )
+        elif key == "coverage_reasons":
+            updated[key] = _merged_part_choice(
+                job, key, value, _checked_coverage_reasons
+            )
+        elif key == "dispositions":
+            updated[key] = _merged_part_choice(
+                job, key, value, _checked_dispositions
+            )
+        else:  # pragma: no cover - the whitelist above is the closed list
+            raise StudyJobError(f"{key!r} has no study job choice validator.")
     return _save(
         StudyJob(
             path=job.path,
@@ -878,12 +1243,6 @@ def append_intent(
         raise StudyJobError(
             f"A study job intent is one of {', '.join(INTENT_KINDS)}, not "
             f"{intent.kind!r}."
-        )
-    if intent.kind not in _WRITABLE_INTENT_KINDS:
-        raise StudyJobError(
-            f"janki has no writer for a {intent.kind!r} intent yet: the service "
-            "that would honour the ids it reserves does not exist. Nothing was "
-            "written."
         )
     job = _at_revision(config, job_id, expected_revision)
     if any(existing.intent_id == intent.intent_id for existing in job.intents):
@@ -1113,6 +1472,55 @@ def _resolve_curation(
     )
 
 
+def _resolve_finish(
+    config: ProjectConfig, job_id: str, intent: ActionIntent
+) -> _Resolution:
+    """A finish authority, matched by the id its own immutable content addresses.
+
+    No recorded hash is compared, and none needs to be. The finish record is
+    named for the SHA-256 of the authority it carries, so the reserved id *is*
+    the path, and ``_strict_record`` refuses unless the filename matches that id
+    **and** ``sha256(canonical(authority))`` equals it; the embedded ``job_id``
+    is then compared against this job. That is what makes misidentifying another
+    receipt as this action's artifact impossible.
+
+    The ``sha256`` on the reference is measured fresh from the bytes on disk and
+    is disclosure, not a comparison: the record's mutable phase sections
+    legitimately advance as the finish runs, and the finish's own durable state
+    is what says where it stands.
+    """
+
+    from japanese_anki.application import study_finish
+
+    receipt_id = _reserved(intent, "receipt_id")
+    if not receipt_id:
+        return _Resolution(None, "the intent reserves no finish receipt id")
+    try:
+        path = study_finish.receipt_path(config, receipt_id)
+        record = study_finish.inspect_study_finish(config, receipt_id)
+    except (JankiError, OSError) as exc:
+        return _Resolution(None, f"its finish authority could not be read: {exc}")
+    if record.job_id != job_id:
+        return _Resolution(
+            None, f"the finish authority at {path} records study job {record.job_id}"
+        )
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        return _Resolution(None, f"its finish authority could not be read: {exc}")
+    return _Resolution(
+        ActionReference(
+            intent_id=intent.intent_id,
+            kind=intent.kind,
+            path=path,
+            sha256=digest,
+            job_id=job_id,
+            reserves=intent.reserves,
+        ),
+        "",
+    )
+
+
 def _resolve_intent(
     config: ProjectConfig, job_id: str, intent: ActionIntent
 ) -> _Resolution:
@@ -1122,6 +1530,8 @@ def _resolve_intent(
         return _resolve_batch(config, job_id, intent)
     if intent.kind == "curation":
         return _resolve_curation(config, job_id, intent)
+    if intent.kind == "finish":
+        return _resolve_finish(config, job_id, intent)
     return _Resolution(
         None, f"janki cannot resolve a {intent.kind!r} intent's artifact yet"
     )
@@ -1645,65 +2055,567 @@ def dispatch_job_batch(
     return outcome
 
 
+# --- the effective extraction frontier ----------------------------------------
+#
+# Contract §9.5: what a job has extracted is neither "its last batch" nor "every
+# batch it recorded". It is one effective attempt per part, derived from the
+# confirmed-execution receipts the batch service owns and the exact journal
+# entries those receipts retire. Nothing below reads a filename, a modification
+# time or the order of the intent log to decide what is current, and `retry_of`
+# on its own retires nothing: it says which batch a plan was made from, which is
+# provenance rather than a supersession.
+
+
+@dataclass(frozen=True, slots=True)
+class JobChildRef:
+    """One batch child of one job, named so two of them cannot be confused.
+
+    A job spans several batches, and two of them legitimately hold a source 1 —
+    a retry of the second part is that retry's *first* child. An index alone is
+    therefore not an identity here, so the batch that reserved it, the intent
+    that recorded that batch, the index inside it and the part it read are
+    carried together and compared together.
+    """
+
+    batch_id: str
+    intent_id: str
+    index: int
+    source_name: str
+
+    @property
+    def named(self) -> str:
+        """This child in one phrase, for a sentence a person has to act on."""
+
+        return f"source {self.index} ({self.source_name}) of batch {self.batch_id}"
+
+
+@dataclass(frozen=True, slots=True)
+class JobChildAttempt:
+    """One attempt at one part of a job, and what became of it.
+
+    A superseded attempt is not deleted from this history. Its own recorded
+    state and whether money may already have moved are kept from the snapshot
+    the confirmation that retired it saved, because the journal row itself is
+    gone once ``forget`` runs and that snapshot is then the only record of what
+    the attempt cost.
+    """
+
+    ref: JobChildRef
+    operation_id: str
+    state: str
+    bookkeeping_complete: bool
+    #: The staging document this child's own answer writes to, exactly as its
+    #: request was bound to it. Carried so a caller that needs one part's
+    #: settled review — a finish deciding what it may promote — reads it from
+    #: this derivation rather than composing a second one from a file name.
+    staging_path: Path
+    #: The child a confirmed execution retired this attempt in favour of.
+    superseded_by: JobChildRef | None = None
+    #: The state this attempt held in the snapshot that confirmation saved.
+    retired_state: str = ""
+    #: Whether that snapshot is one where a provider may already have billed.
+    retired_billed: bool = False
+
+    @property
+    def settled(self) -> bool:
+        """Whether this attempt saved proposals. Not the same as complete."""
+
+        return self.state == "committed"
+
+    @property
+    def complete(self) -> bool:
+        """Settled *and* with its grammar half written: a finish needs both."""
+
+        return self.settled and self.bookkeeping_complete
+
+
+@dataclass(frozen=True, slots=True)
+class JobFrontier:
+    """Which attempt is current for each part of one job, and the rest.
+
+    The single derivation both a job's review page and its finish readiness
+    read. A page may draw the settled subset of ``effective`` and say what is
+    missing; a finish must require the whole of it.
+    """
+
+    job_id: str
+    #: One current attempt per part, in the order the parts were first sent.
+    effective: tuple[JobChildAttempt, ...]
+    #: Attempts a confirmed execution retired, oldest first, with their cost.
+    superseded: tuple[JobChildAttempt, ...]
+    #: Children of a batch whose request exists and whose execution nobody has
+    #: confirmed. They reserve nothing, retire nothing and count for nothing.
+    prepared: tuple[JobChildRef, ...]
+    #: Batch intents whose own artifact could not be matched, each with why.
+    unresolved: tuple[str, ...]
+
+    @property
+    def unsettled(self) -> tuple[JobChildAttempt, ...]:
+        """Every effective attempt a finish would still be waiting on."""
+
+        return tuple(attempt for attempt in self.effective if not attempt.complete)
+
+
+def _layout_wire(child: Any) -> Any:
+    """The frozen source-form layout a child was sent under, or nothing."""
+
+    layout = child.expectation.table_layout
+    return None if layout is None else layout.to_wire()
+
+
+def _require_same_purpose(
+    job_id: str,
+    batch_id: str,
+    old: JobChildAttempt,
+    old_child: Any,
+    new_child: Any,
+) -> None:
+    """Prove the retirement and the fresh request are one part's history.
+
+    §9.5's lineage: the same source bytes, the same part ancestry and the same
+    frozen layout. Two requests that share nothing but a confirmation are two
+    pieces of work, and joining them would put one part's proposals under
+    another part's name.
+    """
+
+    if (
+        old_child.source.name != new_child.source.name
+        or old_child.source_sha256 != new_child.source_sha256
+    ):
+        raise StudyJobError(
+            f"Batch {batch_id} of study job {job_id} was confirmed to retire "
+            f"{old.ref.named} and sends {new_child.source.name} in its place. A "
+            "retry is a second attempt at the same part, so these two are a "
+            "disjoint chain rather than one history and janki will not join "
+            "them."
+        )
+    if old_child.lineage != new_child.lineage:
+        raise StudyJobError(
+            f"Batch {batch_id} of study job {job_id} was confirmed to retire "
+            f"{old.ref.named} and sends a {new_child.source.name} split out of "
+            "a different document. The part ancestry of an attempt and of its "
+            "replacement must be the same, so janki will not join them."
+        )
+    if _layout_wire(old_child) != _layout_wire(new_child):
+        raise StudyJobError(
+            f"Batch {batch_id} of study job {job_id} was confirmed to retire "
+            f"{old.ref.named} and sends {new_child.source.name} under a "
+            "different frozen source form. A retry asks the same question "
+            "again; asking a different one is new work, not a second attempt."
+        )
+
+
+def _require_supersedable(
+    job_id: str,
+    batch_id: str,
+    old: JobChildAttempt,
+    discard: operations.Operation,
+) -> None:
+    """Refuse a confirmation that retires a source which already succeeded."""
+
+    if discard.state == "committed" or old.state == "committed":
+        raise StudyJobError(
+            f"Batch {batch_id} of study job {job_id} was confirmed to retire "
+            f"{old.ref.named}, whose operation {old.operation_id} is recorded "
+            "committed. A source that saved its proposals is never superseded: "
+            "its cards would leave this job's frontier without anybody deciding "
+            "that. Nothing was changed."
+        )
+
+
+def _require_unreserved(
+    config: ProjectConfig,
+    job_id: str,
+    batch_id: str,
+    intent: ActionIntent,
+    refusal: str,
+) -> None:
+    """A batch the journal reserved is never read as one that never ran.
+
+    Both ways this job can fail to read a batch it recorded — its own binding
+    refusing the manifest, and the batch service's reader refusing it — mean
+    the same thing when the journal holds that batch's reservation: it ran, it
+    may already have retired an earlier attempt, and its own evidence cannot
+    be read. Skipping it would leave the *retired* attempt standing as the
+    part's effective child and report the reason as an unsettled source, which
+    is a silent reversal wearing the words of ordinary waiting.
+
+    Only reservation decides. A batch the journal never reserved sent nothing,
+    retired nothing and spent nothing, so its unreadable artifact stays
+    disclosed read-only state in ``unresolved`` — the same treatment the
+    adjacent no-confirmed-receipt branch already gives, by the same rule.
+    """
+
+    if not batch_id:
+        return
+    reservation = extraction_batch.read_batch_reservation(config, batch_id)
+    if reservation is None:
+        return
+    covered = ", ".join(Path(name).name for name in reservation.source_files)
+    retry_of = str(intent.bindings.get("retry_of") or "")
+    raise StudyJobError(
+        f"Study job {job_id} recorded batch {batch_id}, the journal holds its "
+        f"reservation of {len(reservation.child_operation_ids)} call(s)"
+        + (f" over {covered}" if covered else "")
+        + f", and its own record cannot be read as that batch: {refusal}"
+        + (f"; it was recorded as a retry of batch {retry_of}" if retry_of else "")
+        + ". A batch that ran may already have retired an earlier attempt, so "
+        "janki will not fall back on the older reading of this job's frontier. "
+        "Restore that record, or settle these calls, before this job's "
+        "frontier can be read."
+    )
+
+
+def _frontier_attempts(
+    config: ProjectConfig, job: StudyJob
+) -> tuple[
+    list[JobChildAttempt],
+    dict[JobChildRef, Any],
+    list[tuple[str, Any]],
+    list[JobChildRef],
+    list[str],
+]:
+    """Read every batch this job recorded, once, through the owning reader."""
+
+    job_id = job.header.job_id
+    attempts: list[JobChildAttempt] = []
+    children: dict[JobChildRef, Any] = {}
+    confirmed: list[tuple[str, Any]] = []
+    prepared: list[JobChildRef] = []
+    unresolved: list[str] = []
+    for intent in job.intents:
+        if intent.kind not in ("extract_batch", "retry"):
+            continue
+        batch_id = _reserved(intent, "batch_id")
+        resolution = _resolve_batch(config, job_id, intent)
+        if resolution.reference is None:
+            _require_unreserved(config, job_id, batch_id, intent, resolution.refusal)
+            unresolved.append(
+                f"{batch_id or intent.intent_id}: {resolution.refusal}"
+            )
+            continue
+        try:
+            record = extraction_batch.read_batch_execution_record(config, batch_id)
+        except (JankiError, OSError) as exc:
+            _require_unreserved(config, job_id, batch_id, intent, str(exc))
+            unresolved.append(f"{batch_id}: {exc}")
+            continue
+        refs = tuple(
+            JobChildRef(
+                batch_id=batch_id,
+                intent_id=intent.intent_id,
+                index=child.index,
+                source_name=child.source.name,
+            )
+            for child in record.children
+        )
+        if not record.confirmed:
+            if record.reserved:
+                # The journal holds this batch's reservation, so it ran — and
+                # the receipt saying what its owner confirmed is not there. Its
+                # retirements may already have been executed, which is exactly
+                # when quietly falling back on the older attempt would present a
+                # superseded child as current.
+                raise StudyJobError(
+                    f"Study job {job_id} recorded batch {batch_id}, the journal "
+                    "holds its reservation, and no confirmed-execution receipt "
+                    f"at {extraction_batch.execution_receipt_path(config, batch_id)} "
+                    "describes it"
+                    + (
+                        f"; it was planned as a retry of batch {record.retry_of}"
+                        if record.retry_of
+                        else ""
+                    )
+                    + ". janki will not read a batch that ran as one that never "
+                    "did. Restore that receipt, or settle these calls, before "
+                    "this job's frontier can be read."
+                )
+            prepared.extend(refs)
+            continue
+        confirmed.append((batch_id, record))
+        for ref, child in zip(refs, record.children, strict=True):
+            if ref in children:
+                raise StudyJobError(
+                    f"Batch {batch_id} of study job {job_id} names source "
+                    f"{ref.index} more than once, so janki cannot say which "
+                    "attempt at it is which."
+                )
+            if any(
+                attempt.operation_id == child.operation_id for attempt in attempts
+            ):
+                # One paid authority, one attempt. Two children sharing an id
+                # would make every retirement of it ambiguous.
+                raise StudyJobError(
+                    f"Study job {job_id} records two children holding operation "
+                    f"{child.operation_id}, the second in batch {batch_id}. "
+                    "janki cannot attribute an attempt or its retirement to "
+                    "either of them."
+                )
+            outcome = record.child_outcome(child.index)
+            children[ref] = child
+            attempts.append(
+                JobChildAttempt(
+                    ref=ref,
+                    operation_id=child.operation_id,
+                    state=outcome.state,
+                    bookkeeping_complete=outcome.bookkeeping_complete,
+                    staging_path=child.staging_path,
+                )
+            )
+    return attempts, children, confirmed, prepared, unresolved
+
+
+def _frontier_edges(
+    job_id: str,
+    attempts: Sequence[JobChildAttempt],
+    children: Mapping[JobChildRef, Any],
+    confirmed: Sequence[tuple[str, Any]],
+) -> tuple[dict[JobChildRef, JobChildRef], dict[JobChildRef, operations.Operation]]:
+    """Which attempt each confirmed retirement replaced, proved one at a time."""
+
+    by_operation = {attempt.operation_id: attempt for attempt in attempts}
+    by_place = {
+        (attempt.ref.batch_id, attempt.ref.index): attempt for attempt in attempts
+    }
+    edges: dict[JobChildRef, JobChildRef] = {}
+    retirements: dict[JobChildRef, operations.Operation] = {}
+    for batch_id, record in confirmed:
+        if not record.discards:
+            continue
+        if len(record.discards) != len(record.children):
+            raise StudyJobError(
+                f"Batch {batch_id} of study job {job_id} was confirmed to retire "
+                f"{len(record.discards)} operation(s) while sending "
+                f"{len(record.children)}, so janki cannot say which attempt each "
+                "one replaces."
+            )
+        for discard, child in zip(record.discards, record.children, strict=True):
+            new = by_place[(batch_id, child.index)]
+            old = by_operation.get(discard.operation_id)
+            if old is None:
+                raise StudyJobError(
+                    f"Batch {batch_id} of study job {job_id} was confirmed to "
+                    f"retire operation {discard.operation_id}, which no batch "
+                    "this job recorded ever sent. janki will not place a "
+                    "retirement it cannot attribute."
+                )
+            if record.retry_of and record.retry_of != old.ref.batch_id:
+                raise StudyJobError(
+                    f"Batch {batch_id} of study job {job_id} was planned as a "
+                    f"retry of batch {record.retry_of} and retires "
+                    f"{old.ref.named}. One confirmation cannot name two "
+                    "different histories."
+                )
+            _require_supersedable(job_id, batch_id, old, discard)
+            _require_same_purpose(job_id, batch_id, old, children[old.ref], child)
+            if old.ref in edges:
+                raise StudyJobError(
+                    f"Study job {job_id} holds two confirmed retirements of "
+                    f"{old.ref.named}: batch {edges[old.ref].batch_id} and batch "
+                    f"{new.ref.batch_id}. Which of them is current is not "
+                    "settled by which record was written last, so janki refuses "
+                    "the fork rather than choosing one."
+                )
+            edges[old.ref] = new.ref
+            retirements[old.ref] = discard
+    _refuse_cycles(job_id, edges)
+    return edges, retirements
+
+
+def _refuse_cycles(
+    job_id: str, edges: Mapping[JobChildRef, JobChildRef]
+) -> None:
+    """A history with no oldest attempt is refused, never broken arbitrarily."""
+
+    for start in edges:
+        walked = [start]
+        node = edges[start]
+        while node in edges:
+            if node in walked:
+                walked.append(node)
+                raise StudyJobError(
+                    f"Study job {job_id} records a circle of retirements: "
+                    + ", each retired by ".join(ref.named for ref in walked)
+                    + ". A history with no oldest attempt is not resolved by "
+                    "taking one end of it, so janki refuses to read this "
+                    "frontier at all."
+                )
+            walked.append(node)
+            node = edges[node]
+
+
+def job_effective_frontier(config: ProjectConfig, job_id: str) -> JobFrontier:
+    """One effective attempt per part of this job, and the history behind it.
+
+    §9.5's derivation, and the only one: a job's review page and its finish
+    readiness both read this, so there is never a second approximation of what
+    this job has extracted.
+
+    An attempt is retired only by a batch whose **confirmed-execution receipt**
+    the batch service matches to its own manifest, and only when that receipt
+    names the attempt's exact operation and its replacement is the same part —
+    the same source bytes, the same part ancestry, the same frozen layout. A
+    batch whose manifest exists with no confirmed receipt has reserved nothing
+    and retires nothing. A confirmation that would retire a committed source, a
+    second confirmation retiring an attempt something already retired, a circle
+    of retirements and a retirement this job cannot attribute all refuse by
+    name rather than being resolved by order.
+
+    Reads only, through the batch service's own manifest, receipt and journal
+    readers: nothing here re-derives authority, and nothing is written.
+    """
+
+    job = load_study_job(config, job_id)
+    attempts, children, confirmed, prepared, unresolved = _frontier_attempts(
+        config, job
+    )
+    edges, retirements = _frontier_edges(job_id, attempts, children, confirmed)
+    position = {attempt.ref: index for index, attempt in enumerate(attempts)}
+    predecessor = {new: old for old, new in edges.items()}
+
+    def first_attempt_at(ref: JobChildRef) -> int:
+        """Where this chain's oldest attempt sits, so a retry keeps its place."""
+
+        while ref in predecessor:
+            ref = predecessor[ref]
+        return position[ref]
+
+    effective = tuple(
+        sorted(
+            (attempt for attempt in attempts if attempt.ref not in edges),
+            key=lambda attempt: first_attempt_at(attempt.ref),
+        )
+    )
+    superseded = tuple(
+        replace(
+            attempt,
+            superseded_by=edges[attempt.ref],
+            retired_state=retirements[attempt.ref].state,
+            retired_billed=retirements[attempt.ref].money_may_have_been_spent,
+        )
+        for attempt in attempts
+        if attempt.ref in edges
+    )
+    return JobFrontier(
+        job_id=job_id,
+        effective=effective,
+        superseded=superseded,
+        prepared=tuple(prepared),
+        unresolved=tuple(unresolved),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class StudyJobPreview:
     """One rendered look at what this job has already saved.
 
+    ``children`` are the effective attempts this page really drew and
+    ``pending`` the effective attempts it could not, both as typed references
+    carrying their own batch, intent, index and part name — a job is not one
+    batch, and two batches' source 1 are two different things.
+
     ``rendering_fingerprint`` is the previewed document's own sha256 — a pure
     function of the proposed card fields, the deck's real templates and its
     stylesheet, and nothing else. It carries no checkbox selection and no job
-    revision, so saving one owner choice cannot invalidate another's.
+    revision, so saving one owner choice cannot invalidate another's — and,
+    for the same reason, nothing about *which* parts are missing is written
+    into the document it hashes. A second part going out and not settling
+    changes no card on this page, so it must leave this value alone.
+
+    What is missing is said here instead, in ``pending``, ``unresolved`` and
+    the sentences :attr:`disclosure` derives from them. A surface that draws
+    this page owes the person those sentences: they are the only thing telling
+    them the page is a subset.
     """
 
     job_id: str
-    batch_id: str
-    intent_id: str
+    children: tuple[JobChildRef, ...]
+    pending: tuple[JobChildRef, ...]
+    #: Batch intents this job recorded whose own artifact could not be matched
+    #: and which the journal never reserved, each with why. A reserved one is
+    #: never here — that refuses (:func:`_require_unreserved`).
+    unresolved: tuple[str, ...]
     rendering_fingerprint: str
-    child_indices: tuple[int, ...]
     conflicts: tuple[str, ...]
     preview: Any
+
+    @property
+    def disclosure(self) -> tuple[str, ...]:
+        """Everything of this job's the page does not show, in plain sentences.
+
+        Derived, never stored and never hashed: a surface prints these beside
+        the document instead of the renderer writing them into it.
+        """
+
+        return (
+            *(f"{ref.named} has not settled yet" for ref in self.pending),
+            *(f"batch {entry}" for entry in self.unresolved),
+        )
 
 
 def render_job_preview(config: ProjectConfig, job_id: str) -> StudyJobPreview:
     """Draw this job's saved proposals as the destination deck's real cards.
 
+    Every settled child of the job's whole effective frontier, on one page,
+    each read from its own staging document through the batch service's own
+    ownership check and projection. There is no combined staging file and no
+    synthetic batch identity: a job whose second part was retried draws the
+    first batch's part one beside the retry's part two, and the conflict
+    sentences say which batch each proposal came from.
+
+    Looking at a job before it is finished is legitimate, so the settled subset
+    is drawn and everything this page does not show is returned beside it —
+    the parts still in flight and the batch intents nobody could match, named
+    rather than silently absent. They are returned rather than drawn: the
+    document's sha256 is a content fingerprint, and a part that went out
+    elsewhere changes no card here. A settled child whose own document cannot
+    be read still refuses by part, because that page really would be a subset
+    presenting itself as the whole.
+
     A presentation: it accepts nothing, promotes nothing and writes nothing.
-    Batches are tried in reverse *append* order — the order the job's own
-    intent log records, never modification time — so a retry's proposals are
-    what a person sees, and the reason each earlier batch could not be drawn
-    is reported rather than swallowed.
     """
 
     job = load_study_job(config, job_id)
     deck = job_destination_deck(config, job)
-    refusals: list[str] = []
-    for intent in reversed(job.intents):
-        if intent.kind not in ("extract_batch", "retry"):
-            continue
-        resolution = _resolve_intent(config, job_id, intent)
-        if resolution.reference is None:
-            refusals.append(f"{_reserved(intent, 'batch_id')}: {resolution.refusal}")
-            continue
-        batch_id = _reserved(intent, "batch_id")
-        try:
-            rendered = extraction_batch.render_extraction_batch_preview(
-                config, batch_id, deck_path=deck
-            )
-        except (JankiError, OSError) as exc:
-            refusals.append(f"{batch_id}: {exc}")
-            continue
-        return StudyJobPreview(
-            job_id=job_id,
-            batch_id=batch_id,
-            intent_id=intent.intent_id,
-            rendering_fingerprint=rendered.preview.sha256,
-            child_indices=tuple(rendered.child_indices),
-            conflicts=tuple(rendered.conflicts),
-            preview=rendered.preview,
+    frontier = job_effective_frontier(config, job_id)
+    settled = tuple(attempt for attempt in frontier.effective if attempt.settled)
+    pending = tuple(
+        attempt.ref for attempt in frontier.effective if not attempt.settled
+    )
+    if not settled:
+        waiting = [
+            f"{attempt.ref.named} is {attempt.state}"
+            for attempt in frontier.effective
+        ]
+        waiting.extend(f"{ref.named} was never confirmed" for ref in frontier.prepared)
+        waiting.extend(frontier.unresolved)
+        raise StudyJobError(
+            f"Study job {job_id} has no settled source whose proposals can be "
+            "drawn" + (": " + "; ".join(waiting) if waiting else " yet.")
         )
-    raise StudyJobError(
-        f"Study job {job_id} has no batch whose proposals can be drawn"
-        + (": " + "; ".join(refusals) if refusals else " yet.")
+    rendered = extraction_batch.render_child_proposals(
+        config,
+        [
+            extraction_batch.ChildProposalRef(
+                batch_id=attempt.ref.batch_id,
+                index=attempt.ref.index,
+                # What tells two batches' source 1 apart in a sentence.
+                origin=f" of batch {attempt.ref.batch_id[:8]}",
+            )
+            for attempt in settled
+        ],
+        deck_path=deck,
+        scratch_slug=f"job-{job_id}",
+        scratch_title=f"Study job {job_id[:8]} proposals",
+    )
+    return StudyJobPreview(
+        job_id=job_id,
+        children=tuple(attempt.ref for attempt in settled),
+        pending=pending,
+        unresolved=frontier.unresolved,
+        rendering_fingerprint=rendered.preview.sha256,
+        conflicts=tuple(rendered.conflicts),
+        preview=rendered.preview,
     )
 
 
@@ -1924,6 +2836,83 @@ def _resume_curation(
     )
 
 
+def _resume_finish(
+    config: ProjectConfig,
+    job_id: str,
+    reference: ActionReference,
+    finish_options: Mapping[str, Any],
+) -> JobResumeAction:
+    """Continue one recorded finish under the authority it already holds.
+
+    The finish service is the writer, exactly as the publication, batch and
+    curation services are: this hands the receipt back to it and appends no
+    outcome of its own beyond closing the intent when the finish is complete.
+    No owner decision is asked for, no dictionary fact is refetched, and an
+    unknown paid outcome is never re-sent — the finish's own phase chain
+    decides what, if anything, is still owed.
+    """
+
+    from japanese_anki.application import study_finish
+
+    receipt_id = str(reference.reserves.get("receipt_id") or "")
+    try:
+        result = study_finish.resume_study_finish(
+            config,
+            receipt_id,
+            chosen_provider=finish_options.get("chosen_provider"),
+            word_provider=finish_options.get("word_provider"),
+            sentence_provider=finish_options.get("sentence_provider"),
+        )
+    except (JankiError, OSError) as exc:
+        return JobResumeAction(
+            intent_id=reference.intent_id,
+            kind=reference.kind,
+            closed=False,
+            detail=(
+                f"This job's recorded finish could not be continued: {exc} "
+                "Nothing was adopted in its place and this job's record of it "
+                "stays open."
+            ),
+        )
+    if not result.succeeded:
+        outstanding = " ".join(result.outstanding)
+        return JobResumeAction(
+            intent_id=reference.intent_id,
+            kind=reference.kind,
+            closed=False,
+            detail=(
+                f"Finish {receipt_id[:12]} stands at {result.state}. "
+                + (outstanding or "Resuming again continues exactly that authority.")
+                + " Nothing new was authorized here."
+            ),
+        )
+    current = load_study_job(config, job_id)
+    append_outcome(
+        config,
+        job_id,
+        IntentOutcome(
+            intent_id=reference.intent_id,
+            state="applied",
+            at=datetime.now(UTC).isoformat(),
+            observed=((str(reference.path), reference.sha256),),
+            consequences={"state": result.state, "resumed": True},
+        ),
+        expected_revision=current.revision,
+    )
+    return JobResumeAction(
+        intent_id=reference.intent_id,
+        kind=reference.kind,
+        closed=True,
+        detail=(
+            # §7.12: the finish's `card_count` is the package receipt's
+            # whole-deck expansion, not this job's contribution, so it is named
+            # as the deck's rather than reported as what this job added.
+            f"Finish {receipt_id[:12]} is complete: {result.output_path} packages "
+            f"{result.card_count} card(s) for the whole deck."
+        ),
+    )
+
+
 def _resume_batch(
     config: ProjectConfig,
     job_id: str,
@@ -1971,6 +2960,8 @@ def _resume_batch(
 def resume_job_actions(
     config: ProjectConfig,
     job_id: str,
+    *,
+    finish_options: Mapping[str, Any] | None = None,
     **dispatch_options: Any,
 ) -> tuple[JobResumeAction, ...]:
     """Finish what this job's open intents still have authority for.
@@ -1991,7 +2982,7 @@ def resume_job_actions(
     closed = job.closed_intent_ids
     actions: list[JobResumeAction] = []
     for intent in job.intents:
-        if intent.intent_id in closed or intent.kind not in _WRITABLE_INTENT_KINDS:
+        if intent.intent_id in closed:
             continue
         resolution = _resolve_intent(config, job_id, intent)
         if resolution.reference is None:
@@ -2016,6 +3007,12 @@ def resume_job_actions(
             )
         elif intent.kind == "curation":
             actions.append(_resume_curation(config, job_id, resolution.reference))
+        elif intent.kind == "finish":
+            actions.append(
+                _resume_finish(
+                    config, job_id, resolution.reference, finish_options or {}
+                )
+            )
         else:
             actions.append(
                 _resume_batch(config, job_id, resolution.reference, dispatch_options)

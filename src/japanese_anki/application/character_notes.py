@@ -1187,6 +1187,12 @@ def _reference_characters(characters: Sequence[str]) -> tuple[str, ...]:
     applies `kanji.kanji_in` per record over a whole collection, and a character
     two words share arrives twice. One character is still one lookup.
 
+    **No characters at all is a settled answer, not a malformed request.** The
+    same fold over a kana-only selection — あげる, もらう — legitimately produces an
+    empty list, and a preparation for it is an ordinary no-op: no provider is
+    asked anything, neither store is proposed a change, and both before-states
+    are still bound so the apply's compare-and-swap has something to measure.
+
     Nothing here mints an identity. The check is only that each target is one
     kanji, which is what both providers require of a request.
     """
@@ -1195,8 +1201,6 @@ def _reference_characters(characters: Sequence[str]) -> tuple[str, ...]:
             "Reference characters are a list of single characters, not one string."
         )
     targets = tuple(dict.fromkeys(characters))
-    if not targets:
-        raise CharacterNotesError("Name at least one character to prepare facts for.")
     for character in targets:
         if not isinstance(character, str):
             raise CharacterNotesError("Every reference character must be text.")

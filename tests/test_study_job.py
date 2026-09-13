@@ -272,42 +272,696 @@ def test_record_choice_refuses_a_payload_naming_an_immutable_namespace(
     assert load_study_job(config, job.header.job_id).revision == job.revision
 
 
-@pytest.mark.parametrize(
-    "key",
-    [
-        "include_example_audio",
-        "review_flags",
-        "review_patterns",
-        "coverage_reasons",
-        "dispositions",
-    ],
-)
-def test_record_choice_refuses_an_owner_decision_whose_control_does_not_exist(
-    tmp_path: Path, key: str
-) -> None:
-    """Reserved names, not writable ones: their editors ship with the finish.
+# --- the owner's five decisions, each with its own validator ------------------
+#
+# These five keys used to be refused by name because no control recorded them.
+# The finish's editors do, so the refusals are gone and each key has an explicit
+# validator instead. What is checked here is that none of them is *merely*
+# allowlisted: a decision stored in an unvalidated shape is a decision nobody
+# can prove was made, and the four provenance values are what make one
+# reviewable later.
 
-    Reserving them here is what stops the same decision arriving later under a
-    different, unvalidated key. Writing one now would be a placeholder for a
-    decision no rendering has been taken over.
+BINDINGS: dict[str, Any] = {
+    "part": "verbs-p1.png",
+    "staging_sha256": "a" * 64,
+    "rendering_fingerprint": "b" * 64,
+}
+
+
+def _bound(job_id: str, **overrides: Any) -> dict[str, Any]:
+    return {**BINDINGS, "job_id": job_id, **overrides}
+
+
+#: One *complete and exactly valid* payload per per-part decision, beyond the
+#: four bindings. Shared by every test below that needs a real saved decision,
+#: so a change to one key's closed field set has one place to be stated.
+DECISION_PAYLOADS: dict[str, dict[str, Any]] = {
+    "review_flags": {"record_ids": []},
+    "review_patterns": {"value": True},
+    "coverage_reasons": {"reason": "The table has no totals line."},
+    "dispositions": {"action": "defer", "reason": "Next lesson covers these."},
+}
+
+
+@pytest.mark.parametrize(("key", "entry"), sorted(DECISION_PAYLOADS.items()))
+def test_an_owner_decision_records_the_four_bindings_it_was_taken_over(
+    tmp_path: Path, key: str, entry: dict[str, Any]
+) -> None:
+    """Job, part, that part's staging bytes and the rendering it was decided over.
+
+    Deliberately not the job document's own revision: that is the CAS this write
+    already performs, and binding it here would make saving one owner choice
+    stale another independent one.
     """
 
     config = _project(tmp_path)
     job = _job(config)
-    with pytest.raises(StudyJobError) as error:
+
+    saved = record_choice(
+        config,
+        job.header.job_id,
+        {key: {BINDINGS["part"]: _bound(job.header.job_id, **entry)}},
+        expected_revision=job.revision,
+    )
+
+    stored = saved.choices[key][BINDINGS["part"]]
+    assert stored["job_id"] == job.header.job_id
+    assert stored["part"] == BINDINGS["part"]
+    assert stored["staging_sha256"] == BINDINGS["staging_sha256"]
+    assert stored["rendering_fingerprint"] == BINDINGS["rendering_fingerprint"]
+    assert stored["saved_at"]
+    assert load_study_job(config, job.header.job_id).choices == saved.choices
+
+
+@pytest.mark.parametrize("key", sorted(DECISION_PAYLOADS))
+@pytest.mark.parametrize(
+    "missing", ["job_id", "part", "staging_sha256", "rendering_fingerprint"]
+)
+def test_an_owner_decision_missing_one_binding_writes_nothing(
+    tmp_path: Path, key: str, missing: str
+) -> None:
+    """A decision nobody can place is not stored under a partial provenance.
+
+    The entry is otherwise exactly this key's valid payload, so the refusal can
+    only be about the dropped binding — and the message is matched on the whole
+    phrase that names it rather than on the bare field name, which four short
+    binding names would match almost anywhere.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    entry = _bound(job.header.job_id, **DECISION_PAYLOADS[key])
+    entry.pop(missing)
+
+    with pytest.raises(StudyJobError, match=f"records the exact {missing}"):
         record_choice(
             config,
             job.header.job_id,
-            {key: True},
+            {key: {BINDINGS["part"]: entry}},
             expected_revision=job.revision,
         )
-    message = str(error.value)
-    assert key in message
-    # Refused by name, with the reason: the schema knows this decision and is
-    # holding the name for the control that will record it. A generic "not a
-    # study job choice" would leave the name free for something else to take.
-    assert "reserved for" in message
     assert load_study_job(config, job.header.job_id).choices == {}
+
+
+def test_one_owner_decision_never_stales_another_independent_one(
+    tmp_path: Path,
+) -> None:
+    """Two parts, two choices, two renderings — and both survive the other's save.
+
+    §9.1's rule stated as an artifact fact: the first part's coverage reason is
+    still bound to the rendering it was taken over after a second part saves a
+    decision over a different one.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    first = record_choice(
+        config,
+        job.header.job_id,
+        {
+            "coverage_reasons": {
+                "p1.png": _bound(
+                    job.header.job_id,
+                    part="p1.png",
+                    reason="The source lists no totals.",
+                )
+            }
+        },
+        expected_revision=job.revision,
+    )
+    second = record_choice(
+        config,
+        job.header.job_id,
+        {
+            "coverage_reasons": {
+                "p2.png": _bound(
+                    job.header.job_id,
+                    part="p2.png",
+                    staging_sha256="c" * 64,
+                    rendering_fingerprint="d" * 64,
+                    reason="This page is a chart.",
+                )
+            }
+        },
+        expected_revision=first.revision,
+    )
+
+    reasons = second.choices["coverage_reasons"]
+    assert set(reasons) == {"p1.png", "p2.png"}
+    assert reasons["p1.png"]["rendering_fingerprint"] == "b" * 64
+    assert reasons["p1.png"]["reason"] == "The source lists no totals."
+    assert reasons["p2.png"]["rendering_fingerprint"] == "d" * 64
+
+
+def test_a_coverage_reason_and_a_disposition_reason_are_the_owners_own_words(
+    tmp_path: Path,
+) -> None:
+    """Blank is refused rather than derived, exactly as `coverage` refuses it."""
+
+    config = _project(tmp_path)
+    job = _job(config)
+    for key, entry in (
+        ("coverage_reasons", {"reason": "   "}),
+        ("dispositions", {"action": "exclude", "reason": ""}),
+    ):
+        with pytest.raises(StudyJobError, match="reason"):
+            record_choice(
+                config,
+                job.header.job_id,
+                {key: {BINDINGS["part"]: _bound(job.header.job_id, **entry)}},
+                expected_revision=job.revision,
+            )
+    assert load_study_job(config, job.header.job_id).choices == {}
+
+
+def test_a_disposition_is_exactly_an_exclusion_or_a_deferral(tmp_path: Path) -> None:
+    config = _project(tmp_path)
+    job = _job(config)
+    assert study_job.DISPOSITION_ACTIONS == ("exclude", "defer")
+
+    with pytest.raises(StudyJobError, match="exclude or defer"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {
+                "dispositions": {
+                    BINDINGS["part"]: _bound(
+                        job.header.job_id, action="archive", reason="Not this job."
+                    )
+                }
+            },
+            expected_revision=job.revision,
+        )
+    assert load_study_job(config, job.header.job_id).choices == {}
+
+
+def _two_parts(
+    config: ProjectConfig, job: Any, key: str
+) -> Any:
+    """Save the same per-part decision for `p1.png` and `p2.png`, in two saves.
+
+    Two different renderings on purpose, so a later assertion that the surviving
+    part is byte-identical is also an assertion about the rendering it was bound
+    to rather than only about its payload.
+    """
+    first = record_choice(
+        config,
+        job.header.job_id,
+        {key: {"p1.png": _bound(job.header.job_id, part="p1.png", **DECISION_PAYLOADS[key])}},
+        expected_revision=job.revision,
+    )
+    return record_choice(
+        config,
+        job.header.job_id,
+        {
+            key: {
+                "p2.png": _bound(
+                    job.header.job_id,
+                    part="p2.png",
+                    staging_sha256="c" * 64,
+                    rendering_fingerprint="d" * 64,
+                    **DECISION_PAYLOADS[key],
+                )
+            }
+        },
+        expected_revision=first.revision,
+    )
+
+
+@pytest.mark.parametrize("key", sorted(DECISION_PAYLOADS))
+def test_the_owner_withdraws_one_part_and_the_other_stays_byte_identical(
+    tmp_path: Path, key: str
+) -> None:
+    """An explicit `None` withdraws exactly the part it names, through this writer.
+
+    The owner's own control and the owner's own compare-and-swap: the same
+    reversible local save that recorded the decision is what takes it back, so a
+    saved decision the finish refuses can be cleared without hand-editing the
+    job document. Nothing else in the map moves — the surviving part keeps its
+    bindings, its rendering and its saved date byte for byte.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    saved = _two_parts(config, job, key)
+    kept = json.dumps(saved.choices[key]["p2.png"], sort_keys=True)
+
+    withdrawn = record_choice(
+        config,
+        job.header.job_id,
+        {key: {"p1.png": None}},
+        expected_revision=saved.revision,
+    )
+
+    assert set(withdrawn.choices[key]) == {"p2.png"}
+    assert json.dumps(withdrawn.choices[key]["p2.png"], sort_keys=True) == kept
+    reread = load_study_job(config, job.header.job_id)
+    assert reread.choices == withdrawn.choices
+
+
+def test_a_withdrawal_leaves_every_other_choice_and_pending_intent_alone(
+    tmp_path: Path,
+) -> None:
+    """One key's withdrawal is not a rewrite of the job's other decisions.
+
+    §9.1's independence rule applied to the new direction: withdrawing a coverage
+    reason cannot disturb another key's saved decision, the job-wide audio
+    preference, or an intent that is still open — the last of which is what stops
+    a reversible local edit clearing work a service already reserved.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    saved = _two_parts(config, job, "coverage_reasons")
+    saved = record_choice(
+        config,
+        job.header.job_id,
+        {
+            "dispositions": {
+                "p1.png": _bound(
+                    job.header.job_id,
+                    part="p1.png",
+                    **DECISION_PAYLOADS["dispositions"],
+                )
+            }
+        },
+        expected_revision=saved.revision,
+    )
+    saved = record_choice(
+        config,
+        job.header.job_id,
+        {"include_example_audio": {"value": False}},
+        expected_revision=saved.revision,
+    )
+    intent = ActionIntent(
+        intent_id=study_job.new_intent_id(),
+        kind="source_parts",
+        decided_at="2026-09-12T10:00:00+00:00",
+        reserves={"recipe_id": "r-1", "receipt_sha256": "77aa"},
+        bindings={},
+    )
+    saved = append_intent(
+        config, job.header.job_id, intent, expected_revision=saved.revision
+    )
+    disposition = json.dumps(saved.choices["dispositions"], sort_keys=True)
+
+    withdrawn = record_choice(
+        config,
+        job.header.job_id,
+        {"coverage_reasons": {"p1.png": None}},
+        expected_revision=saved.revision,
+    )
+
+    assert set(withdrawn.choices["coverage_reasons"]) == {"p2.png"}
+    assert json.dumps(withdrawn.choices["dispositions"], sort_keys=True) == disposition
+    assert withdrawn.choices["include_example_audio"]["value"] is False
+    assert [entry.intent_id for entry in withdrawn.intents] == [intent.intent_id]
+    assert withdrawn.closed_intent_ids == frozenset()
+
+
+def test_withdrawing_a_decision_this_job_does_not_hold_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """A withdrawal names a stored decision, so there is nothing to no-op over.
+
+    Accepting it would report a withdrawal to an owner whose stale editor was
+    looking at a different part — and would spend a revision saying nothing. The
+    other part's reason is still there afterwards.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    saved = record_choice(
+        config,
+        job.header.job_id,
+        {
+            "coverage_reasons": {
+                "p2.png": _bound(
+                    job.header.job_id,
+                    part="p2.png",
+                    **DECISION_PAYLOADS["coverage_reasons"],
+                )
+            }
+        },
+        expected_revision=job.revision,
+    )
+
+    with pytest.raises(StudyJobError, match="nothing to withdraw"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {"coverage_reasons": {"p1.png": None}},
+            expected_revision=saved.revision,
+        )
+    reread = load_study_job(config, job.header.job_id)
+    assert set(reread.choices["coverage_reasons"]) == {"p2.png"}
+    assert reread.revision == saved.revision
+
+
+@pytest.mark.parametrize("key", sorted(DECISION_PAYLOADS))
+def test_an_empty_decision_map_is_refused_rather_than_read_as_a_withdrawal(
+    tmp_path: Path, key: str
+) -> None:
+    """Withdrawal is stated per part; an empty map clears nothing implicitly."""
+
+    config = _project(tmp_path)
+    job = _job(config)
+    saved = _two_parts(config, job, key)
+
+    with pytest.raises(StudyJobError, match="keyed by published part name"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {key: {}},
+            expected_revision=saved.revision,
+        )
+    assert set(load_study_job(config, job.header.job_id).choices[key]) == {
+        "p1.png",
+        "p2.png",
+    }
+
+
+@pytest.mark.parametrize(
+    ("key", "stray", "extra"),
+    [
+        ("dispositions", "record_id", {"record_id": "word:走る:はしる"}),
+        ("review_flags", "review_patterns", {"review_patterns": True}),
+        ("coverage_reasons", "approved_at", {"approved_at": "2026-09-12"}),
+        ("review_patterns", "values", {"values": True}),
+    ],
+)
+def test_a_per_part_decision_refuses_a_field_its_schema_does_not_define(
+    tmp_path: Path, key: str, stray: str, extra: dict[str, Any]
+) -> None:
+    """A misspelled or invented field refuses by name; nothing is dropped.
+
+    The sharp case is `dispositions`: a payload carrying `record_id` instead of
+    `record_ids` used to be stored as "no rows selected", which the finish reads
+    as the **whole part** — one held row's exclusion silently widened to the
+    page. Closing the field set is what makes that a refusal instead, and the
+    refusal names the field so the typo is visible.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+
+    with pytest.raises(StudyJobError, match=stray):
+        record_choice(
+            config,
+            job.header.job_id,
+            {
+                key: {
+                    BINDINGS["part"]: _bound(
+                        job.header.job_id, **DECISION_PAYLOADS[key], **extra
+                    )
+                }
+            },
+            expected_revision=job.revision,
+        )
+    assert load_study_job(config, job.header.job_id).choices == {}
+
+
+@pytest.mark.parametrize("supplied", [False, 0, "", {}, None])
+def test_a_present_record_ids_is_validated_as_supplied_not_widened(
+    tmp_path: Path, supplied: Any
+) -> None:
+    """A present selection that is not a list of ids is refused, not emptied.
+
+    `entry.get("record_ids") or []` turned every one of these into "no rows
+    selected", which §7.7 reads as the whole part. A value the owner's control
+    could not have meant is a refusal: janki does not repair one decision into a
+    wider one.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+
+    with pytest.raises(StudyJobError, match="distinct nonblank record ids"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {
+                "dispositions": {
+                    BINDINGS["part"]: _bound(
+                        job.header.job_id,
+                        action="exclude",
+                        reason="Only this row repeats lesson 9.",
+                        record_ids=supplied,
+                    )
+                }
+            },
+            expected_revision=job.revision,
+        )
+    assert load_study_job(config, job.header.job_id).choices == {}
+
+
+def test_a_disposition_covers_the_whole_part_only_when_it_selects_no_row(
+    tmp_path: Path,
+) -> None:
+    """Absent and explicit `[]` are the two documented whole-part spellings."""
+
+    config = _project(tmp_path)
+    job = _job(config)
+    absent = record_choice(
+        config,
+        job.header.job_id,
+        {
+            "dispositions": {
+                "p1.png": _bound(
+                    job.header.job_id,
+                    part="p1.png",
+                    action="defer",
+                    reason="I will read this page with lesson 12.",
+                )
+            }
+        },
+        expected_revision=job.revision,
+    )
+    explicit = record_choice(
+        config,
+        job.header.job_id,
+        {
+            "dispositions": {
+                "p2.png": _bound(
+                    job.header.job_id,
+                    part="p2.png",
+                    action="defer",
+                    reason="Same page, stated the long way.",
+                    record_ids=[],
+                )
+            }
+        },
+        expected_revision=absent.revision,
+    )
+
+    assert explicit.choices["dispositions"]["p1.png"]["record_ids"] == []
+    assert explicit.choices["dispositions"]["p2.png"]["record_ids"] == []
+
+
+def test_a_review_selection_states_which_rows_it_flags_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    """"None of them" is a decision the owner states, not an omitted argument.
+
+    An empty `record_ids` list is accepted and stored; a *missing* key refuses.
+    The pattern-set mark is deliberately absent from this entry — it is its own
+    `review_patterns` choice, which is the one fact the finish reads, so a review
+    selection cannot hold a second copy for the two to disagree over.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    saved = record_choice(
+        config,
+        job.header.job_id,
+        {"review_flags": {BINDINGS["part"]: _bound(job.header.job_id, record_ids=[])}},
+        expected_revision=job.revision,
+    )
+    stored = saved.choices["review_flags"][BINDINGS["part"]]
+    assert stored["record_ids"] == []
+    assert set(stored) == {
+        "job_id",
+        "part",
+        "staging_sha256",
+        "rendering_fingerprint",
+        "record_ids",
+        "saved_at",
+    }
+
+    with pytest.raises(StudyJobError, match="which rows it flags"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {"review_flags": {BINDINGS["part"]: _bound(job.header.job_id)}},
+            expected_revision=saved.revision,
+        )
+    with pytest.raises(StudyJobError, match="distinct nonblank record ids"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {
+                "review_flags": {
+                    BINDINGS["part"]: _bound(
+                        job.header.job_id,
+                        record_ids=["word:話す:はなす", "word:話す:はなす"],
+                    )
+                }
+            },
+            expected_revision=saved.revision,
+        )
+
+
+def test_the_pattern_review_choice_is_the_one_place_that_mark_is_stored(
+    tmp_path: Path,
+) -> None:
+    """One standalone true-or-false fact per part, and no second copy anywhere.
+
+    `False` is the owner saying "not this part's patterns" and is stored as
+    stated; a value that is neither refuses rather than being inferred. Saving a
+    review selection for the same part adds no pattern field of its own.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    marked = record_choice(
+        config,
+        job.header.job_id,
+        {"review_patterns": {BINDINGS["part"]: _bound(job.header.job_id, value=True)}},
+        expected_revision=job.revision,
+    )
+    stored = marked.choices["review_patterns"][BINDINGS["part"]]
+    assert stored["value"] is True
+    assert set(stored) == {
+        "job_id",
+        "part",
+        "staging_sha256",
+        "rendering_fingerprint",
+        "value",
+        "saved_at",
+    }
+
+    with_flags = record_choice(
+        config,
+        job.header.job_id,
+        {"review_flags": {BINDINGS["part"]: _bound(job.header.job_id, record_ids=[])}},
+        expected_revision=marked.revision,
+    )
+    assert "review_patterns" not in with_flags.choices["review_flags"][BINDINGS["part"]]
+    assert with_flags.choices["review_patterns"][BINDINGS["part"]]["value"] is True
+
+    cleared = record_choice(
+        config,
+        job.header.job_id,
+        {"review_patterns": {BINDINGS["part"]: _bound(job.header.job_id, value=False)}},
+        expected_revision=with_flags.revision,
+    )
+    assert cleared.choices["review_patterns"][BINDINGS["part"]]["value"] is False
+
+    with pytest.raises(StudyJobError, match="never inferred"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {
+                "review_patterns": {
+                    BINDINGS["part"]: _bound(job.header.job_id, value="yes")
+                }
+            },
+            expected_revision=cleared.revision,
+        )
+
+
+def test_the_sentence_audio_choice_binds_the_job_and_its_revision_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    """Job-wide, so no part, no staging hash, no rendering and no reason.
+
+    A re-rendered staging file cannot stale this preference, which is exactly
+    why it must not carry the bindings the per-part decisions carry.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+
+    saved = record_choice(
+        config,
+        job.header.job_id,
+        {"include_example_audio": {"value": False}},
+        expected_revision=job.revision,
+    )
+
+    stored = saved.choices["include_example_audio"]
+    assert stored["value"] is False
+    assert stored["job_id"] == job.header.job_id
+    assert set(stored) == {"value", "job_id", "saved_at"}
+
+    # Re-enabling is the same control and the same CAS, not a second key.
+    reenabled = record_choice(
+        config,
+        job.header.job_id,
+        {"include_example_audio": {"value": True}},
+        expected_revision=saved.revision,
+    )
+    assert reenabled.choices["include_example_audio"]["value"] is True
+
+    for stray, message in (
+        ({"value": False, "part": BINDINGS["part"]}, "records no part"),
+        (
+            {"value": False, "rendering_fingerprint": "b" * 64},
+            "records no rendering_fingerprint",
+        ),
+        ({"value": False, "reason": "too expensive"}, "records no reason"),
+        ({"value": "no"}, "exactly true or false"),
+        ({}, "exactly true or false"),
+    ):
+        with pytest.raises(StudyJobError, match=message):
+            record_choice(
+                config,
+                job.header.job_id,
+                {"include_example_audio": stray},
+                expected_revision=reenabled.revision,
+            )
+    with pytest.raises(StudyJobError, match="another study job"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {"include_example_audio": {"value": True, "job_id": "someone-else"}},
+            expected_revision=reenabled.revision,
+        )
+    assert (
+        load_study_job(config, job.header.job_id).choices["include_example_audio"][
+            "value"
+        ]
+        is True
+    )
+
+
+def test_every_writable_choice_key_has_its_own_validator(tmp_path: Path) -> None:
+    """No catch-all: a key in the schema with no checker fails loudly.
+
+    `CHOICE_KEYS` is the closed list, and the dispatch below it is exhaustive by
+    construction. A key added to one without the other is the exact mistake this
+    asserts against.
+    """
+
+    assert set(study_job.CHOICE_KEYS) == {
+        "coverage_reasons",
+        "directions",
+        "dispositions",
+        "include_example_audio",
+        "part_layout_bindings",
+        "part_selections",
+        "review_flags",
+        "review_patterns",
+    }
+    config = _project(tmp_path)
+    job = _job(config)
+    with pytest.raises(StudyJobError, match="not a study job choice"):
+        record_choice(
+            config,
+            job.header.job_id,
+            {"include_example_audio_v2": {"value": True}},
+            expected_revision=job.revision,
+        )
 
 
 def test_record_choice_refuses_a_layout_binding_to_a_revision_that_does_not_exist(
@@ -502,32 +1156,74 @@ def test_a_successor_supersedes_only_an_intent_an_outcome_already_closed(
     ]
 
 
-@pytest.mark.parametrize("kind", ["finish"])
-def test_append_intent_refuses_a_kind_whose_owning_service_does_not_exist(
-    tmp_path: Path, kind: str
+def test_an_intent_kind_outside_the_closed_list_refuses_by_name(
+    tmp_path: Path,
 ) -> None:
-    """The datatype carries all five kinds; only the shipped ones are writable.
+    """`INTENT_KINDS` is the one kind check, and `"download"` is what it refuses.
 
-    ``curation`` left this list when `application/study_curation.py` shipped;
-    ``finish`` stays until the study-finish authority does.
+    Every kind in the closed list has an owning service — ``curation`` arrived
+    with `application/study_curation.py` and ``finish`` with
+    `application/study_finish.py` — so the second "is there a writer for this
+    kind yet" guard has been removed rather than left as an unreachable safety
+    net. This is the refusal that remains, named for what it actually exercises.
     """
 
     config = _project(tmp_path)
     job = _job(config)
+    assert study_job.INTENT_KINDS == (
+        "source_parts",
+        "extract_batch",
+        "retry",
+        "curation",
+        "finish",
+    )
     with pytest.raises(StudyJobError) as error:
         append_intent(
             config,
             job.header.job_id,
             ActionIntent(
                 intent_id=study_job.new_intent_id(),
-                kind=kind,
+                kind="download",
                 decided_at="2026-09-09T10:00:00+00:00",
                 reserves={},
                 bindings={},
             ),
             expected_revision=job.revision,
         )
-    assert kind in str(error.value)
+    assert "download" in str(error.value)
+    assert load_study_job(config, job.header.job_id).intents == ()
+
+
+def test_a_finish_intent_is_writable_and_resolves_to_its_authority(
+    tmp_path: Path,
+) -> None:
+    """A reserved finish receipt id resolves to the record at that exact path.
+
+    The finish record is named for the SHA-256 of the authority it carries, so
+    the reserved id *is* the path. Until the authority exists the intent stays
+    open and unresolved rather than being closed or fabricated.
+    """
+
+    config = _project(tmp_path)
+    job = _job(config)
+    receipt_id = "e" * 64
+    intent = ActionIntent(
+        intent_id=study_job.new_intent_id(),
+        kind="finish",
+        decided_at="2026-09-12T10:00:00+00:00",
+        reserves={"receipt_id": receipt_id},
+        bindings={},
+    )
+
+    saved = append_intent(
+        config, job.header.job_id, intent, expected_revision=job.revision
+    )
+
+    assert [entry.kind for entry in saved.intents] == ["finish"]
+    status = study_job_status(config, job.header.job_id)
+    assert status.open_intents == (intent.intent_id,)
+    assert status.unresolved_intents == (intent.intent_id,)
+    assert discover_actions(config, job.header.job_id) == ()
 
 
 def test_a_job_document_grants_no_spending_or_discard_authority(
