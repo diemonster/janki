@@ -128,13 +128,32 @@ or second-guesses what came back.
     `revise`, `promote --accept-coverage`, Realtime audio, and the explicit
     `anthropic-api` revision provider each still need their own exact
     authorization, and the Max account's extra-usage setting is the owner's.
-- Run `make gates` before considering work complete: it runs ruff, pytest,
-  and a sample deck build. Run it rather than its parts. Bare `pytest` and
-  bare `janki` resolve through the venv's editable install to the *primary*
-  worktree, so inside a linked worktree they exercise code your branch never
-  changed and report green. `make gates` derives every path from the
-  checkout it lives in; `conftest.py` does the same for pytest and aborts if
-  the package still resolves elsewhere.
+- **While implementing, test the change — not the repository.** Run the focused
+  nodes or files that own the behaviour you changed, and run them again the
+  same way when a review finds something and you fix it. When a changed
+  interface makes a caller behave differently, add that caller's test too: a
+  directly affected caller is part of the change, not a sweep. Once those
+  checks pass, do not repeat or broaden them without a new change, a new
+  failure, or a concrete integration concern you can name and have not
+  resolved. A second green run of the same tests over the same bytes proves
+  nothing the first one did not.
+- **Keep the output of the first run.** Send a run's complete stdout and
+  stderr to a file and keep the command's own exit status — the process's
+  direct status, not a summary line printed after it by something else —
+  rather than piping through `tail`, which discards the failures and the exit
+  code together. A run whose evidence was thrown away has to happen again, and
+  that, not the testing, is what makes evidence expensive.
+- Run `make gates` **once**, at the commit or completion boundary, after the
+  change is stable and review-ready: it runs ruff, pytest, and a sample deck
+  build. Run it rather than its parts, and do not run the full pytest suite
+  separately beforehand — that is the same suite twice. If gates exposes a
+  failure, fix it with a narrow test and a narrow change, re-run those focused
+  nodes, and only then re-run the gates the repository requires.
+- Bare `pytest` and bare `janki` resolve through the venv's editable install to
+  the *primary* worktree, so inside a linked worktree they exercise code your
+  branch never changed and report green. Anchor every run to the checkout:
+  `make gates` derives every path from the checkout it lives in; `conftest.py`
+  does the same for pytest and aborts if the package still resolves elsewhere.
 
 ## Japanese-content rules
 

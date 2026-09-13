@@ -72,6 +72,7 @@ __all__ = [
     "load_readings",
     "parse_kanji_page",
     "parse_reading_page",
+    "parse_readings",
     "save_readings",
     "urllib_transport",
 ]
@@ -1041,6 +1042,43 @@ def _bound_reading(
 # --- the facts store ---------------------------------------------------------
 
 
+def parse_readings(
+    text: str | None, *, source: Any
+) -> dict[str, CharacterReadings]:
+    """Decode the facts store from exactly ``text``, naming ``source`` in errors.
+
+    The parser this module owns, over text the caller already read. A caller
+    that hashed one read gets the facts *that* read held rather than whatever
+    a later read of the same path would find, so a write and a restore between
+    the two cannot substitute facts nobody bound. ``None`` is the missing file
+    :func:`load_readings` reports as an empty store.
+    """
+    if text is None:
+        return {}
+    try:
+        raw = json.loads(text)
+    except ValueError as exc:
+        raise KanjiReadingsError(f"Could not read {source}: {exc}") from exc
+    fields = _object(raw, f"{source}")
+    for key, expected in (
+        ("schema_version", SCHEMA_VERSION),
+        ("source", SOURCE),
+        ("metric", METRIC),
+    ):
+        if fields.get(key) != expected:
+            raise KanjiReadingsError(
+                f"{source}: {key} is {fields.get(key)!r}, not {expected!r}"
+            )
+    characters = _object(fields.get("characters"), f"{source}: characters")
+    store = {}
+    for character, entry in characters.items():
+        fields_for = _object(entry, f"{source}: the entry for {character!r}")
+        store[str(character)] = CharacterReadings.from_dict(
+            {**fields_for, "character": str(character)}
+        )
+    return store
+
+
 def load_readings(path: Any) -> dict[str, CharacterReadings]:
     """Read the facts file. A missing one is an empty store, not an error.
 
@@ -1049,29 +1087,12 @@ def load_readings(path: Any) -> dict[str, CharacterReadings]:
     """
     file = Path(path)
     try:
-        raw = json.loads(read_text_bound(file))
+        text = read_text_bound(file)
     except FileNotFoundError:
         return {}
-    except (JankiError, OSError, ValueError) as exc:
+    except (JankiError, OSError) as exc:
         raise KanjiReadingsError(f"Could not read {file}: {exc}") from exc
-    fields = _object(raw, f"{file}")
-    for key, expected in (
-        ("schema_version", SCHEMA_VERSION),
-        ("source", SOURCE),
-        ("metric", METRIC),
-    ):
-        if fields.get(key) != expected:
-            raise KanjiReadingsError(
-                f"{file}: {key} is {fields.get(key)!r}, not {expected!r}"
-            )
-    characters = _object(fields.get("characters"), f"{file}: characters")
-    store = {}
-    for character, entry in characters.items():
-        fields_for = _object(entry, f"{file}: the entry for {character!r}")
-        store[str(character)] = CharacterReadings.from_dict(
-            {**fields_for, "character": str(character)}
-        )
-    return store
+    return parse_readings(text, source=file)
 
 
 def save_readings(path: Any, store: Mapping[str, CharacterReadings]) -> None:

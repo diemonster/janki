@@ -750,7 +750,395 @@ Assistant resource and would discard the bound intent.
 
 ---
 
-## 5. Commit boundaries
+## 5. S6-E as implemented
+
+Signatures copied from the source, not from the plan. Where the brief and the
+implementation differ, the implementation is what is written here and the
+difference is named.
+
+### 5.1 The keyed fact book, in `enrich.py`
+
+Contract §7.3 says "New in `enrich.py`", and that is where these live — beside
+the `DictionaryLookup` Protocol §2.5 landed, so a replay client can canonicalize
+*effective* arguments against the real module defaults, and so nothing has to
+import a new module to raise `EnrichError`.
+
+```python
+FACT_BOOK_METHODS: tuple[str, ...] = ("parse", "lookup_vocabulary")
+
+@dataclass(frozen=True, slots=True)
+class DictionaryFactConflict:
+    method: str; arguments: str; responses: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True)
+class DictionaryFactBook:
+    facts: tuple[tuple[str, str, str], ...] = ()   # (method, arguments wire, response wire), sorted
+    def __len__(self) / __contains__(key) / keys() / items()
+    def answer(self, method: str, arguments: str) -> str
+    @property
+    def fingerprint(self) -> str
+    def to_dict(self) / from_dict(cls, raw)
+
+class RecordingDictionaryClient:
+    def __init__(self, client: DictionaryLookup)
+    calls: list[tuple[str, str]]                   # every key asked for, repeats included
+    @property
+    def conflicts(self) -> tuple[DictionaryFactConflict, ...]
+    def freeze(self) -> DictionaryFactBook
+
+class ReplayDictionaryClient:
+    def __init__(self, book: DictionaryFactBook)
+    book: DictionaryFactBook
+    calls: list[tuple[str, str]]
+```
+
+Both clients implement `DictionaryLookup` with the Protocol's exact signatures
+and defaults, so either satisfies `decide_promotion`, `promote.check_readings`
+and every §7.8 helper with no change.
+
+**The key** is `(method, canonical argument wire)`. The wire is
+`json.dumps(effective, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+allow_nan=False)` over the *effective* arguments:
+
+| method | keyed arguments |
+|---|---|
+| `parse` | `text`, `token_fields`, `vocabulary_fields`, `forced_furigana`, `encoding` |
+| `lookup_vocabulary` | `pairs`, `fields`, `batch_size` |
+
+Defaults are filled in from the Protocol's own values, so `parse("話す")` and
+`parse("話す", token_fields=jpdb.DEFAULT_TOKEN_FIELDS, …, forced_furigana=None,
+encoding=jpdb.DEFAULT_ENCODING)` are **one** key, and `fields` passed positionally
+— which is how `enrich._readings_for` passes it — is the same key as the keyword
+form. Tuples canonicalize to lists, so `[[vid, sid]]` and `[(vid, sid)]` are one
+request, matching `jpdb.as_pair`. Every other explicit argument value is a
+different key.
+
+**Iterable arguments are snapshotted before the transport sees them**, and the
+snapshot is what is forwarded. A generator of `pairs` or of `forced_furigana`
+spans therefore reaches the live client whole; keying after the transport had
+consumed it would record an empty list beside a request that carried spans.
+
+**The response wire** is the decoded method result the client already has — not
+HTTP bytes it never returns. `parse` stores
+`{"tokens": result.tokens, "vocabulary": result.vocabulary}` and
+`lookup_vocabulary` stores the list of row dicts, both with `sort_keys=False` so
+key order is the dictionary's own. Replay rebuilds a real `jpdb.ParseResult` and
+a real `list[dict]` from that wire on **every** answer, so each caller gets its
+own clone and a caller's edits reach nobody. The recording client returns the
+same clone, so the preview pass and the applying pass cannot diverge.
+
+**Conflicts.** `RecordingDictionaryClient` answers live on every call — it is not
+a cache. A repeated key whose answer is byte-identical is one fact; a key
+answered two different ways retains **both** wires in `conflicts` and refuses at
+`freeze()` with `[dictionary-fact-conflict]`, leaving the evidence intact and
+re-raising on every later `freeze()`. `DictionaryFactBook.__post_init__` refuses
+the same shape, and refuses a method outside `FACT_BOOK_METHODS`.
+
+**Replay** raises `EnrichError("[dictionary-fact-missing] …")` for an unknown key
+and has no transport at all, so "no phase refetches after review" is a property
+of the type rather than a rule somebody remembers. `fingerprint` binds every
+response as well as every key; `to_dict`/`from_dict` round-trip and `from_dict`
+refuses a recorded fingerprint that does not match with
+`[dictionary-fact-stale]`.
+
+### 5.2 `enrich.decide_enrichment`, and the honest scope diagnostic
+
+```python
+def decide_enrichment(client, records, revision, *, ids=None, force_fields=(),
+                      kanji_store=None) -> EnrichResult
+```
+
+`enrich_records` keeps its **exact** signature and behaviour and is now that same
+decision over the same private `_decide`. The one difference is the
+out-of-scope refusal, which used to claim "in the normalized file. Enrichment
+reads that file only" from an entry that never opened a file:
+
+* `enrich_records` — "*in the records this pass was given. Enrichment reads only
+  those records, so an id that 'janki status --format ids' lists …*"
+* `decide_enrichment` — "*in `<revision.path>`. Enrichment reads that file only,
+  so …*"
+
+The remaining advice (inline deck note, staged row) is unchanged in both. No
+canonical read is fabricated and no temporary collection is written; `revision`
+is the exact text and path its caller already bound, which for a study finish is
+a projected post-promotion chain that is deliberately not on disk.
+
+`source_forms` is absent from `ENRICHABLE_FIELDS` and from `AI_FIELDS`, so
+neither entry can fill or overwrite one.
+
+### 5.3 `application/enrichment.py`
+
+```python
+@dataclass(frozen=True, slots=True)
+class DictionaryEnrichmentDecision:
+    …                                   # unchanged fields
+    projected: bool = False             # new; part of the decision fingerprint (version 2)
+
+def plan_dictionary_enrichment_revision(
+    config, client, records, revision, ids, *, force_fields=(), kanji_store,
+) -> DictionaryEnrichmentDecision
+```
+
+`kanji_store` is a **required** keyword with no default: it is §7.9's frozen
+projected store, and "nobody has run `janki kanji`" has to be said out loud as
+`kanji_store=None` rather than defaulted into. The planner reads neither live
+canonical nor the live kanji path; it keeps `_plan`'s ledger preflight, refuses a
+revision whose path is not this configuration's collection with
+`[dictionary-projection-unbound]`, and returns `projected=True`.
+
+`plan_dictionary_enrichment` and `plan_all_dictionary_enrichment` are unchanged
+in behaviour and return `projected=False`. Both now annotate `client` as
+`enrich.DictionaryLookup`.
+
+```python
+def commit_dictionary_enrichment(config, decision, *, expected_fingerprint)          # takes the guard
+def commit_dictionary_enrichment_under_guard(config, decision, *, expected_fingerprint)
+```
+
+`_require_executable` — `[dictionary-projection-not-executable]` — is the **first
+statement of both**, ahead of the guard acquisition, the repository compare, the
+fingerprint check and the early `nothing` return. `commit_dictionary_enrichment`
+then takes `study_curation.curation_guard(config)` outermost (§7.5), and the
+write holds `exclusive_path_lock` on canonical and then the ledger. Because
+`exclusive_path_lock` is not re-entrant, the one writer calls
+`io.save_records_json_locked` and `Ledger.save_under_lock`. `cli.command_enrich`
+and `workbench/server.py` are unchanged and neither holds the guard, so both keep
+using the guard-taking entry.
+
+```python
+@dataclass(frozen=True, slots=True)
+class PreparedDictionaryEnrichment:
+    repository_root: str; output_path: str; ledger_path: str; kanji_path: str
+    record_ids: tuple[str, ...]
+    force_fields: tuple[str, ...]
+    enriched_at: str                                   # the frozen ISO day
+    bound_values: Mapping[str, Mapping[str, Any]]      # record id -> field -> exact new value
+    cleared_fields: Mapping[str, tuple[str, ...]]      # record id -> provisional marks cleared
+    book_fingerprint: str = ""
+    components: tuple[staging.PreparedComponent, ...]  # exactly ("canonical", "ledger")
+    @property
+    def changed_record_ids / cleared_record_ids / writes
+    @property
+    def projected_input_sha256 / projected_output_sha256    # §7.4's pair, off the canonical component
+    @property
+    def fingerprint(self) -> str                       # derived, so `replace()` cannot keep a stale seal
+    def to_dict(self) / from_dict(cls, raw)
+
+@dataclass(frozen=True, slots=True)
+class DictionaryEnrichmentRecovery:
+    state: DictionaryEnrichmentCommitState
+    output_path: Path
+    already_complete: tuple[str, ...]
+    finished: tuple[str, ...]
+    changed_record_ids / cleared_record_ids: tuple[str, ...]
+    ledger_error: ledger.LedgerError | None = None
+
+def prepare_dictionary_enrichment(config, decision, *, now=None, book=None)
+def apply_prepared_dictionary_enrichment(config, prepared, *, client=None, decision=None)        # takes the guard
+def apply_prepared_dictionary_enrichment_under_guard(config, prepared, *, client=None, decision=None)
+def recover_prepared_dictionary_enrichment(config, prepared, *, client=None)                     # takes the guard
+def recover_prepared_dictionary_enrichment_under_guard(config, prepared, *, client=None)
+```
+
+`prepare` publishes nothing, refuses a projected decision, and freezes:
+
+* **canonical** — `expected_before = sha256(decision.output_revision.text)`,
+  `after_text = io.records_json_text(result.records)`. A pass with **no** change
+  and **no** cleared mark binds canonical *unwritten* rather than proposing the
+  saver's normalization of bytes nobody asked it to touch.
+* **ledger** — `expected_before` from the current bytes, `after_text` from
+  `ledger.load_snapshot(path, wire)` plus one
+  `record_enriched(kind="jpdb", model="jpdb", fields=…, at=<frozen day>)` per
+  changed record, serialized through `Ledger.serialized_text()`. A **cleared-only**
+  pass writes canonical and no attribution row at all, so its ledger component is
+  bound and unwritten — including the absent-and-stays-absent case, which is not
+  a present `{}`.
+
+`apply` under the guard: `_bound_intent` (configuration, role order, nonempty
+scope, ISO day, each role's path re-resolved from the live configuration) →
+canonical and ledger locks → `_precheck_components` over the **entire** vector,
+including the bound-unwritten components → a **started** intent is finished from
+its frozen payloads and **never** re-planned → only a genuinely unstarted one is
+re-planned. Unlike promotion's resume the re-plan runs *inside* the held locks:
+`plan_dictionary_enrichment` reads canonical, the ledger and the reference store
+through the bound readers and takes neither of these two path locks, so there is
+no window between the classification, the decision and the write.
+
+The re-plan is `plan_dictionary_enrichment(config, <replay client>,
+prepared.record_ids, force_fields=prepared.force_fields)` — the ordinary planner,
+over real canonical, reading the reference store §7.9 has already written, with
+no network anywhere. A missing `client` refuses with
+`[enrichment-intent-client-required]`; a client whose book fingerprint is not the
+bound one refuses with `[enrichment-intent-book-mismatch]`.
+`_assert_intent_matches` then compares record ids, force fields, the cleared
+marks, **every** authorized field value naming both the bound and the recomputed
+one, and **both** sides of each component binding. The commit is the one
+`_commit_under_locks` the ordinary path uses, with `at=prepared.enriched_at`.
+There is no second payload check: `_assert_intent_matches` derives the fresh
+components from the same decision through the same `_prepared_from`, so the bytes
+compared and the bytes written are one derivation under one lock.
+
+`recover` makes the same started/unstarted distinction. A started pass replays
+only the writes it still owes, canonical then ledger, from the frozen payloads
+and the frozen day, and reports `already_complete` / `finished`. A ledger replay
+that still fails is **not** an exception: it returns
+`state="committed_ledger_incomplete"` with the error, which is the writer's own
+split reached from the intent alone when the process died before returning it,
+and it blocks a job reaching `complete` on the same rule as promotion's.
+
+**Refusal tags.** `[dictionary-projection-not-executable]`,
+`[dictionary-projection-unbound]`, `[dictionary-config-mismatch]`,
+`[dictionary-plan-stale]`, `[enrichment-intent-invalid]`,
+`[enrichment-intent-stale]`, `[enrichment-intent-client-required]`,
+`[enrichment-intent-book-mismatch]`, `[enrichment-recovery-incomplete]`.
+
+### 5.4 `application/character_notes.py` — reference facts
+
+```python
+REFERENCE_FILE_LABELS: tuple[str, str] = ("kanji reference store", "jpdb reading facts")
+
+@dataclass(frozen=True, slots=True)
+class MissingReferenceFact:
+    character: str; store: str; detail: str
+    def to_dict(self) / from_dict(cls, raw)
+
+@dataclass(frozen=True, slots=True)
+class ReferenceFactsPreparation:
+    project_root: Path
+    characters: tuple[str, ...]
+    refresh_readings: bool
+    looked_up: tuple[str, ...]
+    fetched_readings: tuple[str, ...]
+    missing: tuple[MissingReferenceFact, ...]
+    files: tuple[ProposedFile, ...]      # exactly REFERENCE_FILE_LABELS, in that order
+    fingerprint: str                     # stored, like CharacterNotesPlan's
+    @property
+    def changed_files(self) -> tuple[ProposedFile, ...]
+    def file(self, label) -> ProposedFile | None
+    def to_dict(self) / from_dict(cls, raw)
+
+@dataclass(frozen=True, slots=True)
+class ReferenceFactsResult:
+    already_complete: tuple[str, ...]
+    changed: tuple[str, ...]
+    missing: tuple[MissingReferenceFact, ...]
+
+def prepare_reference_facts(config, characters, *, refresh_readings=False)
+def apply_prepared_reference_facts(config, preparation) -> ReferenceFactsResult
+def recover_prepared_reference_facts(config, preparation) -> ReferenceFactsResult
+```
+
+Each store's own module now exposes the decoder its loader uses, so a caller
+holding bytes it has already read need not read them again:
+
+```python
+# kanji.py
+def parse_store(text: str | None, *, source: Any) -> KanjiStore
+def load_store(path: Any) -> KanjiStore            # read_text_bound, then parse_store
+
+# jpdb_kanji.py
+def parse_readings(text: str | None, *, source: Any) -> dict[str, CharacterReadings]
+def load_readings(path: Any) -> dict[str, CharacterReadings]
+                                                   # read_text_bound, then parse_readings
+```
+
+`None` is the missing file both loaders still report as an empty store, and a
+present but empty document is still the parse failure it was. `source` names
+the path in every message, so the refusal texts — `Could not read {path}: …`,
+`{path} must hold a JSON object keyed by character`, the wire-field and
+per-entry messages — are unchanged, as is the malformed-saved-store refusal a
+preparation raises as `CharacterNotesError`. There is one parser per format:
+the loaders delegate rather than carrying a second copy.
+
+Both preparations take that route. `prepare_reference_facts` and
+`prepare_character_notes` snapshot each store once, and the text `_snapshot`
+returns is what `parse_store` / `parse_readings` decode — the digest apply
+compares and the store the proposal is built from come from a single read.
+Reading the file a second time was a real defect rather than a tidiness point:
+a store replaced and restored between the two reads left the after-payload
+built on content nobody bound, and the apply's compare-and-swap accepted it
+because the file was byte-identical to the snapshot, so saved entries were
+lost. `prepare_character_notes` still reads `config.kanji_notes_file` through
+`kanji_notes.load_notes`; that third store keeps the split read.
+
+`characters` are single kanji, deduplicated in order — unlike a character-note
+batch, which refuses a repeat, because the caller applies `kanji.kanji_in` per
+record over a whole collection and a character two words share arrives twice.
+Nothing here mints an identity: the check is only that each target is one kanji,
+which is what both providers require of a request.
+
+It reuses `_snapshot` (whose text it parses), `_reference`, `_facts` and
+`_serialized`, and touches
+exactly two paths — `config.kanji_file` and `config.jpdb_readings_file`, refused
+if a configuration points both at one file. It never reads or writes
+`config.kanji_notes_file`, mints no `kanji:` identity, no note and no deck.
+Saved facts are reused; only missing characters are fetched;
+`refresh_readings=True` re-requests exactly the named characters' JPDB pages and
+**not** the KANJIDIC inventory. Raw HTML goes to `config.jpdb_html_cache` only.
+The payloads come from `kanji.save_store` / `jpdb_kanji.save_readings` rendered
+into a private `tempfile` scratch path, so preparation publishes nothing.
+
+An unavailable lookup is an exact disclosed `MissingReferenceFact` carrying the
+provider's own message, not a refusal and not a guess: the word cards already
+exist and the hole is the owner's to decide about. The existing character-note
+path is unchanged and still **refuses** a failed lookup, because a note cannot be
+written without facts.
+
+`detail` is exactly the provider's own message, with one qualifier appended and
+only when both halves hold: `refresh_readings=True` *and* the facts store
+already has an entry for that character. Then it reads `<provider message> The
+refresh failed; the saved reading facts for this character were kept.` — a
+statement about the file, which `_facts` never touched, so nothing is proposed
+for it and a card still shows what was saved earlier. A character with no saved
+entry, and any failure outside a refresh, keeps the bare provider message and
+its existing missing-data meaning. No field, label, type or flow changes: the
+store label is still `REFERENCE_FILE_LABELS[1]`.
+
+A saved store that cannot be read is a **refusal**, not a hole and not an empty
+store: preparation raises `CharacterNotesError` carrying the owning module's
+message and the file's path, before any provider request, and proposes nothing.
+
+`apply` and `recover` are the same idempotent replay, deliberately: this write is
+a pure compare-and-swap over frozen bytes, so there is no classification an
+interrupted pair could corrupt — only writes it still owes. Both re-prove the
+binding (root, the closed label list, each path re-resolved from the live
+configuration and compared lexically, the stored fingerprint, and a full
+`from_dict(to_dict())` round trip), take both paths' locks in sorted-path order,
+measure **both** before any write, and write only the pending one. A store
+already at its after-state is safe; any third state refuses with
+`[reference-facts-stale]` before anything further is written.
+
+The low-level writer `_apply_proposed_files` is now shared with
+`execute_character_notes`, whose refusal text, tolerated states and returned
+`changed` labels are byte-for-byte what they were.
+
+### 5.5 Ordering inside `enriched`
+
+1. **Reference preparation** runs over the post-promotion collection (§7.2's
+   `carry_N`), producing both stores' frozen after-texts and any missing states.
+2. The **vocabulary enrichment projection** is planned next, through
+   `plan_dictionary_enrichment_revision` with that frozen store as
+   `kanji_store` — so the preview renders over the reference facts the owner is
+   about to approve, not over the live pre-write store.
+3. At apply time the **reference components are written first**, then the
+   prepared vocabulary and ledger components. The enrichment apply's real
+   re-plan reads the live reference store, so it must observe what step 3's
+   first half wrote; running it the other way round makes the re-plan compute
+   values the preview never showed, and it refuses naming both.
+4. Within the enrichment component vector the order is canonical, then ledger.
+
+### 5.6 What S6-E does **not** expose
+
+No finish control, CLI flag or Assistant action, and no production stub,
+placeholder or shim. `RecordingDictionaryClient` and `ReplayDictionaryClient` are
+ordinary production types; the only fakes are in tests. The reference
+preparation deliberately stops at the two reference stores — kanji notes, decks
+and `kanji:` identities remain `character_notes`' existing batch and
+`kanji_finish`'s.
+
+---
+
+## 6. Commit boundaries
 
 The owner asked for a code review, a manual verification of its findings, the
 fixes and a re-review at each boundary, up to four rounds, on 2026-09-10.
@@ -761,7 +1149,7 @@ fixes and a re-review at each boundary, up to four rounds, on 2026-09-10.
 | 1 | DESIGN amendment F and corrected handoff | committed `d512904` |
 | 2 | Shared serializer seam and this interface record | committed `fdcd96a`; `make gates`: 5651 passed, 800 warnings, Ruff clean, sample build; nine production mutations caught |
 | 3 | S6-P — review and promotion | **complete in this revision.** §4 records its APIs. Five initial defects and two follow-up gaps are fixed with failing-first tests and 16/16 plus 9/9 mutation sweeps. Two obsolete test seams found by full gates are corrected and 2/2 further mutants caught and restored. Independent reviews 2 and 3 are clean and root-verified; final `make gates`: **5743 passed**, 800 warnings, Ruff clean, sample build (523.58s). |
-| 4 | S6-E — reference facts and enrichment | pending |
+| 4 | S6-E — reference facts and enrichment | **complete in this revision, independently reviewed and gated.** §5 records the actual APIs. Two review rounds and root verification closed the bound-store split-read defect and corrected saved-fact disclosure. Four new correction mutants were caught; prior M22 was rerun after its anchor moved, while the other 29 prior traces remain applicable. Mutation limits remain explicit: M16 protects refusal ordering before a missing-key replay error; M26 protects the configuration/path diagnostic before fingerprint refusal. Reconstructed pre-fix runs prove old behavior, not chronological TDD. Final `make gates`: **5830 passed**, 800 warnings, Ruff clean, sample build, 516.70s. The source and test assertions stayed unchanged through the gate. No finish action is exposed. |
 | 5 | S6-B — package preparation and recovery | pending |
 | 6 | `study_finish` coordinator, Assistant and CLI surfaces, `card_preview` | pending |
 | 7 | S7 — the complete offline journey | pending |

@@ -52,7 +52,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters import kanji_cards
 from japanese_anki.exporters.anki import deck_kind
-from japanese_anki.identifiers import character_record_id
+from japanese_anki.identifiers import character_record_id, contains_kanji
 from japanese_anki.io import (
     DataError,
     atomic_write_bytes_bound,
@@ -63,12 +63,19 @@ from japanese_anki.io import (
 from japanese_anki.kanji_notes import CharacterNote
 
 __all__ = [
+    "REFERENCE_FILE_LABELS",
     "CharacterNotesError",
     "CharacterNotesPlan",
     "CharacterNotesResult",
+    "MissingReferenceFact",
     "ProposedFile",
+    "ReferenceFactsPreparation",
+    "ReferenceFactsResult",
+    "apply_prepared_reference_facts",
     "execute_character_notes",
     "prepare_character_notes",
+    "prepare_reference_facts",
+    "recover_prepared_reference_facts",
     "verify_character_notes_applied",
 ]
 
@@ -718,8 +725,11 @@ def prepare_character_notes(
 
     try:
         store = kanji_notes.load_notes(notes_path)
-        reference = kanji.load_store(kanji_path)
-        facts = jpdb_kanji.load_readings(readings_path)
+        # From the text this batch bound above, not from a second read: the
+        # digest and the store a proposal is built on have to come from one
+        # read, or a write that is undone before apply lands as a silent loss.
+        reference = kanji.parse_store(kanji_before, source=kanji_path)
+        facts = jpdb_kanji.parse_readings(readings_before, source=readings_path)
     except JankiError as exc:
         raise CharacterNotesError(str(exc)) from exc
 
@@ -856,22 +866,78 @@ def _assert_plan_binding(config: ProjectConfig, plan: CharacterNotesPlan) -> Non
 
 
 @contextlib.contextmanager
-def _bound_files(
-    config: ProjectConfig, plan: CharacterNotesPlan
+def _bound_paths(
+    files: Sequence[ProposedFile], *, deck_dir: Path | None = None
 ) -> Iterator[tuple[ProposedFile, ...]]:
-    """Hold every file this batch bound, in one fixed order, and hand them back.
+    """Hold every file a prepared payload bound, in one fixed order.
 
-    One order for the apply and for the after-state check: two callers taking
-    these locks in different orders could wait on each other forever, and a
-    state read without the lock is a state that may already have moved by the
-    time its reader acts on it.
+    One order for every caller: two of them taking these locks in different
+    orders could wait on each other forever, and a state read without the lock
+    is a state that may already have moved by the time its reader acts on it.
+    ``deck_dir`` is taken first where a batch also writes a deck; reference-only
+    work names no deck and takes no deck lock.
     """
-    ordered = tuple(sorted(plan.files, key=lambda item: str(item.path)))
+    ordered = tuple(sorted(files, key=lambda item: str(item.path)))
     with contextlib.ExitStack() as locks:
-        locks.enter_context(exclusive_path_lock(config.deck_dir))
+        if deck_dir is not None:
+            locks.enter_context(exclusive_path_lock(deck_dir))
         for item in ordered:
             locks.enter_context(exclusive_path_lock(item.path))
         yield ordered
+
+
+def _bound_files(
+    config: ProjectConfig, plan: CharacterNotesPlan
+) -> contextlib.AbstractContextManager[tuple[ProposedFile, ...]]:
+    """The character batch's own lock set: its four files under the deck lock."""
+    return _bound_paths(plan.files, deck_dir=config.deck_dir)
+
+
+def _apply_proposed_files(
+    ordered: Sequence[ProposedFile], *, tag: str, subject: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Precheck **every** bound file, then write only the pending ones.
+
+    The one low-level writer for both the character batch and §7.9's reference
+    preparation, so neither can drift into a different rule about which states
+    are acceptable. A file already holding the proposed bytes is complete —
+    that is how an interrupted apply resumes without paying for the evidence
+    again — and any third state refuses before anything further is written,
+    which is what stops a stale later target after an earlier one has landed.
+
+    Returns ``(already_complete, written)`` by label.
+    """
+    already: list[str] = []
+    pending: list[ProposedFile] = []
+    for item in ordered:
+        _text, current = _snapshot(item.path)
+        if current == item.after_sha256:
+            if item.changed:
+                already.append(item.label)
+            continue
+        if current != item.before_sha256:
+            raise CharacterNotesError(
+                f"[{tag}] {item.path} is neither the state "
+                f"this {subject} was prepared against nor the state it proposes. "
+                "Nothing further was written; prepare it again."
+            )
+        if item.changed:
+            pending.append(item)
+
+    written: list[str] = []
+    for item in pending:
+        assert item.after_text is not None
+        try:
+            atomic_write_bytes_bound(
+                item.path,
+                item.after_text.encode("utf-8"),
+                expected_revision=item.before_sha256,
+                expected_absent=item.before_sha256 is None,
+            )
+        except (DataError, OSError) as exc:
+            raise CharacterNotesError(f"Could not write {item.path}: {exc}") from exc
+        written.append(item.label)
+    return tuple(already), tuple(written)
 
 
 def verify_character_notes_applied(
@@ -934,38 +1000,12 @@ def execute_character_notes(
     ):
         raise CharacterNotesError(_PLAN_STALE)
 
-    written: list[str] = []
     with _bound_files(config, plan) as ordered:
         # Every file is checked before any is written, so a batch that would
         # refuse halfway leaves nothing half-applied.
-        pending: list[ProposedFile] = []
-        for item in ordered:
-            _text, current = _snapshot(item.path)
-            if current == item.after_sha256:
-                continue
-            if current != item.before_sha256:
-                raise CharacterNotesError(
-                    f"[character-batch-stale] {item.path} is neither the state "
-                    "this batch was prepared against nor the state it proposes. "
-                    "Nothing further was written; prepare it again."
-                )
-            if item.changed:
-                pending.append(item)
-
-        for item in pending:
-            assert item.after_text is not None
-            try:
-                atomic_write_bytes_bound(
-                    item.path,
-                    item.after_text.encode("utf-8"),
-                    expected_revision=item.before_sha256,
-                    expected_absent=item.before_sha256 is None,
-                )
-            except (DataError, OSError) as exc:
-                raise CharacterNotesError(
-                    f"Could not write {item.path}: {exc}"
-                ) from exc
-            written.append(item.label)
+        _already, written = _apply_proposed_files(
+            ordered, tag="character-batch-stale", subject="batch"
+        )
 
     return CharacterNotesResult(
         deck_path=plan.deck_path,
@@ -976,5 +1016,439 @@ def execute_character_notes(
         deck_record_ids=plan.deck_record_ids,
         deck_note_count=plan.deck_note_count,
         deck_card_count=plan.deck_card_count,
-        changed=tuple(written),
+        changed=written,
     )
+
+
+# --- reference facts the reviewed word cards already need ----------------------
+#
+# Contracts §7.9. A word card reads both reference stores at build time and
+# never fetches, so a newly promoted verb bringing a character neither store
+# covers ships a card with a hole. This prepares those two files and **only**
+# those two: it mints no character note, no `kanji:` identity and no character
+# deck, and it changes nothing in the curated `data/kanji_notes.json`.
+#
+# `kanji_addition` cannot do this as written — it binds canonical bytes, so it
+# cannot describe a projection before the preview, and it fetches and writes in
+# one call, so it cannot hand a prepared payload to a later apply.
+
+
+#: The two labels a reference preparation may bind, in the order it holds them.
+#: A closed list: a preparation that named anything else would be a route to
+#: writing a file this phase has no business in.
+REFERENCE_FILE_LABELS: tuple[str, str] = (
+    "kanji reference store",
+    "jpdb reading facts",
+)
+
+_REFERENCE_STALE = (
+    "[reference-facts-stale] the exact reference preparation changed after it "
+    "was prepared. Nothing was written; prepare it again."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MissingReferenceFact:
+    """One requested fact nobody could supply, disclosed exactly as it failed.
+
+    §7.9: an unavailable lookup is a **missing state in the preview** for the
+    owner to decide on. Nothing here retries in the background, ranks anything,
+    or invents an entry — a character with no saved facts and no answer simply
+    stays absent from the store, and this says so and why.
+    """
+
+    character: str
+    store: str
+    detail: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "character": self.character,
+            "store": self.store,
+            "detail": self.detail,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> MissingReferenceFact:
+        return cls(
+            character=str(raw["character"]),
+            store=str(raw["store"]),
+            detail=str(raw["detail"]),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceFactsPreparation:
+    """Both reference stores' exact after-bytes, and what they cost to get.
+
+    Frozen before the preview and written by a later apply, so what the owner
+    reviewed is what lands. The payloads come from the stores' own writers —
+    `kanji.save_store` and `jpdb_kanji.save_readings` — rendered into a private
+    scratch path, so a preparation publishes nothing a reader treats as content.
+    """
+
+    project_root: Path
+    characters: tuple[str, ...]
+    refresh_readings: bool
+    #: Characters whose reference entry this preparation looked up, and whose
+    #: provider facts it requested. Named so a plan can say what it asked for.
+    looked_up: tuple[str, ...]
+    fetched_readings: tuple[str, ...]
+    missing: tuple[MissingReferenceFact, ...]
+    files: tuple[ProposedFile, ...]
+    #: Stored rather than derived, exactly as `CharacterNotesPlan` stores its
+    #: own. Nothing re-derives these payloads at apply — the whole point is
+    #: that they were frozen before the preview — so a seal computed from
+    #: whatever the object currently holds would agree with any edit made to
+    #: it. This one disagrees.
+    fingerprint: str
+
+    @property
+    def changed_files(self) -> tuple[ProposedFile, ...]:
+        return tuple(item for item in self.files if item.changed)
+
+    def file(self, label: str) -> ProposedFile | None:
+        for item in self.files:
+            if item.label == label:
+                return item
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "project_root": str(self.project_root),
+            "characters": list(self.characters),
+            "refresh_readings": self.refresh_readings,
+            "looked_up": list(self.looked_up),
+            "fetched_readings": list(self.fetched_readings),
+            "missing": [item.to_dict() for item in self.missing],
+            "files": [item.to_dict() for item in self.files],
+            "fingerprint": self.fingerprint,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> ReferenceFactsPreparation:
+        try:
+            if raw.get("schema_version") != 1:
+                raise CharacterNotesError(
+                    "Unknown reference-facts preparation version "
+                    f"{raw.get('schema_version')!r}."
+                )
+            preparation = cls(
+                project_root=Path(str(raw["project_root"])),
+                characters=tuple(str(item) for item in raw["characters"]),
+                refresh_readings=bool(raw["refresh_readings"]),
+                looked_up=tuple(str(item) for item in raw["looked_up"]),
+                fetched_readings=tuple(str(item) for item in raw["fetched_readings"]),
+                missing=tuple(
+                    MissingReferenceFact.from_dict(item) for item in raw["missing"]
+                ),
+                files=tuple(ProposedFile.from_dict(item) for item in raw["files"]),
+                fingerprint=str(raw["fingerprint"]),
+            )
+        except CharacterNotesError:
+            raise
+        except (JankiError, KeyError, TypeError, ValueError) as exc:
+            raise CharacterNotesError(
+                f"This is not a complete reference-facts preparation: {exc}"
+            ) from exc
+        if _reference_fingerprint(preparation) != preparation.fingerprint:
+            raise CharacterNotesError(_REFERENCE_STALE)
+        return preparation
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceFactsResult:
+    """What one apply or recovery found already done, and what it wrote."""
+
+    #: The labels of the stores that already held the proposed bytes.
+    already_complete: tuple[str, ...]
+    #: The labels this call wrote. Empty on an exact retry.
+    changed: tuple[str, ...]
+    #: Carried through unchanged, because a preview that disclosed a missing
+    #: fact must keep disclosing it after the apply.
+    missing: tuple[MissingReferenceFact, ...]
+
+
+def _reference_fingerprint(preparation: ReferenceFactsPreparation) -> str:
+    payload = preparation.to_dict()
+    payload["fingerprint"] = ""
+    return hashlib.sha256(
+        json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _reference_characters(characters: Sequence[str]) -> tuple[str, ...]:
+    """The exact single kanji this preparation is for, deduplicated in order.
+
+    Deduplicated rather than refused, unlike a character-note batch: the caller
+    applies `kanji.kanji_in` per record over a whole collection, and a character
+    two words share arrives twice. One character is still one lookup.
+
+    Nothing here mints an identity. The check is only that each target is one
+    kanji, which is what both providers require of a request.
+    """
+    if isinstance(characters, (str, bytes)):
+        raise CharacterNotesError(
+            "Reference characters are a list of single characters, not one string."
+        )
+    targets = tuple(dict.fromkeys(characters))
+    if not targets:
+        raise CharacterNotesError("Name at least one character to prepare facts for.")
+    for character in targets:
+        if not isinstance(character, str):
+            raise CharacterNotesError("Every reference character must be text.")
+        if len(character) != 1 or not contains_kanji(character):
+            raise CharacterNotesError(
+                f"Not a single kanji character: {character!r}"
+            )
+    return targets
+
+
+def _reference_paths(config: ProjectConfig) -> tuple[Path, Path]:
+    """This configuration's two reference stores, proved to be two files."""
+    kanji_path = config.kanji_file.resolve()
+    readings_path = config.jpdb_readings_file.resolve()
+    if kanji_path == readings_path:
+        raise CharacterNotesError(
+            "The kanji reference store and the jpdb reading facts must be two "
+            f"different files; this configuration points both at {kanji_path}."
+        )
+    return kanji_path, readings_path
+
+
+def _optional_reference(
+    character: str,
+    store: kanji.KanjiStore,
+    looked_up: list[str],
+    missing: list[MissingReferenceFact],
+) -> None:
+    """Fill one character's inventory entry, or disclose why it is missing.
+
+    Through the same `_reference` the character-note batch uses, so there is
+    one lookup rule. The difference is only what an unavailable answer means:
+    a character *note* cannot be written without facts and refuses, while a
+    word card that already exists simply keeps its hole, and the owner is told
+    which character and why.
+    """
+    try:
+        _reference(character, store, looked_up)
+    except CharacterNotesError as exc:
+        missing.append(
+            MissingReferenceFact(
+                character=character,
+                store=REFERENCE_FILE_LABELS[0],
+                detail=str(exc.__cause__ or exc),
+            )
+        )
+
+
+def _optional_facts(
+    config: ProjectConfig,
+    character: str,
+    store: dict[str, jpdb_kanji.CharacterReadings],
+    fetched: list[str],
+    missing: list[MissingReferenceFact],
+    *,
+    refresh: bool,
+) -> None:
+    """Fill one character's reported-usage entry, or disclose the failure.
+
+    A refresh that fails over a character the store already covers is a
+    different state from having no facts at all, and the disclosure says which.
+    The saved entry is untouched — `_facts` refuses before it writes one — so
+    the qualifier is a plain statement of what the file still holds, added only
+    when a refresh was asked for and there was something to keep.
+    """
+    kept = refresh and character in store
+    try:
+        _facts(config, character, store, fetched, refresh=refresh)
+    except CharacterNotesError as exc:
+        detail = str(exc.__cause__ or exc)
+        if kept:
+            detail += (
+                " The refresh failed; the saved reading facts for this "
+                "character were kept."
+            )
+        missing.append(
+            MissingReferenceFact(
+                character=character,
+                store=REFERENCE_FILE_LABELS[1],
+                detail=detail,
+            )
+        )
+
+
+def prepare_reference_facts(
+    config: ProjectConfig,
+    characters: Sequence[str],
+    *,
+    refresh_readings: bool = False,
+) -> ReferenceFactsPreparation:
+    """Fill the two reference stores for ``characters``, writing nothing.
+
+    Saved facts are reused: a character both stores already cover costs no
+    request at all, and a rerun over a settled collection proposes no change.
+    Only the characters that are missing are fetched, through `kanji.fetch_kanji`
+    and `jpdb_kanji.fetch_character` under the on-demand lookup preference, and
+    the provider's raw HTML goes to the private cache outside the repository.
+
+    **Refresh is explicit only**, and refreshes only the JPDB reading pages:
+    `refresh_readings` re-requests exactly the named characters' published
+    usage. The KANJIDIC inventory is reused whatever it says — a refresh of one
+    provider's pages is not an instruction to re-ask another.
+
+    This mints no character note, no ``kanji:`` identity and no character deck,
+    and never reads or writes the curated notes store. A lookup nobody can
+    answer becomes an exact disclosed missing state rather than a guess or a
+    refusal: the word cards already exist, and the hole is the owner's to
+    decide about.
+    """
+    targets = _reference_characters(characters)
+    if not isinstance(refresh_readings, bool):
+        raise CharacterNotesError("refresh_readings must be true or false.")
+    kanji_path, readings_path = _reference_paths(config)
+
+    kanji_before, kanji_sha = _snapshot(kanji_path)
+    readings_before, readings_sha = _snapshot(readings_path)
+    try:
+        # The bytes bound above are the ones parsed here. A second read could
+        # answer from content that is replaced and restored before the apply's
+        # compare-and-swap, which would then accept a proposal built on a store
+        # nobody bound and drop the entries the bound one held.
+        reference = kanji.parse_store(kanji_before, source=kanji_path)
+        facts = jpdb_kanji.parse_readings(readings_before, source=readings_path)
+    except JankiError as exc:
+        raise CharacterNotesError(str(exc)) from exc
+
+    looked_up: list[str] = []
+    fetched: list[str] = []
+    missing: list[MissingReferenceFact] = []
+    for character in targets:
+        _optional_reference(character, reference, looked_up, missing)
+        _optional_facts(
+            config, character, facts, fetched, missing, refresh=refresh_readings
+        )
+
+    # Through the writers that own the formats, into a private scratch path.
+    # What the file will hold is whatever those modules write, and nothing a
+    # reader treats as content is published here.
+    kanji_after = _serialized(kanji.save_store, reference) if looked_up else None
+    readings_after = _serialized(jpdb_kanji.save_readings, facts) if fetched else None
+
+    draft = ReferenceFactsPreparation(
+        project_root=config.root.resolve(),
+        characters=targets,
+        refresh_readings=refresh_readings,
+        looked_up=tuple(looked_up),
+        fetched_readings=tuple(fetched),
+        missing=tuple(missing),
+        files=(
+            ProposedFile(
+                label=REFERENCE_FILE_LABELS[0],
+                path=kanji_path,
+                before_sha256=kanji_sha,
+                after_text=None if kanji_after == kanji_before else kanji_after,
+            ),
+            ProposedFile(
+                label=REFERENCE_FILE_LABELS[1],
+                path=readings_path,
+                before_sha256=readings_sha,
+                after_text=(
+                    None if readings_after == readings_before else readings_after
+                ),
+            ),
+        ),
+        fingerprint="",
+    )
+    return replace(draft, fingerprint=_reference_fingerprint(draft))
+
+
+def _assert_reference_binding(
+    config: ProjectConfig, preparation: ReferenceFactsPreparation
+) -> None:
+    """Refuse a preparation that is not this project's own, unaltered payload.
+
+    The repository root is not the binding on its own: two configurations in
+    one root can name different reference stores, and a substituted target
+    holding byte-identical content would pass every digest check. Each label is
+    re-resolved through the *live* configuration and compared lexically, so an
+    alias cannot stand in for the bound file.
+    """
+    if preparation.project_root != config.root.resolve():
+        raise CharacterNotesError(
+            "This reference preparation belongs to a different repository "
+            "configuration."
+        )
+    labels = tuple(item.label for item in preparation.files)
+    if labels != REFERENCE_FILE_LABELS:
+        raise CharacterNotesError(
+            "A reference preparation binds exactly "
+            f"{' and '.join(REFERENCE_FILE_LABELS)}, in that order, and this "
+            f"one binds {', '.join(labels) or 'nothing'}."
+        )
+    expected = dict(zip(REFERENCE_FILE_LABELS, _reference_paths(config), strict=True))
+    for item in preparation.files:
+        if item.path != expected[item.label]:
+            raise CharacterNotesError(
+                f"This reference preparation writes {item.path}, but the "
+                f"project's {item.label} is {expected[item.label]}."
+            )
+    if not secrets.compare_digest(
+        _reference_fingerprint(preparation), preparation.fingerprint
+    ):
+        raise CharacterNotesError(_REFERENCE_STALE)
+    # The same completeness gate a preparation restored from a receipt passes
+    # through, applied to this one: an apply must not be authorized by a
+    # payload that is not a whole, self-consistent, restorable preparation.
+    if ReferenceFactsPreparation.from_dict(preparation.to_dict()) != preparation:
+        raise CharacterNotesError(_REFERENCE_STALE)
+
+
+def _replay_reference_facts(
+    config: ProjectConfig, preparation: ReferenceFactsPreparation
+) -> ReferenceFactsResult:
+    """Write exactly the prepared bytes for both stores, or refuse first.
+
+    No lookup, no re-plan, no refetch. Both paths are measured under their own
+    locks before either is written, so a stale second store stops the first
+    store's effect instead of being discovered after it landed.
+    """
+    _assert_reference_binding(config, preparation)
+    with _bound_paths(preparation.files) as ordered:
+        already, written = _apply_proposed_files(
+            ordered, tag="reference-facts-stale", subject="reference preparation"
+        )
+    return ReferenceFactsResult(
+        already_complete=already, changed=written, missing=preparation.missing
+    )
+
+
+def apply_prepared_reference_facts(
+    config: ProjectConfig, preparation: ReferenceFactsPreparation
+) -> ReferenceFactsResult:
+    """Publish one prepared pair of reference stores, and nothing else.
+
+    A store already holding the proposed bytes is safe rather than a refusal:
+    this write is a pure compare-and-swap over frozen bytes, so an exact retry
+    after an interrupted apply is the same operation again. That is also why
+    :func:`recover_prepared_reference_facts` is this same replay — there is no
+    classification an interrupted pair could corrupt, only writes it still owes.
+    """
+    return _replay_reference_facts(config, preparation)
+
+
+def recover_prepared_reference_facts(
+    config: ProjectConfig, preparation: ReferenceFactsPreparation
+) -> ReferenceFactsResult:
+    """Finish one interrupted reference write from its preparation alone.
+
+    From the preparation, and from nothing else: a returned value that was
+    never persisted is not evidence. Each bound path is re-measured against its
+    own before/after pair, the missing write is finished, and a path at neither
+    digest refuses. Nothing is looked up again — the facts were fetched once,
+    before the preview.
+    """
+    return _replay_reference_facts(config, preparation)

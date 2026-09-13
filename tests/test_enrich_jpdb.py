@@ -1103,6 +1103,101 @@ def test_an_unknown_id_is_an_error_before_any_api_call() -> None:
     assert api.bodies == []
 
 
+def test_the_record_only_pass_says_it_read_the_records_it_was_given() -> None:
+    """It never read a file, so it cannot claim one.
+
+    ``enrich_records`` receives a list; the caller decided where that list came
+    from. Naming "the normalized file" here was an assumption, and it is the
+    wrong diagnostic the moment a study finish hands this pass a projected
+    post-promotion collection.
+    """
+    api = hanasu_api()
+
+    with pytest.raises(EnrichError) as excinfo:
+        enrich_records(client_for(api), [record()], ids=["word:無い:ない"])
+
+    message = str(excinfo.value)
+    assert "the records this pass was given" in message
+    assert "normalized file" not in message
+    assert "janki migrate-inline" in message, "the existing advice is kept"
+
+
+def test_the_explicit_revision_pass_names_the_file_its_records_came_from(
+    tmp_path: Path,
+) -> None:
+    api = hanasu_api()
+    collection = tmp_path / "vocabulary.json"
+    collection.write_text("[]", encoding="utf-8")
+    revision = io_module.records_revision(collection)
+
+    with pytest.raises(EnrichError) as excinfo:
+        enrich.decide_enrichment(
+            client_for(api),
+            [record()],
+            revision,
+            ids=["word:無い:ない"],
+        )
+
+    message = str(excinfo.value)
+    assert str(collection) in message
+    assert "Enrichment reads that file only" in message
+    assert api.bodies == []
+
+
+def test_decide_enrichment_is_enrich_records_over_an_explicit_revision(
+    tmp_path: Path,
+) -> None:
+    """One implementation, two entries: the explicit-revision API exists to
+    carry a projection's own revision, not to decide anything differently."""
+    collection = tmp_path / "vocabulary.json"
+    collection.write_text("[]", encoding="utf-8")
+    revision = io_module.records_revision(collection)
+    target = record()
+
+    ordinary = enrich_records(client_for(hanasu_api()), [target], ids=[target.id])
+    explicit = enrich.decide_enrichment(
+        client_for(hanasu_api()), [target], revision, ids=[target.id]
+    )
+
+    assert explicit.records == ordinary.records
+    assert explicit.changes == ordinary.changes
+    assert explicit.cleared == ordinary.cleared
+    assert explicit.warnings == ordinary.warnings
+    assert (explicit.looked_up, explicit.skipped) == (
+        ordinary.looked_up,
+        ordinary.skipped,
+    )
+
+
+def test_decide_enrichment_honours_force_fields_and_the_supplied_kanji_store(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "vocabulary.json"
+    revision = io_module.records_revision(collection)
+    filled = record(furigana="curated[よみ]")
+
+    untouched = enrich.decide_enrichment(
+        client_for(hanasu_api()), [filled], revision, ids=[filled.id]
+    )
+    forced = enrich.decide_enrichment(
+        client_for(hanasu_api()),
+        [filled],
+        revision,
+        ids=[filled.id],
+        force_fields=("furigana",),
+    )
+
+    assert "furigana" not in untouched.changes.get(filled.id, {})
+    assert forced.changes[filled.id]["furigana"][1] == "話[はな]す"
+
+
+def test_neither_enrichment_entry_can_write_source_forms() -> None:
+    """`source_forms` is an ordinary hole-fillable canonical field and is not
+    enrichable; no dictionary pass may fill or overwrite one."""
+    assert "source_forms" not in enrich.ENRICHABLE_FIELDS
+    assert "source_forms" not in enrich.AI_FIELDS
+
+
 # --- the field diff ---------------------------------------------------------
 
 
@@ -1819,9 +1914,14 @@ def test_a_failed_ledger_write_says_a_re_run_would_skip_these_records(
     fill). The message covers both, and is not the polish one."""
     root = project(tmp_path, [record()])
     patch_api(monkeypatch, hanasu_api())
+    # `save_under_lock`, not `save`: the one enrichment transaction now holds
+    # canonical and the ledger from before its vector is measured until after
+    # its last write (contracts §7.5), and `io.exclusive_path_lock` is not
+    # re-entrant, so the writer inside that span cannot call the lock-taking
+    # entry. This is the seam the ledger half of the split actually fails at.
     monkeypatch.setattr(
         cli.ledger.Ledger,
-        "save",
+        "save_under_lock",
         lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
     )
 

@@ -553,25 +553,43 @@ class KanjiStore:
         return [self.entries[c] for c in kanji_in(text) if c in self.entries]
 
 
+def parse_store(text: str | None, *, source: Any) -> KanjiStore:
+    """Decode one kanji store from exactly ``text``, naming ``source`` in errors.
+
+    The parser this module owns, over text the caller already read. A caller
+    that hashed one read gets the store *that* read held rather than whatever
+    a later read of the same path would find, so a write and a restore between
+    the two cannot substitute a store nobody bound. ``None`` is the missing
+    file :func:`load_store` reports as an empty store.
+    """
+    if text is None:
+        return KanjiStore()
+    try:
+        raw = json.loads(text)
+    except ValueError as exc:
+        raise KanjiError(f"Could not read {source}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise KanjiError(f"{source} must hold a JSON object keyed by character")
+    entries = {}
+    for character, value in raw.items():
+        if not isinstance(value, dict):
+            raise KanjiError(f"{source}: entry for {character!r} must be an object")
+        entries[str(character)] = KanjiInfo.from_dict({"character": character, **value})
+    return KanjiStore(entries=entries)
+
+
 def load_store(path: Any) -> KanjiStore:
     """Read the kanji file. A missing one is an empty store, not an error."""
     from pathlib import Path
 
     file = Path(path)
     try:
-        raw = json.loads(read_text_bound(file))
+        text = read_text_bound(file)
     except FileNotFoundError:
         return KanjiStore()
-    except (JankiError, OSError, ValueError) as exc:
+    except (JankiError, OSError) as exc:
         raise KanjiError(f"Could not read {file}: {exc}") from exc
-    if not isinstance(raw, dict):
-        raise KanjiError(f"{file} must hold a JSON object keyed by character")
-    entries = {}
-    for character, value in raw.items():
-        if not isinstance(value, dict):
-            raise KanjiError(f"{file}: entry for {character!r} must be an object")
-        entries[str(character)] = KanjiInfo.from_dict({"character": character, **value})
-    return KanjiStore(entries=entries)
+    return parse_store(text, source=file)
 
 
 def save_store(path: Any, store: KanjiStore) -> None:

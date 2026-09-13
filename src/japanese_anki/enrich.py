@@ -30,6 +30,7 @@ you meant, and ``/parse`` picks for itself unless it is told. So the pass runs
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
@@ -45,7 +46,7 @@ from japanese_anki.identifiers import (
     normalize_identity_part,
     short_fingerprint,
 )
-from japanese_anki.io import is_empty
+from japanese_anki.io import RecordsRevision, is_empty
 from japanese_anki.ledger import Ledger
 from japanese_anki.models import (
     ExampleSentence,
@@ -61,10 +62,15 @@ from japanese_anki.staging import NON_READING_HOLDS, annotate, annotations
 __all__ = [
     "DICTIONARY_MAY_NOT_SETTLE",
     "ENRICHABLE_FIELDS",
+    "FACT_BOOK_METHODS",
+    "DictionaryFactBook",
+    "DictionaryFactConflict",
     "DictionaryLookup",
     "DictionaryReadings",
     "EnrichError",
     "EnrichResult",
+    "RecordingDictionaryClient",
+    "ReplayDictionaryClient",
     "SuggestionResult",
     "AI_FIELDS",
     "STAGING_THRESHOLD",
@@ -82,6 +88,7 @@ __all__ = [
     "batch_custom_id",
     "batch_key_map",
     "batch_requests",
+    "decide_enrichment",
     "dictionary_readings",
     "enrich_ai",
     "enrich_records",
@@ -279,6 +286,381 @@ class DictionaryLookup(Protocol):
         *,
         batch_size: int = jpdb.DEFAULT_BATCH_SIZE,
     ) -> list[dict[str, Any]]: ...
+
+
+#: The only two methods a fact book keys, because they are the only two a
+#: promote or enrich route ever calls. `JpdbClient` exposes five.
+FACT_BOOK_METHODS: tuple[str, ...] = ("parse", "lookup_vocabulary")
+
+
+def _jsonable(value: Any) -> Any:
+    """A tuple-free copy, so two spellings of one request canonicalize alike.
+
+    ``[[vid, sid]]`` and ``[(vid, sid)]`` are the same effective request —
+    `jpdb.as_pair` reads both identically — and a book that keyed them
+    differently would miss its own recording at replay.
+    """
+    if isinstance(value, Mapping):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (str, bytes)) or not isinstance(value, (Sequence, Iterable)):
+        return value
+    return [_jsonable(item) for item in value]
+
+
+def _wire(payload: Any, *, canonical: bool, what: str) -> str:
+    """JSON text for a request key or a response, refusing what cannot encode.
+
+    ``canonical`` sorts keys, which is what makes a *request* key stable no
+    matter how its mapping was built. A *response* is never sorted: the book
+    hands back the shape the dictionary actually returned.
+    """
+    try:
+        return json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=canonical,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise EnrichError(
+            f"A dictionary fact book cannot record {what}: {exc}"
+        ) from exc
+
+
+def _parse_request(
+    text: str,
+    *,
+    token_fields: Sequence[str],
+    vocabulary_fields: Sequence[str],
+    forced_furigana: Sequence[Sequence[Any]] | None,
+    encoding: str,
+) -> tuple[str, dict[str, Any]]:
+    """One ``/parse`` request's key and the exact arguments to forward.
+
+    Every effective argument is snapshotted **before** the transport can see
+    it: `forced_furigana` may be a generator, and a key computed after the
+    client consumed it would record an empty span list while the request that
+    was actually sent carried spans.
+    """
+    effective: dict[str, Any] = {
+        "text": text,
+        "token_fields": [str(name) for name in token_fields],
+        "vocabulary_fields": [str(name) for name in vocabulary_fields],
+        "forced_furigana": (
+            None
+            if forced_furigana is None
+            else [_jsonable(span) for span in forced_furigana]
+        ),
+        "encoding": encoding,
+    }
+    return _wire(effective, canonical=True, what="a /parse request"), effective
+
+
+def _lookup_request(
+    pairs: Iterable[Any], fields: Sequence[str], *, batch_size: int
+) -> tuple[str, dict[str, Any]]:
+    """One ``lookup-vocabulary`` request's key and the arguments to forward."""
+    effective: dict[str, Any] = {
+        "pairs": [_jsonable(pair) for pair in pairs],
+        "fields": [str(name) for name in fields],
+        "batch_size": batch_size,
+    }
+    return (
+        _wire(effective, canonical=True, what="a lookup-vocabulary request"),
+        effective,
+    )
+
+
+def _parse_response_wire(result: jpdb.ParseResult) -> str:
+    return _wire(
+        {"tokens": result.tokens, "vocabulary": result.vocabulary},
+        canonical=False,
+        what="a /parse answer",
+    )
+
+
+def _parse_response(wire: str) -> jpdb.ParseResult:
+    """A fresh `ParseResult` per answer, so one caller's edits reach nobody."""
+    payload = json.loads(wire)
+    return jpdb.ParseResult(
+        tokens=payload["tokens"], vocabulary=payload["vocabulary"]
+    )
+
+
+def _lookup_response_wire(rows: list[dict[str, Any]]) -> str:
+    return _wire(rows, canonical=False, what="a lookup-vocabulary answer")
+
+
+def _lookup_response(wire: str) -> list[dict[str, Any]]:
+    return json.loads(wire)
+
+
+@dataclass(frozen=True, slots=True)
+class DictionaryFactConflict:
+    """One key two different answers were recorded for, with both answers."""
+
+    method: str
+    arguments: str
+    responses: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DictionaryFactBook:
+    """Every dictionary answer one study finish fetched, keyed by its request.
+
+    A **mapping**, never a consumptive sequence. The key is
+    ``(method, canonical argument wire)`` and the value is the response wire,
+    so a bound query answers any number of times in any order — which is
+    required, because the same expression is parsed once by the promote reading
+    witness and again by enrichment, and the promotion fold visits parts in an
+    order the preview does not repeat.
+
+    ``facts`` is sorted so the wire and therefore :attr:`fingerprint` are the
+    same for any two books holding the same answers.
+    """
+
+    facts: tuple[tuple[str, str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        seen: dict[tuple[str, str], str] = {}
+        for entry in self.facts:
+            if len(entry) != 3:
+                raise EnrichError(
+                    "A dictionary fact book entry is (method, arguments, response)"
+                )
+            method, arguments, response = entry
+            if method not in FACT_BOOK_METHODS:
+                raise EnrichError(
+                    f"A dictionary fact book keys {' and '.join(FACT_BOOK_METHODS)}, "
+                    f"not {method!r}"
+                )
+            existing = seen.get((method, arguments))
+            if existing is not None and existing != response:
+                raise EnrichError(
+                    "[dictionary-fact-conflict] the dictionary answered "
+                    f"{method} {arguments} two different ways. The book is the "
+                    "authority for what the owner reviewed, so it cannot hold "
+                    "both; record the facts again."
+                )
+            seen[(method, arguments)] = response
+        object.__setattr__(self, "facts", tuple(sorted(self.facts)))
+
+    def __len__(self) -> int:
+        return len(self.facts)
+
+    def __contains__(self, key: tuple[str, str]) -> bool:
+        return any((method, arguments) == key for method, arguments, _ in self.facts)
+
+    def keys(self) -> tuple[tuple[str, str], ...]:
+        return tuple((method, arguments) for method, arguments, _ in self.facts)
+
+    def items(self) -> tuple[tuple[tuple[str, str], str], ...]:
+        return tuple(
+            ((method, arguments), response) for method, arguments, response in self.facts
+        )
+
+    def answer(self, method: str, arguments: str) -> str:
+        """The recorded response wire, or a refusal that never reaches jpdb."""
+        for recorded_method, recorded_arguments, response in self.facts:
+            if recorded_method == method and recorded_arguments == arguments:
+                return response
+        raise EnrichError(
+            f"[dictionary-fact-missing] no recorded {method} answer for "
+            f"{arguments}. The facts the owner reviewed were fetched once, "
+            "before the preview; nothing here asks the dictionary again."
+        )
+
+    @property
+    def fingerprint(self) -> str:
+        """Binds every answer, so a moved fact cannot keep the authority."""
+        wire = _wire(
+            {"version": 1, "facts": [list(entry) for entry in self.facts]},
+            canonical=True,
+            what="this fact book",
+        )
+        return hashlib.sha256(wire.encode("utf-8")).hexdigest()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "facts": [
+                {"method": method, "arguments": arguments, "response": response}
+                for method, arguments, response in self.facts
+            ],
+            "fingerprint": self.fingerprint,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> DictionaryFactBook:
+        try:
+            if raw.get("schema_version") != 1:
+                raise EnrichError(
+                    f"Unknown dictionary fact book version {raw.get('schema_version')!r}"
+                )
+            book = cls(
+                facts=tuple(
+                    (str(item["method"]), str(item["arguments"]), str(item["response"]))
+                    for item in raw["facts"]
+                )
+            )
+        except EnrichError:
+            raise
+        except (KeyError, TypeError, ValueError) as exc:
+            raise EnrichError(
+                f"This is not a complete dictionary fact book: {exc}"
+            ) from exc
+        recorded = raw.get("fingerprint")
+        if recorded is not None and str(recorded) != book.fingerprint:
+            raise EnrichError(
+                "[dictionary-fact-stale] the stored dictionary fact book does "
+                "not match its own fingerprint."
+            )
+        return book
+
+
+class RecordingDictionaryClient:
+    """Answer from the live dictionary, and record every answer by request.
+
+    It is not a cache: every call still reaches ``client``, because the point
+    is to capture what the dictionary says while the facts are being fetched
+    for the preview. What it removes is the *second* source of truth — after
+    the preview nothing asks again, and :meth:`freeze` is the book every later
+    phase replays.
+
+    Two different answers to one key are both retained and refuse at
+    :meth:`freeze`. Overwriting the first would destroy the evidence that the
+    dictionary moved underneath the preview.
+    """
+
+    def __init__(self, client: DictionaryLookup) -> None:
+        self._client = client
+        self._facts: dict[tuple[str, str], str] = {}
+        self._conflicts: dict[tuple[str, str], list[str]] = {}
+        #: Every key asked for, in order, including repeats — the call
+        #: accounting a finish reports.
+        self.calls: list[tuple[str, str]] = []
+
+    def parse(
+        self,
+        text: str,
+        *,
+        token_fields: Sequence[str] = jpdb.DEFAULT_TOKEN_FIELDS,
+        vocabulary_fields: Sequence[str] = jpdb.DEFAULT_VOCABULARY_FIELDS,
+        forced_furigana: Sequence[Sequence[Any]] | None = None,
+        encoding: str = jpdb.DEFAULT_ENCODING,
+    ) -> jpdb.ParseResult:
+        arguments, effective = _parse_request(
+            text,
+            token_fields=token_fields,
+            vocabulary_fields=vocabulary_fields,
+            forced_furigana=forced_furigana,
+            encoding=encoding,
+        )
+        result = self._client.parse(
+            effective["text"],
+            token_fields=effective["token_fields"],
+            vocabulary_fields=effective["vocabulary_fields"],
+            forced_furigana=effective["forced_furigana"],
+            encoding=effective["encoding"],
+        )
+        return _parse_response(self._record("parse", arguments, _parse_response_wire(result)))
+
+    def lookup_vocabulary(
+        self,
+        pairs: Iterable[Any],
+        fields: Sequence[str] = jpdb.DEFAULT_LOOKUP_FIELDS,
+        *,
+        batch_size: int = jpdb.DEFAULT_BATCH_SIZE,
+    ) -> list[dict[str, Any]]:
+        arguments, effective = _lookup_request(pairs, fields, batch_size=batch_size)
+        rows = self._client.lookup_vocabulary(
+            effective["pairs"], effective["fields"], batch_size=effective["batch_size"]
+        )
+        return _lookup_response(
+            self._record("lookup_vocabulary", arguments, _lookup_response_wire(rows))
+        )
+
+    def _record(self, method: str, arguments: str, wire: str) -> str:
+        key = (method, arguments)
+        self.calls.append(key)
+        seen = self._facts.get(key)
+        if seen is None:
+            self._facts[key] = wire
+        elif seen != wire:
+            self._conflicts.setdefault(key, [seen]).append(wire)
+        return wire
+
+    @property
+    def conflicts(self) -> tuple[DictionaryFactConflict, ...]:
+        """Every key the dictionary answered two ways, with all its answers."""
+        return tuple(
+            DictionaryFactConflict(
+                method=method, arguments=arguments, responses=tuple(responses)
+            )
+            for (method, arguments), responses in sorted(self._conflicts.items())
+        )
+
+    def freeze(self) -> DictionaryFactBook:
+        """The book, or a refusal that leaves both conflicting answers intact."""
+        if self._conflicts:
+            conflict = self.conflicts[0]
+            raise EnrichError(
+                "[dictionary-fact-conflict] the dictionary answered "
+                f"{conflict.method} {conflict.arguments} "
+                f"{len(conflict.responses)} different ways while the facts were "
+                "being recorded. Nothing was frozen and every answer is "
+                "retained; record them again."
+            )
+        return DictionaryFactBook(
+            facts=tuple(
+                (method, arguments, response)
+                for (method, arguments), response in self._facts.items()
+            )
+        )
+
+
+class ReplayDictionaryClient:
+    """Answer only from a frozen book, and never from the network.
+
+    Every phase after the preview uses one of these, which is what makes "no
+    phase refetches after review" a property of the code rather than a rule
+    somebody has to remember: there is no transport here to reach.
+    """
+
+    def __init__(self, book: DictionaryFactBook) -> None:
+        self.book = book
+        self.calls: list[tuple[str, str]] = []
+
+    def parse(
+        self,
+        text: str,
+        *,
+        token_fields: Sequence[str] = jpdb.DEFAULT_TOKEN_FIELDS,
+        vocabulary_fields: Sequence[str] = jpdb.DEFAULT_VOCABULARY_FIELDS,
+        forced_furigana: Sequence[Sequence[Any]] | None = None,
+        encoding: str = jpdb.DEFAULT_ENCODING,
+    ) -> jpdb.ParseResult:
+        arguments, _effective = _parse_request(
+            text,
+            token_fields=token_fields,
+            vocabulary_fields=vocabulary_fields,
+            forced_furigana=forced_furigana,
+            encoding=encoding,
+        )
+        self.calls.append(("parse", arguments))
+        return _parse_response(self.book.answer("parse", arguments))
+
+    def lookup_vocabulary(
+        self,
+        pairs: Iterable[Any],
+        fields: Sequence[str] = jpdb.DEFAULT_LOOKUP_FIELDS,
+        *,
+        batch_size: int = jpdb.DEFAULT_BATCH_SIZE,
+    ) -> list[dict[str, Any]]:
+        arguments, _effective = _lookup_request(pairs, fields, batch_size=batch_size)
+        self.calls.append(("lookup_vocabulary", arguments))
+        return _lookup_response(self.book.answer("lookup_vocabulary", arguments))
 
 
 def _resolved(result: jpdb.ParseResult) -> list[tuple[dict[str, Any], dict[str, Any]]]:
@@ -634,8 +1016,23 @@ def _apply(
     return replace(record, **{name: new for name, (_, new) in changes.items()}), changes
 
 
+#: How the scope refusal below names the records it was actually given.
+#:
+#: `enrich_records` receives a list and never opens a file, so it cannot say
+#: which file the list came from; `decide_enrichment` is handed the
+#: `RecordsRevision` those records were read from and says its path. One
+#: implementation, two honest diagnostics — the alternative was keeping the old
+#: "in the normalized file" sentence, which is an assumption the record-only
+#: entry has no way to check and a lie the moment a study finish hands this
+#: pass a projected post-promotion collection.
+_SUPPLIED_RECORDS_SCOPE: tuple[str, str] = (
+    "in the records this pass was given",
+    "Enrichment reads only those records",
+)
+
+
 def enrich_records(
-    client: jpdb.JpdbClient,
+    client: DictionaryLookup,
     records: Sequence[VocabularyRecord],
     *,
     force_fields: Sequence[str] = (),
@@ -657,6 +1054,67 @@ def enrich_records(
     costs nothing. Memoizing the negative answer would need somewhere to keep
     it that is not the record.
     """
+    return _decide(
+        client,
+        records,
+        ids=ids,
+        force_fields=force_fields,
+        kanji_store=kanji_store,
+        scope=_SUPPLIED_RECORDS_SCOPE,
+    )
+
+
+def decide_enrichment(
+    client: DictionaryLookup,
+    records: Sequence[VocabularyRecord],
+    revision: RecordsRevision,
+    *,
+    ids: Sequence[str] | None = None,
+    force_fields: Sequence[str] = (),
+    kanji_store: Any | None = None,
+) -> EnrichResult:
+    """Decide one pass over explicit records and the revision they came from.
+
+    The same decision :func:`enrich_records` makes — one implementation, and
+    this is the entry a caller uses when it knows *which* collection revision
+    those records are, whether that revision is on disk or a study finish's
+    projected post-promotion chain. The only difference is the scope refusal,
+    which names that revision's own path instead of describing the records.
+
+    Nothing here reads the file: ``revision`` is already the exact text and
+    path its caller bound, and re-opening the path would be a second read of
+    something that may deliberately not exist yet.
+    """
+    where = getattr(revision, "path", None)
+    if where is None:
+        raise EnrichError(
+            "decide_enrichment needs the RecordsRevision these records came "
+            "from; it names that revision's path when an id is not among them."
+        )
+    return _decide(
+        client,
+        records,
+        ids=ids,
+        force_fields=force_fields,
+        kanji_store=kanji_store,
+        scope=(f"in {where}", "Enrichment reads that file only"),
+    )
+
+
+def _decide(
+    client: DictionaryLookup,
+    records: Sequence[VocabularyRecord],
+    *,
+    force_fields: Sequence[str],
+    ids: Sequence[str] | None,
+    kanji_store: Any | None,
+    scope: tuple[str, str],
+) -> EnrichResult:
+    """The one dictionary decision both public entries make.
+
+    ``scope`` is the ``(where, reads)`` pair the out-of-scope refusal uses, so
+    the two entries differ in what they *say* and in nothing else.
+    """
     result = EnrichResult(records=list(records))
     by_id = {record.id: index for index, record in enumerate(result.records)}
     if ids is None:
@@ -664,9 +1122,10 @@ def enrich_records(
     else:
         targets = list(dict.fromkeys(ids))
         if missing := [record_id for record_id in targets if record_id not in by_id]:
+            where, reads = scope
             raise EnrichError(
-                f"No record with id {', '.join(repr(item) for item in missing)} in the "
-                "normalized file. Enrichment reads that file only, so an id that "
+                f"No record with id {', '.join(repr(item) for item in missing)} "
+                f"{where}. {reads}, so an id that "
                 "'janki status --format ids' lists but this rejects belongs to an "
                 "inline deck note ('janki migrate-inline' moves it) or a staged row "
                 "(finish its reading review first)."

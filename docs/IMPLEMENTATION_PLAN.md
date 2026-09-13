@@ -111,8 +111,11 @@ marked "supersedes design").
   announces itself. `conftest.py` purges `src/**/__pycache__` and sets
   `sys.dont_write_bytecode` before the first import, and the `Makefile`
   exports `PYTHONDONTWRITEBYTECODE=1` for the CLI paths pytest cannot
-  reach — so run mutants through `make test` / `make gates` and do not
-  bypass either. Still prove the harness before trusting a clean sweep:
+  reach. Run each mutant's focused pytest nodes with the checkout's `src` on
+  `PYTHONPATH`, `PYTHONDONTWRITEBYTECODE=1` and its venv Python; keep these
+  bytecode protections without running the full suite per mutant. The lead
+  runs `make gates` once at the stable commit boundary, as `AGENTS.md` requires.
+  Still prove the harness before trusting a clean sweep:
   apply one mutant you are certain is unguarded and confirm it survives.
 
 ---
