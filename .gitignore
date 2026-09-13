@@ -10,9 +10,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Generated Anki packages and previews (dist/.gitkeep is tracked)
-dist/*.apkg
-dist/*-preview.html
+# Generated packages, previews, and supporting artifacts
+dist/*
+!dist/.gitkeep
 
 # Nothing under data/ is ignored, deliberately. data/staging/ holds hand-typed
 # readings and data/media/ holds cached audio; both are only recoverable if they
