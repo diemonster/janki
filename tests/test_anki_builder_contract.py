@@ -46,6 +46,18 @@ class FakeNote:
         self.tags = kwargs["tags"]
         self.guid = kwargs["guid"]
 
+    @property
+    def cards(self):
+        """Stand in for the expansion genanki alone can compute.
+
+        The real rule is `Model._req` over each template's `qfmt`, which these
+        doubles deliberately do not reimplement: they exist to record what the
+        builder wired. One card per enabled template is what this harness
+        answers; the expansion itself is pinned against the installed genanki by
+        `test_anki_build.py::test_the_shared_expansion_follows_genanki_required_fields`.
+        """
+        return [SimpleNamespace(ord=ordinal) for ordinal in range(len(self.model.templates))]
+
 
 class FakePackage:
     def __init__(self, deck):

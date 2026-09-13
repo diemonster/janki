@@ -1161,7 +1161,7 @@ def resolve_deck_media_paths(
 
     target = deck_path.resolve()
     deck_config, records = resolve_deck_records(target)
-    return _media_paths_for_records(target, project_config, deck_config, records)
+    return render_deck(target, project_config, deck_config, records).media_files
 
 
 def project_deck_media_paths(
@@ -1187,51 +1187,171 @@ def project_deck_media_paths(
         source_path,
         source_records,
     )
-    return _media_paths_for_records(
+    return render_deck(
         target,
         project_config,
         deck_config,
         records,
         allowed_missing_media=allowed_missing_media,
-    )
+    ).media_files
 
 
-def _media_paths_for_records(
-    target: Path,
+@dataclass(frozen=True, slots=True)
+class RenderedNote:
+    """One note's exact exported content, before genanki is involved."""
+
+    record_id: str
+    #: Positional, parallel to :data:`FIELD_NAMES`.
+    fields: tuple[str, ...]
+    #: Cleaned and in note order, exactly what the built note carries.
+    tags: tuple[str, ...]
+    #: Absolute paths this note claimed, in claim order. A path already claimed
+    #: by an earlier note appears here too: the notes share one packaged file,
+    #: and which notes reference it is what a caller asking this needs.
+    media_files: tuple[Path, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedDeck:
+    """One deck rendered once: its notetype, its notes and its media.
+
+    The exporter owns which example slots reach fields, how media paths are
+    resolved, and Anki's flattened-basename rule, so a caller that needs to
+    know what a package *will* contain reads it from here rather than from a
+    second renderer that would drift.
+    """
+
+    deck_path: Path
+    deck_id: int
+    deck_name: str
+    deck_description: str
+    model_id: int
+    model_name: str
+    field_names: tuple[str, ...]
+    card_types: tuple[str, ...]
+    #: ``(display name, qfmt, afmt)`` per enabled direction, in card order.
+    templates: tuple[tuple[str, str, str], ...]
+    notes: tuple[RenderedNote, ...]
+    #: Deduped and sorted by name — what ``genanki.Package.media_files`` gets.
+    media_files: tuple[Path, ...]
+    warnings: tuple[str, ...]
+
+    @property
+    def record_ids(self) -> tuple[str, ...]:
+        return tuple(note.record_id for note in self.notes)
+
+
+def _deck_number(
+    deck_config: dict[str, Any],
+    key: str,
+    default: int,
+    deck_path: Path,
+) -> int:
+    """One of the deck's two Anki numbers, or the project's when it names none.
+
+    An **absent** key means "the project's", which is how nearly every deck
+    file is written. A key that is *there* and unusable is refused right here,
+    naming the deck and the key: `deck_id:` with no value is YAML for ``None``
+    and `deck_id: [1]` is a list, and ``int()`` answers both with a bare
+    ``TypeError``. Since this conversion moved into the renderer it runs while
+    *media* is planned, so that traceback would surface in a display-only
+    planning caller — the Assistant's build action, `plan_deck_package`,
+    `card_revision_finish` — every one of which catches `JankiError`, `OSError`
+    and `ValueError`, and none of which catches `TypeError`.
+
+    `_resolve_deck_records_document` already refuses a non-integer `model_id`
+    for exactly this reason and stays that check's owner; it never read
+    `deck_id` at all, and it deliberately lets an explicit null through. This
+    does not re-check the file's shape — it names the failure of the one
+    conversion it performs, and every value ``int()`` accepts today still
+    converts the way it always did.
+    """
+
+    if key not in deck_config:
+        return int(default)
+    try:
+        return int(deck_config[key])
+    except (TypeError, ValueError) as exc:
+        raise AnkiBuildError(
+            f"deck.{key} must be an integer, got {deck_config[key]!r}: {deck_path}"
+        ) from exc
+
+
+def render_deck(
+    deck_path: Path,
     project_config: ProjectConfig,
     deck_config: dict[str, Any],
     records: Sequence[VocabularyRecord],
     *,
     allowed_missing_media: frozenset[Path] = frozenset(),
-) -> tuple[Path, ...]:
-    """Run the ordinary field renderer over one already-resolved record set."""
+) -> RenderedDeck:
+    """Run the ordinary field renderer over one already-resolved record set.
 
+    :func:`build_deck`, :func:`resolve_deck_media_paths` and
+    :func:`project_deck_media_paths` all end here, so the media a plan
+    fingerprints, the fields a package carries and the warnings a caller
+    displays are one rendering rather than three that agree by hand.
+
+    The stylesheet is deliberately *not* read: media planning must keep
+    working for a deck whose `style.css` is missing, and the stylesheet is
+    already bound as a template input by the callers that care.
+    """
+
+    target = Path(deck_path).resolve()
     card_types = resolve_card_types(deck_config, project_config)
-    templates = []
+    template_dir = project_config.template_dir
+    templates: list[tuple[str, str, str]] = []
     for card_type in card_types:
-        front_file, back_file, _display_name = CARD_FILES[card_type]
+        front_file, back_file, display_name = CARD_FILES[card_type]
         templates.append(
-            _read_text(project_config.template_dir / front_file)
-            + _read_text(project_config.template_dir / back_file)
+            (
+                display_name,
+                _read_text(template_dir / front_file),
+                _read_text(template_dir / back_file),
+            )
         )
+
+    # Every `{{Field}}` the enabled templates mention, so a warning about a
+    # card line can be checked against the card rather than asserted. Derived
+    # rather than listed here: a list of which card shows which sentence is a
+    # claim about the templates, and claims about templates drift.
     drawn_fields = frozenset(
         re.findall(
             r"\{\{[#^/]?(?:furigana:)?([A-Za-z]+)\}\}",
-            "".join(templates),
+            "".join(qfmt + afmt for _name, qfmt, afmt in templates),
         )
+    )
+    # A deck may say its own numbers; most take the project's. Absent means the
+    # project's; present and unusable is refused by name, because these two
+    # conversions now run while media is planned.
+    model_id = _deck_number(
+        deck_config,
+        "model_id",
+        project_config.model_id_base + _card_mask(card_types),
+        target,
+    )
+    deck_id = _deck_number(
+        deck_config, "deck_id", project_config.default_deck_id, target
     )
     deck_max_meanings = deck_config.get("max_meanings")
     if deck_max_meanings is None:
         deck_max_meanings = project_config.max_meanings
+    media_dir = project_config.media_dir.resolve()
+    # Looked up once for the whole rendering: 前 is the same 前 in every word.
     kanji_store = load_kanji_store(project_config.kanji_file)
+    # Read, never fetched: what a word card says about a character is whatever
+    # an explicit lookup already saved, so a build stays offline.
     reading_evidence = load_readings(project_config.jpdb_readings_file)
     media_files: list[str] = []
     warnings: list[str] = []
+    # Packaged basename -> (absolute path, the record that claimed it first).
     claimed: dict[str, tuple[str, str]] = {}
+    notes: list[RenderedNote] = []
     for record in records:
+        claimed_before = len(media_files)
         values = _field_values(
             record,
-            project_config.media_dir.resolve(),
+            media_dir,
             target.parent,
             media_files,
             warnings,
@@ -1244,6 +1364,10 @@ def _media_paths_for_records(
             ),
             allowed_missing_media,
         )
+        # `validate_records` refuses this on the record, which is the earlier
+        # and better error. This covers what that check cannot see, because not
+        # every value here comes from the record — the kanji block is rendered
+        # from `data/kanji.json`.
         fault = field_separator_fault(FIELD_NAMES, values)
         if fault is not None:
             raise AnkiBuildError(
@@ -1251,7 +1375,112 @@ def _media_paths_for_records(
                 "separator Anki joins a note's fields with. Writing it would "
                 "shift every later field out of place."
             )
-    return tuple(sorted({Path(value).resolve() for value in media_files}, key=str))
+        notes.append(
+            RenderedNote(
+                record_id=record.id,
+                fields=tuple(values),
+                tags=tuple(
+                    cleaned for tag in record.tags if (cleaned := _clean_tag(tag))
+                ),
+                media_files=tuple(
+                    Path(value).resolve() for value in media_files[claimed_before:]
+                ),
+            )
+        )
+    return RenderedDeck(
+        deck_path=target,
+        deck_id=deck_id,
+        deck_name=str(deck_config.get("name", project_config.default_deck_name)),
+        deck_description=str(deck_config.get("description", "")),
+        model_id=model_id,
+        model_name=str(
+            deck_config.get(
+                "model_name",
+                f"Japanese Study ({'+'.join(card_types)})",
+            )
+        ),
+        field_names=tuple(FIELD_NAMES),
+        card_types=tuple(card_types),
+        templates=tuple(templates),
+        notes=tuple(notes),
+        media_files=tuple(
+            sorted({Path(value).resolve() for value in media_files}, key=str)
+        ),
+        warnings=tuple(warnings),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ExpandedNote:
+    """One rendered note as genanki writes it into a collection."""
+
+    record_id: str
+    #: ``genanki.guid_for(record_id)`` — what Anki matches a rebuilt note on.
+    guid: str
+    #: Ascending template ordinals, with repeats kept so this is the multiset a
+    #: collection's ``cards`` rows have to hold. It is genanki's own
+    #: required-field decision over *these* rendered fields, **not** one card
+    #: per enabled direction: ``Model._req`` asks, for each template, which
+    #: fields its question cannot do without, and ``Note._front_back_cards``
+    #: drops a card whose question would come out empty.
+    card_ordinals: tuple[int, ...]
+    #: The ``genanki.Note`` itself, for the builder that packages it.
+    note: Any
+
+
+def expand_deck(rendering: RenderedDeck, *, css: str) -> tuple[ExpandedNote, ...]:
+    """Turn one rendering into the genanki notes a package is written from.
+
+    :func:`build_deck` packages exactly these notes, so a caller that has to
+    know which cards an archive *should* contain reads the expansion from here
+    rather than from the enabled directions. The two are not the same thing:
+    the enabled directions are what the deck offers, and genanki's
+    required-field evaluation decides which of them this note's rendered fields
+    actually produce.
+
+    ``css`` is the stylesheet the notetype carries — genanki writes it into
+    ``col.models`` from the model these notes hold, so the builder passes the
+    bound one. It takes no part in the expansion, which ``Model._req`` computes
+    from the field names and the enabled templates alone, so a caller that
+    wants only the card ordinals can pass ``""`` and compare the archived
+    stylesheet by its own bound hash.
+    """
+
+    if genanki is None:
+        raise AnkiBuildError(
+            "genanki is not installed. Run: python -m pip install -e '.[dev]'"
+        )
+    model = genanki.Model(
+        rendering.model_id,
+        rendering.model_name,
+        fields=[{"name": name} for name in rendering.field_names],
+        templates=[
+            {"name": name, "qfmt": qfmt, "afmt": afmt}
+            for name, qfmt, afmt in rendering.templates
+        ],
+        css=css,
+        sort_field_index=1,
+    )
+    expanded: list[ExpandedNote] = []
+    for rendered in rendering.notes:
+        note = genanki.Note(
+            model=model,
+            fields=list(rendered.fields),
+            tags=list(rendered.tags),
+            guid=genanki.guid_for(rendered.record_id),
+        )
+        expanded.append(
+            ExpandedNote(
+                record_id=rendered.record_id,
+                guid=note.guid,
+                # `Note.cards` is cached, and this is the same value the write
+                # reads: genanki computes it once per note from the fields it
+                # is about to store.
+                card_ordinals=tuple(sorted(card.ord for card in note.cards)),
+                note=note,
+            )
+        )
+    return tuple(expanded)
 
 
 def _write_package_atomic(
@@ -1312,102 +1541,17 @@ def build_deck(
     if include_ids is not None:
         records = [record for record in records if record.id in include_ids]
 
-    card_types = resolve_card_types(deck_config, project_config)
-    template_dir = project_config.template_dir
-    templates = []
-    for card_type in card_types:
-        front_file, back_file, display_name = CARD_FILES[card_type]
-        templates.append(
-            {
-                "name": display_name,
-                "qfmt": _read_text(template_dir / front_file),
-                "afmt": _read_text(template_dir / back_file),
-            }
-        )
-
-    # Every `{{Field}}` the enabled templates mention, so a warning about a
-    # card line can be checked against the card rather than asserted. Derived
-    # rather than listed here: a list of which card shows which sentence is a
-    # claim about the templates, and claims about templates drift.
-    drawn_fields = frozenset(
-        re.findall(
-            r"\{\{[#^/]?(?:furigana:)?([A-Za-z]+)\}\}",
-            "".join(t["qfmt"] + t["afmt"] for t in templates),
-        )
+    rendering = render_deck(deck_path, project_config, deck_config, records)
+    expanded = expand_deck(
+        rendering,
+        css=_read_text(project_config.template_dir / "style.css"),
     )
 
-    model_id = int(
-        deck_config.get(
-            "model_id",
-            project_config.model_id_base + _card_mask(card_types),
-        )
-    )
-    deck_id = int(deck_config.get("deck_id", project_config.default_deck_id))
-    deck_name = str(deck_config.get("name", project_config.default_deck_name))
-    model_name = str(
-        deck_config.get(
-            "model_name",
-            f"Japanese Study ({'+'.join(card_types)})",
-        )
-    )
+    deck = genanki.Deck(rendering.deck_id, rendering.deck_name)
+    deck.description = rendering.deck_description
 
-    model = genanki.Model(
-        model_id,
-        model_name,
-        fields=[{"name": name} for name in FIELD_NAMES],
-        templates=templates,
-        css=_read_text(template_dir / "style.css"),
-        sort_field_index=1,
-    )
-    deck = genanki.Deck(deck_id, deck_name)
-    deck.description = str(deck_config.get("description", ""))
-
-    media_dir = project_config.media_dir.resolve()
-    # Looked up once for the whole build: 前 is the same 前 in every word.
-    kanji_store = load_kanji_store(project_config.kanji_file)
-    # Read, never fetched: what a word card says about a character is whatever
-    # an explicit lookup already saved, so a build stays offline.
-    reading_evidence = load_readings(project_config.jpdb_readings_file)
-    media_files: list[str] = []
-    # Packaged basename -> (absolute path, the record that claimed it first).
-    claimed: dict[str, tuple[str, str]] = {}
-    media_warnings: list[str] = []
-    # A deck may say its own number; most take the project's. `resolve_deck_records`
-    # has already refused anything that is not an integer, so an explicit null is
-    # the only remaining way to reach here without one, and it means "the
-    # project's" rather than an error.
-    deck_max_meanings = deck_config.get("max_meanings")
-    if deck_max_meanings is None:
-        deck_max_meanings = project_config.max_meanings
-    for record in records:
-        values = _field_values(
-            record, media_dir, deck_path.parent, media_files, media_warnings,
-            claimed,
-            drawn_fields,
-            deck_max_meanings,
-            render_kanji_html(
-                kanji_store.for_text(record.expression),
-                reading_evidence=reading_evidence,
-            ),
-        )
-        # `validate_records` refuses this on the record, which is the earlier
-        # and better error. This covers what that check cannot see, because not
-        # every value here comes from the record — the kanji block is rendered
-        # from `data/kanji.json`.
-        fault = field_separator_fault(FIELD_NAMES, values)
-        if fault is not None:
-            raise AnkiBuildError(
-                f"{record.id}: the {fault} field contains U+001F, the "
-                "separator Anki joins a note's fields with. Writing it would "
-                "shift every later field out of place."
-            )
-        note = genanki.Note(
-            model=model,
-            fields=values,
-            tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
-            guid=genanki.guid_for(record.id),
-        )
-        deck.add_note(note)
+    for item in expanded:
+        deck.add_note(item.note)
 
     if output_path is None:
         output_path = resolve_deck_output_path(
@@ -1419,7 +1563,7 @@ def build_deck(
     output_path = Path(os.path.abspath(os.fspath(output_path)))
 
     package = genanki.Package(deck)
-    package.media_files = sorted(set(media_files))
+    package.media_files = [str(path) for path in rendering.media_files]
     # Written beside the target and renamed into place. genanki needs a real
     # path and writes the zip incrementally, so an interrupted build (a ^C, a
     # full disk, a media file that vanishes mid-write) otherwise leaves a
@@ -1436,10 +1580,10 @@ def build_deck(
     )
     return BuildResult(
         output_path=output_path,
-        deck_name=deck_name,
-        note_count=len(records),
-        card_types=tuple(card_types),
-        media_count=len(set(media_files)),
-        warnings=tuple(media_warnings),
-        record_ids=tuple(record.id for record in records),
+        deck_name=rendering.deck_name,
+        note_count=len(rendering.notes),
+        card_types=rendering.card_types,
+        media_count=len(rendering.media_files),
+        warnings=rendering.warnings,
+        record_ids=rendering.record_ids,
     )

@@ -1138,7 +1138,493 @@ and `kanji:` identities remain `character_notes`' existing batch and
 
 ---
 
-## 6. Commit boundaries
+## 6. S6-B as implemented
+
+Signatures copied from the source. Two shared-file exceptions were verified and
+approved against the actual code before this package started, and both are
+recorded here: `exporters/anki.py` (the missing rendering seam) and
+`application/audio.py` (the audio-completion proof). The verified paid-attribution
+correction also changes the native `audio_cmd.py`/`tts` callbacks and the shared
+ledger entry query, as described in §6.2. These are structural persistence seams;
+existing finish coordinators and content are unchanged.
+
+### 6.1 `exporters/anki.py` — one rendering, three consumers
+
+```python
+@dataclass(frozen=True, slots=True)
+class RenderedNote:
+    record_id: str
+    fields: tuple[str, ...]          # positional, parallel to FIELD_NAMES
+    tags: tuple[str, ...]            # cleaned, in note order
+    media_files: tuple[Path, ...]    # absolute, this note's claims in claim order
+
+@dataclass(frozen=True, slots=True)
+class RenderedDeck:
+    deck_path: Path; deck_id: int; deck_name: str; deck_description: str
+    model_id: int; model_name: str
+    field_names: tuple[str, ...]; card_types: tuple[str, ...]
+    templates: tuple[tuple[str, str, str], ...]      # (display name, qfmt, afmt)
+    notes: tuple[RenderedNote, ...]
+    media_files: tuple[Path, ...]                    # deduped, sorted by name
+    warnings: tuple[str, ...]
+    @property
+    def record_ids(self) -> tuple[str, ...]
+
+def render_deck(deck_path, project_config, deck_config, records, *,
+                allowed_missing_media: frozenset[Path] = frozenset()) -> RenderedDeck
+
+@dataclass(frozen=True, slots=True)
+class ExpandedNote:
+    record_id: str
+    guid: str                       # genanki.guid_for(record_id)
+    card_ordinals: tuple[int, ...]  # ascending, repeats kept: genanki's own
+                                    # required-field expansion of these fields
+    note: Any                       # the genanki.Note the builder packages
+
+def expand_deck(rendering: RenderedDeck, *, css: str) -> tuple[ExpandedNote, ...]
+```
+
+`_media_paths_for_records` is **deleted**. `resolve_deck_media_paths` and
+`project_deck_media_paths` keep their signatures and return
+`render_deck(...).media_files`; `build_deck` adds the notes `expand_deck` returns to
+its deck and passes `css=_read_text(template_dir / "style.css")` into it, so the one
+place a `genanki.Model` and a `genanki.Note` are built is `expand_deck` — and planning,
+which calls neither, still requires neither genanki nor the stylesheet. Field rendering,
+validation-before-narrowing, the public direction/output resolvers, the warnings,
+`BuildResult` and every public signature are unchanged.
+
+**Two accepted timing deltas.** `deck_config["model_id"]` and
+`deck_config["deck_id"]` are now converted inside the renderer, so a deck file
+carrying a number Anki cannot use is refused when its media is planned rather than
+minutes later at the exporter. Valid configurations are unaffected, and an **absent**
+key still means the project's default. A key that is *present* and unusable is refused
+by `_deck_number` as an `AnkiBuildError` naming the deck file and the key, rather than
+as whatever `int()` raises: `deck_id:` with no value is YAML for `None` and
+`deck_id: [1]` is a list, both of which give a bare `TypeError` that the planning
+callers — the Assistant build action, `plan_deck_package`, `card_revision_finish`, each
+catching `JankiError`/`OSError`/`ValueError` — do not catch.
+`_resolve_deck_records_document` stays the owner of the deck document's shape, including
+its stricter non-integer `model_id` rule; it never read `deck_id` and deliberately lets
+an explicit null through. Pinned by
+`test_anki_build.py::test_media_planning_refuses_a_deck_number_the_build_cannot_use`,
+`…::test_media_planning_names_the_deck_and_key_for_an_unusable_number` and
+`test_application_deck_package.py::test_package_planning_refuses_a_deck_number_it_cannot_use`.
+
+**The expansion is genanki's, not the enabled list.** `ExpandedNote.card_ordinals` is
+`Note.cards` over the model `expand_deck` builds, which is `Model._req` over each
+enabled template's `qfmt`: recognition keeps its card when `Expression` **or** `Image`
+is non-empty, production when `Meanings` **or** `PartOfSpeech` is, reading when
+`Expression` is. So the cards an archive carries are not one per enabled direction, and
+`card_types` is not a substitute for asking. With the three shipped front templates the
+two coincide for every record this project loads — `validate_record` makes a missing
+meaning an error and `_string_list` drops empty ones — but an ordinary card-design edit
+separates them: a production front prompting on `{{Furigana}}` legitimately expands a
+record with no furigana into one card, which
+`test_application_deck_package.py::test_the_receipt_counts_the_cards_the_archive_was_proven_to_carry`
+builds end to end.
+`test_anki_build.py::test_the_shared_expansion_follows_genanki_required_fields` pins the
+rule itself against the installed genanki. `css` rides on the notetype genanki
+serializes and takes no part in the expansion, so a caller that wants only the ordinals
+passes `""` and compares the archived stylesheet by its own bound hash. The genanki
+doubles in `test_anki_builder_contract.py` answer `cards` with one card per enabled
+template, deliberately: they record what the builder wired and do not reimplement
+`_req`.
+
+**Limitation.** Expected values drawn from the owning renderer prove that the
+archive faithfully carries what the renderer produced from the reviewed inputs.
+They cannot catch a defect *inside* the renderer, which moves both sides
+together; that stays with `test_anki_build.py` and `test_card_templates.py`. A
+second independent renderer would catch it and would drift, which is why the
+seam forbids one. `render_deck` also runs twice per prepare (once for the plan's
+media, once for the expected values): local CPU over one deck.
+The same applies to the expansion: comparing the archive against `expand_deck` proves
+the archive carries the cards the builder's own notes produced, not that genanki's
+required-field rule is the rule Anki would apply.
+
+### 6.2 `application/audio.py` — the durable audio-completion proof
+
+```python
+AUDIO_COMPLETION_SCHEMA = "janki-audio-completion-proof-v1"
+CLIP_EVOLUTION: Mapping[str, frozenset[str]]
+ProvenSlotOrigin = Literal["reused", "recovered", "synthesized"]
+
+class AudioProofError(JankiError): ...
+
+def provider_plan_wire(provider: AudioProviderPlan | None) -> dict | None
+def media_target_path(config: ProjectConfig, target: str) -> Path
+
+@dataclass(frozen=True, slots=True)
+class ExpectedAudioSlot:      record_id, kind, position: int | None
+def expected_audio_slots(records, record_ids, *, words, examples) -> tuple[ExpectedAudioSlot, ...]
+
+@dataclass(frozen=True, slots=True)
+class ConfirmedAudioClip:     record_id, kind, target, request_input, forced_accent,
+                              content_fingerprint, provider, initial_state,
+                              initial_media_sha256, initial_recovery_key,
+                              initial_recovery_sha256, initial_recovery_source
+@dataclass(frozen=True, slots=True)
+class ConfirmedAudioPlan:     repository_root, canonical_path, ledger_path, media_dir,
+                              record_ids, targeted, words, examples, force,
+                              word_provider, example_provider, clips
+                              # clip_for(target), to_wire(), from_wire(config, raw)
+def confirm_audio_plan(config, plan: AudioPlan) -> ConfirmedAudioPlan
+
+@dataclass(frozen=True, slots=True)
+class ReservedPaidAttempt:    target, operation_id, expected_request_fp
+@dataclass(frozen=True, slots=True)
+class ProvenPaidOperation:    operation_id, kind, model, source_file, source_sha256,
+                              expected_request_fp, state: Literal["committed", "accounted"]
+@dataclass(frozen=True, slots=True)
+class ProvenAudioSlot:        record_id, kind, position, target, reference, media_sha256,
+                              request_input, forced_accent, content_fingerprint,
+                              provider, origin, paid_operation
+@dataclass(frozen=True, slots=True)
+class AudioCompletionProof:   schema, repository_root, canonical_path, canonical_sha256,
+                              ledger_path, media_dir, record_ids, words, examples,
+                              slots, fingerprint
+                              # clip_count, stored_slot_count, realized_media_sha256,
+                              # origin_by_media_path, slots_for(), to_wire(), from_wire()
+
+def prove_audio_completion(config, plan: AudioPlan, *, authority: ConfirmedAudioPlan,
+                           expected_slots: Sequence[ExpectedAudioSlot],
+                           reservations: Sequence[ReservedPaidAttempt] = ()) -> AudioCompletionProof
+def revalidate_audio_completion(config, proof: AudioCompletionProof) -> None
+```
+
+The proof binds the **whole** confirmed enumeration, not a state map:
+`confirm_audio_plan` freezes the scope, the inclusion flags, both provider
+profiles and every clip's request identity, provider and initial disposition
+with the fixed hash that disposition implies, and proving compares the fresh
+plan against all of it plus `CLIP_EVOLUTION`. A matching `current` clip in a
+different voice is refused as a changed provider.
+
+The census is independent: `expected_audio_slots` counts stored fields — a word
+slot where `words` and the record has a reading, an example slot for every
+nonblank `example.japanese` — and never `AudioPlan.clips`. The caller's
+disclosed census is cross-checked against one re-derived from the post-audio
+canonical, so under-declaring buys nothing, and revalidation re-derives it again
+so an omitted slot refuses even when the payload's self-fingerprint is
+recomputed. Several slots legitimately share one clip; the existing
+divergent-spoken-input refusal stays in `audio_cmd.prepare_example_audio_profiles`.
+
+Per slot the proof reads only durable state: the canonical reference
+(file existence alone is never accepted), the media bytes, and
+`Ledger.audio_entry_for(..., provider=, voice=, speed=, settings=)` — which is
+where the voice is proven, since `content_fp` deliberately excludes it.
+`audio_entry_for` returns an isolated copy of the very entry `audio_file_for`
+answers with, and `audio_file_for` now delegates to it: one currency predicate,
+because a paid clip's attribution has to be read from the same entry that
+answered "current", not from a second, similar query.
+
+**Money.** Only a clip the confirmation enumerated as `provider-required` **and**
+`paid-network` may carry a paid attempt, and one is **required**: a coordinator
+that never wires `before_paid_dispatch` gets no proof. Reuse and recovery invent
+no reservation, and supplying one for them refuses.
+
+The binding is two independently written values meeting. The dispatcher retains
+`expected_request_fp` — derived from the approved request and profile before the
+call left. The **paid writer** records `paid_attempt` into the clip's own WAL row
+and, through commit, into its canonical audio entry: `operation_id`,
+`request_fp`, `model` and `audio_sha256`, minted from the reply it is about to
+persist, inside the operation's commit and therefore before the forget. Proving
+requires all four to agree with the reservation, the model and the bytes read
+from disk, for **every newly dispatched paid clip** — whether or not the journal
+entry survives. `ProvenPaidOperation.state` classifies (`"committed"` while the
+entry is present, `"accounted"` once it is not, every other state refused by
+name), but neither value is ever accepted on its own.
+
+**Two corrections to earlier descriptions of this seam.** First, the planning
+report required `state == "committed"` at proving *and at every revalidation*,
+which is unsatisfiable on the success path: `synthesize_journaled` ends with
+`commit_result(...)` followed by `forget([operation_id])`, so a successful paid
+clip's journal entry is **gone**. Second — and this is what the `paid_attempt`
+record exists to fix — an earlier version of this section treated that absence as
+itself the accounting, constructing the operation from the caller's reservation
+whenever the id was missing. It is not: absence is equally what a refusal proven
+before send, a reconciler's forget of a `failed_before_send` row, an owner's
+`--forget --force` discard and a never-existent id leave behind, and meanwhile
+any other authorized run may have voiced the same identity-addressed target.
+A proof built on absence could therefore label another run's bytes as a
+discarded attempt's accounted result. The forget decision still says the money
+was dealt with; it never said *which clip* the money bought, and now the writer
+does.
+
+The writer-side seam this rests on, owned by `tts/`, `audio_cmd.py` and
+`ledger.py` rather than by this package:
+
+```python
+# japanese_anki.tts
+@dataclass(frozen=True, slots=True)
+class PaidAttempt:            operation_id, request_fp, model, audio_sha256
+
+class JournaledSpeechProvider(SpeechProvider, Protocol):
+    def synthesize_journaled(..., persist: Callable[[bytes, PaidAttempt], _Persisted],
+                             before_dispatch: Callable[[str], None] | None = None) -> _Persisted
+    def reconcile_journaled(..., audio_sha256: str,
+                            attach: Callable[[PaidAttempt], None] | None = None) -> None
+
+# japanese_anki.audio_cmd
+PAID_ATTEMPT = "paid_attempt"   # the ledger detail key
+PersistPendingAudio = Callable[
+    [ledger_mod.Ledger, str, Mapping[str, object] | None], None
+]
+
+# japanese_anki.ledger.Ledger
+def audio_entry_for(record_id, *, of, content_fp, provider=None, voice=None,
+                    speed=None, settings=None) -> dict | None
+def merge_pending_audio(keys, *, replace=False,
+                        expected: Mapping[str, Mapping[str, Any]] | None = None) -> None
+
+# japanese_anki.application.audio — the native callback factory
+def _audio_wal_persister(force: bool) -> audio_cmd.PersistPendingAudio
+def _persist_audio_wal(book, keys, *, replace=False,
+                       expected: Mapping[str, Mapping[str, Any]] | None = None) -> ledger.Ledger
+```
+
+The WAL callback's third argument is the exact row read before an attribution
+update. Staging and adoption pass `None`; attaching a still-live captured
+reply's attribution passes that predecessor. The application callback forwards
+it as `{key: expected}` to `merge_pending_audio`. On an unforced run the locked
+merge accepts the exact predecessor or the already-written successor, refuses
+any third state (including a vanished row), and preserves unrelated durable
+rows. This lets a stage interrupted before its WAL row resume through the real
+application writer without another provider call. The existing explicit
+`replace=True`/`--force` behavior remains separate and bypasses that comparison;
+B's completion proof accepts only unforced scope.
+
+There is one callback shape, not two: the free local branch passes `None`
+beside its bytes rather than keeping a second signature alive. No ledger schema
+version and no migration — `details` is free-form JSON that existing readers
+already preserve, and `audio_file_for` ignores unknown fields.
+
+**Recovery and reuse.** `reconcile_journaled` takes an `attach` callback and
+offers the attempt only once the adopted bytes are proven to be that entry's own
+reply, always before settling or forgetting it; a failing attach keeps both the
+entry and the stage. A `--force` replacement that adopts a different valid
+orphan stage at the same request key does **not** inherit the replaced row's
+attempt — the same request may legitimately be voiced twice, and the second
+reply's bytes are not the first call's result — so it earns a witness from the
+matching live reply or has none. A clip confirmed `current` or `recoverable`
+carries `paid_operation=None` and requires nothing new, and a ledger entry
+written before this field existed still proves reuse and recovery unchanged.
+
+`revalidate_audio_completion` resolves **no** provider and sends no call.
+Absence of a `pending_audio` row and of a retained capture after success is the
+finished state and is never read as missing proof.
+
+**Locks.** Both entries are caller-holds: the caller must already own
+`exclusive_path_lock(config.root / ".janki-audio-operation")`. Neither takes
+it, neither takes the canonical or deck locks, and `io.exclusive_path_lock` is
+not re-entrant.
+
+**Scope.** The proof is evidence about artifacts. It grants no job authority and
+no spending authority: a shared `repository_root`, `canonical_sha256` and
+`media_dir` prove artifact scope, not that two study jobs are one, and a
+coordinator must still bind the proof to its own exact phase receipt and owner
+authority.
+
+**Not centralized.** `card_revision_finish._ALLOWED_CLIP_EVOLUTION` and
+`revision_finish._ALLOWED_CLIP_EVOLUTION` are **left in place**: those modules
+are out of this package's scope, and changing two shipped finish modules merely
+to share a constant was explicitly not authorized. `CLIP_EVOLUTION` is
+therefore a third copy of the same table until the coordinator wave folds them
+together. Inside `audio.py` the duplicate provider-wire builder *was* removed:
+`_fingerprint` now calls `provider_plan_wire`.
+
+### 6.3 `application/deck_package.py` — realization, preparation, publication
+
+```python
+PREPARED_PACKAGE_DIR_NAME = ".janki-prepared"
+PREPARED_PACKAGE_SCHEMA = "janki-prepared-deck-package-v1"
+
+def plan_vocabulary_deck_package_revision(config, deck_path, records, revision, *,
+        media_sha256: Mapping[Path, str | None],
+        reference_sha256: Mapping[Path, str | None] | None = None) -> DeckPackagePlan
+
+def assert_projection_realized(projection: DeckPackagePlan, fresh: DeckPackagePlan, *,
+                               audio_completion: AudioCompletionProof) -> None
+
+@dataclass(frozen=True, slots=True)
+class DeckPackageNote:        record_id, guid, fields, tags, card_ordinals
+@dataclass(frozen=True, slots=True)
+class DeckPackageInventory:   deck_id, deck_name, deck_description, model_id, model_name,
+                              field_names, card_types, templates, stylesheet_sha256,
+                              notes, media, deck_sha256, configuration_fingerprint,
+                              output_path, stored_sentence_slots,
+                              exported_sentence_slots, sentence_clips, fingerprint
+@dataclass(frozen=True, slots=True)
+class DeckPackageExport:      record_id, deck_stem, gaps, at
+@dataclass(frozen=True, slots=True)
+class DeckPackagePreparation: schema, preparation_id, projection, plan, audio_completion,
+                              staged_path, staged_sha256, staged_identity,
+                              expected_directory_identity,       # private stage
+                              output_directory_identity,         # dist/
+                              inventory,
+                              output_before_revision, output_before_identity,
+                              ledger_before_sha256, export_delta, ledger_after_sha256,
+                              warnings, supersedes, fingerprint
+                              # package_sha256, packaged_receipt(config),
+                              # to_wire(config), from_wire(config, raw)
+
+def prepare_deck_package(config, projection, *, audio_completion,
+                         supersedes: DeckPackagePreparation | None = None) -> DeckPackagePreparation
+def publish_prepared_deck_package(config, preparation) -> DeckPackageResult
+def recover_prepared_deck_package(config, preparation) -> DeckPackageResult | None
+```
+
+**`reference_sha256`** is consulted at exactly the two
+`_input(config, …, optional=True)` reads for `config.kanji_file` and
+`config.jpdb_readings_file`. Any other path, a repeated canonicalized path, a
+malformed hash, or a configuration pointing both stores at one file refuses. A
+`None` value projects the store's **absence**, which the fresh plan has to
+reproduce; it is never a wildcard. The only wildcard in the system is an
+enumerated `media_inputs` path. Those bytes reach the card's character block and
+not its media, so the projected records, media set and counts are unchanged by
+the override — what changes is the input the realized plan must equal.
+
+**`assert_projection_realized`** is pure: two plans and one already-revalidated
+proof, no disk read. Every field is compared for equality except the constructed
+`fingerprint`; `output_revision`/`output_identity` must still be the state the
+projection bound, and that pair is what `output_before` records. A media path
+the projection bound to a hash stays fixed; a path it bound to `None` must now
+carry a real SHA-256 equal to `audio_completion.realized_media_sha256[path]`,
+whose slot origin may not be `reused`. A path appearing or vanishing refuses,
+naming it. The proof's `repository_root` and `canonical_sha256` must match the
+plan's — an artifact-scope check, explicitly not a different-job proof. The
+permissive `card_revision_finish._build_compatible` is never used, and the whole
+fingerprint is never compared. `_assert_pending_audio_clear` stays a separate
+gate after it, and strict `_assert_same` remains for the concrete plan from
+publication onwards.
+
+**`prepare_deck_package`** requires the caller to hold
+`.janki-audio-operation`, revalidates the proof under it, then takes
+`_execute_nonconjugation_locked`'s own lock set — deck dir, deck path, then the
+sorted remaining `_locked_paths` — re-plans inside it, realizes the projection,
+clears pending audio, and builds with the owning exporter into
+`dist/.janki-prepared/<preparation_id>.apkg` with `output_expected_absent=True`.
+The confirmed target and the canonical export ledger are untouched. It then
+verifies the builder result against the plan, snapshots the staged bytes and
+inode, binds **both** directories it will use — the private staging directory it reads
+the artifact back from and, separately, the directory the confirmed target lives in —
+re-plans and `_assert_same_after_output`, reads the inventory, and
+freezes the export delta with one `date.today()` call whose value every later
+replay uses. The two identities are distinct bindings on purpose: replacing `dist/` and
+replacing `dist/.janki-prepared/` are different events, and `expected_directory_identity`
+is the private one.
+
+`preparation_id` is a fresh `secrets.token_hex(16)`, so a superseding attempt is
+necessarily a new immutable record. `supersedes=` mints §7.11's free-rebuild
+row: the same projection and the same proof, and the rebuilt inventory
+fingerprint must equal the superseded one, which is what "from the same bound
+input inventory" is checked to mean. The old intent is never edited.
+
+**The inventory** is read from the real artifact with stdlib `zipfile` and
+`sqlite3` over a private extracted copy: `collection.anki2`, the `media` JSON
+manifest and its numbered members, with any other layout refused by a named
+unsupported-layout diagnostic. It validates, against the owning renderer's
+output over the same bytes the build consumed: the archived model and deck
+identities and names, the deck description, the field names, the card templates
+(`name`/`qfmt`/`afmt`), the **archived stylesheet** against the bound
+`card stylesheet` template input, each note's GUID **and its exact `\x1f`-split
+field bytes and tags**, each note's **card multiset** — the exact ascending template
+ordinals `expand_deck` reports for that note's rendered fields, so a dropped, repeated
+or added card is refused by name — each card's deck, and every packaged media name
+against its bound byte hash. A GUID set, a note count, an archive self-hash or an
+ordinal merely being in range is never the check: an ordinal no enabled template has is
+a difference from that multiset like any other, so there is no separate bounds check
+kept in step with it. A note genanki legitimately expands into fewer cards than the
+deck enables is **accepted**, because the expected multiset is read from the same
+expansion the builder wrote. Before those comparisons it runs the
+proof-to-artifact check: for each **exported** sentence slot the note's stored
+sound field must name the proven target and the packaged member must hold the
+proven bytes, checked independently of word audio. Stored sentence slots,
+exported sentence slots and unique clips are recorded as three numbers and never
+summed.
+
+Content only. genanki mints note and card ids, `mod`, `usn` and `col.crt` from
+the build clock and the zip carries per-member timestamps, so APKG bytes are not
+reproducible across builds: the artifact SHA proves *this file*, the inventory
+proves *what it contains*, and the free rebuild in the recovery table has to
+reproduce the second, not the first.
+
+**Publication** revalidates the proof, re-plans and compares strictly against
+the persisted concrete plan, re-verifies the staged bytes at their bound inode
+inside their bound directory, **classifies the ledger before writing anything**,
+publishes those exact bytes with `atomic_write_bytes_bound` bound to `output_before`
+and to the prepared `output_directory_identity`, and applies the frozen
+delta before→after. The ledger contract is exactly before to after: `Ledger.save`
+refuses a ledger that moved, so a third state refuses and names both digests
+rather than merging. The precheck is §7.5's rule that an apply verifies its **entire**
+bound set before any effect: a ledger already at a third state makes the frozen delta
+unappliable, and publishing first would spend the artifact write to reach a state
+`publish` can no longer retry — its `_assert_same` refuses once the target has moved —
+leaving only recovery able to report it. One owning classifier
+(`_ledger_at_a_bound_state`) answers before/after/third for both the precheck and the
+apply, which re-reads after the write because `Ledger.save` guards the baseline the
+replay was computed from. Pinned by
+`test_application_deck_package.py::test_publication_refuses_a_third_ledger_state_before_writing_the_target`
+(target untouched, owner ledger byte-preserved) and
+`…::test_publication_binds_the_output_directory_the_preparation_captured`.
+
+**Recovery** consumes the intent and nothing else and recognizes its own output
+**before** any strict re-plan. Target at `package_sha256` with the ledger at the
+after-state completes; at the before-state applies the delta; at a third state
+refuses, naming both. Target still at `output_before` re-plans, compares
+strictly and publishes. A vanished stage with an unchanged target returns
+`None`, which is the caller's cue to mint a superseding preparation — and the **whole
+private directory being absent is the same vanished stage as the file being absent**,
+because this scratch content is disposable. This is the same-checkout recovery case;
+these checks do not establish support for rebasing a receipt into another checkout. A stage
+replaced at another inode, or a private directory that **is there** under a different
+identity, refuses by name
+rather than publishing a file this intent never bound. `_directory_identity` therefore
+lets `FileNotFoundError` through and wraps every other `OSError`, so the two outcomes
+stay distinguishable by type rather than by message text. Pinned by
+`test_application_deck_package.py::test_a_removed_private_staging_directory_is_a_vanished_stage`
+beside the existing unlinked-file and replaced-directory nodes. Any third target revision
+refuses and the external file is preserved.
+
+**`packaged` is not `complete`.** `packaged_receipt(config)` returns the
+evidence a later preview receipt is minted from — output path, package SHA,
+inventory fingerprint, the whole-deck `note_count`/`card_count`/`card_types`/
+`media_count`, an `audio_selection` block, the audio
+proof's fingerprint, the ledger after-digest, the build warnings and any
+`supersedes` link. It mints no download token and exposes no finish action.
+
+**Two scopes, both named.** `card_count` here is `inventory.card_count` — the sum of
+the per-note expansions the archive was *validated* against, note by note — and not
+`plan.card_count`, which is `len(records) × len(card_types)` computed before the build.
+The plan's number is the **capacity the deck's configuration allows** and stays exactly
+that: the projection/fresh comparison remains strict and exact over it, and a deck is
+never refused for expanding into fewer cards than its directions offer. A completed
+build proof reports what the package was proven to contain, so a coordinator or preview
+must display `card_count` as the archive's total and must not re-derive it from notes ×
+directions. The three sentence numbers are the **job's selection**, not the deck: they
+are counted from `audio_completion.slots`, so a deck record the audio phase never
+covered contributes nothing to them. They therefore live in `audio_selection` together
+with that proof's exact `record_ids`, which is §7.12's "every count says explicitly
+whether it is the full deck inventory or the job subset" made structural rather than
+conventional. `DeckPackageInventory` keeps the same three field names and the same
+values; its docstrings now say which scope they are. `DeckPackageResult.card_count` from
+a prepared publication is likewise the validated archive total; the ordinary
+`execute_deck_package` path, which reads no archive back, still reports the plan's
+number.
+
+**Ledger digests** are taken over `Ledger.serialized_text()` rather than the raw
+file, so a repository with no ledger yet has a defined before-state and every
+comparison is over the same normalization the saver writes.
+
+### 6.4 What S6-B does **not** expose
+
+No coordinator, no finish action, no CLI flag, no Assistant surface, no preview
+and no download offer. No generic receipt framework and no compatibility layer:
+`DeckPackagePreparation` and `AudioCompletionProof` are concrete wires for these
+two seams. No Japanese validation is added and `source_forms` is untouched. The
+only fakes are in tests, which use temporary repositories throughout.
+
+---
+
+## 7. Commit boundaries
 
 The owner asked for a code review, a manual verification of its findings, the
 fixes and a re-review at each boundary, up to four rounds, on 2026-09-10.
@@ -1148,8 +1634,8 @@ fixes and a re-review at each boundary, up to four rounds, on 2026-09-10.
 | 0 | Review and planning models moved to Claude Fable 5.1 | committed `390ee81` |
 | 1 | DESIGN amendment F and corrected handoff | committed `d512904` |
 | 2 | Shared serializer seam and this interface record | committed `fdcd96a`; `make gates`: 5651 passed, 800 warnings, Ruff clean, sample build; nine production mutations caught |
-| 3 | S6-P — review and promotion | **complete in this revision.** §4 records its APIs. Five initial defects and two follow-up gaps are fixed with failing-first tests and 16/16 plus 9/9 mutation sweeps. Two obsolete test seams found by full gates are corrected and 2/2 further mutants caught and restored. Independent reviews 2 and 3 are clean and root-verified; final `make gates`: **5743 passed**, 800 warnings, Ruff clean, sample build (523.58s). |
-| 4 | S6-E — reference facts and enrichment | **complete in this revision, independently reviewed and gated.** §5 records the actual APIs. Two review rounds and root verification closed the bound-store split-read defect and corrected saved-fact disclosure. Four new correction mutants were caught; prior M22 was rerun after its anchor moved, while the other 29 prior traces remain applicable. Mutation limits remain explicit: M16 protects refusal ordering before a missing-key replay error; M26 protects the configuration/path diagnostic before fingerprint refusal. Reconstructed pre-fix runs prove old behavior, not chronological TDD. Final `make gates`: **5830 passed**, 800 warnings, Ruff clean, sample build, 516.70s. The source and test assertions stayed unchanged through the gate. No finish action is exposed. |
-| 5 | S6-B — package preparation and recovery | pending |
+| 3 | S6-P — review and promotion | **complete at `972ef32`.** §4 records its APIs. Five initial defects and two follow-up gaps are fixed with failing-first tests and 16/16 plus 9/9 mutation sweeps. Two obsolete test seams found by full gates are corrected and 2/2 further mutants caught and restored. Independent reviews 2 and 3 are clean and root-verified; final `make gates`: **5743 passed**, 800 warnings, Ruff clean, sample build (523.58s). |
+| 4 | S6-E — reference facts and enrichment | **complete at `e36f638`, independently reviewed and gated.** §5 records the actual APIs. Two review rounds and root verification closed the bound-store split-read defect and corrected saved-fact disclosure. Four new correction mutants were caught; prior M22 was rerun after its anchor moved, while the other 29 prior traces remain applicable. Mutation limits remain explicit: M16 protects refusal ordering before a missing-key replay error; M26 protects the configuration/path diagnostic before fingerprint refusal. Reconstructed pre-fix runs prove old behavior, not chronological TDD. Final `make gates`: **5830 passed**, 800 warnings, Ruff clean, sample build, 516.70s. The source and test assertions stayed unchanged through the gate. No finish action is exposed. |
+| 5 | S6-B — package preparation and recovery | **complete in this revision, independently reviewed and gated.** §6 records the actual APIs. Package reviews 2/3 and native paid-attribution reviews 1/2, with root verification, closed archive/count/publication defects and the production WAL recovery collision. One combined `make gates`: **5942 passed**, 1008 warnings, Ruff clean, sample build, 543.35s; all reviewed source/test bytes stayed unchanged. Focused regressions and mutation traces are retained, including initial survivors and later tests that catch them. Some mutations pin diagnostics or callback arguments rather than independent artifact rejection (including WAL M08/M10); no stronger claim is made. No finish action or final preview is exposed. |
 | 6 | `study_finish` coordinator, Assistant and CLI surfaces, `card_preview` | pending |
 | 7 | S7 — the complete offline journey | pending |

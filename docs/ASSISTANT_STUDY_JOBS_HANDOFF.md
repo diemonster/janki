@@ -27,7 +27,7 @@ before touching its promotion, review or coverage writers. Its independent
 reviews and root verification are complete; final `make gates` passed
 **5743 tests**, 800 warnings, Ruff and the sample build (523.58s).
 
-**S6-E is complete in this revision.** Its actual frozen-fact, reference-store,
+**S6-E is complete at `e36f638`.** Its actual frozen-fact, reference-store,
 enrichment and apply/recovery APIs are in the
 [S6 interface record §5](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md). Both reference
 preparations decode the exact bytes they bind; the saved-store replacement
@@ -37,18 +37,28 @@ passed **5830 tests**, 800 warnings, Ruff and the sample build (516.70s).
 Use focused tests and preserved evidence while implementing or correcting a
 finding; the lead runs the full gate once at the stable commit boundary.
 
-**Start S6-B from this revision**, then implement the coordinator/surfaces and
-S7, sequentially in the primary checkout as the owner chose. B's real shared
-audio-completion proof service belongs in `application/audio.py` and lands
-with B's package consumer; no placeholder writer or early finish action.
+**S6-B is complete in this revision.** Read the
+[S6 interface record §6](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md) for its real
+audio-completion proof and prepared package APIs. Package and native-audio
+re-reviews are clean and root-verified; one combined `make gates` passed
+**5942 tests**, 1008 warnings, Ruff and the sample build (543.35s). Source and
+test bytes stayed unchanged through that gate.
+
+**Start the coordinator and Assistant/CLI/HTML surfaces from this revision**,
+then S7, sequentially in the primary checkout as the owner chose.
 The proof binds the whole confirmed audio enumeration and independently
 checks every expected sentence slot. A paid reservation retains its expected
-request fingerprint for provider-free revalidation. The later coordinator
+request fingerprint before dispatch; the native writer's durable `paid_attempt`
+independently identifies the call that produced the bytes, even after journal
+cleanup. The coordinator must persist that expected fingerprint and the
+current reservation per target, and may not manufacture the writer's witness.
+Prepared packaging reports actual archive card counts and distinguishes its
+selected-audio counts from whole-deck totals. The later coordinator
 binds its own exact phase receipt to the job and finish authority: matching
 canonical/media bytes alone do not prove job ownership. Successful WAL
 cleanup is expected and does not prevent package proof.
 
-S6's finish actions and S7 remain unimplemented. P and E expose no finish CLI
+S6's finish actions and S7 remain unimplemented. P, E and B expose no finish CLI
 flag or Assistant action. Their package-level tests do not establish the
 complete Assistant/CLI journey or final HTML audio playback.
 

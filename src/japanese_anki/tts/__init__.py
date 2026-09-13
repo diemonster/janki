@@ -17,6 +17,7 @@ without knowing which engine it is holding.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol, TypeVar, runtime_checkable
 
 from japanese_anki.errors import JankiError
@@ -24,6 +25,7 @@ from japanese_anki.errors import JankiError
 __all__ = [
     "RenderProfile",
     "JournaledSpeechProvider",
+    "PaidAttempt",
     "SentenceProfileSelector",
     "SpeechProvider",
     "TtsError",
@@ -36,6 +38,35 @@ _Persisted = TypeVar("_Persisted")
 
 class TtsError(JankiError):
     """A speech engine refused, or could not be reached."""
+
+
+@dataclass(frozen=True, slots=True)
+class PaidAttempt:
+    """Which billed call produced exactly these audio bytes.
+
+    Minted by the paid writer from the reply it is about to persist, never by
+    a caller and never from a reservation: a reservation says a call was
+    *authorized*, and the whole point of this record is to say which call
+    actually rendered the bytes now on their way to the ledger.
+
+    It exists because a successful journaled operation is *forgotten* — that
+    durable forget is how the repository says the money was dealt with — so
+    after a clean run the journal holds nothing to point at. Without a witness
+    written before that forget, an old reservation for an attempt that
+    produced nothing is indistinguishable from one that produced the clip, and
+    a later proof would attribute another run's bytes to it.
+
+    ``audio_sha256`` is over the decoded audio the writer is persisting, so the
+    binding survives to any reader that can hash the published file. It is the
+    field that keeps a witness from travelling onto a replacement render at the
+    same request key: the same request may legitimately be voiced twice, and
+    the second reply's bytes are not the first attempt's result.
+    """
+
+    operation_id: str
+    request_fp: str
+    model: str
+    audio_sha256: str
 
 
 @runtime_checkable
@@ -136,13 +167,19 @@ class JournaledSpeechProvider(SpeechProvider, Protocol):
         forced_accent: bool,
         source_file: str,
         source_sha256: str,
-        persist: Callable[[bytes], _Persisted],
+        persist: Callable[[bytes, PaidAttempt], _Persisted],
         before_dispatch: Callable[[str], None] | None = None,
     ) -> _Persisted:
         """Capture, decode, and persist one reply under its operation entry.
 
         ``before_dispatch`` receives the durable operation id after response
         capture is prepared but before the provider transport may be opened.
+
+        ``persist`` receives the decoded audio together with the
+        :class:`PaidAttempt` that produced it, and is called inside the
+        operation's commit — before the ``committed`` write and therefore
+        before the successful ``forget`` — so the writer's own attribution
+        reaches durable storage while the journal entry still exists.
         """
         ...
 
@@ -154,8 +191,16 @@ class JournaledSpeechProvider(SpeechProvider, Protocol):
         source_file: str,
         source_sha256: str,
         audio_sha256: str,
+        attach: Callable[[PaidAttempt], None] | None = None,
     ) -> None:
-        """Settle a captured operation whose exact audio WAL already exists."""
+        """Settle a captured operation whose exact audio WAL already exists.
+
+        ``attach`` is offered the attempt only once the still-live reply is
+        proven to decode to ``audio_sha256``, and always before the entry is
+        settled or forgotten: recovery that adopts bytes must be able to make
+        their attribution durable while the journal can still supply it. A
+        raising ``attach`` leaves the entry and its evidence in place.
+        """
         ...
 
 

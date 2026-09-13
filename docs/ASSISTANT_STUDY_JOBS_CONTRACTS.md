@@ -1347,8 +1347,15 @@ digest. The WAV bytes are not: `_projected_package_media:701-731` binds a known 
 `provider-required` one. There is therefore **no pre-known WAV hash and no pre-computed
 ledger digest for this phase**. Its proof is the writer-owned reservations plus the
 `pending_audio` WAL and its `data/media/audio/.pending/*.stage` bytes, which the job
-reports and never clears. Each paid clip is reserved durably in the finish record at
-`before_paid_dispatch` (`application/audio.py:1046`) as `_reserve_paid_clip:1903` does. On
+reports and never clears — the WAL and those stage bytes are the phase's proof **only
+while the transaction is unfinished**; successful finalization removes both (§7.11), and
+their absence after success is the finished state, never missing evidence. What survives
+finalization is the writer's own `paid_attempt` on the committed audio entry: operation
+id, request fingerprint, model and rendered byte hash, written inside the paid operation's
+commit and therefore before the successful `forget`. Each paid clip is reserved durably in
+the finish record at
+`before_paid_dispatch` (`application/audio.py:1066`,
+`execute_targeted_audio_locked:1053`) as `_reserve_paid_clip:1915` does. On
 restart `_reconcile_reservations:1828-1900` is the model: an `authorized` reservation
 becomes `failed_before_send` and is forgotten; removed evidence refuses rather than
 billing again; an unknown outcome is never resent; nonempty frames are never silently
@@ -1360,7 +1367,15 @@ Before `audio_complete`, every expected enabled slot must have its canonical
 exist and whose ledger entry is current for the exact request and profile.
 File creation alone is insufficient. Missing references, missing/stale bytes,
 an incomplete writer transaction or an unaccounted paid attempt leave the job
-unfinished and resumable. An explicit owner opt-out binds zero new example
+unfinished and resumable. **Accounted** means the clip's durable audio entry
+carries the paid writer's own `paid_attempt` naming *this* finish's reserved
+operation, the request fingerprint the dispatcher independently expected, the
+model, and the bytes now on disk. It deliberately does **not** mean absence
+from the operation journal: absence is equally what a refusal proven before
+send, a reconciler's forget of a `failed_before_send` row, an owner's
+`--forget --force` discard of an unknown outcome, and an id that never existed
+all leave behind, while any other authorized run may legitimately have voiced
+the same identity-addressed target in between. An explicit owner opt-out binds zero new example
 requests, preserves existing references/media, and is recorded and displayed
 as omitted by owner; it is never reported as successful sentence generation.
 
@@ -1400,9 +1415,16 @@ hash must still equal it and a path the projection bound to `None` must now be a
 sha256 that is **this finish's own `audio_complete` result**, proven by the immutable
 `audio_completion` proof in that phase's receipt. Per resolved slot it records the
 bound clip request/profile, target and actual byte hash, checked against the audio
-writer's current ledger currency and bytes under its operation lock. A paid clip
-also binds its reservation and accounted journal operation; an unpaid VOICEVOX
-clip has no paid operation to require. Active recovery uses the existing WAL, but
+writer's current ledger currency and bytes under its operation lock. A **newly
+dispatched** paid clip also binds its reservation to the writer-recorded attempt
+provenance on that same ledger entry — after a successful `forget` there is no journal
+operation left to bind, so the binding is that provenance, compared field by field with
+the reservation the dispatcher saved and with the bytes read from disk; while the journal
+entry is still present (a forget not yet run, or interrupted) both are required and it
+must be `committed`. A clip reused as `current`, or recovered from work already paid for,
+binds no reservation and no attempt: its bytes are fixed by the confirmation's own hash,
+and inventing attribution for them would name a call that did not produce them. An unpaid
+VOICEVOX clip has no paid operation to require. Active recovery uses the existing WAL, but
 successful finalization removes that WAL: neither a live WAL row nor a retained
 capture is a package precondition. The proof is saved after the existing writer
 finishes and before package preparation, revalidated against the current exact
@@ -1414,9 +1436,13 @@ a template or deck edit — refuses, naming the input.
 `DeckPackagePreparation` binds the authority `projection` and that realization proof
 alongside `plan` — **the fresh concrete plan**, which every later strict `_assert_same`
 compares against — plus `preparation_id`, `staged_path` with its own
-`staged_sha256` (also `package_sha256`: publication copies those exact bytes), `staged_identity` and the `expected_directory_identity` of the
-validated private directory (`io.prepare_bound_directory:474`), `inventory`,
-`output_before`, `ledger_before_sha256`, the frozen export delta and `ledger_after_sha256`.
+`staged_sha256` (also `package_sha256`: publication copies those exact bytes), `staged_identity`, two separately named directory bindings —
+`expected_directory_identity`, the validated **private** staging directory the staged
+artifact is read back from (`io.prepare_bound_directory:474`), and
+`output_directory_identity`, the directory the confirmed target lives in, which
+publication writes into — `inventory`, `output_before`, `ledger_before_sha256`, the frozen
+export delta and `ledger_after_sha256`. They are two different directories and neither
+name stands in for the other.
 Both the projection proof and the concrete plan are persisted before publication.
 
 **Prepare** takes the same lock set as `_execute_nonconjugation_locked:857-862`, re-plans
@@ -1455,7 +1481,10 @@ and `_assert_same` against the persisted concrete `preparation.plan` — strict 
 on, because the projection has already been realized; re-verify the staged bytes still hash to `staged_sha256` at the bound
 inode inside the bound directory; publish them with `atomic_write_bytes_bound(target,
 data, expected_revision=…, expected_identity=…, expected_absent=…,
-expected_directory_identity=…)` bound to `output_before`; then apply the frozen delta and
+expected_directory_identity=…)` — `expected_revision`/`expected_identity`/`expected_absent`
+bound to `output_before`, and `expected_directory_identity` bound to the preparation's
+`output_directory_identity`, the **output** parent and never the private staging
+binding; then apply the frozen delta and
 save. `Ledger.save` is guarded and refuses a ledger that moved since it was read
 (`ledger.py:679-684`), so **the ledger contract here is exactly before → after**: there is
 no permissive merge onto an arbitrary current ledger, because that would both contradict

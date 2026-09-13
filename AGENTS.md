@@ -452,6 +452,18 @@ below is what is left, and it is the loop every other project already uses.*
     rerunning the exact matching `janki audio` command. Do not delete them.
     Successful audio runs automatically remove a stage only after proving that
     neither a WAL row nor any current exact request can still claim it.
+    A paid clip's WAL row and the canonical audio entry it commits into also
+    carry the writer's own `paid_attempt` — the operation id, request
+    fingerprint, model and rendered byte hash, recorded inside the operation's
+    commit and therefore *before* the successful forget retires the entry.
+    That record, not the journal's silence, is what says which billed call
+    produced these exact bytes: any authorized run may voice the same
+    identity-addressed target, and a forgotten attempt that produced nothing
+    leaves the journal looking identical to one that succeeded. Recovery
+    carries it with the bytes it describes and never onto a replacement render
+    at the same request key; clips reused or recovered without a fresh call
+    have none and need none. Machine-written like the rest of the ledger:
+    never add, edit or move one by hand.
 10. `data/review.json`: the retired review subsystem's store — **committed**
     as history and read by nothing since M8.2. Do not extend it or wire a
     reader to it; it is a record of what a model once said, not state.

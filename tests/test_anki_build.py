@@ -1,5 +1,6 @@
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -9,6 +10,7 @@ pytest.importorskip("genanki")
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.anki import (
+    FIELD_NAMES,
     AnkiBuildError,
     build_deck,
     deck_declared_record_versions,
@@ -16,6 +18,9 @@ from japanese_anki.exporters.anki import (
     deck_kind,
     deck_kind_from_revision,
     deck_selection,
+    expand_deck,
+    render_deck,
+    resolve_deck_media_paths,
     resolve_deck_records,
 )
 from japanese_anki.io import DataError, RecordsRevision
@@ -1453,3 +1458,219 @@ def test_a_reading_only_deck_is_not_told_a_line_it_lacks_is_silent(
     silent = [w for w in result.warnings if "has no audio" in w]
     assert not any("毎日話します。" in w for w in silent), "no polite line on this card"
     assert any("毎日話すよ。" in w for w in silent), "but the casual one is drawn"
+
+
+def test_media_planning_refuses_a_deck_number_the_build_cannot_use(
+    tmp_path: Path,
+) -> None:
+    """Planning and building run one renderer, so both read the deck's numbers.
+
+    `deck_id`/`model_id` used to be converted only inside `build_deck`, which
+    meant a deck file carrying `deck_id: "36"`-with-a-typo planned its media
+    happily and failed minutes later at the exporter. The renderer the two
+    share converts them once, so the same deck is refused before any record is
+    rendered. Valid configurations are untouched.
+
+    The refusal is janki's own, naming the deck and the key, rather than the
+    `ValueError` `int()` raises: the planning callers catch `JankiError`, and a
+    person reading "invalid literal for int()" is not told which file to open.
+    """
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす", meanings=["to speak"],
+    )])
+    deck = tmp_path / "decks" / "d.yaml"
+    deck.write_text(
+        'name: D\ndeck:\n  source: "../vocabulary.json"\n  deck_id: "not a number"\n',
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    with pytest.raises(AnkiBuildError) as refusal:
+        resolve_deck_media_paths(deck, config)
+
+    assert "deck.deck_id must be an integer, got 'not a number'" in str(refusal.value)
+    assert str(deck) in str(refusal.value)
+
+
+@pytest.mark.parametrize(
+    ("line", "key"),
+    [
+        ("  deck_id:\n", "deck_id"),
+        ("  deck_id: [1]\n", "deck_id"),
+        ("  model_id:\n", "model_id"),
+    ],
+    ids=["deck_id-empty", "deck_id-list", "model_id-empty"],
+)
+def test_media_planning_names_the_deck_and_key_for_an_unusable_number(
+    tmp_path: Path, line: str, key: str
+) -> None:
+    """A deck number that is there and unusable is a refusal, not a `TypeError`.
+
+    `deck_id:` with no value is YAML for `None` and `deck_id: [1]` is a list;
+    `int()` answers both with a bare `TypeError`, and these numbers are now read
+    while *media* is planned, so a display-only planning caller — the Assistant's
+    build action, `plan_deck_package`, `card_revision_finish`, all of which catch
+    `JankiError`/`ValueError` — would end in a traceback naming no deck file.
+    `_resolve_deck_records_document` already refuses a non-integer `model_id` for
+    exactly this reason; it never read `deck_id` and deliberately lets an explicit
+    null through, which is the shape left over.
+
+    Mutation: default an explicit null instead of refusing it, or catch only
+    `ValueError`.
+    """
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす", meanings=["to speak"],
+    )])
+    deck = tmp_path / "decks" / "d.yaml"
+    deck.write_text(
+        'name: D\ndeck:\n  source: "../vocabulary.json"\n' + line, encoding="utf-8"
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    with pytest.raises(AnkiBuildError) as refusal:
+        resolve_deck_media_paths(deck, config)
+
+    assert f"deck.{key} must be an integer" in str(refusal.value)
+    assert str(deck) in str(refusal.value)
+
+
+def test_media_planning_and_the_build_are_one_rendering(tmp_path: Path) -> None:
+    """The plan's media and the package's fields come from the same pass.
+
+    Two renderers that agree by hand drift. `resolve_deck_media_paths` returns
+    exactly `render_deck(...).media_files`, and the note values the renderer
+    produced are the `flds` the archive carries — which is what lets a
+    plan-bound caller say what a package will contain without writing a second
+    renderer to say it.
+    """
+    _project(tmp_path)
+    media = tmp_path / "media" / "audio"
+    media.mkdir(parents=True)
+    (media / "janki-word.wav").write_bytes(b"word bytes")
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす",
+        meanings=["to speak"], tags=["week-1"], audio="audio/janki-word.wav",
+        examples=[ExampleSentence(
+            japanese="話します。", english="I speak.", register="polite"
+        )],
+    )])
+    deck = tmp_path / "decks" / "d.yaml"
+    config = ProjectConfig.load(tmp_path)
+    deck_config, records = resolve_deck_records(deck)
+
+    rendering = render_deck(deck, config, deck_config, records)
+    build_deck(deck, config, tmp_path / "o.apkg")
+
+    assert rendering.media_files == resolve_deck_media_paths(deck, config)
+    assert rendering.notes[0].media_files == (media / "janki-word.wav",)
+    assert rendering.record_ids == ("word:話す:はなす",)
+    _names, values = _fields(tmp_path / "o.apkg")
+    assert tuple(values) == rendering.notes[0].fields
+    assert rendering.notes[0].tags == ("week-1",)
+
+
+def _cards_by_guid(apkg: Path) -> dict[str, tuple[int, ...]]:
+    """Each packaged note's GUID and the ascending card ordinals it expanded to."""
+    import sqlite3
+    import tempfile
+
+    with ZipFile(apkg) as z:
+        name = "collection.anki21" if "collection.anki21" in z.namelist() else "collection.anki2"
+        db = Path(tempfile.mkdtemp()) / "c.db"
+        db.write_bytes(z.read(name))
+    con = sqlite3.connect(db)
+    rows = con.execute(
+        "select notes.guid, cards.ord from cards join notes on cards.nid = notes.id"
+    ).fetchall()
+    con.close()
+    expanded: dict[str, list[int]] = {}
+    for guid, ordinal in rows:
+        expanded.setdefault(str(guid), []).append(int(ordinal))
+    return {guid: tuple(sorted(values)) for guid, values in expanded.items()}
+
+
+def test_the_shared_expansion_is_what_the_builder_packages(tmp_path: Path) -> None:
+    """The cards a caller can read ahead are the cards the archive carries.
+
+    `build_deck` packages exactly the notes `expand_deck` returns, so the
+    `cards` rows in the written package are genanki's expansion of them. That
+    is what lets a plan-bound caller say which cards an archive should hold —
+    per note, as a multiset — without writing a second rules engine that would
+    drift from the one that did the writing.
+    """
+    _project(tmp_path)
+    _write_records(tmp_path, [
+        VocabularyRecord(
+            id="word:話す:はなす", expression="話す", reading="はなす",
+            meanings=["to speak"],
+        ),
+        VocabularyRecord(
+            id="word:水:みず", expression="水", reading="みず", meanings=["water"],
+        ),
+    ])
+    deck = tmp_path / "decks" / "d.yaml"
+    config = ProjectConfig.load(tmp_path)
+    deck_config, records = resolve_deck_records(deck)
+    rendering = render_deck(deck, config, deck_config, records)
+
+    expanded = expand_deck(
+        rendering,
+        css=(config.template_dir / "style.css").read_text(encoding="utf-8"),
+    )
+    build_deck(deck, config, tmp_path / "o.apkg")
+
+    assert rendering.card_types == ("recognition", "production")
+    assert {item.record_id: item.card_ordinals for item in expanded} == {
+        "word:話す:はなす": (0, 1),
+        "word:水:みず": (0, 1),
+    }
+    assert {
+        item.guid: item.card_ordinals for item in expanded
+    } == _cards_by_guid(tmp_path / "o.apkg")
+
+
+def test_the_shared_expansion_follows_genanki_required_fields(tmp_path: Path) -> None:
+    """Which cards a note gets is genanki's decision, not the enabled list.
+
+    `Model._req` asks of each template which fields its question cannot do
+    without — recognition wants an Expression or an Image, production wants
+    Meanings or a PartOfSpeech — and `Note._front_back_cards` drops a card whose
+    question would come out empty. So "one card per enabled direction" is not
+    what a package contains, and a caller asserting it would refuse an archive
+    genanki wrote correctly.
+
+    Shown on the rendered fields, which is the level the rule reads: no record
+    this project loads reaches it, because `validate_record` makes a missing
+    meaning an error and `_string_list` drops empty ones, so every accepted word
+    note really does get both cards. That is a fact about this notetype's
+    templates and validator rather than a guarantee worth hard-coding — the
+    expansion is read from genanki either way, and a template that stops
+    mentioning a field moves both sides together.
+    """
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす",
+        meanings=["to speak"], part_of_speech="verb",
+    )])
+    deck = tmp_path / "decks" / "d.yaml"
+    config = ProjectConfig.load(tmp_path)
+    deck_config, records = resolve_deck_records(deck)
+    rendering = render_deck(deck, config, deck_config, records)
+
+    assert [item.card_ordinals for item in expand_deck(rendering, css="")] == [(0, 1)]
+
+    unanswerable = replace(
+        rendering.notes[0],
+        fields=tuple(
+            "" if name in {"Meanings", "PartOfSpeech"} else value
+            for name, value in zip(
+                rendering.field_names, rendering.notes[0].fields, strict=True
+            )
+        ),
+    )
+    suppressed = expand_deck(replace(rendering, notes=(unanswerable,)), css="")
+
+    assert rendering.field_names == tuple(FIELD_NAMES)
+    assert [item.card_ordinals for item in suppressed] == [(0,)]

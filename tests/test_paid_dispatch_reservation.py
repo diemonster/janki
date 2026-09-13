@@ -77,7 +77,7 @@ def _synthesize(
         forced_accent=False,
         source_file=_SOURCE,
         source_sha256=_SOURCE_SHA,
-        persist=lambda _wav: "pending-key",
+        persist=lambda _wav, _attempt: "pending-key",
         before_dispatch=before_dispatch,
     )
 

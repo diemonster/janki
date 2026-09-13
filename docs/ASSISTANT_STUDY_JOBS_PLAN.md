@@ -35,7 +35,7 @@ archive-recovery, lock-order and unstarted-redecision defects. Final
 `make gates` passed **5743 tests**, with 800 warnings, Ruff clean and the
 sample deck built (523.58s).
 
-**S6-E (reference facts and enrichment) is complete in this revision.** The
+**S6-E (reference facts and enrichment) is complete at `e36f638`.** The
 [S6 interface record §5](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md) records its
 frozen dictionary facts, projected enrichment, prepared reference stores and
 exact apply/recovery APIs. Reference preparation parses the same store bytes
@@ -54,12 +54,23 @@ callers during changes and review fixes, preserved full output and direct exit
 statuses, and one final lead-owned `make gates` at a stable commit boundary.
 No separate full pytest run is needed beforehand.
 
-**S6-B is next**, followed sequentially by the finish coordinator and
-Assistant/CLI/HTML surfaces, then S7. These remain unimplemented: no
+**S6-B (audio-completion proof and prepared packaging) is complete in this
+revision.** The [S6 interface record §6](ASSISTANT_STUDY_JOBS_S6_INTERFACES.md)
+records the actual APIs. The native paid writer preserves which call produced
+each clip before journal cleanup; interrupted attribution resumes through an
+exact predecessor comparison in the real WAL merge. Packaging validates the
+archive's actual cards, fields and media, keeps selected-audio counts separate
+from whole-deck totals, and binds private staging and output directories
+independently. The package and native-audio corrections passed independent
+re-review and root verification. One combined `make gates` passed **5942 tests**,
+1008 warnings, Ruff and the sample build (543.35s), with all reviewed source and
+test bytes unchanged. Focused evidence was reused across unchanged corrections;
+diagnostic-only mutation failures are not claimed as independent artifact barriers.
+
+**The finish coordinator and Assistant/CLI/HTML surfaces are next**, then S7.
+These remain unimplemented: no
 `application/study_finish.py` and no `janki study review`/`coverage`/
-`disposition`/`finish` control exists yet. P and E expose no finish action.
-The B audio-proof and package interfaces have implementation preparation,
-which is not B implementation or acceptance.
+`disposition`/`finish` control exists yet. P, E and B expose no finish action.
 [ASSISTANT_STUDY_JOBS_HANDOFF.md](ASSISTANT_STUDY_JOBS_HANDOFF.md) is the
 self-contained handoff for resuming at S6 and then S7; it records the committed
 S5 APIs those milestones build on, the limits of S5's evidence, and which

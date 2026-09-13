@@ -1409,3 +1409,294 @@ def test_the_tracked_ledger_agrees_with_the_records_it_describes() -> None:
         "these records would gain a duplicate source reference on "
         f"`janki status --rebuild`: {diverging}"
     )
+
+
+def test_audio_entry_and_file_queries_share_one_currency_predicate(
+    tmp_path: Path,
+) -> None:
+    """One question, one answer, two shapes — never two similar predicates.
+
+    A caller proving a paid clip needs the whole entry, because the attempt
+    that rendered it is recorded beside the file name and the journal no longer
+    holds it. Answering that from a second, similar predicate is how two
+    readers come to disagree about whether the same clip is current.
+
+    Mutation: give `audio_entry_for` its own copy of the profile comparison.
+    """
+
+    book = ledger_module.load(tmp_path / "ledger.json")
+    book.record_audio(
+        "word:読む:よむ",
+        file="janki-paid.wav",
+        of="example",
+        provider="openai-realtime",
+        voice="cedar",
+        speed=1.0,
+        settings={"model": "gpt-realtime-1.5"},
+        content_fp="d" * 64,
+        paid_attempt={
+            "operation_id": "abc",
+            "request_fp": "e" * 64,
+            "model": "gpt-realtime-1.5",
+            "audio_sha256": "f" * 64,
+        },
+    )
+    exact = {
+        "of": "example",
+        "content_fp": "d" * 64,
+        "provider": "openai-realtime",
+        "voice": "cedar",
+        "speed": 1.0,
+        "settings": {"model": "gpt-realtime-1.5"},
+    }
+
+    entry = book.audio_entry_for("word:読む:よむ", **exact)
+
+    assert entry is not None
+    assert entry["file"] == book.audio_file_for("word:読む:よむ", **exact)
+    assert entry["paid_attempt"]["operation_id"] == "abc"
+    entry["paid_attempt"]["operation_id"] = "edited through the returned copy"
+    assert (
+        book.records["word:読む:よむ"]["audio"][0]["paid_attempt"]["operation_id"] == "abc"
+    )
+    for changed in (
+        {"voice": "ash"},
+        {"speed": 0.9},
+        {"settings": {"model": "gpt-realtime-legacy"}},
+        {"content_fp": "0" * 64},
+        {"of": "word"},
+    ):
+        narrowed = {**exact, **changed}
+        assert book.audio_entry_for("word:読む:よむ", **narrowed) is None
+        assert book.audio_file_for("word:読む:よむ", **narrowed) is None
+
+
+def test_a_pending_paid_attempt_reaches_the_canonical_entry_unchanged(
+    tmp_path: Path,
+) -> None:
+    """The WAL row carries the writer's attribution into committed state.
+
+    Nothing re-derives it on the way: the paid writer recorded it while its
+    call still existed, and commit is a copy, not a second opinion.
+
+    Mutation: rebuild the committed details from the row's identity fields.
+    """
+
+    path = tmp_path / "ledger.json"
+    book = ledger_module.load(path)
+    arguments = {
+        "of": "example",
+        "target": "janki-paid.wav",
+        "request_input": "本を読みます。",
+        "forced_accent": False,
+        "content_fp": "d" * 64,
+        "provider": "openai-realtime",
+        "voice": "cedar",
+        "speed": 1.0,
+        "settings": {"model": "gpt-realtime-1.5"},
+    }
+    witness = {
+        "operation_id": "5f2a",
+        "request_fp": "e" * 64,
+        "model": "gpt-realtime-1.5",
+        "audio_sha256": "b" * 64,
+    }
+    key = book.pending_audio_key_for("word:読む:よむ", **arguments)
+    assert key == book.record_pending_audio(
+        "word:読む:よむ",
+        **arguments,
+        staged_file=f".pending/{key}-{'b' * 64}.stage",
+        staged_sha256="b" * 64,
+        paid_attempt=witness,
+    )
+    book.save()
+
+    reloaded = ledger_module.load(path)
+    assert reloaded.pending_audio[key]["details"]["paid_attempt"] == witness
+    reloaded.commit_pending_audio(key)
+
+    entry = reloaded.audio_entry_for(
+        "word:読む:よむ",
+        of="example",
+        content_fp="d" * 64,
+        provider="openai-realtime",
+        voice="cedar",
+        speed=1.0,
+        settings={"model": "gpt-realtime-1.5"},
+    )
+    assert entry is not None and entry["paid_attempt"] == witness
+    assert reloaded.pending_audio == {}
+
+
+def _paid_wal_arguments(request_input: str) -> dict[str, object]:
+    return {
+        "of": "example",
+        "target": "janki-paid.wav",
+        "request_input": request_input,
+        "forced_accent": False,
+        "content_fp": "d" * 64,
+        "provider": "openai-realtime",
+        "voice": "cedar",
+        "speed": 1.0,
+        "settings": {"model": "gpt-realtime-1.5"},
+    }
+
+
+def test_a_pending_row_update_swaps_exactly_the_row_its_writer_read(
+    tmp_path: Path,
+) -> None:
+    """The log's one non-additive update, and what it must not disturb.
+
+    Adding a staged render needs no predecessor: an absent row is added and an
+    identical one is a no-op. Changing a row does, because the value being
+    written differs from the durable one by exactly the change being made, and
+    that is also what another command's row looks like. So the caller carries
+    the row it read; the durable row may be that row, or already be the result
+    (the same swap arriving twice). Everything else — other rows, other
+    records, sections this version never read — still comes from the state
+    found under the lock, not from the writer's snapshot.
+
+    Mutation: compare the durable row against the value being written.
+    """
+
+    path = tmp_path / "ledger.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "records": {},
+                "pending_batches": {},
+                "promote_queue": {"shirabe.yaml": ["word:話す:"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    arguments = _paid_wal_arguments("本を読みます。")
+    book = ledger_module.load(path)
+    key = book.record_pending_audio(
+        "word:読む:よむ",
+        **arguments,
+        staged_file=f".pending/{book.pending_audio_key_for('word:読む:よむ', **arguments)}"
+        f"-{'b' * 64}.stage",
+        staged_sha256="b" * 64,
+    )
+    book.save()
+
+    writer = ledger_module.load(path)
+    before = writer.pending_audio_entry(key)
+    assert before is not None and before["details"] == {}
+
+    # Another audio command finishes unrelated work in between.
+    other = ledger_module.load(path)
+    other.record_added("word:話す:はなす")
+    other_arguments = _paid_wal_arguments("日本語を話します。")
+    other_key = other.record_pending_audio(
+        "word:話す:はなす",
+        **other_arguments,
+        staged_file=f".pending/{other.pending_audio_key_for('word:話す:はなす', **other_arguments)}"
+        f"-{'c' * 64}.stage",
+        staged_sha256="c" * 64,
+    )
+    other.save()
+
+    witness = {
+        "operation_id": "5f2a",
+        "request_fp": "e" * 64,
+        "model": "gpt-realtime-1.5",
+        "audio_sha256": "b" * 64,
+    }
+    writer.record_pending_audio(
+        "word:読む:よむ",
+        **arguments,
+        staged_file=str(before["staged_file"]),
+        staged_sha256="b" * 64,
+        at=str(before["at"]),
+        paid_attempt=witness,
+    )
+    writer.merge_pending_audio([key], expected={key: before})
+
+    reloaded = ledger_module.load(path)
+    assert reloaded.pending_audio[key] == {**before, "details": {"paid_attempt": witness}}
+    assert reloaded.pending_audio[other_key] == other.pending_audio[other_key]
+    assert "word:話す:はなす" in reloaded.records
+    assert reloaded.extra == {"promote_queue": {"shirabe.yaml": ["word:話す:"]}}
+
+    # The same swap a second time is this writer's own state, not a conflict.
+    writer.merge_pending_audio([key], expected={key: before})
+    assert ledger_module.load(path).pending_audio == reloaded.pending_audio
+
+
+def test_a_pending_row_that_changed_under_an_update_refuses_and_is_left_alone(
+    tmp_path: Path,
+) -> None:
+    """A swap is a refusal too, and the row it refuses belongs to someone else.
+
+    Anything that is neither the row this update read nor the result it is
+    writing is another writer's paid render: the merge leaves it, and the rest
+    of that writer's ledger, exactly where it found them. A row that vanished
+    meanwhile is refused rather than re-added — the update's premise was a row
+    that is still there, and putting it back would resurrect a recovery
+    transaction somebody else completed.
+
+    Mutation: treat an absent or foreign row as a free slot to write into.
+    """
+
+    path = tmp_path / "ledger.json"
+    arguments = _paid_wal_arguments("本を読みます。")
+    book = ledger_module.load(path)
+    key = book.record_pending_audio(
+        "word:読む:よむ",
+        **arguments,
+        staged_file=f".pending/{book.pending_audio_key_for('word:読む:よむ', **arguments)}"
+        f"-{'b' * 64}.stage",
+        staged_sha256="b" * 64,
+    )
+    book.save()
+
+    writer = ledger_module.load(path)
+    before = writer.pending_audio_entry(key)
+    assert before is not None
+    writer.record_pending_audio(
+        "word:読む:よむ",
+        **arguments,
+        staged_file=str(before["staged_file"]),
+        staged_sha256="b" * 64,
+        at=str(before["at"]),
+        paid_attempt={
+            "operation_id": "5f2a",
+            "request_fp": "e" * 64,
+            "model": "gpt-realtime-1.5",
+            "audio_sha256": "b" * 64,
+        },
+    )
+
+    # An expectation nobody compares is worse than none at all.
+    with pytest.raises(LedgerError, match="names no row this merge writes"):
+        writer.merge_pending_audio([key], expected={"f" * 64: before})
+
+    other = ledger_module.load(path)
+    elsewhere = "c" * 64
+    other.pending_audio[key] = {
+        **other.pending_audio[key],
+        "staged_file": f".pending/{key}-{elsewhere}.stage",
+        "staged_sha256": elsewhere,
+    }
+    other.save()
+    durable = path.read_text(encoding="utf-8")
+
+    with pytest.raises(LedgerError, match="no longer the row this update read"):
+        writer.merge_pending_audio([key], expected={key: before})
+    assert path.read_text(encoding="utf-8") == durable
+
+    # Without a predecessor the same merge is additive, and says so differently.
+    with pytest.raises(LedgerError, match="changed concurrently"):
+        writer.merge_pending_audio([key])
+    assert path.read_text(encoding="utf-8") == durable
+
+    gone = ledger_module.load(path)
+    del gone.pending_audio[key]
+    gone.save()
+
+    with pytest.raises(LedgerError, match="no longer the row this update read"):
+        writer.merge_pending_audio([key], expected={key: before})
+    assert ledger_module.load(path).pending_audio == {}

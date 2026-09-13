@@ -76,11 +76,14 @@ loser still finds a well-formed file. ``save`` refuses to overwrite a file that
 changed since it was read rather than clobber it. Paid audio is the deliberate
 exception: :meth:`Ledger.merge_pending_audio` locks and additively persists
 each completed clip before another provider call, then the command finalizes
-the canonical audio entries in a later guarded save.
+the canonical audio entries in a later guarded save. Its one non-additive
+update — recovery recording which billed call produced an already-staged clip
+— names the row it read and is swapped against exactly that.
 """
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from collections.abc import Container, Iterable, Mapping
@@ -480,6 +483,42 @@ def _validate_pending_audio_entry(
         )
 
 
+def _pending_merge_conflict(
+    key: str,
+    *,
+    existing: Mapping[str, Any] | None,
+    entry: Mapping[str, Any],
+    predecessor: Mapping[str, Any] | None,
+) -> str | None:
+    """Why ``entry`` may not replace the durable row, if it may not.
+
+    Without a predecessor the merge is additive, which is what staging a paid
+    render is: an absent row is added, an identical one is a no-op, and any
+    other durable row belongs to a writer this one knows nothing about.
+
+    With one, the caller is updating a row it read, and the durable row must be
+    exactly the row it read — or already be the successor, which is this same
+    swap arriving a second time and is therefore idempotent, not a conflict. A
+    row that vanished meanwhile is not "nothing to conflict with" either: the
+    update's whole premise was a row that is still there, and re-adding it
+    would resurrect a recovery transaction somebody else finished.
+    """
+    if predecessor is not None:
+        if existing in (predecessor, entry):
+            return None
+        return (
+            f"Pending audio entry {key!r} is no longer the row this update read; "
+            "refusing to overwrite another writer's paid render. Re-run after the "
+            "other audio command finishes."
+        )
+    if existing is None or existing == entry:
+        return None
+    return (
+        f"Pending audio entry {key!r} changed concurrently; refusing to overwrite "
+        "either paid render. Re-run after the other audio command finishes."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Fingerprints — the only place these formulas exist
 #
@@ -741,7 +780,11 @@ class Ledger:
             raise LedgerError(str(exc)) from exc
 
     def merge_pending_audio(
-        self, keys: Iterable[str], *, replace: bool = False
+        self,
+        keys: Iterable[str],
+        *,
+        replace: bool = False,
+        expected: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
         """Durably merge additive WAL rows under one ledger lock.
 
@@ -750,6 +793,16 @@ class Ledger:
         an arbitrary retry bound is exhausted. This operation takes the lock
         once, reads the latest state inside it, adds only the named exact rows,
         and writes that merged state without clobbering concurrent provenance.
+
+        ``expected`` names, per key, the exact row its caller read *before*
+        changing it. The log has one update that is not additive — recovery
+        adding a still-live provider reply's attribution to the row it just
+        read — and comparing the new value against the durable one cannot tell
+        this writer's own change from somebody else's. So that caller carries
+        its predecessor here and the merge swaps exactly that pair: see
+        :func:`_pending_merge_conflict`. ``replace`` is unchanged and still
+        wins, because it is the owner's explicit ``--force`` decision to
+        replace whatever is on disk.
         """
         rows: dict[str, dict[str, Any]] = {}
         for raw_key in dict.fromkeys(str(item) for item in keys):
@@ -757,17 +810,26 @@ class Ledger:
             if entry is None:
                 raise LedgerError(f"Pending audio entry {raw_key!r} disappeared")
             rows[raw_key] = entry
+        expectations = {str(key): row for key, row in (expected or {}).items()}
+        unknown = sorted(set(expectations) - set(rows))
+        if unknown:
+            raise LedgerError(
+                f"Pending audio expectation {unknown[0]!r} names no row this merge "
+                "writes; a compare-and-swap nothing compares is not one"
+            )
         try:
             with exclusive_path_lock(self.path):
                 latest = load(self.path)
                 for key, entry in rows.items():
-                    existing = latest.pending_audio.get(key)
-                    if existing is not None and existing != entry and not replace:
-                        raise LedgerError(
-                            f"Pending audio entry {key!r} changed concurrently; "
-                            "refusing to overwrite either paid render. Re-run "
-                            "after the other audio command finishes."
+                    if not replace:
+                        conflict = _pending_merge_conflict(
+                            key,
+                            existing=latest.pending_audio.get(key),
+                            entry=entry,
+                            predecessor=expectations.get(key),
                         )
+                        if conflict is not None:
+                            raise LedgerError(conflict)
                     latest.pending_audio[key] = dict(entry)
                 latest._save_locked()
         except DataError as exc:
@@ -1216,6 +1278,42 @@ class Ledger:
             if (self.records.get(key) or {}).get("exports")
         )
 
+    def audio_entry_for(
+        self,
+        record_id: str,
+        *,
+        of: str,
+        content_fp: str,
+        provider: str | None = None,
+        voice: int | str | None = None,
+        speed: float | None = None,
+        settings: Mapping[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        """The whole entry :meth:`audio_file_for` answers with, or ``None``.
+
+        The same question and the same predicate — one definition, because two
+        readers that disagree about whether a clip is current are worse than
+        either answer alone. This exists beside the name because a caller
+        proving a *paid* clip needs what the writer recorded alongside the
+        file name: the attempt that rendered it, which the journal no longer
+        holds once the call was successfully forgotten.
+
+        An isolated copy, so a reader cannot edit the ledger through it.
+        """
+        for entry in self._audio_entries(record_id):
+            if entry.get("of") != of or str(entry.get("content_fp") or "") != content_fp:
+                continue
+            if not _audio_profile_matches(
+                entry,
+                provider=provider,
+                voice=voice,
+                speed=speed,
+                settings=settings,
+            ):
+                continue
+            return copy.deepcopy(entry)
+        return None
+
     def audio_file_for(
         self,
         record_id: str,
@@ -1245,19 +1343,18 @@ class Ledger:
         cannot describe is not one it should keep, and re-synthesizing costs
         seconds.
         """
-        for entry in self._audio_entries(record_id):
-            if entry.get("of") != of or str(entry.get("content_fp") or "") != content_fp:
-                continue
-            if not _audio_profile_matches(
-                entry,
-                provider=provider,
-                voice=voice,
-                speed=speed,
-                settings=settings,
-            ):
-                continue
-            return str(entry.get("file") or "") or None
-        return None
+        entry = self.audio_entry_for(
+            record_id,
+            of=of,
+            content_fp=content_fp,
+            provider=provider,
+            voice=voice,
+            speed=speed,
+            settings=settings,
+        )
+        if entry is None:
+            return None
+        return str(entry.get("file") or "") or None
 
     @staticmethod
     def _pending_audio_identity(

@@ -28,7 +28,7 @@ from japanese_anki.operations import (
     capture_artifact,
     prepare_artifact_store,
 )
-from japanese_anki.tts import TtsError
+from japanese_anki.tts import PaidAttempt, TtsError
 
 __all__ = [
     "ENDPOINT",
@@ -708,7 +708,7 @@ class OpenAiRealtimeProvider:
         forced_accent: bool,
         source_file: str,
         source_sha256: str,
-        persist: Callable[[bytes], _Persisted],
+        persist: Callable[[bytes, PaidAttempt], _Persisted],
         operations_path: Path | None = None,
         before_dispatch: Callable[[str], None] | None = None,
     ) -> _Persisted:
@@ -773,10 +773,21 @@ class OpenAiRealtimeProvider:
 
         envelope = OperationJournal.load(path).read_reply(held.operation_id)
         audio = self.decode_response(envelope)
+        # Minted here, from the entry that is about to be committed and the
+        # bytes that are about to be persisted — not from any caller. A
+        # successful operation is forgotten two lines below, so this is the
+        # last moment at which the repository can be told which billed call
+        # produced this clip.
+        attempt = PaidAttempt(
+            operation_id=held.operation_id,
+            request_fp=request_fp,
+            model=MODEL,
+            audio_sha256=hashlib.sha256(audio).hexdigest(),
+        )
         persisted: list[_Persisted] = []
 
         def _persist() -> None:
-            persisted.append(persist(audio))
+            persisted.append(persist(audio, attempt))
 
         OperationJournal.load(path).commit_result(held.operation_id, _persist)
         OperationJournal.load(path).forget([held.operation_id])
@@ -791,6 +802,7 @@ class OpenAiRealtimeProvider:
         source_sha256: str,
         audio_sha256: str,
         operations_path: Path | None = None,
+        attach: Callable[[PaidAttempt], None] | None = None,
     ) -> None:
         """Settle an exact captured call after its audio WAL was recovered."""
         path = self._operations_path(operations_path)
@@ -826,6 +838,20 @@ class OpenAiRealtimeProvider:
             raise TtsError(
                 f"Recovered audio does not match Realtime operation "
                 f"{held.operation_id}; refusing to settle either artifact."
+            )
+        if attach is not None:
+            # Only now: the adopted bytes are proven to be this entry's own
+            # reply, so the attribution being made durable is this call's and
+            # not a neighbouring render's. Before any settlement, because a
+            # forget that runs first leaves nothing to recover it from — and a
+            # failure here must keep both the entry and the recovered stage.
+            attach(
+                PaidAttempt(
+                    operation_id=held.operation_id,
+                    request_fp=request_fp,
+                    model=MODEL,
+                    audio_sha256=actual,
+                )
             )
         if held.state == "result_captured":
             OperationJournal.load(path).commit_result(

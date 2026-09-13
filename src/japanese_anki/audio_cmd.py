@@ -37,7 +37,7 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -52,6 +52,7 @@ from japanese_anki.models import (
 )
 from japanese_anki.tts import (
     JournaledSpeechProvider,
+    PaidAttempt,
     SentenceProfileSelector,
     SpeechProvider,
     TtsError,
@@ -62,10 +63,12 @@ from japanese_anki.tts import (
 __all__ = [
     "ACCENT_UNVERIFIED",
     "AUDIO_SUBDIR",
+    "PAID_ATTEMPT",
     "AudioError",
     "AudioClipRequirement",
     "AudioPaidDispatch",
     "AudioResult",
+    "PersistPendingAudio",
     "SynthesisError",
     "audio_clip_requirements",
     "audio_journal_source",
@@ -119,6 +122,25 @@ AUDIO_SUBDIR = "audio"
 #: janki. Recorded so "we let it guess here" stays answerable later, instead of
 #: looking identical to a clip whose accent came from a dictionary.
 ACCENT_UNVERIFIED = "accent_unverified"
+
+#: The ledger detail naming the billed call that rendered a clip's exact bytes.
+#: Written by the paid writer while its operation still exists, carried by the
+#: WAL row into the canonical audio entry, and read afterwards by anything that
+#: has to say *which* attempt a paid clip is the result of — the journal itself
+#: is gone once the call has been successfully forgotten. Absent for every free
+#: clip and for every clip reused or recovered without a fresh call.
+PAID_ATTEMPT = "paid_attempt"
+
+#: Make one exact write-ahead row durable, on behalf of the caller that owns
+#: the ledger. The third argument is the row this writer read *before* changing
+#: it, or ``None`` for an ordinary additive stage write that had no predecessor
+#: to read. Recovery is the one update here that changes a row rather than
+#: adding one, and the row it changes may be one this same run wrote moments
+#: earlier — so its persister is handed the exact before value to swap against
+#: rather than being asked to overwrite whatever it finds.
+PersistPendingAudio = Callable[
+    [ledger_mod.Ledger, str, Mapping[str, object] | None], None
+]
 
 
 def media_relative(path: Path, media_dir: Path) -> str:
@@ -557,7 +579,7 @@ def _pending_current_file(
     audio_dir: Path,
     provider: SpeechProvider,
     details: dict[str, object] | None = None,
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
+    persist_pending: PersistPendingAudio | None = None,
     replace_corrupt: bool = False,
 ) -> tuple[str, str] | None:
     """Recover an exact staged render, adopting an orphaned WAL row if needed."""
@@ -575,18 +597,24 @@ def _pending_current_file(
     )
     if recovery is None:
         return None
+    arguments = {
+        "of": of,
+        "target": expected,
+        "request_input": request_input,
+        "forced_accent": forced_accent,
+        "content_fp": content_fp,
+        "provider": provider.name,
+        "voice": provider.voice,
+        "speed": provider.speed,
+        "settings": provider.settings,
+    }
     if recovery.adopt_required:
-        arguments = {
-            "of": of,
-            "target": expected,
-            "request_input": request_input,
-            "forced_accent": forced_accent,
-            "content_fp": content_fp,
-            "provider": provider.name,
-            "voice": provider.voice,
-            "speed": provider.speed,
-            "settings": provider.settings,
-        }
+        # Deliberately the caller's details and nothing else. A row being
+        # replaced here described *other* bytes — `--force` recovery may adopt
+        # a different valid render at the same request key — so carrying its
+        # attribution across would attribute this clip to a call that did not
+        # produce it. The witness is re-earned below from the journal, or the
+        # clip simply has none.
         recorded = book.record_pending_audio(
             record_id,
             **arguments,
@@ -597,7 +625,9 @@ def _pending_current_file(
         if recorded != recovery.key:  # pragma: no cover - ledger owns the identity formula
             raise SynthesisError("Pending audio identity changed during stage recovery")
         if persist_pending is not None:
-            persist_pending(book, recovery.key)
+            # Additive, like staging: this run read no row here — there was
+            # none, or `--force` authorized replacing a corrupt one.
+            persist_pending(book, recovery.key, None)
     if isinstance(provider, JournaledSpeechProvider):
         provider.reconcile_journaled(
             request_input,
@@ -605,12 +635,109 @@ def _pending_current_file(
             source_file=audio_journal_source(record_id, of=of, target=expected),
             source_sha256=content_fp,
             audio_sha256=recovery.staged_sha256,
+            attach=_attach_paid_attempt(
+                book,
+                record_id,
+                key=recovery.key,
+                arguments=arguments,
+                staged_file=recovery.staged_name,
+                staged_sha256=recovery.staged_sha256,
+                persist_pending=persist_pending,
+            ),
         )
     return recovery.key, recovery.expected
 
 
+def _attach_paid_attempt(
+    book: ledger_mod.Ledger,
+    record_id: str,
+    *,
+    key: str,
+    arguments: dict[str, object],
+    staged_file: str,
+    staged_sha256: str,
+    persist_pending: PersistPendingAudio | None,
+) -> Callable[[PaidAttempt], None]:
+    """Make a still-live reply's attribution durable on the adopted WAL row.
+
+    Recovery is the one path where the bytes and the call that produced them
+    arrive separately: the stage survived a crash, the journal entry survived
+    it too, and only the provider can say they belong together. The settlement
+    that follows deletes the journal entry, so this runs first — and if it
+    cannot be persisted it raises, leaving both the entry and the stage exactly
+    where a rerun can find them again.
+
+    This is also the only write in the log that *changes* a row rather than
+    adding one, and the row it changes is usually one this same run wrote
+    moments earlier while adopting the orphan stage. So the row as it was read
+    travels into the persist and is swapped against there: an ordinary unforced
+    rerun — the remedy this state is promised — must not be refused as a
+    concurrent edit by the run that is making it.
+    """
+
+    def attach(attempt: PaidAttempt) -> None:
+        entry = book.pending_audio_entry(key)
+        if entry is None:  # pragma: no cover - the row was just recorded or found
+            raise SynthesisError(
+                f"Pending audio {key} vanished before its paid attempt could be "
+                "recorded; refusing to settle the provider call."
+            )
+        if str(entry.get("staged_sha256") or "") != staged_sha256:
+            raise SynthesisError(
+                f"Pending audio {key} no longer stages the recovered bytes; "
+                "refusing to record another attempt's attribution."
+            )
+        witness = _paid_attempt_detail(attempt, staged_sha256)
+        recorded_details = dict(entry.get("details") or {})
+        if recorded_details.get(PAID_ATTEMPT) == witness:
+            # The ordinary resume of a row this writer already attributed. Not
+            # rewriting it keeps the ledger byte-identical and its date honest.
+            return
+        recorded_details[PAID_ATTEMPT] = witness
+        recorded = book.record_pending_audio(
+            record_id,
+            **arguments,  # type: ignore[arg-type]
+            staged_file=staged_file,
+            staged_sha256=staged_sha256,
+            at=str(entry.get("at") or "") or None,
+            **recorded_details,
+        )
+        if recorded != key:  # pragma: no cover - ledger owns the identity formula
+            raise SynthesisError("Pending audio identity changed during attribution")
+        if persist_pending is not None:
+            # `entry` as it was read above, never the row just recorded: a
+            # predecessor derived from the value being written would compare
+            # equal to anything and prove nothing.
+            persist_pending(book, key, entry)
+
+    return attach
+
+
+def _paid_attempt_detail(attempt: PaidAttempt, staged_sha256: str) -> dict[str, object]:
+    """The durable form of one writer-minted attempt, bound to these bytes.
+
+    ``staged_sha256`` is the hash of the bytes actually being recorded, never a
+    field copied out of the attempt. A witness that described a *different*
+    render would be worse than none: a reader comparing it against the
+    published file would still find a self-consistent pair of fields inside
+    the entry and conclude the wrong call produced the clip.
+    """
+    if attempt.audio_sha256 != staged_sha256:
+        raise SynthesisError(
+            f"Paid attempt {attempt.operation_id} describes other audio than "
+            "the bytes being staged; refusing to record its attribution."
+        )
+    return {
+        "operation_id": str(attempt.operation_id),
+        "request_fp": str(attempt.request_fp),
+        "model": str(attempt.model),
+        "audio_sha256": staged_sha256,
+    }
+
+
 def _stage_audio(
     data: bytes,
+    attempt: PaidAttempt | None,
     *,
     book: ledger_mod.Ledger,
     record_id: str,
@@ -622,7 +749,7 @@ def _stage_audio(
     provider: SpeechProvider,
     audio_dir: Path,
     details: dict[str, object] | None = None,
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
+    persist_pending: PersistPendingAudio | None = None,
 ) -> str:
     """Write paid bytes away from canonical media and add their exact WAL row."""
     arguments = {
@@ -639,6 +766,13 @@ def _stage_audio(
     staged_sha256 = hashlib.sha256(data).hexdigest()
     key = book.pending_audio_key_for(record_id, **arguments)
     staged_file = _pending_stage_name(key, staged_sha256)
+    # The attempt travels with the bytes into the same additive row, so no
+    # ordering exists in which the clip is durable and its attribution is not.
+    attribution = (
+        {}
+        if attempt is None
+        else {PAID_ATTEMPT: _paid_attempt_detail(attempt, staged_sha256)}
+    )
     try:
         atomic_write_bytes_bound(audio_dir / staged_file, data)
     except DataError as exc:
@@ -651,14 +785,16 @@ def _stage_audio(
         staged_file=staged_file,
         staged_sha256=staged_sha256,
         **(details or {}),
+        **attribution,
     )
     if recorded != key:  # pragma: no cover - the ledger owns this formula
         raise SynthesisError("Pending audio identity changed while it was staged")
     # Inside the per-clip operation, before control can reach another provider
     # call. A process death or OOM after this point therefore leaves the exact
     # paid bytes reachable from the durable WAL, not merely from this object.
+    # Additive: a fresh render read no row it is replacing.
     if persist_pending is not None:
-        persist_pending(book, key)
+        persist_pending(book, key, None)
     return key
 
 
@@ -688,10 +824,16 @@ def _synthesize_and_stage(
     forced_accent: bool,
     source_file: str,
     source_sha256: str,
-    persist: Callable[[bytes], str],
+    persist: Callable[[bytes, PaidAttempt | None], str],
     before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None,
 ) -> str:
-    """Use a captured paid-reply transaction when the provider offers one."""
+    """Use a captured paid-reply transaction when the provider offers one.
+
+    ``persist`` takes the attempt beside the bytes on both branches. A local
+    engine bills nothing and has no attempt to name, so it passes ``None``
+    rather than a second callback shape: one seam with an honest empty answer
+    is checkable, two seams are a place for an unattributed paid clip to hide.
+    """
     if isinstance(provider, JournaledSpeechProvider):
         callback = None
         if before_paid_dispatch is not None:
@@ -724,7 +866,7 @@ def _synthesize_and_stage(
             persist=persist,
             before_dispatch=callback,
         )
-    return persist(provider.synthesize(text, forced_accent=forced_accent))
+    return persist(provider.synthesize(text, forced_accent=forced_accent), None)
 
 
 def _word_request(record: VocabularyRecord) -> tuple[str, bool, str | None]:
@@ -742,7 +884,7 @@ def _word_audio(
     result: AudioResult,
     force: bool,
     stage_only: bool,
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
+    persist_pending: PersistPendingAudio | None,
     before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None,
 ) -> VocabularyRecord:
     # Decided before the currency check, deliberately. Whether this record's
@@ -865,7 +1007,7 @@ def _example_audio(
     result: AudioResult,
     force: bool,
     stage_only: bool,
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
+    persist_pending: PersistPendingAudio | None,
     before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None,
 ) -> VocabularyRecord:
     """Voice this record's examples, keeping whatever gets written.
@@ -1051,7 +1193,7 @@ def generate_audio(
     force: bool = False,
     protected_records: Sequence[VocabularyRecord] = (),
     stage_only: bool = False,
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
+    persist_pending: PersistPendingAudio | None = None,
     before_paid_dispatch: Callable[[AudioPaidDispatch], None] | None = None,
 ) -> AudioResult:
     """Synthesize what is missing, and report what was deliberately not.
@@ -1214,7 +1356,7 @@ def _clip_requirement(
     stage_only: bool,
     adopt_pending: bool,
     details: dict[str, object] | None,
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
+    persist_pending: PersistPendingAudio | None,
 ) -> AudioClipRequirement:
     """Classify one exact request through execution's recovery/currency gates."""
     _canonical_target_exists(audio_dir, target)
@@ -1310,7 +1452,7 @@ def audio_clip_requirements(
     stage_only: bool = True,
     adopt_pending: bool = False,
     protected_records: Sequence[VocabularyRecord] = (),
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None = None,
+    persist_pending: PersistPendingAudio | None = None,
 ) -> tuple[AudioClipRequirement, ...]:
     """Return the exact current/recovery/provider census without synthesis."""
     _refuse_address_collisions(
@@ -1409,7 +1551,7 @@ def _preflight_provider_availability(
     force: bool,
     stage_only: bool,
     protected_records: Sequence[VocabularyRecord],
-    persist_pending: Callable[[ledger_mod.Ledger, str], None] | None,
+    persist_pending: PersistPendingAudio | None,
 ) -> None:
     """Check every engine still needed before the first provider call.
 
