@@ -49,7 +49,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   git diff --quiet "$range" 2>/dev/null && continue
 
   label="push-$(git rev-parse --short "$local_sha")"
-  echo "janki review: reviewing ${range} before push (Fable, max effort — this takes a few minutes)..."
+  echo "janki review: checking ${range} before push..."
 
   # The reviewer must not consume the rest of git's ref list.
   "$REVIEWER" gate "$range" "$label" </dev/null || STATUS=1
