@@ -61,12 +61,20 @@ A stream interrupted before its terminal capture still has its exact frames
 and request fingerprint, but not yet that stored manifest, so it is not
 replayable across a later contract change.
 
-Development, planning and code-review launches use the tracked
-`scripts/claude-subscription.py` launcher. It strips inherited provider overrides
-and verifies a Claude Pro/Max subscription under the same environment and
-settings context used for dispatch. An unverified login stops the model call;
-there is no API fallback. This rule does not change the separately authorized
-paid content providers or the owner's subscription extra-usage setting.
+Development, planning and code-review launches use `scripts/llm.py` with an
+explicit provider, role, exact model and effort. One extensible `Provider`
+boundary owns executable resolution, configuration isolation, an allowlisted
+child environment, subscription verification, permissions and CLI dispatch.
+Claude requires a first-party Pro/Max login; Codex requires a ChatGPT login.
+Authentication runs in the same context as the selected dispatch. Review and
+planning are read-only; implementation may write the workspace. The review
+hook defaults to Codex/GPT-6 Astra at max effort and reads the same tracked
+review prompt as Claude. An unverified login stops that launch: there is no
+API fallback or automatic provider switch. The owner may explicitly select
+another supported subscription provider for a new guarded launch. Development
+selection leaves janki's runtime models, separately authorized paid-content
+providers, journal and recovery contracts, and subscription extra-usage
+settings unchanged.
 
 An ordinary Janki message is a separate, non-card-writing model turn. Its
 `[assistant]` provider is independent from the revision transport, its model is

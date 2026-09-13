@@ -99,30 +99,47 @@ review step. To disable the review in this clone, create
 `.claude/hooks/DISABLED` with a short reason; delete it to re-enable it. That
 marker stops the review only: LFS keeps running either way.
 
-### Launching Claude for work on janki
+### Choosing a model for work on janki
 
-Development, planning and review model launches go through one tracked
-launcher, and the review hooks already use it:
+Development, planning and review launches use one guarded provider entry point:
 
 ```bash
-scripts/claude-subscription.py --check  # free: verify the login, then stop
-scripts/claude-subscription.py --model 'claude-opus-5[1m]' --effort xhigh -p "..."
-scripts/claude-subscription.py --model 'claude-opus-5[1m]' --effort xhigh  # interactive
+scripts/llm.py --provider codex --role review --check
+scripts/llm.py --provider claude --role implementation --check
+scripts/llm.py --provider codex --role review --model gpt-6-astra --effort max --prompt-file /tmp/review.md
+scripts/llm.py --provider claude --role implementation --model 'claude-opus-5[1m]' --effort xhigh --prompt-file /tmp/task.md
 ```
 
-Settings files are disabled for these launches, so name the model and effort
-explicitly: `xhigh` for implementation, `max` for planning and review.
+`--check` verifies the selected subscription login without making a model call.
+For a launch, specify the provider, role, exact model and effort. Prompt text
+comes from stdin or a UTF-8 `--prompt-file`; `--json` returns native JSONL.
+Implementation normally uses `xhigh`; planning and review use `max`. Review and
+planning are read-only, while implementation may write the workspace. Native
+CLI flags cannot bypass these role or authentication choices.
 
-It hands the CLI an allowlisted environment, resolves an absolute `claude`, and
-checks `auth status --json` under exactly the environment, working directory
-and `--safe-mode --setting-sources ''` the launch itself uses. Anything short of
-a claude.ai first-party Pro or Max login is refused, with no fallback — an
-`ANTHROPIC_API_KEY` sitting in your shell is otherwise invisible until the
-Console bill arrives. Your environment is left alone; the launcher simply does
-not pass it on. This covers the repository's entry points, not a `claude` you
-type in some other terminal. Paid content calls — `janki extract`, `revise`,
-`promote --accept-coverage`, sentence audio — are unaffected and still ask for
-their own consent.
+The launcher resolves the selected CLI, isolates its configuration, supplies
+an allowlisted environment without inherited API keys or provider overrides,
+and verifies the subscription in the same context used for dispatch. Claude
+requires a claude.ai first-party Pro or Max login; Codex requires a ChatGPT
+login. A refusal stops that launch. There is no API fallback or automatic
+provider switch; the owner may explicitly choose another supported
+subscription provider for a new guarded launch. Your shell environment is left
+alone. This protects the repository's entry points, not a native CLI typed in
+some other terminal.
+
+The review hooks default to Codex with `gpt-6-astra` at `max` effort. Set
+`JANKI_REVIEW_PROVIDER=claude` to use `claude-opus-5`, or set
+`JANKI_REVIEW_MODEL` to an exact model id for the selected provider. Both read
+`prompts/development-code-review.md` each run, and reports record provider,
+model and effort. Content-only changes skip both providers and their login
+probes. A completed review with findings blocks a push; a refused, failed,
+timed-out or incomplete review is recorded as ERROR and permits the push.
+`.claude/hooks/DISABLED` and `.claude/reviews/` remain local hook state paths
+for either provider.
+
+This development provider boundary does not change janki's runtime models or
+paid content calls — `extract`, `revise`, `promote --accept-coverage`, sentence
+audio — or their exact consent, journal, recovery and billing contracts.
 
 ### Audio and Git LFS
 

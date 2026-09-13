@@ -91,43 +91,45 @@ or second-guesses what came back.
   mints per build and are not stable — the GUID is what Anki matches on.
 - Surface source filename and row number in import errors.
 - Never silently discard an input row or unknown source column.
-- **Models for working on janki**: implementation is Claude Opus 5 at
-  extra-high effort (`.claude/settings.json`); review and planning are
-  Claude Fable 5.1 at max effort (`.claude/agents/code-reviewer.md`,
-  `.claude/agents/planner.md`) — the owner's decision of 2026-09-10, so a
-  reviewer reads the implementer's work with a different model rather than
-  the same one. No model aliases in settings: the id is written out, so a
-  harness alias change cannot silently swap the model. **janki's own runtime
-  calls are unaffected and stay on Claude Opus 5** (`config.py` defaults,
-  `claude_client.DEFAULT_EFFORT`; only the ordinary Assistant turn takes a
-  configured depth, `[assistant] effort`) — a development-model choice is
-  never a change to what a paid content call sends.
+- **Models for working on janki are an explicit provider choice.** Development,
+  planning, and review may use Claude (`claude-opus-5`) or Codex
+  (`gpt-6-astra`). Write the exact model id and effort for each launch; no model
+  aliases or automatic provider selection. The review hook defaults to Codex
+  with GPT-6 Astra at `max` effort. Set `JANKI_REVIEW_PROVIDER=claude` to select
+  Claude Opus 5, and `JANKI_REVIEW_MODEL` for an exact model override within the
+  selected provider. Implementation normally uses `xhigh`; planning and review
+  use `max`. **janki's own runtime calls are unaffected and stay on Claude
+  Opus 5** (`config.py` defaults, `claude_client.DEFAULT_EFFORT`; only the
+  ordinary Assistant turn takes `[assistant] effort`). A development choice
+  never changes a paid content request.
 - **Every development, planning, or review model launch goes through
-  `scripts/claude-subscription.py`.** That is the repository's only CLI entry
-  point to a model. It builds the child's environment from an allowlist,
-  resolves an absolute `claude`, and runs `auth status --json` under exactly
-  the environment, working directory and `--safe-mode --setting-sources ''`
-  the launch itself uses — so what it verified is the process that runs. It
-  refuses anything short of a claude.ai first-party Pro or Max login.
-  - `scripts/claude-subscription.py --check` runs that probe alone, free, and
-    prints a summary carrying no account details.
-  - **Not allowed substitutes:** bare `claude -p`, a hand-written `env -u
-    ANTHROPIC_API_KEY claude …`, an Agent SDK or API call standing in for the
-    CLI, or a settings file that re-supplies a provider. `--settings`,
-    `--setting-sources`, `--bare` and any cwd-changing launch form are refused
-    by the launcher rather than overridden.
-  - **A refusal stops the work.** There is no API-billed fallback, and
-    switching to one is not a workaround for a failed login — it is the
-    mistake this exists to prevent. A valid Max login and an inherited
-    `ANTHROPIC_API_KEY` are indistinguishable from the outside: the CLI runs,
-    answers, exits 0, and the only evidence is a Console bill.
-  - The wrapper protects this repository's entry points — the review hooks and
-    anything an agent starts here. It cannot police a `claude` typed in an
-    unrelated terminal; that is what `--check` and this rule are for.
-  - It changes nothing about **paid content calls**. `janki extract`,
-    `revise`, `promote --accept-coverage`, Realtime audio, and the explicit
-    `anthropic-api` revision provider each still need their own exact
-    authorization, and the Max account's extra-usage setting is the owner's.
+  `scripts/llm.py`.** This is the repository's only CLI entry point for that
+  work. Its `Provider` boundary owns executable resolution, an allowlisted
+  child environment, configuration isolation, subscription authentication,
+  model/effort capabilities, role permissions, and native CLI arguments. The
+  selected provider verifies authentication in the exact context it dispatches:
+  Claude requires a claude.ai first-party Pro or Max login; Codex requires a
+  ChatGPT login. Review and planning are read-only; implementation may write
+  the workspace. New providers belong behind this boundary, not in hooks.
+  - The free probes are `scripts/llm.py --provider codex --role review --check`
+    and `scripts/llm.py --provider claude --role implementation --check`.
+    They print summaries without account details and make no model call.
+  - A launch requires `--provider`, `--role`, `--model`, and `--effort`.
+    Prompt text comes from stdin or an exact UTF-8 `--prompt-file`.
+    `--json` requests native JSONL. Native CLI flags are not passed through.
+  - **Not allowed substitutes:** bare `claude -p`, bare `codex exec`, a
+    hand-written environment scrub, an Agent SDK or API call standing in for
+    the launcher, or configuration that re-supplies a provider or API key.
+  - **A refusal stops that launch.** There is no API-billed fallback and no
+    automatic retry on another provider. The owner may explicitly select
+    another supported subscription provider; that is a new guarded launch.
+  - The launcher protects repository entry points and anything an agent starts
+    here. It cannot police a native CLI typed in an unrelated terminal. The
+    owner's subscription extra-usage settings remain the owner's.
+  - **Paid content calls are separate.** `janki extract`, `revise`,
+    `promote --accept-coverage`, Realtime audio, and the explicit
+    `anthropic-api` revision provider retain their exact authorization,
+    journal, recovery, and billing contracts.
 - **While implementing, test the change — not the repository.** Run the focused
   nodes or files that own the behaviour you changed, and run them again the
   same way when a review finds something and you fix it. When a changed
@@ -482,11 +484,16 @@ A new import must not erase manually curated examples, notes, conjugations, or f
 ## Repository review hooks
 
 - `scripts/janki-review.sh` is the tracked implementation used by the
-  post-commit advisory review and the pre-push review gate.
+  post-commit advisory review and the pre-push review gate. Both providers read
+  `prompts/development-code-review.md` on every run. Reports name provider,
+  model and effort. Only one exact final verdict from a successful process can
+  be CLEAN or FINDINGS; refusal, timeout, failure or incomplete output is ERROR.
+  Findings block a push; an incomplete review permits it and reports the error.
 - **Code review and Japanese-content review are separate.** The code reviewer
   excludes `data/**` and `dist/**`; a content-only commit or push must not start
-  Claude at all, and a mixed range exposes only its non-content paths to the
-  code reviewer. It may inspect code that preserves or renders Japanese fields,
+  either provider, including its free login probe. A mixed range supplies only
+  its non-content diff, with Git external converters disabled. The reviewer may
+  inspect code that preserves or renders Japanese fields,
   but it never judges whether repository Japanese, readings, furigana,
   translations, examples, or usage notes are correct or natural. Content is
   reviewed through the workbench and owner acceptance. This owner decision

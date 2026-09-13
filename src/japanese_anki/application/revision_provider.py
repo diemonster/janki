@@ -766,7 +766,7 @@ def _sanitized_claude_environment(
     env: Mapping[str, str] | None,
     controlled: Mapping[str, str],
 ) -> dict[str, str]:
-    # One allowlist, shared with scripts/claude-subscription.py: a name that is
+    # One allowlist, shared with the Claude development provider: a name that is
     # safe to inherit for a billed revision is the same name that is safe to
     # inherit for a development launch, and two copies would drift.
     source = os.environ if env is None else env

@@ -2,10 +2,9 @@
 
 Two callers share these facts: janki's revision transport
 (``application/revision_provider.py``) and the tracked development launcher
-``scripts/claude-subscription.py``.  The launcher has to work in a fresh clone
-that has no venv yet, so this module imports nothing but the standard library
-and nothing from the rest of the package — the launcher loads this file
-directly by path rather than importing ``japanese_anki``.
+``scripts/llm.py`` through its Claude provider. The launcher has to work in a
+fresh clone that has no venv yet, so this module imports only the standard
+library; the development entry point selects its checkout's source explicitly.
 
 The rule it encodes is one fact.  From the outside, a Claude Code process
 billed to a Console API key is indistinguishable from one billed to a Pro or

@@ -23,15 +23,14 @@ cd "$REPO_ROOT" || exit 0
 REVIEW_DIR="$REPO_ROOT/.claude/reviews"
 REPORT="$REVIEW_DIR/${LABEL}.md"
 
-# Wall-clock cap, seconds. An Opus 5 max-effort review normally lands well
-# inside this; the cap exists so a hung API call can never wedge a push forever.
+# Wall-clock cap, seconds, so a hung model call cannot wedge a push forever.
 # JANKI_REVIEW_TIMEOUT overrides it so the timeout path can be exercised.
 if [ "$MODE" = "gate" ]; then DEFAULT_TIMEOUT=900; else DEFAULT_TIMEOUT=1800; fi
 TIMEOUT="${JANKI_REVIEW_TIMEOUT:-$DEFAULT_TIMEOUT}"
 
 # --- guards: never break git over a review ------------------------------------
 
-# A review is a Claude call per commit and per push. Keep the local marker under
+# A review is one selected-provider call per commit and per push. Keep the marker under
 # .claude/ so disabling the hook remains per-clone and can never be committed.
 DISABLED="$REPO_ROOT/.claude/hooks/DISABLED"
 if [ -f "$DISABLED" ]; then
@@ -40,23 +39,16 @@ if [ -f "$DISABLED" ]; then
   exit 0
 fi
 
-command -v claude >/dev/null 2>&1 || exit 0
-
-# The review never starts `claude` itself. scripts/claude-subscription.py is
-# the repository's only model entry point: it hands the CLI an allowlisted
-# environment, verifies through `auth status --json` that the login really is
-# Claude Pro or Max, and refuses outright otherwise. An inherited
-# ANTHROPIC_API_KEY is invisible from here — the reviewer runs, answers, and
-# exits 0 — and the only evidence is a Console bill, so the check has to be
-# structural rather than remembered. There is deliberately no fallback to a
-# bare `claude` call: a review that cannot start is an ERROR verdict, which
-# the advisory path reports and the gate path allows through.
-LAUNCHER="$REPO_ROOT/scripts/claude-subscription.py"
-if [ ! -x "$LAUNCHER" ]; then
-  echo "janki review: ${LAUNCHER#"$REPO_ROOT"/} is missing or not executable." >&2
-  echo "  No review ran. janki never falls back to launching claude directly." >&2
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/janki-review.XXXXXX")" || {
+  echo "janki review: NOTHING WAS REVIEWED — cannot create the review files." >&2
   exit 0
-fi
+}
+trap 'rm -rf "$RUN_DIR"' EXIT
+PROMPT_FILE="$RUN_DIR/prompt.md"
+DIFF_FILE="$RUN_DIR/diff.txt"
+DIFF_ERROR_FILE="$RUN_DIR/diff-diagnostics.txt"
+OUTPUT_FILE="$RUN_DIR/answer.txt"
+ERROR_FILE="$RUN_DIR/diagnostics.txt"
 
 # Code review and repository-content review are separate operations. A source,
 # staged card, curated deck, generated media file, or operational ledger under
@@ -70,54 +62,32 @@ CODE_REVIEW_PATHSPEC=(
   ":(exclude)dist/**"
 )
 
-# Nothing to look at in the code-review scope. This also covers empty commits,
-# no-op pushes, and content-only submissions without starting Claude.
-if git diff --quiet "$RANGE" -- "${CODE_REVIEW_PATHSPEC[@]}" 2>/dev/null; then
+# Supply the filtered diff ourselves: Claude's read-only role has no shell.
+# Disable Git's external converters so preparing a review cannot run local code.
+git --no-pager diff --no-ext-diff --no-textconv "$RANGE" -- \
+  "${CODE_REVIEW_PATHSPEC[@]}" >"$DIFF_FILE" 2>"$DIFF_ERROR_FILE"
+DIFF_STATUS=$?
+
+# Empty commits, no-op pushes and content-only submissions never probe a model.
+# A failed range lookup is an error, not an empty review scope.
+if [ "$DIFF_STATUS" -eq 0 ] && [ ! -s "$DIFF_FILE" ]; then
   echo "janki code review: skipped ${RANGE} (repository-content-only change)"
   exit 0
 fi
 
 mkdir -p "$REVIEW_DIR"
 
-# --- prompt -------------------------------------------------------------------
-
-read -r -d '' PROMPT <<PROMPT_EOF
-Review the changes in the git range \`${RANGE}\`.
-
-Use \`git diff ${RANGE} -- . ':(exclude)data/**' ':(exclude)dist/**'\` to see
-the complete and only review scope. Do not run an unfiltered diff and do not
-open or review any path under \`data/\` or \`dist/\`, even if a changed code
-path refers to one. Repository content and generated artifacts have their own
-workflow and are never inputs to this code audit. Read \`AGENTS.md\` and the
-docs relevant to the changed code before judging it; this repository has
-non-obvious invariants around durable source data, note identity, staging, the
-ledger, and generated media.
-
-Prioritize concrete correctness defects, especially data loss or silently
-dropped input; unstable note IDs/GUIDs; schema, ledger, or staging round-trip
-breakage; content-addressed media mistakes; CLI/API contract mismatches;
-Unicode/encoding round-trip mistakes in implementation; and tests that would
-pass against the pre-change code. Whether authored Japanese, readings,
-furigana, translations, examples, or usage notes are linguistically correct or
-natural is explicitly outside this code review. Verify every finding against
-surrounding code and call sites. Do not report style or naming preferences.
-
-Output GitHub-flavored markdown:
-
-- A one-line summary of what the range changes.
-- Then each finding as its own section: a \`path/to/file.py:LINE\` heading, the
-  concrete failure (inputs or state that produce the wrong result), and the fix.
-  Order by severity, worst first.
-- Report only defects you can trace to specific lines. No style notes, no
-  praise, no "consider" suggestions, no summary of things that are fine.
-
-End your output with exactly one final line, nothing after it:
-
-VERDICT: CLEAN
-  ...if you found no defects, or
-VERDICT: FINDINGS <n>
-  ...where <n> is the number of findings above.
-PROMPT_EOF
+# Provider selection is explicit; a refusal never tries another provider.
+PROVIDER="${JANKI_REVIEW_PROVIDER:-codex}"
+case "$PROVIDER" in
+  claude) DEFAULT_MODEL="claude-opus-5" ;;
+  codex) DEFAULT_MODEL="gpt-6-astra" ;;
+  *) DEFAULT_MODEL="" ;;  # The launcher reports an unknown provider as a refusal.
+esac
+MODEL="${JANKI_REVIEW_MODEL:-$DEFAULT_MODEL}"
+EFFORT="max"
+LAUNCHER="$REPO_ROOT/scripts/llm.py"
+PROMPT_TEMPLATE="$REPO_ROOT/prompts/development-code-review.md"
 
 # --- run ----------------------------------------------------------------------
 
@@ -126,26 +96,36 @@ PROMPT_EOF
   echo
   echo "- Commit: \`$(git rev-parse --short HEAD 2>/dev/null)\` on \`$(git rev-parse --abbrev-ref HEAD 2>/dev/null)\`"
   echo "- Mode: ${MODE}"
+  echo "- Provider: ${PROVIDER}"
+  echo "- Model: ${MODEL}"
+  echo "- Effort: ${EFFORT}"
   echo
   echo '---'
   echo
 } >"$REPORT"
 
-# The model is named explicitly rather than left to a local agent or alias.
-# Keeping the review instructions above in this tracked script means a fresh
-# clone does not depend on an ignored .claude/agents file — which matters more
-# now that the launcher runs with `--setting-sources ''`, so no settings file
-# supplies a model, an effort, or a provider on its behalf.
-#
-# The launcher execs the CLI, so this is still one process: $CLAUDE_PID below
-# is the reviewer itself and the watchdog's kill reaches it.
-"$LAUNCHER" -p "$PROMPT" \
-  --model claude-opus-5 \
-  --effort max \
-  --permission-mode dontAsk \
-  --allowedTools Read Glob Grep "Bash(git *)" "Bash(rg *)" "Bash(ls *)" \
-  >>"$REPORT" 2>&1 </dev/null &
-CLAUDE_PID=$!
+# Read the same tracked instructions for both providers on every run. The
+# exact filtered diff is labelled input appended to the template.
+run_review() {
+  if [ "$DIFF_STATUS" -ne 0 ]; then
+    cat "$DIFF_ERROR_FILE" >&2
+    return "$DIFF_STATUS"
+  fi
+  cat "$PROMPT_TEMPLATE" >"$PROMPT_FILE" || return 1
+  {
+    printf '\n## Review input\n\nGit range: `%s`\n\n' "$RANGE"
+    printf "Scoped diff command: \`git --no-pager diff --no-ext-diff --no-textconv %s -- . ':(exclude)data/**' ':(exclude)dist/**'\`\n" "$RANGE"
+    printf '\nExact filtered diff:\n\n```diff\n'
+    cat "$DIFF_FILE" || return 1
+    printf '\n```\n'
+  } >>"$PROMPT_FILE" || return 1
+  # The launcher probes subscription auth and execs this provider's CLI under
+  # the same guarded context. Read-only review permissions belong to it.
+  exec "$LAUNCHER" --provider "$PROVIDER" --role review \
+    --model "$MODEL" --effort "$EFFORT" --prompt-file "$PROMPT_FILE"
+}
+run_review >"$OUTPUT_FILE" 2>"$ERROR_FILE" </dev/null &
+REVIEW_PID=$!
 
 # Portable watchdog. macOS has no coreutils `timeout` by default. The trap is
 # important: killing only the watchdog shell can leave its `sleep` child alive,
@@ -163,7 +143,7 @@ CLAUDE_PID=$!
   sleep "$TIMEOUT" &
   SLEEP_PID=$!
   wait "$SLEEP_PID"
-  kill -0 "$CLAUDE_PID" 2>/dev/null && kill "$CLAUDE_PID" 2>/dev/null
+  kill -0 "$REVIEW_PID" 2>/dev/null && kill "$REVIEW_PID" 2>/dev/null
 ) >/dev/null 2>&1 </dev/null &
 WATCHDOG_PID=$!
 # Drop the watchdog from the job table, or killing it below makes the shell
@@ -171,35 +151,57 @@ WATCHDOG_PID=$!
 disown "$WATCHDOG_PID" 2>/dev/null || true
 
 # Reaped with stderr closed: when the watchdog kills the reviewer, the shell
-# announces it as "Terminated: 15 (claude -p ...)" — the whole command line,
+# announces it as "Terminated: 15 (reviewer ...)" — the whole command line,
 # printed into the middle of a git push.
-wait "$CLAUDE_PID" 2>/dev/null
+wait "$REVIEW_PID" 2>/dev/null
 STATUS=$?
 kill "$WATCHDOG_PID" 2>/dev/null
 wait "$WATCHDOG_PID" 2>/dev/null
 
-# A review that fails has to say so. Without this the file simply has no verdict
-# line, which looks exactly like a review that is still running.
+# Keep complete diagnostics, but only the final-answer channel can decide the
+# verdict. A CLI may echo the prompt (including example verdicts) on stderr.
+if [ -s "$ERROR_FILE" ]; then
+  {
+    echo '## Reviewer diagnostics'
+    echo
+    cat "$ERROR_FILE"
+    echo
+    echo '---'
+    echo
+  } >>"$REPORT"
+fi
+cat "$OUTPUT_FILE" >>"$REPORT"
+
+# Only a successful process with one exact final verdict completed a review.
+# A partial reply may already contain CLEAN when the CLI subsequently fails.
+VERDICT="$(awk '
+  NF { last = $0 }
+  /^VERDICT:/ { count++ }
+  END {
+    if (count == 1 && last ~ /^VERDICT: (CLEAN|FINDINGS [1-9][0-9]*)$/) print last
+  }
+' "$OUTPUT_FILE")"
 REASON=""
-if ! grep -qE '^VERDICT: (CLEAN|FINDINGS [0-9]+)' "$REPORT"; then
-  if [ "$STATUS" -eq 143 ] || [ "$STATUS" -eq 124 ]; then
-    REASON="timed out after ${TIMEOUT}s"
-  elif [ "$STATUS" -ne 0 ]; then
-    REASON="the reviewer exited ${STATUS}"
-  else
-    REASON="the reviewer ended without a verdict"
-  fi
+if [ "$DIFF_STATUS" -ne 0 ]; then
+  REASON="the requested Git range could not be read"
+elif [ "$STATUS" -eq 143 ] || [ "$STATUS" -eq 124 ]; then
+  REASON="timed out after ${TIMEOUT}s"
+elif [ "$STATUS" -ne 0 ]; then
+  REASON="the reviewer exited ${STATUS}"
+elif [ -z "$VERDICT" ]; then
+  REASON="the reviewer ended without one complete final verdict"
+fi
+if [ -n "$REASON" ]; then
+  VERDICT="VERDICT: ERROR"
   {
     echo
     echo "_Review did not complete: ${REASON}._"
     echo
-    echo "VERDICT: ERROR"
+    echo "$VERDICT"
   } >>"$REPORT"
 fi
 
 # --- verdict ------------------------------------------------------------------
-
-VERDICT="$(grep -oE '^VERDICT: (CLEAN|FINDINGS [0-9]+|ERROR)' "$REPORT" | tail -1)"
 
 if [ "$MODE" != "gate" ]; then
   # Advisory. Say what happened and get out of the way; the commit already landed.

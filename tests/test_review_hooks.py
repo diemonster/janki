@@ -14,8 +14,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts" / "install-review-hooks.sh"
 REVIEWER = ROOT / "scripts" / "janki-review.sh"
-LAUNCHER = ROOT / "scripts" / "claude-subscription.py"
+LAUNCHER = ROOT / "scripts" / "llm.py"
 AUTH_MODULE = ROOT / "src" / "japanese_anki" / "subscription_auth.py"
+DEVELOPMENT_MODULE = ROOT / "src" / "japanese_anki" / "development_llm.py"
+REVIEW_PROMPT = ROOT / "prompts" / "development-code-review.md"
 CODE_REVIEWER = ROOT / ".claude" / "agents" / "code-reviewer.md"
 HOOK_SOURCE = ROOT / "scripts" / "git-hooks"
 TRACKED_HOOKS = ("post-checkout", "post-commit", "post-merge", "pre-push")
@@ -79,7 +81,7 @@ raise SystemExit(int(os.environ.get("{exit_variable}", "{default_exit}")))
 # records the review dispatch. Every path it needs is baked in for the same
 # reason.
 FAKE_CLAUDE = """#!{python}
-import json, os, sys
+import json, os, sys, time
 
 argv = sys.argv[1:]
 with open({log!r}, "a") as log:
@@ -101,6 +103,30 @@ if argv[-3:] == ["auth", "status", "--json"]:
     raise SystemExit({status_exit})
 
 sys.stdout.write({stdout!r})
+sys.stdout.flush()
+sys.stderr.write({stderr!r})
+time.sleep({delay})
+raise SystemExit({exit_code})
+"""
+
+FAKE_CODEX = """#!{python}
+import json, os, sys, time
+
+argv = sys.argv[1:]
+with open({log!r}, "a") as log:
+    log.write(json.dumps(dict(
+        tool="codex", argv=argv, env=dict(os.environ), cwd=os.getcwd(),
+        stdin="" if sys.stdin.isatty() else sys.stdin.read(),
+    )) + "\\n")
+
+if "login" in argv and "status" in argv:
+    sys.stderr.write({status!r})
+    raise SystemExit({status_exit})
+
+sys.stdout.write({stdout!r})
+sys.stdout.flush()
+sys.stderr.write({stderr!r})
+time.sleep({delay})
 raise SystemExit({exit_code})
 """
 
@@ -193,7 +219,9 @@ def fake_claude(
     status: str = SUBSCRIPTION_STATUS,
     status_exit: int = 0,
     stdout: str = "",
+    stderr: str = "",
     exit_code: int = 0,
+    delay: float = 0,
 ) -> Path:
     return executable(
         path,
@@ -203,7 +231,35 @@ def fake_claude(
             status=status,
             status_exit=status_exit,
             stdout=stdout,
+            stderr=stderr,
             exit_code=exit_code,
+            delay=delay,
+        ),
+    )
+
+
+def fake_codex(
+    path: Path,
+    *,
+    log: Path,
+    status: str = "Logged in using ChatGPT\n",
+    status_exit: int = 0,
+    stdout: str = "",
+    stderr: str = "",
+    exit_code: int = 0,
+    delay: float = 0,
+) -> Path:
+    return executable(
+        path,
+        FAKE_CODEX.format(
+            python=sys.executable,
+            log=str(log),
+            status=status,
+            status_exit=status_exit,
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=exit_code,
+            delay=delay,
         ),
     )
 
@@ -222,6 +278,7 @@ def fake_toolchain(tmp_path: Path, *, lfs_exit: int = 0) -> tuple[Path, dict[str
     # Nothing here may reach a paid model, so any call — including the
     # launcher's free subscription probe — is a test failure that also fails.
     recorder(bin_dir / "claude", "claude", log, "CLAUDE_EXIT", default_exit=1)
+    recorder(bin_dir / "codex", "codex", log, "CODEX_EXIT", default_exit=1)
     python_shim(bin_dir / "python3")
     env = {
         **os.environ,
@@ -260,9 +317,11 @@ def test_installer_puts_every_tracked_shim_in_a_fresh_clone(tmp_path: Path) -> N
 
 def test_manual_code_reviewer_contract_excludes_japanese_content() -> None:
     contract = CODE_REVIEWER.read_text(encoding="utf-8")
+    assert "prompts/development-code-review.md" in contract
+    contract = REVIEW_PROMPT.read_text(encoding="utf-8")
 
-    assert "Exclude\n`data/**` and `dist/**` from every diff" in contract
-    assert "never judge whether authored Japanese" in contract
+    assert "`data/**` and `dist/**` from every diff" in contract
+    assert "never judge whether authored japanese" in contract.lower()
     assert "linguistically correct or natural" in contract
     assert "a later pass filters" not in contract
 
@@ -277,18 +336,20 @@ def test_manual_code_reviewer_contract_excludes_japanese_content() -> None:
     ids=lambda path: path.name,
 )
 def test_every_model_launch_instruction_names_the_mandatory_launcher(document: Path) -> None:
-    """A developer or agent reading only one of these must still not run bare claude."""
+    """Every entry document directs model launches through the provider boundary."""
     collapsed = " ".join(document.read_text(encoding="utf-8").lower().split())
 
-    assert "scripts/claude-subscription.py" in collapsed
+    assert "scripts/llm.py" in collapsed
     assert "bare `claude -p`" in collapsed
+    assert "`codex exec`" in collapsed
     assert "not allowed substitutes" in collapsed
 
 
 def test_the_readme_documents_the_launcher_and_its_free_check() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert "scripts/claude-subscription.py --check" in readme
+    assert "scripts/llm.py --provider codex --role review --check" in readme
+    assert "scripts/llm.py --provider claude --role implementation --check" in readme
 
 
 @pytest.mark.parametrize("conflicting", ["pre-push", "post-checkout"])
@@ -352,22 +413,20 @@ def test_stock_hook_reference_matches_installed_git_lfs(tmp_path: Path) -> None:
 
 
 def install_review_scripts(path: Path) -> Path:
-    """Copy the reviewer *and* everything the mandatory launcher needs.
-
-    The reviewer cannot start Claude by itself any more: it runs
-    `scripts/claude-subscription.py`, which loads
-    `src/japanese_anki/subscription_auth.py` by path so a fresh clone with no
-    venv can still launch. A fixture that copied the reviewer alone would
-    exercise a review that can never start.
-    """
+    """Use the real provider launcher and its modules in a fresh-clone fixture."""
     scripts = path / "scripts"
     scripts.mkdir(exist_ok=True)
     reviewer = scripts / "janki-review.sh"
     shutil.copy2(REVIEWER, reviewer)
-    shutil.copy2(LAUNCHER, scripts / "claude-subscription.py")
+    shutil.copy2(LAUNCHER, scripts / "llm.py")
     module = path / "src" / "japanese_anki" / "subscription_auth.py"
     module.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(AUTH_MODULE, module)
+    shutil.copy2(DEVELOPMENT_MODULE, module.with_name("development_llm.py"))
+    shutil.copy2(AUTH_MODULE.with_name("__init__.py"), module.with_name("__init__.py"))
+    prompt = path / "prompts" / REVIEW_PROMPT.name
+    prompt.parent.mkdir(exist_ok=True)
+    shutil.copy2(REVIEW_PROMPT, prompt)
     return reviewer
 
 
@@ -422,69 +481,80 @@ def test_disabled_marker_is_announced_before_any_review_runs(tmp_path: Path) -> 
     post_commit = run(tmp_path / ".git" / "hooks" / "post-commit", cwd=tmp_path, env=env)
     assert post_commit.returncode == 0, post_commit.stderr
     assert not calls(log, "claude")
+    assert not calls(log, "codex")
     assert "janki review: disabled (budget pause)" in post_commit.stdout
     assert "started in background" not in post_commit.stdout
 
 
-def claude_bin(
-    tmp_path: Path, *, log: Path, **claude: object
+def provider_bin(
+    tmp_path: Path, *, log: Path, provider: str = "codex", **response: object
 ) -> tuple[Path, dict[str, str]]:
-    """A PATH with a recording fake Claude, and an inherited Console API key.
-
-    The key is here in every review test on purpose: it is the exact thing that
-    charged the Console through a valid Max login, and the launcher's only job
-    is that it never reaches the child.
-    """
+    """Fake both providers; inherited API keys must never reach either CLI."""
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir(exist_ok=True)
-    fake_claude(fake_bin / "claude", log=log, **claude)  # type: ignore[arg-type]
+    fake_claude(fake_bin / "claude", log=log, **(response if provider == "claude" else {}))
+    fake_codex(fake_bin / "codex", log=log, **(response if provider == "codex" else {}))
     python_shim(fake_bin / "python3")
     env = {
         **os.environ,
         "ANTHROPIC_API_KEY": INHERITED_KEY,
+        "OPENAI_API_KEY": "sk-openai-test-DEADBEEF",
+        "JANKI_REVIEW_PROVIDER": provider,
         "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
     }
     return fake_bin, env
 
 
-def claude_calls(log: Path) -> list[dict]:
-    return calls(log, "claude")
-
-
-def test_code_review_reaches_claude_only_through_the_subscription_launcher(
-    tmp_path: Path,
+@pytest.mark.parametrize("provider", ["codex", "claude"])
+def test_code_review_reaches_selected_provider_through_the_guarded_launcher(
+    tmp_path: Path, provider: str,
 ) -> None:
     reviewer = review_repository(tmp_path)
     log = tmp_path / "claude-calls.jsonl"
-    _, env = claude_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
+    _, env = provider_bin(tmp_path, log=log, provider=provider, stdout="VERDICT: CLEAN\n")
 
     result = run(reviewer, "gate", "HEAD~1..HEAD", "wrapped", cwd=tmp_path, env=env)
 
     assert result.returncode == 0, result.stderr
-    invocations = claude_calls(log)
+    invocations = calls(log, provider)
     assert len(invocations) == 2, "one free subscription probe, then the review"
     probe, dispatch = invocations
-    assert probe["argv"] == ENFORCED_ARGUMENTS + AUTH_STATUS
-    assert dispatch["argv"][:4] == [*ENFORCED_ARGUMENTS, "-p"]
+    if provider == "claude":
+        assert probe["argv"] == ENFORCED_ARGUMENTS + AUTH_STATUS
+        assert dispatch["argv"][:4] == [*ENFORCED_ARGUMENTS, "-p"]
+    else:
+        assert "login" in probe["argv"] and "status" in probe["argv"]
+        assert "exec" in dispatch["argv"]
     assert "--model" in dispatch["argv"]
     for call in invocations:
         assert "ANTHROPIC_API_KEY" not in call["env"]
-        assert call["env"]["CLAUDE_CODE_SAFE_MODE"] == "1"
-        assert call["env"]["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
+        assert "OPENAI_API_KEY" not in call["env"]
+        if provider == "claude":
+            assert call["env"]["CLAUDE_CODE_SAFE_MODE"] == "1"
+            assert call["env"]["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
         assert Path(call["cwd"]).resolve() == tmp_path.resolve()
     report = (tmp_path / ".claude" / "reviews" / "wrapped.md").read_text()
     assert "VERDICT: CLEAN" in report
+    model = "gpt-6-astra" if provider == "codex" else "claude-opus-5"
+    assert f"- Provider: {provider}" in report
+    assert f"- Model: {model}" in report
+    assert "- Effort: max" in report
+    other = "claude" if provider == "codex" else "codex"
+    assert not calls(log, other)
 
 
 def test_a_console_billed_login_stops_the_review_without_dispatching(tmp_path: Path) -> None:
     reviewer = review_repository(tmp_path)
     log = tmp_path / "claude-calls.jsonl"
-    _, env = claude_bin(tmp_path, log=log, status=CONSOLE_STATUS, stdout="VERDICT: CLEAN\n")
+    _, env = provider_bin(
+        tmp_path, log=log, provider="claude", status=CONSOLE_STATUS, stdout="VERDICT: CLEAN\n"
+    )
 
     result = run(reviewer, "gate", "HEAD~1..HEAD", "console", cwd=tmp_path, env=env)
 
     assert result.returncode == 0, "a reviewer that could not start must not block a push"
-    assert [call["argv"] for call in claude_calls(log)] == [ENFORCED_ARGUMENTS + AUTH_STATUS]
+    assert [call["argv"] for call in calls(log, "claude")] == [ENFORCED_ARGUMENTS + AUTH_STATUS]
+    assert not calls(log, "codex"), "authentication refusal never selects another provider"
     report = (tmp_path / ".claude" / "reviews" / "console.md").read_text()
     assert report.rstrip().endswith("VERDICT: ERROR")
     assert "owner@example.test" not in report
@@ -495,7 +565,7 @@ def test_a_console_billed_login_stops_the_review_without_dispatching(tmp_path: P
 def test_failed_reviewer_writes_an_error_verdict_and_allows_push(tmp_path: Path) -> None:
     reviewer = review_repository(tmp_path)
     log = tmp_path / "claude-calls.jsonl"
-    _, env = claude_bin(tmp_path, log=log, exit_code=7)
+    _, env = provider_bin(tmp_path, log=log, exit_code=7)
 
     result = run(reviewer, "gate", "HEAD~1..HEAD", "failed", cwd=tmp_path, env=env)
 
@@ -506,10 +576,69 @@ def test_failed_reviewer_writes_an_error_verdict_and_allows_push(tmp_path: Path)
     assert report.rstrip().endswith("VERDICT: ERROR")
 
 
-def test_content_only_range_never_starts_the_code_reviewer(tmp_path: Path) -> None:
+@pytest.mark.parametrize("provider", ["codex", "claude"])
+@pytest.mark.parametrize("exit_code", [7, 124])
+def test_failed_process_cannot_report_clean(
+    tmp_path: Path, provider: str, exit_code: int
+) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(
+        tmp_path, log=log, provider=provider, stdout="VERDICT: CLEAN\n", exit_code=exit_code
+    )
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "false-clean", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0, "incomplete reviews retain the existing allow-push policy"
+    report = (tmp_path / ".claude" / "reviews" / "false-clean.md").read_text()
+    assert report.rstrip().endswith("VERDICT: ERROR")
+    assert "NOTHING WAS REVIEWED" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        "VERDICT: CLEAN\nmore work remains\n",
+        "VERDICT: CLEAN but uncertain\n",
+        "VERDICT: FINDINGS 0\n",
+        "VERDICT: FINDINGS 1\nVERDICT: CLEAN\n",
+    ],
+)
+def test_only_one_complete_final_verdict_counts(tmp_path: Path, stdout: str) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout=stdout)
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "incomplete", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0
+    report = (tmp_path / ".claude" / "reviews" / "incomplete.md").read_text()
+    assert report.rstrip().endswith("VERDICT: ERROR")
+
+
+@pytest.mark.parametrize("stdout", ["", "VERDICT: CLEAN\n"])
+def test_diagnostic_verdicts_neither_complete_nor_invalidate_the_answer(
+    tmp_path: Path, stdout: str
+) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout=stdout, stderr="VERDICT: CLEAN\n")
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "diagnostic", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0
+    report = (tmp_path / ".claude" / "reviews" / "diagnostic.md").read_text()
+    expected = "VERDICT: CLEAN" if stdout else "VERDICT: ERROR"
+    assert report.rstrip().endswith(expected)
+
+
+@pytest.mark.parametrize("provider", ["codex", "claude"])
+def test_content_only_range_never_starts_the_code_reviewer(
+    tmp_path: Path, provider: str
+) -> None:
     reviewer = content_review_repository(tmp_path)
     log = tmp_path / "claude-calls.jsonl"
-    _, env = claude_bin(tmp_path, log=log)
+    _, env = provider_bin(tmp_path, log=log, provider=provider)
 
     result = run(
         reviewer,
@@ -522,14 +651,17 @@ def test_content_only_range_never_starts_the_code_reviewer(tmp_path: Path) -> No
 
     assert result.returncode == 0
     assert "repository-content-only change" in result.stdout
-    assert claude_calls(log) == [], "not even the free subscription probe"
+    assert records(log) == [], "not even a free subscription probe for either provider"
     assert not (tmp_path / ".claude" / "reviews").exists()
 
 
-def test_mixed_range_prompt_excludes_repository_content(tmp_path: Path) -> None:
+@pytest.mark.parametrize("provider", ["codex", "claude"])
+def test_mixed_range_prompt_excludes_repository_content(
+    tmp_path: Path, provider: str
+) -> None:
     reviewer = content_review_repository(tmp_path, mixed=True)
     log = tmp_path / "claude-calls.jsonl"
-    _, env = claude_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
+    _, env = provider_bin(tmp_path, log=log, provider=provider, stdout="VERDICT: CLEAN\n")
 
     result = run(
         reviewer,
@@ -541,12 +673,169 @@ def test_mixed_range_prompt_excludes_repository_content(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    dispatch = claude_calls(log)[-1]
-    prompt = "\n".join(dispatch["argv"])
-    assert "git diff HEAD~1..HEAD -- . ':(exclude)data/**'" in prompt
+    dispatch = calls(log, provider)[-1]
+    prompt = "\n".join([*dispatch["argv"], dispatch["stdin"]])
+    assert "git --no-pager diff --no-ext-diff --no-textconv HEAD~1..HEAD" in prompt
+    assert "-- . ':(exclude)data/**' ':(exclude)dist/**'" in prompt
+    assert "diff --git a/feature.py b/feature.py" in prompt
+    assert "-VALUE = 1\n+VALUE = 2" in prompt
+    assert "description: second" not in prompt
     collapsed = " ".join(prompt.lower().split())
     assert "do not open or review any path under `data/`" in collapsed
     assert "linguistically correct or natural is explicitly outside" in collapsed
+
+
+def test_invalid_range_records_error_without_a_provider_probe(tmp_path: Path) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
+
+    result = run(reviewer, "gate", "not-a-range", "invalid", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0
+    assert not records(log)
+    report = (tmp_path / ".claude" / "reviews" / "invalid.md").read_text()
+    assert report.rstrip().endswith("VERDICT: ERROR")
+    assert "Git range could not be read" in report
+
+
+@pytest.mark.parametrize("converter", ["external", "textconv"])
+def test_preparing_the_diff_never_runs_a_git_converter(
+    tmp_path: Path, converter: str
+) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
+    converter_log = tmp_path / "converter-calls.jsonl"
+    command = recorder(tmp_path / "converter", "converter", converter_log, "CONVERTER_EXIT")
+    if converter == "external":
+        assert run("git", "config", "diff.external", command, cwd=tmp_path).returncode == 0
+    else:
+        (tmp_path / ".git" / "info" / "attributes").write_text("change.txt diff=custom\n")
+        assert run("git", "config", "diff.custom.textconv", command, cwd=tmp_path).returncode == 0
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "converter", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0
+    assert not records(converter_log)
+    prompt = calls(log, "codex")[-1]["stdin"]
+    assert "-first\n+second" in prompt
+
+
+def test_default_provider_is_codex_with_astra_at_max_effort(tmp_path: Path) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
+    env.pop("JANKI_REVIEW_PROVIDER")
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "default", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert len(calls(log, "codex")) == 2
+    assert not calls(log, "claude")
+    report = (tmp_path / ".claude" / "reviews" / "default.md").read_text()
+    assert "- Provider: codex\n- Model: gpt-6-astra\n- Effort: max" in report
+
+
+@pytest.mark.parametrize(
+    "provider,model", [("codex", "gpt-5.5"), ("claude", "claude-opus-5[1m]")]
+)
+def test_exact_model_override_reaches_the_selected_provider(
+    tmp_path: Path, provider: str, model: str
+) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, provider=provider, stdout="VERDICT: CLEAN\n")
+    env["JANKI_REVIEW_MODEL"] = model
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "model", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0, result.stderr
+    dispatch = calls(log, provider)[-1]
+    assert dispatch["argv"][dispatch["argv"].index("--model") + 1] == model
+    report = (tmp_path / ".claude" / "reviews" / "model.md").read_text()
+    assert f"- Model: {model}" in report
+
+
+def test_codex_api_login_refuses_without_claude_fallback(tmp_path: Path) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(
+        tmp_path, log=log, status="Logged in using an API key - sk-secret\n",
+        stdout="VERDICT: CLEAN\n",
+    )
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "api-login", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0
+    assert len(calls(log, "codex")) == 1
+    assert not calls(log, "claude")
+    report = (tmp_path / ".claude" / "reviews" / "api-login.md").read_text()
+    assert report.rstrip().endswith("VERDICT: ERROR")
+    assert "sk-secret" not in report
+
+
+def test_unknown_provider_refuses_without_starting_any_cli(tmp_path: Path) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log)
+    env["JANKI_REVIEW_PROVIDER"] = "unregistered"
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "unknown", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0
+    assert not records(log)
+    report = (tmp_path / ".claude" / "reviews" / "unknown.md").read_text()
+    assert report.rstrip().endswith("VERDICT: ERROR")
+
+
+@pytest.mark.parametrize("mode,expected", [("gate", 1), ("advisory", 0)])
+def test_complete_findings_keep_existing_gate_and_advisory_policy(
+    tmp_path: Path, mode: str, expected: int
+) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout="A concrete defect.\nVERDICT: FINDINGS 1\n")
+
+    result = run(reviewer, mode, "HEAD~1..HEAD", "findings", cwd=tmp_path, env=env)
+
+    assert result.returncode == expected
+    report = (tmp_path / ".claude" / "reviews" / "findings.md").read_text()
+    assert report.rstrip().endswith("VERDICT: FINDINGS 1")
+
+
+def test_timeout_after_clean_output_is_an_incomplete_review(tmp_path: Path) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n", delay=10)
+    env["JANKI_REVIEW_TIMEOUT"] = "1"
+
+    result = run(reviewer, "gate", "HEAD~1..HEAD", "timeout", cwd=tmp_path, env=env)
+
+    assert result.returncode == 0
+    report = (tmp_path / ".claude" / "reviews" / "timeout.md").read_text()
+    assert "timed out after 1s" in report
+    assert report.rstrip().endswith("VERDICT: ERROR")
+
+
+def test_review_reloads_the_shared_prompt_for_each_run(tmp_path: Path) -> None:
+    reviewer = review_repository(tmp_path)
+    log = tmp_path / "review-calls.jsonl"
+    _, env = provider_bin(tmp_path, log=log, stdout="VERDICT: CLEAN\n")
+    template = tmp_path / "prompts" / REVIEW_PROMPT.name
+    first_prompt = template.read_text(encoding="utf-8")
+
+    first = run(reviewer, "gate", "HEAD~1..HEAD", "first", cwd=tmp_path, env=env)
+    template.write_text(first_prompt + "\nUnique second-run instruction.\n", encoding="utf-8")
+    second = run(reviewer, "gate", "HEAD~1..HEAD", "second", cwd=tmp_path, env=env)
+
+    assert first.returncode == second.returncode == 0
+    first_call, second_call = calls(log, "codex")[1::2]
+    first_input = "\n".join([*first_call["argv"], first_call["stdin"]])
+    second_input = "\n".join([*second_call["argv"], second_call["stdin"]])
+    assert first_prompt in first_input
+    assert template.read_text(encoding="utf-8") in second_input
+    assert "Unique second-run instruction." not in first_input
 
 
 def push_repository(tmp_path: Path) -> SimpleNamespace:
